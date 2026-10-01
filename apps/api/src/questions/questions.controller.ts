@@ -100,7 +100,6 @@ export class QuestionsController {
   }
 
   /** Before `:id`, or "images" is read as a question id. */
-  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.CREATE)
   @RequiresAnyFeature(
     [
       FEATURE_KEYS.QUESTION_MANAGEMENT,

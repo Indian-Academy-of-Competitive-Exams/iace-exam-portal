@@ -182,6 +182,6 @@ export class SectionThreadController {
     @Body(new ZodBody(editSectionCommentSchema)) body: EditSectionCommentBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SectionComment> {
-    return this.thread.editComment(testId, sectionId, commentId, body, user.id);
+    return this.thread.editComment(testId, sectionId, commentId, body, user.id, user.isSuperAdmin);
   }
 }

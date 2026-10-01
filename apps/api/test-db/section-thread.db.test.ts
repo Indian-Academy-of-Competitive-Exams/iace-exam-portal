@@ -143,6 +143,26 @@ describe('SectionThreadService', () => {
     );
   });
 
+  /** The failure this prevents: the seat the section passed on from rewriting what it said on the way out. */
+  it('refuses a reword by an author the section has passed on from', async () => {
+    const { thread, testId, sectionId } = await aSection();
+    const said = await thread.comment(
+      testId,
+      sectionId,
+      { body: 'Q7 is wrong', images: [] },
+      READER,
+    );
+    await prisma.questionAssignment.updateMany({
+      where: { testId, baseConfigSectionId: sectionId, assigneeId: READER },
+      data: { replacedAt: new Date() },
+    });
+
+    await assert.rejects(
+      () => thread.editComment(testId, sectionId, said.id, { body: 'Q7 is fine' }, READER),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+  });
+
   it('refuses an admin who holds neither role on the section', async () => {
     const { thread, testId, sectionId } = await aSection();
 

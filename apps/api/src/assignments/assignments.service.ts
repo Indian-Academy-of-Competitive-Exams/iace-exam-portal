@@ -942,7 +942,7 @@ async function handedOnArrival(
       finalizedAt: { not: null },
       test: { paperSource: PAPER_SOURCES.FRAMED },
     },
-    select: { finalizedAt: true },
+    select: { id: true },
   });
   return typing ? new Date() : null;
 }

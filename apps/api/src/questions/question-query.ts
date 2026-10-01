@@ -50,8 +50,10 @@ function narrowsTheBank(
 ): Prisma.QuestionWhereInput[] {
   const filters: Prisma.QuestionWhereInput[] = [];
 
-  // Out of circulation is out of the bank: naming a status is how you ask to see them.
-  if (!query.status) filters.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
+  // Out of circulation is out of the bank: only naming ARCHIVED asks for them, since matching any widens past a status that does not.
+  if (!query.status?.includes(QUESTION_STATUS.ARCHIVED)) {
+    filters.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
+  }
   // The picker asks the same question the draw asks, so it cannot offer a row fillSection refuses.
   if (query.drawable) filters.push(drawableFor(query.forTestId));
   // Resolved through the assignment relation, so no caller has to carry a list of ids in the URL.

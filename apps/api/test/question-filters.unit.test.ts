@@ -42,6 +42,20 @@ describe('questionWhere — a filter holding several values', () => {
     assert.deepEqual(conditionFor({ status: 'ARCHIVED' }, 'status'), { in: ['ARCHIVED'] });
   });
 
+  /** The failure this prevents: the ORed status widening past itself, listing the archived to a reader who asked for ACTIVE. */
+  it('keeps the archived out when a status other than ARCHIVED is named and any matches', () => {
+    assert.deepEqual(conditions({ status: 'ACTIVE', difficulty: 'HIGH', match: 'any' }), [
+      { status: { not: 'ARCHIVED' } },
+      { OR: [{ difficulty: { in: ['HIGH'] } }, { status: { in: ['ACTIVE'] } }] },
+    ]);
+  });
+
+  it('still shows them when ARCHIVED is one of the statuses named', () => {
+    assert.deepEqual(conditions({ status: 'ACTIVE,ARCHIVED', difficulty: 'HIGH', match: 'any' }), [
+      { OR: [{ difficulty: { in: ['HIGH'] } }, { status: { in: ['ACTIVE', 'ARCHIVED'] } }] },
+    ]);
+  });
+
   /** The default narrows whichever way the reader is combining filters. */
   it('keeps the archived out even when matching any', () => {
     assert.deepEqual(conditions({ subjectId: 'sub_1', difficulty: 'LOW', match: 'any' }), [
@@ -54,6 +68,7 @@ describe('questionWhere — a filter holding several values', () => {
     const where = conditions({ subjectId: 'sub_1', difficulty: 'LOW,HIGH', status: 'ACTIVE' });
 
     assert.deepEqual(where, [
+      { status: { not: 'ARCHIVED' } },
       { subjectId: { in: ['sub_1'] } },
       { difficulty: { in: ['LOW', 'HIGH'] } },
       { status: { in: ['ACTIVE'] } },

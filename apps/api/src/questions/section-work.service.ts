@@ -336,6 +336,7 @@ export class SectionWorkService {
   async uncheck(pair: Pair, questionId: string, viewer: SectionViewer): Promise<SectionWork> {
     const context = await this.load(pair, viewer);
     this.requireReading(context);
+    await this.requireOnPaper(pair, questionId);
     await this.prisma.questionReview.updateMany({
       where: { testId: pair.testId, questionId },
       data: { checkedAt: null, checkedById: null },
@@ -381,6 +382,7 @@ export class SectionWorkService {
       throw new AppException(ErrorCodes.FORBIDDEN, TYPISTS_ONLY_MESSAGE);
     }
     if (context.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
+    await this.requireOnPaper(pair, questionId);
     const review = await this.reviewRow(pair.testId, questionId);
     if (!isOpenSendBack(review)) {
       throw new AppException(ErrorCodes.CONFLICT, NOT_SENT_BACK_MESSAGE);

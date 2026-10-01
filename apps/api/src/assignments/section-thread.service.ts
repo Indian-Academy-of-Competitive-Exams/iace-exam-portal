@@ -73,6 +73,7 @@ export class SectionThreadService {
     commentId: string,
     input: EditSectionCommentBody,
     authorId: string,
+    isSuperAdmin = false,
   ): Promise<SectionComment> {
     const before = await this.prisma.sectionComment.findFirst({
       where: { id: commentId, testId, baseConfigSectionId },
@@ -82,6 +83,8 @@ export class SectionThreadService {
     if (before.authorId !== authorId) {
       throw new AppException(ErrorCodes.FORBIDDEN, NOT_YOURS_TO_REWORD);
     }
+    // A reword is a write: the seat the section passed on from adds nothing more to the thread.
+    await this.assertMayWrite(testId, baseConfigSectionId, authorId, isSuperAdmin);
 
     const replaced: CommentRevision = {
       body: before.body,

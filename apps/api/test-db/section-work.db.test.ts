@@ -782,6 +782,70 @@ describe('SectionWorkService — the reader’s review', () => {
       refusedWith(ErrorCodes.FORBIDDEN),
     );
   });
+
+  /** The failure this prevents: one section's seats clearing a tick, or taking a fix, on another section of the same test. */
+  it('refuses a review write on a question the test holds under another section', async () => {
+    const { work } = await build();
+    const { catalog, pair, onPaper, typistDone } = await aSection();
+    const own = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(own);
+    await typistDone();
+
+    const other = await makeSection(prisma, catalog, { name: 'Reasoning', order: 2 });
+    const theirPair = { testId: pair.testId, baseConfigSectionId: other.id };
+    await assign(catalog, pair.testId, other.id, CHIEF, ASSIGNMENT_ROLES.TYPIST);
+    const theirReading = await assign(
+      catalog,
+      pair.testId,
+      other.id,
+      STRANGER,
+      ASSIGNMENT_ROLES.PROOFREADER,
+    );
+    const theirs = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await prisma.paperQuestion.create({
+      data: {
+        ...theirPair,
+        baseConfigId: catalog.baseConfigId,
+        questionId: theirs.id,
+        questionVersionId: theirs.versionId,
+        order: 50,
+        marks: 2,
+        negativeMarks: 0.5,
+      },
+    });
+    await prisma.questionAssignment.update({
+      where: { id: theirReading.id },
+      data: { handedAt: new Date() },
+    });
+    const reviewOfTheirs = () =>
+      prisma.questionReview.findFirstOrThrow({ where: { questionId: theirs.id } });
+
+    await work.check(theirPair, theirs.id, viewer(STRANGER));
+    await assert.rejects(
+      () => work.uncheck(pair, theirs.id, viewer(READER)),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+    assert.notEqual((await reviewOfTheirs()).checkedAt, null);
+
+    await work.sendBack(
+      theirPair,
+      theirs.id,
+      { reason: SEND_BACK_REASONS.SPELLING },
+      viewer(STRANGER),
+    );
+    await assert.rejects(
+      () => work.fixed(pair, theirs.id, viewer(TYPIST)),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+    assert.equal((await reviewOfTheirs()).fixedAt, null);
+
+    await work.check(pair, own.id, viewer(READER));
+    const read = await work.uncheck(pair, own.id, viewer(READER));
+    assert.equal(
+      read.questions.find((row) => row.questionId === own.id)?.review.state,
+      REVIEW_STATES.UNCHECKED,
+    );
+  });
 });
 
 describe('SectionWorkService — the cross-test warning', () => {
