@@ -62,6 +62,7 @@ export { RowActions } from './components/ui/row-actions';
 export { linkVariants } from './components/ui/link';
 export { type PaginationProps } from './components/ui/pagination';
 export { Watermark } from './components/ui/watermark';
+export { Calculator } from './components/ui/calculator';
 export { RichContent } from './components/ui/rich-content';
 export { mathErrorIn } from './lib/rich-html';
 export { INDIC_SCRIPTS, type IndicScript } from './components/ui/rich-text-transliterate';

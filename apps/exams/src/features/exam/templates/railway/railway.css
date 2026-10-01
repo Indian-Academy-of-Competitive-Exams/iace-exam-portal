@@ -624,3 +624,9 @@
   cursor: pointer;
   transition: all 0.2s ease;
 }
+
+/* The calculator has no glyph in the original's sprite sheet, so its icon is sized like one. */
+[data-exam-template='ssc_railways'] .rw-utilitybar svg {
+  width: 18px;
+  height: 18px;
+}

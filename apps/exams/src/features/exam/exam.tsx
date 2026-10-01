@@ -143,7 +143,13 @@ function ExamHall(
     );
   }
 
-  return <ExamShell examTemplate={sitting.paper.examTemplate} view={view} />;
+  return (
+    <ExamShell
+      examTemplate={sitting.paper.examTemplate}
+      calculatorEnabled={sitting.paper.calculatorEnabled}
+      view={view}
+    />
+  );
 }
 
 /** Names the sitting, so a paper handed in elsewhere lands on its result instead of restarting. */

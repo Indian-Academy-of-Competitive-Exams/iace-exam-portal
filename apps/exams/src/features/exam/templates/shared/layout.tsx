@@ -13,7 +13,7 @@ import {
 } from './slots';
 import { PaperPanel, RulesPanel } from './panels';
 
-export function Layout({ view, config }: Readonly<ExamSlotProps>) {
+export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProps>) {
   const onPaper = config.watermark === 'PAPER';
   const [panel, setPanel] = useState<'PAPER' | 'RULES' | null>(null);
 
@@ -23,6 +23,7 @@ export function Layout({ view, config }: Readonly<ExamSlotProps>) {
       <Header
         view={view}
         config={config}
+        onOpenCalculator={onOpenCalculator}
         onOpenPaper={() => setPanel('PAPER')}
         onOpenRules={() => setPanel('RULES')}
       />

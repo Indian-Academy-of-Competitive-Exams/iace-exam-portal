@@ -3,7 +3,7 @@
  * handed — never by a fork, so neither can drift into behaving differently.
  * Nothing here holds state: every value and every callback comes off the view.
  */
-import { Eraser, FileText, Flag, Info, Maximize, Send } from 'lucide-react';
+import { Calculator, Eraser, FileText, Flag, Info, Maximize, Send } from 'lucide-react';
 import { TEST_UI, type ExamTemplateConfig, type PaletteCounts } from '@iace/contracts';
 import {
   Alert,
@@ -30,6 +30,8 @@ import { PALETTE_LEGEND } from '../../../../lib/constants';
 export interface ExamSlotProps {
   view: ExamView;
   config: ExamTemplateConfig;
+  /** Absent where the config offers no calculator, which is how a skin knows not to draw it. */
+  onOpenCalculator?: () => void;
 }
 
 const SWITCH: Readonly<Record<'TABS' | 'BUTTONS', string>> = {
@@ -44,6 +46,7 @@ const SWITCH: Readonly<Record<'TABS' | 'BUTTONS', string>> = {
 export function Header({
   view,
   config,
+  onOpenCalculator,
   onOpenPaper,
   onOpenRules,
 }: Readonly<ExamSlotProps & { onOpenPaper?: () => void; onOpenRules?: () => void }>) {
@@ -63,6 +66,12 @@ export function Header({
           <Button type="button" variant="ghost" size="sm" onClick={onOpenRules}>
             <Info aria-hidden />
             Instructions
+          </Button>
+        ) : null}
+        {onOpenCalculator ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onOpenCalculator}>
+            <Calculator aria-hidden />
+            Calculator
           </Button>
         ) : null}
         {/* The way IN: without it a candidate is only ever nagged for leaving a screen never offered. */}

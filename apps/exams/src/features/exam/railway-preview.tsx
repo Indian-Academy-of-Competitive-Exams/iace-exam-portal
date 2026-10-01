@@ -24,6 +24,7 @@ export function RailwayPreviewPage() {
   return (
     <ExamShell
       examTemplate={EXAM_TEMPLATE.SSC_RAILWAYS}
+      calculatorEnabled
       view={{
         ...view,
         // The only callbacks the preview wires: the submit screen is unreachable otherwise.

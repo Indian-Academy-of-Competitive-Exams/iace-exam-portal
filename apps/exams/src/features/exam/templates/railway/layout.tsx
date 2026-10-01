@@ -4,6 +4,7 @@
  * the two skins cannot drift into behaving differently.
  */
 import { useState } from 'react';
+import { Calculator } from 'lucide-react';
 import { isStateShown, type ExamClock } from '@iace/contracts';
 import { TIMER_KIND, useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
 import { Alert, Badge, Button, cn } from '@iace/ui';
@@ -17,7 +18,7 @@ import { ScrollPane } from './scroll-pane';
 import { RailwaySubmitSummary } from './submit-summary';
 import './railway.css';
 
-export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
+export function RailwayLayout({ view, onOpenCalculator }: Readonly<ExamSlotProps>) {
   const [openPanel, setOpenPanel] = useState<'PAPER' | 'INSTRUCTIONS' | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(true);
   // The original answers Submit by taking the question area over and folding the palette away.
@@ -47,6 +48,12 @@ export function RailwayLayout({ view }: Readonly<ExamSlotProps>) {
           <span className="rw-icon instruction_icon" aria-hidden />
           <span>Instruction</span>
         </button>
+        {onOpenCalculator ? (
+          <button type="button" className="flex items-center gap-2" onClick={onOpenCalculator}>
+            <Calculator aria-hidden />
+            <span>Calculator</span>
+          </button>
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1">

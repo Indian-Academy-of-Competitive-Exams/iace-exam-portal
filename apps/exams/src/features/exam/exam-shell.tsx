@@ -3,8 +3,9 @@
  * confirmation are here rather than in a template, so a new skin cannot ship
  * without them — and the data attribute is what scopes that skin's tokens.
  */
+import { useState } from 'react';
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
-import { Alert, Button, ConfirmDialog } from '@iace/ui';
+import { Alert, Button, Calculator, ConfirmDialog } from '@iace/ui';
 import { submittingSays, type ExamView } from '@iace/app-kit';
 import { Layout } from './templates/shared/layout';
 import { useLockedZoom } from './lock-zoom';
@@ -13,9 +14,11 @@ import { RailwayFullscreenNag } from './templates/railway/fullscreen-nag';
 
 export function ExamShell({
   examTemplate,
+  calculatorEnabled,
   view,
-}: Readonly<{ examTemplate: ExamTemplate; view: ExamView }>) {
+}: Readonly<{ examTemplate: ExamTemplate; calculatorEnabled: boolean; view: ExamView }>) {
   const { submit, fullscreen } = view;
+  const [calculating, setCalculating] = useState(false);
   useLockedZoom();
   // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
@@ -30,7 +33,14 @@ export function ExamShell({
       // A sitting is not a document to copy from: neither skin lets the paper be selected.
       className="relative flex h-dvh select-none flex-col bg-exam-surface text-exam-ink"
     >
-      <Skin view={view} config={EXAM_TEMPLATE_CONFIG[template]} />
+      <Skin
+        view={view}
+        config={EXAM_TEMPLATE_CONFIG[template]}
+        onOpenCalculator={calculatorEnabled ? () => setCalculating(true) : undefined}
+      />
+
+      {/* Mounted here, not in a skin, so a config that offers one cannot be drawn without it. */}
+      {calculating ? <Calculator onClose={() => setCalculating(false)} /> : null}
 
       {fullscreen.nagging ? <Nag fullscreen={fullscreen} says={nagSays(fullscreen.exits)} /> : null}
 
