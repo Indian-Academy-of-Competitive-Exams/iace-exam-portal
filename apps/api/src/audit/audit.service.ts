@@ -25,6 +25,7 @@ import {
   writeWorkbook,
   type ExportColumn,
 } from '../common/exporting';
+import { importFileContentType } from '../common/importing';
 import { matchFilters } from '../common/match-filters';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
@@ -240,7 +241,10 @@ export class AuditService {
   }
 
   /** Scoped like `listImports`: an admin who cannot see the run cannot fetch what it was fed. */
-  async importFile(id: string, viewer: AuditViewer): Promise<{ body: Buffer; filename: string }> {
+  async importFile(
+    id: string,
+    viewer: AuditViewer,
+  ): Promise<{ body: Buffer; filename: string; contentType: string }> {
     this.assertActive(viewer);
     const where: Prisma.ImportLogWhereInput = { id };
     if (!viewer.isSuperAdmin) where.actorId = viewer.id;
@@ -255,6 +259,7 @@ export class AuditService {
     return {
       body: await this.storage.read(log.fileS3Key),
       filename: `${log.feature.toLowerCase()}-import-${log.id}.${extension}`,
+      contentType: importFileContentType(log.fileS3Key),
     };
   }
 

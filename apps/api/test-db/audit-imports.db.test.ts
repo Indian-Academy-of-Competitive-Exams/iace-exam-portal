@@ -10,6 +10,7 @@ import {
   IMPORT_SOURCE,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_STATUS,
+  XLSX_CONTENT_TYPE,
   type AuditAction,
   type QuestionImportColumnKey,
 } from '@iace/contracts';
@@ -163,7 +164,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     const [log, ...others] = await importLogs();
     assert.equal(others.length, 0);
     assert.equal(log?.status, IMPORT_LOG_STATUS.COMMITTED);
-    assert.deepEqual([log?.created, log?.updated, log?.skipped, log?.failed], [1, 1, 0, 1]);
+    assert.deepEqual([log?.created, log?.updated, log?.skipped, log?.failed], [1, 1, 1, 0]);
     assert.ok(storage.objects.has(log?.fileS3Key ?? ''), 'the run names the sheet it stored');
 
     // The invalid row wrote nothing and gets no audit entry — only the two rows the commit touched.
@@ -239,7 +240,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     );
     const [log] = await importLogs();
     assert.equal(log?.status, IMPORT_LOG_STATUS.FAILED);
-    assert.deepEqual([log?.created, log?.updated], [2, 0]);
+    assert.deepEqual([log?.created, log?.updated, log?.failed], [2, 0, 1]);
   });
 
   /** By the time the audit write runs the students are durable: losing the trail never relabels the commit. */
@@ -260,6 +261,93 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     assert.deepEqual([log?.status, log?.created], [IMPORT_LOG_STATUS.COMMITTED, 1]);
     // The audit write never landed — that is the cost, not a lie about the import.
     assert.equal(await prisma.rowActionLog.count(), 0);
+  });
+});
+
+describe('ImportsService — a run whose file never reached storage', () => {
+  /** The failure this prevents: an eternally PREVIEWED run with a null key and no finishedAt. */
+  it('closes the run FAILED when the upload throws, and writes no student', async () => {
+    await onlineBranch();
+    const storage = new FakeStorage();
+    storage.failNextUpload = true;
+
+    await assert.rejects(
+      () =>
+        importsOn(prisma, { storage }).commitStudents(
+          Buffer.from(roster('mobile\n9876543210')),
+          ADMIN,
+        ),
+      /s3 is down/,
+    );
+
+    const [log, ...others] = await importLogs();
+    assert.equal(others.length, 0);
+    assert.equal(log?.status, IMPORT_LOG_STATUS.FAILED);
+    assert.equal(log?.fileS3Key, null);
+    assert.ok(log?.finishedAt, 'the run is closed, not left in progress');
+    assert.equal(log?.failed, 1, 'the row the abort never reached');
+    assert.equal(await prisma.student.count(), 0);
+  });
+});
+
+/** The same roster as a real workbook, so the stored key is chosen from the bytes and not the name. */
+async function rosterWorkbook(csv: string): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Students');
+  for (const line of roster(csv).split('\n')) sheet.addRow(line.split(','));
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+describe('ImportsService — the stored sheet keeps the format it arrived in', () => {
+  const SUPER_ADMIN = { id: ADMIN, isSuperAdmin: true, isActive: true };
+
+  const storedFile = async (file: Buffer) => {
+    await onlineBranch();
+    const storage = new FakeStorage();
+    await importsOn(prisma, { storage }).commitStudents(file, ADMIN);
+    const [log] = await importLogs();
+    return {
+      key: log?.fileS3Key ?? '',
+      ...(await new AuditService(prisma, storage as never).importFile(log?.id ?? '', SUPER_ADMIN)),
+    };
+  };
+
+  /** The failure this prevents: a CSV roster downloading from the audit list named .xlsx. */
+  it('stores a CSV roster under a .csv key and hands it back as a CSV', async () => {
+    const file = await storedFile(Buffer.from(roster('mobile\n9876543210')));
+
+    assert.ok(file.key.endsWith('.csv'), file.key);
+    assert.ok(file.filename.endsWith('.csv'), file.filename);
+    assert.equal(file.contentType, 'text/csv');
+  });
+
+  it('stores a workbook roster under a .xlsx key and hands it back as a workbook', async () => {
+    const file = await storedFile(await rosterWorkbook('mobile\n9876543210'));
+
+    assert.ok(file.key.endsWith('.xlsx'), file.key);
+    assert.ok(file.filename.endsWith('.xlsx'), file.filename);
+    assert.equal(file.contentType, XLSX_CONTENT_TYPE);
+  });
+});
+
+describe('ImportsService.commitProgramStudents — the run and the response count the same rows', () => {
+  /** The failure this prevents: a file of already-enrolled rows reading 1 skipped on screen and 5 in the audit. */
+  it('counts an already-enrolled row and an unusable row alike, on both sides', async () => {
+    const program = 'SSC FOUNDATION';
+    await makeStudent(prisma, { mobile: '9000000001', programs: [program] });
+
+    const result = await importsOn().commitProgramStudents(
+      program,
+      Buffer.from('mobile,full_name\n9000000001,Already\nnot-a-number,Bad'),
+      ADMIN,
+    );
+
+    const [log] = await importLogs();
+    assert.deepEqual(
+      [result.alreadyEnrolled, result.invalid, result.enrolled, result.skipped],
+      [1, 1, 0, 2],
+    );
+    assert.deepEqual([log?.total, log?.skipped, log?.failed], [2, 2, 0]);
   });
 });
 

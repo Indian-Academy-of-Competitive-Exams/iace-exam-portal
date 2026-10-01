@@ -5,7 +5,6 @@ import {
   AUDIT_FEATURE,
   ActorTypes,
   EXPORT_KINDS,
-  XLSX_CONTENT_TYPE,
   paginationQuerySchema,
   rowActionExportQuerySchema,
   rowActionListQuerySchema,
@@ -77,7 +76,6 @@ export class AuditController {
 
   /** The sheet the run was fed. Streamed, never a signed link: the file is full of student PII. */
   @Get('imports/:id/file')
-  @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Cache-Control', 'no-store')
   async importFile(
     @Param('id') id: string,
@@ -86,6 +84,7 @@ export class AuditController {
   ): Promise<void> {
     const file = await this.audit.importFile(id, viewerOf(user));
 
+    response.setHeader('Content-Type', file.contentType);
     response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
     response.send(file.body);
   }

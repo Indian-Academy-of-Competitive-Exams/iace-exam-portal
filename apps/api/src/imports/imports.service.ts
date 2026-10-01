@@ -39,6 +39,7 @@ import { toDateColumn } from '../common/time/institute-day';
 /** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
 interface RunOutcome {
   rowActions: { entityId: string; action: AuditAction }[];
+  /** `skipped` is every row the run did not write; `failed` is only what a run that died never reached. */
   counts: { created: number; updated: number; skipped: number; failed: number };
 }
 
@@ -80,7 +81,7 @@ export class ImportsService {
       file,
       plan,
       actorId,
-      { failed: plan.summary.invalid },
+      { skipped: plan.summary.invalid },
       async (outcome) => {
         // Hashed up front and in parallel: argon2 is ~13ms a go, which inside the loop idled a whole roster.
         const minted = byMobile(
@@ -143,7 +144,7 @@ export class ImportsService {
       file,
       plan,
       actorId,
-      { failed: plan.summary.invalid },
+      { skipped: plan.summary.invalid },
       async (outcome) => {
         const minted = byMobile(
           await this.startingPins.mint(
@@ -219,13 +220,13 @@ export class ImportsService {
     await this.programs.assertUsable([code], 'programCode');
 
     const plan = await this.planPrograms(code, await readUploadedTable(file));
-    const counts = { skipped: plan.summary.alreadyEnrolled, failed: plan.summary.invalid };
+    const skipped = plan.summary.invalid + plan.summary.alreadyEnrolled;
 
     const enrolling = plan.rows.flatMap((row) =>
       row.action === 'enrol' && row.studentId !== null ? [row.studentId] : [],
     );
 
-    const run = await this.withRun(file, plan, actorId, counts, async (outcome) => {
+    const run = await this.withRun(file, plan, actorId, { skipped }, async (outcome) => {
       if (enrolling.length === 0) return;
       // The guard is what `push` lacked: a student enrolled since the preview would hold the code twice.
       const enrolled = await this.prisma.$queryRaw<{ id: string }[]>`
@@ -239,7 +240,7 @@ export class ImportsService {
       );
     });
 
-    return { ...plan.summary, enrolled: run.counts.updated, skipped: plan.summary.invalid };
+    return { ...plan.summary, enrolled: run.counts.updated, skipped };
   }
 
   /** One row's write, and what the audit trail should call it. */
@@ -395,15 +396,18 @@ export class ImportsService {
     counts: Partial<RunOutcome['counts']>,
     write: (outcome: RunOutcome) => Promise<void>,
   ): Promise<RunOutcome> {
-    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
+    const logId = await this.openRun(plan.summary.total, plan.fileErrors, actorId);
     const outcome: RunOutcome = {
       rowActions: [],
       counts: { created: 0, updated: 0, skipped: 0, failed: 0, ...counts },
     };
 
     try {
+      await this.storeFile(logId, file);
       await write(outcome);
     } catch (error) {
+      const { created, updated, skipped } = outcome.counts;
+      outcome.counts.failed = plan.summary.total - created - updated - skipped;
       await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, outcome, actorId, {
         fileErrors: plan.fileErrors,
         error,
@@ -417,7 +421,6 @@ export class ImportsService {
 
   /** Only a commit opens a run: a row for an abandoned preview is storage nothing ever resolves. */
   private async openRun(
-    file: Buffer,
     total: number,
     fileErrors: readonly string[],
     actorId: string,
@@ -433,11 +436,14 @@ export class ImportsService {
       },
     });
 
-    const key = importFileKey(AUDIT_FEATURE.STUDENT, log.id);
-    await this.storage.upload(key, file);
-    await this.prisma.importLog.update({ where: { id: log.id }, data: { fileS3Key: key } });
-
     return log.id;
+  }
+
+  /** Inside the run's try, so a storage outage closes the run instead of leaving it open with no file. */
+  private async storeFile(logId: string, file: Buffer): Promise<void> {
+    const key = importFileKey(AUDIT_FEATURE.STUDENT, logId, file);
+    await this.storage.upload(key, file);
+    await this.prisma.importLog.update({ where: { id: logId }, data: { fileS3Key: key } });
   }
 
   /** Both endings, one path: the rows are recorded before the status is written, and a failure to record them is swallowed, because by now the writes they describe already happened. */
