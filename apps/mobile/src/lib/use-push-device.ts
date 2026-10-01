@@ -19,6 +19,9 @@ const WHILE_OPEN = {
   shouldSetBadge: false,
 };
 
+/** A paper in progress is never covered; the notification still reaches the shade to read after. */
+const WHILE_SITTING = { ...WHILE_OPEN, shouldShowBanner: false };
+
 export function usePushDevice(signedIn: boolean): void {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -42,7 +45,7 @@ export function usePushDevice(signedIn: boolean): void {
       if (!notifications || !listening) return;
 
       notifications.setNotificationHandler({
-        handleNotification: () => Promise.resolve(WHILE_OPEN),
+        handleNotification: () => Promise.resolve(inSitting.current ? WHILE_SITTING : WHILE_OPEN),
       });
       held.push(
         notifications.addNotificationResponseReceivedListener(() => {
