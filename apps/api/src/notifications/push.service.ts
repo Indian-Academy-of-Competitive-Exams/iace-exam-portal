@@ -18,6 +18,7 @@ import { redisKeys } from '../redis/redis.keys';
 import { AppConfigService } from '../config/app-config.service';
 import { FcmSender } from './fcm.sender';
 import { PUSH_OUTCOMES, WebPushSender, type PushOutcome } from './web-push.sender';
+import { MS_PER_MINUTE } from '../common/time/units';
 
 /** What one push is sent from. The title only — the body may name marks, and a push must not. */
 export interface PushDelivery {
@@ -285,19 +286,28 @@ export class PushService {
     const reached = new Set(
       ledger.flatMap((row) => (row.status === DeliveryStatus.SENT ? [row.notificationId] : [])),
     );
-    const lost = ledger.flatMap((row) =>
-      row.status === DeliveryStatus.FAILED &&
-      !reached.has(row.notificationId) &&
-      row.attempts < PUSH_ATTEMPT_CAP
-        ? [row.notificationId]
-        : [],
+    const lost = ledger.filter(
+      (row) =>
+        row.status === DeliveryStatus.FAILED &&
+        !reached.has(row.notificationId) &&
+        row.attempts < PUSH_ATTEMPT_CAP,
     );
     if (lost.length === 0) return;
 
-    await this.prisma.notification.updateMany({
-      where: { id: { in: lost } },
-      data: { pushedAt: null },
-    });
+    const waves = new Map<number, string[]>();
+    for (const row of lost) {
+      waves.set(row.attempts, [...(waves.get(row.attempts) ?? []), row.notificationId]);
+    }
+
+    const at = Date.now();
+    await Promise.all(
+      [...waves].map(([attempts, ids]) =>
+        this.prisma.notification.updateMany({
+          where: { id: { in: ids } },
+          data: { pushedAt: null, nextPushAt: new Date(at + retryAfterMs(attempts)) },
+        }),
+      ),
+    );
   }
 }
 
@@ -309,6 +319,11 @@ const PUSH_LANES = 8;
 
 /** ponytail: three sweeps of riding out a web-push or FCM outage; a backlogged pass may spend them in one go. */
 const PUSH_ATTEMPT_CAP = 3;
+
+/** One sweep tick, then five: a device that is merely offline gets a real window, not three tries in a second. */
+function retryAfterMs(attempts: number): number {
+  return (attempts <= 1 ? 1 : 5) * MS_PER_MINUTE;
+}
 
 type WebTarget = { endpoint: string; p256dh: string; auth: string };
 

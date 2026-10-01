@@ -10,6 +10,7 @@ import {
 } from '../src/notifications/notifications.service';
 import { type PushService } from '../src/notifications/push.service';
 import { TestOpeningService } from '../src/notifications/test-opening.service';
+import { MS_PER_MINUTE } from '../src/common/time/units';
 import { FakeMessageSender, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import { makeAnnouncement, makeStudent, resetDatabase, testPrisma } from './support/database';
 
@@ -70,6 +71,30 @@ describe('The push sweep', () => {
 
     assert.equal(pushed.length, 2);
     assert.equal(await unpushed(), 0);
+  });
+
+  /** THE failure this prevents: a reopened row claimed on the next page of the same pass, spending all three attempts in under a second. */
+  it('leaves a retry alone until it is due', async () => {
+    const { processor } = build();
+    await told();
+    await processor.pushPending();
+    await prisma.notification.updateMany({
+      data: { pushedAt: null, nextPushAt: new Date(Date.now() + MS_PER_MINUTE) },
+    });
+
+    assert.equal(await processor.pushPending(), 0);
+    assert.equal(await unpushed(), 1);
+  });
+
+  it('takes the retry once its wait is over', async () => {
+    const { processor } = build();
+    await told();
+    await processor.pushPending();
+    await prisma.notification.updateMany({
+      data: { pushedAt: null, nextPushAt: new Date(Date.now() - MS_PER_MINUTE) },
+    });
+
+    assert.equal(await processor.pushPending(), 1);
   });
 
   it('pushes nothing the second time round', async () => {

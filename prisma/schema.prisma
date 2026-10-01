@@ -1056,6 +1056,8 @@ model Notification {
   isRead         Boolean   @default(false)
   // Stamped when the push sweep claims the row; the sweep finds its work through a partial index on null.
   pushedAt       DateTime? @db.Timestamptz(3)
+  // Set only by a retry, to hold the row back: null means the sweep may take it now.
+  nextPushAt     DateTime? @db.Timestamptz(3)
   createdAt      DateTime  @default(now()) @db.Timestamptz(3)
 
   student      Student?               @relation(fields: [studentId], references: [id], onDelete: Cascade)

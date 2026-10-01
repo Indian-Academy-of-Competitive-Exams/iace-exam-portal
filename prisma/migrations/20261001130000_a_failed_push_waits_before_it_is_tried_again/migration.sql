@@ -1,0 +1,24 @@
+-- A push that fails is retried immediately, three times, inside one sweep pass.
+--
+-- `PushService.reopen` hands the claim back with `pushedAt = NULL` and nothing else, and
+-- `NotificationsProcessor.claimPage` takes anything with `pushedAt IS NULL` ordered by `createdAt`.
+-- Two things follow, and neither is what the retry was for:
+--
+--   1. `reopen` is called from inside `pushPage`, and `pushPending` loops up to PUSH_PAGES_PER_PASS
+--      pages. So a row that failed on page 1 is claimable again on page 2 of the SAME pass. With
+--      PUSH_ATTEMPT_CAP at 3, all three attempts can burn in well under a second — against a device
+--      that is merely offline, which is what almost every push failure is.
+--   2. The reopened row is the OLDEST unpushed row by construction, so `ORDER BY "createdAt"` puts
+--      it at the head of every subsequent claim. While its attempts last it takes a slot from newer
+--      notifications on every tick.
+--
+-- `nextPushAt` is the floor: a timestamp the claim will not take a row before. NULL means now, so
+-- every row written by every other path is unaffected and there is nothing to backfill — the column
+-- only ever gets a value from a retry. The claim's predicate gains
+-- `AND ("nextPushAt" IS NULL OR "nextPushAt" <= now())`.
+--
+-- No index. Notification_unpushed_idx is already partial on `pushedAt IS NULL` and still serves the
+-- claim; the deferred rows are a handful that Postgres walks past in createdAt order. Adding a
+-- composite here would cost every insert to save microseconds on a scan of three rows.
+
+ALTER TABLE "Notification" ADD COLUMN "nextPushAt" TIMESTAMPTZ(3);

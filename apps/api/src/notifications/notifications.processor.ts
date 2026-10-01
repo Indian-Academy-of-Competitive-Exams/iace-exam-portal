@@ -114,6 +114,7 @@ export class NotificationsProcessor extends ReportingWorkerHost {
           UPDATE "Notification" SET "pushedAt" = now()
           WHERE "id" IN (
             SELECT "id" FROM "Notification" WHERE "pushedAt" IS NULL
+            AND ("nextPushAt" IS NULL OR "nextPushAt" <= now())
             ORDER BY "createdAt" LIMIT ${RELAY_BATCH}
             FOR UPDATE SKIP LOCKED)
           RETURNING "id", "studentId", "title", "actBy", "announcementId")
