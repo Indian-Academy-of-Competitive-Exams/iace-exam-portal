@@ -1,4 +1,4 @@
-# The API image, for ARM — Fargate runs it on Graviton. One image serves all three roles;
+# The API image, for ARM — every box is Graviton (`t4g`). One image serves all three roles;
 # API_ROLE decides what a container answers. Build from the repo root:
 #   docker build -f apps/api/Dockerfile --target runtime -t iace-api .
 #   docker build -f apps/api/Dockerfile --target migrate -t iace-migrate .
@@ -18,7 +18,7 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY apps/admin/package.json apps/admin/
-COPY apps/test/package.json apps/test/
+COPY apps/exams/package.json apps/exams/
 COPY apps/mobile/package.json apps/mobile/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/app-kit/package.json packages/app-kit/
