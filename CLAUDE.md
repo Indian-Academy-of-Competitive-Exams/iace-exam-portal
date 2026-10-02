@@ -76,6 +76,11 @@ Do not break these — they are why the live test holds at 6–8K:
   interface that source comments cite, so renumbering is a breaking change.
 - `docs/04-infrastructure.md` — what it runs on: the AWS sizing, what each piece costs and why,
   the release runbook, and what was deliberately deferred.
+- `docs/aws-architecture.html` — the deployed shape, every box and container with one line on why
+  it is that and not something else. Open it in a browser and hover; the toggle switches between
+  staging today and staging plus production.
+- `docs/staging-deployment-runbook.pdf` — standing the whole thing up from an empty AWS account,
+  every console field with its reason. Built from a source that does not live in the repo.
 - `docs/design/design-system.html` — living style guide, and the **admin** composition language.
 - `docs/design/student/README.md` — the **student** composition language for `apps/exams`.
   One token set, two compositions; `ui-conventions` marks the bullets that differ.

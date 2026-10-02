@@ -1,0 +1,1417 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IACE platform — AWS architecture (ap-south-1)</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --card: #ffffff;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --line: #cbd5e1;
+        --compute: #ed7100;
+        --network: #8c4fff;
+        --database: #527fff;
+        --storage: #7aa116;
+        --security: #dd344c;
+        --mgmt: #e7157b;
+        --app: #0891b2;
+        --ext: #475569;
+        --vpc: #7c3aed;
+        --subnet: #0ea5e9;
+        --sg: #f59e0b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.45 ui-sans-serif,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: rgba(246, 247, 249, 0.94);
+        backdrop-filter: blur(6px);
+        border-bottom: 1px solid var(--line);
+        padding: 14px 20px;
+      }
+      .hrow {
+        display: flex;
+        gap: 18px;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .controls {
+        margin-left: auto;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .seg button {
+        border: 0;
+        background: #fff;
+        padding: 7px 13px;
+        font: inherit;
+        font-size: 12.5px;
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--ink);
+        color: #fff;
+      }
+      .zoom {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .zoom button {
+        width: 26px;
+        height: 26px;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 6px;
+        cursor: pointer;
+        font: inherit;
+        line-height: 1;
+      }
+      .total {
+        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+      }
+      .total small {
+        font-weight: 400;
+        color: var(--muted);
+      }
+
+      .scroll {
+        overflow: auto;
+        padding: 26px 20px 60px;
+      }
+      .scaler {
+        transform-origin: 0 0;
+        width: max-content;
+      }
+      #board {
+        position: relative;
+        display: flex;
+        gap: 34px;
+        align-items: flex-start;
+        width: max-content;
+      }
+      svg#wires {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        pointer-events: none;
+        z-index: 0;
+      }
+      svg#wires path {
+        fill: none;
+        stroke: #8fa0b5;
+        stroke-width: 1.7;
+      }
+      svg#wires path.faint {
+        stroke: #cbd5e1;
+        stroke-dasharray: 4 4;
+        stroke-width: 1.3;
+      }
+      svg#wires path.hot {
+        stroke: var(--compute);
+        stroke-width: 2.2;
+      }
+      svg#wires2 {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        pointer-events: none;
+        z-index: 4;
+      }
+      svg#wires2 path {
+        fill: none;
+        stroke: var(--compute);
+        stroke-width: 2.2;
+        stroke-opacity: 0.75;
+      }
+      svg#wires2 text {
+        font:
+          10.5px ui-sans-serif,
+          system-ui;
+        fill: #b45309;
+        paint-order: stroke;
+        stroke: var(--bg);
+        stroke-width: 4px;
+        stroke-linejoin: round;
+      }
+      svg#wires text {
+        font:
+          10.5px ui-sans-serif,
+          system-ui;
+        fill: #64748b;
+      }
+      svg#wires .wlabel {
+        paint-order: stroke;
+        stroke: var(--bg);
+        stroke-width: 4px;
+        stroke-linejoin: round;
+      }
+
+      .col {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        width: 250px;
+      }
+      .col.wide {
+        width: 940px;
+      }
+      .coltitle {
+        font-size: 10.5px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 650;
+      }
+
+      .zone {
+        border: 1.5px dashed var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        background: transparent;
+      }
+      .zone > .zh {
+        font-size: 10.5px;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 650;
+        margin-bottom: 9px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .zone.vpc {
+        border-color: var(--vpc);
+        background: rgba(124, 58, 237, 0.04);
+      }
+      .zone.vpc > .zh {
+        color: var(--vpc);
+      }
+      .zone.subnet {
+        border-color: var(--subnet);
+        background: rgba(14, 165, 233, 0.035);
+      }
+      .zone.subnet > .zh {
+        color: var(--subnet);
+      }
+      .zone.sg {
+        border-color: var(--sg);
+        background: rgba(245, 158, 11, 0.05);
+      }
+      .zone.sg > .zh {
+        color: #b45309;
+      }
+      .row {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .node {
+        position: relative;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--ext);
+        border-radius: 9px;
+        padding: 9px 11px;
+        cursor: help;
+        transition:
+          box-shadow 0.12s,
+          transform 0.12s;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+      }
+      .node:hover,
+      .node.on {
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.13);
+        transform: translateY(-1px);
+        z-index: 3;
+      }
+      .node .t {
+        font-weight: 600;
+        font-size: 12.8px;
+        display: flex;
+        gap: 6px;
+        align-items: baseline;
+      }
+      .node .spec {
+        color: var(--muted);
+        font-size: 11.3px;
+        margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+      }
+      .node .cost {
+        position: absolute;
+        top: 8px;
+        right: 9px;
+        font-size: 10.5px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        background: #f1f5f9;
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      .node.compute {
+        border-left-color: var(--compute);
+      }
+      .node.network {
+        border-left-color: var(--network);
+      }
+      .node.database {
+        border-left-color: var(--database);
+      }
+      .node.storage {
+        border-left-color: var(--storage);
+      }
+      .node.security {
+        border-left-color: var(--security);
+      }
+      .node.mgmt {
+        border-left-color: var(--mgmt);
+      }
+      .node.app {
+        border-left-color: var(--app);
+      }
+      .node.sm {
+        padding: 7px 10px;
+      }
+      .node.sm .t {
+        font-size: 12px;
+      }
+      .node .tag {
+        font-size: 9.5px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 650;
+      }
+      .flag {
+        display: inline-block;
+        font-size: 9.5px;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #b45309;
+        background: #fef3c7;
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+      .flag.stale {
+        color: #9f1239;
+        background: #ffe4e6;
+      }
+
+      body[data-mode='a'] .prod-only {
+        display: none;
+      }
+      body[data-mode='b'] .staging-only {
+        display: none;
+      }
+
+      #tip {
+        position: fixed;
+        z-index: 100;
+        max-width: 330px;
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 12.3px;
+        line-height: 1.45;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.35);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.1s;
+      }
+      #tip.show {
+        opacity: 1;
+      }
+      #tip .tt {
+        font-weight: 650;
+        color: #fff;
+        font-size: 12.8px;
+      }
+      #tip .ts {
+        color: #94a3b8;
+        font-size: 11.4px;
+        margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+      }
+      #tip .tw {
+        margin-top: 7px;
+        border-top: 1px solid #1e293b;
+        padding-top: 7px;
+      }
+      #tip .tc {
+        color: #fbbf24;
+        font-variant-numeric: tabular-nums;
+        font-size: 11.4px;
+        margin-top: 5px;
+      }
+
+      footer {
+        padding: 0 20px 40px;
+        color: var(--muted);
+        font-size: 12px;
+        max-width: 1000px;
+      }
+      footer b {
+        color: var(--ink);
+      }
+      .legend {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin: 14px 0 22px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend i {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body data-mode="a">
+    <header>
+      <div class="hrow">
+        <h1>IACE platform — AWS architecture</h1>
+        <span class="sub"
+          >ap-south-1 (Mumbai) · hover anything for why it is that and not something else</span
+        >
+        <div class="controls">
+          <span class="total" id="total"></span>
+          <div class="seg" role="group" aria-label="Environment">
+            <button id="mA" aria-pressed="true">Staging today</button>
+            <button id="mB" aria-pressed="false">With production</button>
+          </div>
+          <span class="zoom"
+            ><button id="zo">−</button><span id="zl">100%</span><button id="zi">+</button></span
+          >
+        </div>
+      </div>
+    </header>
+
+    <div class="scroll">
+      <div class="scaler" id="scaler">
+        <div id="board">
+          <svg id="wires"></svg>
+          <svg id="wires2"></svg>
+
+          <!-- ─────────────── clients ─────────────── -->
+          <div class="col" style="width: 210px">
+            <div class="coltitle">Clients</div>
+
+            <div
+              class="node app"
+              id="c-student"
+              data-title="Student app — apps/test"
+              data-spec="Vite + React SPA, installable PWA"
+              data-why="It is a PWA, and a service worker only registers over real HTTPS — which is the single reason every environment needs a real domain name instead of the AWS-provided hostname."
+            >
+              <div class="t">Student browser</div>
+              <div class="spec">PWA · service worker</div>
+            </div>
+
+            <div
+              class="node app"
+              id="c-admin"
+              data-title="Admin app — apps/admin"
+              data-spec="Vite + React SPA"
+              data-why="Same build pipeline and same bucket as the student app, but its own CloudFront distribution so the two never share a cache invalidation or a request quota."
+            >
+              <div class="t">Admin browser</div>
+              <div class="spec">SPA</div>
+            </div>
+
+            <div
+              class="node app"
+              id="c-mobile"
+              data-title="Mobile — apps/mobile"
+              data-spec="Expo, Android first · not launched"
+              data-why="It talks to the same API on the same hostname, so it needs no edge of its own — the only thing it adds to this diagram is push, which is dark until Firebase is wired."
+            >
+              <div class="t">Mobile app</div>
+              <div class="spec">Expo · Android</div>
+            </div>
+
+            <div
+              class="node"
+              id="c-egress"
+              data-title="What a sitting pulls down"
+              data-spec="41 KB paper + 3 KB score card + 56 KB solutions, gzipped"
+              data-why="Measured 25 Sep 2026: 100 KB a sitting means an 8,000-candidate event is 0.8 GB and thirty events ~24 GB, inside the free 100 GB — without compression() the same traffic is ~125 GB and billable."
+            >
+              <div class="t">≈100 KB per sitting</div>
+              <div class="spec">~24 GB/mo vs 100 GB free</div>
+            </div>
+          </div>
+
+          <!-- ─────────────── edge ─────────────── -->
+          <div class="col" style="width: 270px">
+            <div class="coltitle">Edge — global</div>
+
+            <div
+              class="node network"
+              id="r53"
+              data-title="Route 53 — one hosted zone"
+              data-spec="ALIAS → CloudFront (free) · A → each API box's Elastic IP"
+              data-cost="$0.50/mo"
+              data-why="The A record points at an Elastic IP rather than the instance, because remapping that IP to a replacement box is the failover — seconds, and no DNS propagation to wait out."
+            >
+              <div class="t">Route 53</div>
+              <div class="spec">1 zone · 1 A record per env</div>
+              <div class="cost">$0.50</div>
+            </div>
+
+            <div
+              class="node security"
+              id="acm"
+              data-title="ACM — us-east-1 only"
+              data-spec="Free · CloudFront certificates"
+              data-why="CloudFront will only read a certificate from us-east-1, and the API's certificate is Caddy's own — so ACM exists in exactly one region for exactly three distributions."
+            >
+              <div class="t">ACM <span class="tag">us-east-1</span></div>
+              <div class="spec">free · CDN certs only</div>
+            </div>
+
+            <div
+              class="node network"
+              id="cf-student"
+              data-title="CloudFront — student SPA"
+              data-spec="Pay-as-you-go · /assets/* immutable 1yr · index.html no-cache"
+              data-why="Pay-as-you-go rather than the flat Free plan, because that plan caps at 1M requests per distribution and the student app passes it in a busy month."
+            >
+              <div class="t">CloudFront <span class="tag">student</span></div>
+              <div class="spec">OAC → S3 · brotli · HTTP/3</div>
+            </div>
+
+            <div
+              class="node network"
+              id="cf-fn"
+              data-title="CloudFront Function — SPA routing"
+              data-spec="Viewer request · rewrites page routes to /index.html"
+              data-why="A Function rather than the 404-to-index error rule, so a genuinely missing file still answers 404 instead of returning HTML that the browser then tries to parse as JavaScript."
+            >
+              <div class="t">CloudFront Function</div>
+              <div class="spec">route → index.html</div>
+            </div>
+
+            <div
+              class="node network"
+              id="cf-admin"
+              data-title="CloudFront — admin SPA"
+              data-spec="Same bucket, its own distribution"
+              data-why="Its own distribution keeps the admin app's invalidations and request count off the student app's, which is the one that gets near a quota."
+            >
+              <div class="t">CloudFront <span class="tag">admin</span></div>
+              <div class="spec">OAC → S3</div>
+            </div>
+
+            <div
+              class="node network"
+              id="cf-media"
+              data-title="CloudFront — question media"
+              data-spec="Stable unsigned URLs · MEDIA_BASE_URL + key"
+              data-why="Unsigned so the edge caches one copy of a diagram: a per-student signature would make 8,000 candidates fetch the same image 8,000 times from S3, $37–64 a month at event scale with a browser cache that never hits."
+            >
+              <div class="t">CloudFront <span class="tag">media</span></div>
+              <div class="spec">unsigned · one copy at the edge</div>
+            </div>
+
+            <div
+              class="node storage"
+              id="s3-spa"
+              data-title="S3 — SPA bucket (private)"
+              data-spec="Reached only through an origin access control"
+              data-why="Old /assets files are never deleted, because a tab opened before a deploy still lazy-loads chunks under their previous hashed names — and keeping them costs about a cent a year."
+            >
+              <div class="t">S3 — SPA bundles</div>
+              <div class="spec">private · OAC · assets never pruned</div>
+            </div>
+
+            <div
+              class="node storage"
+              id="s3-media"
+              data-title="S3 — media bucket (private)"
+              data-spec="questions/images public-read through the CDN · uploads immutable 1yr"
+              data-why="One upload path, never branched by environment — MinIO locally opens the same prefix anonymously so the single code path holds from a laptop to production."
+            >
+              <div class="t">S3 — media</div>
+              <div class="spec">uuid keys · WebP 2,045 KB → 229 KB</div>
+            </div>
+
+            <div
+              class="node"
+              id="cf-unknown"
+              data-title="The one unmeasured line that can move the invoice"
+              data-spec="CloudFront free tier is 1 TB ≈ 4.4 MB of images per sitting"
+              data-why="Nobody has measured how many megabytes of images a real paper carries, and at 23 MB a sitting this line alone is ~$450 a month — the knobs are MAX_WIDTH and QUALITY in shrink-image.ts."
+            >
+              <div class="t"><span class="flag">unmeasured</span> image MB per paper</div>
+              <div class="spec">4.4 MB/sitting is the free-tier line</div>
+            </div>
+          </div>
+
+          <!-- ─────────────── VPC ─────────────── -->
+          <div class="col wide">
+            <div class="coltitle">VPC — ap-south-1, one zone in use</div>
+            <div
+              class="zone vpc"
+              id="vpc"
+              data-title="One VPC, two availability zones, one of them empty"
+              data-spec="No NAT gateway, no NAT instance"
+              data-why="The second AZ exists only because an RDS subnet group refuses to be created without two subnets in two zones — everything running sits in one zone, so inter-AZ transfer is zero."
+            >
+              <div class="zh">
+                VPC · 10.0.0.0/16
+                <span
+                  style="
+                    color: var(--muted);
+                    text-transform: none;
+                    letter-spacing: 0;
+                    font-weight: 400;
+                  "
+                  >— no NAT: both boxes are public-subnet, which removed the ALB shape's t4g.nano
+                  and its address</span
+                >
+              </div>
+
+              <div class="row">
+                <!-- public subnet -->
+                <div
+                  class="zone subnet"
+                  style="flex: 1"
+                  id="sub-pub"
+                  data-title="Public subnet — AZ ap-south-1a"
+                  data-spec="Every running instance lives here"
+                  data-why="Public rather than private because outbound to SMS, WhatsApp, push, Sentry and ECR then needs no gateway at all — security groups, not subnet placement, are what actually close these boxes."
+                >
+                  <div class="zh">Public subnet · az-1a</div>
+
+                  <div
+                    class="zone sg"
+                    id="sg-api"
+                    data-title="Security group — API boxes"
+                    data-spec="80 and 443 from 0.0.0.0/0, and nothing else inbound"
+                    data-why="No port 22 at all: a rule pinned to one address holds only until that address rotates, and what happens then is that it gets widened rather than fixed — SSM Session Manager opens a shell with no inbound rule to keep correct."
+                  >
+                    <div class="zh">sg-api · 80/443 world · no inbound SSH</div>
+
+                    <div
+                      class="node compute"
+                      id="boxA"
+                      data-title="Box A — the API box"
+                      data-title-a="Box A′ — the staging API box"
+                      data-title-b="Box A — the production API box"
+                      data-spec-b="EC2 t4g.large · 2 vCPU · 8 GB · gp3 20 GB · Elastic IP"
+                      data-spec-a="EC2 t4g.medium · 2 vCPU · 4 GB · gp3 20 GB · Elastic IP"
+                      data-cost-b="$38.17/mo"
+                      data-cost-a="$21.82/mo"
+                      data-why="Scaling here is vertical and deliberate: stop, resize, start — two minutes, billed hourly — because at t4g.2xlarge one box serves roughly eight times the 10K ceiling. It runs out of availability long before it runs out of CPU."
+                    >
+                      <div class="t">
+                        Box A
+                        <span class="tag" data-t-a="staging" data-t-b="production">staging</span>
+                      </div>
+                      <div class="spec"></div>
+                      <div class="cost"></div>
+                    </div>
+
+                    <div
+                      class="node compute sm"
+                      id="ebsA"
+                      style="margin-top: 10px"
+                      data-title="EBS gp3 — 20 GB"
+                      data-spec="3,000 IOPS and 125 MB/s at any size"
+                      data-cost="$1.82/mo"
+                      data-why="20 GB and not 30: logs cannot fill it — six containers capped at 10 MB×3 is 180 MB — and once images come from ECR the box holds the OS, two releases and the volumes with half the disk spare. deploy/prune-disk.sh keeps it there by dropping every app image but the newest two."
+                    >
+                      <div class="t">EBS gp3 20 GB + Elastic IP</div>
+                      <div class="spec">3,000 IOPS · 125 MB/s</div>
+                    </div>
+
+                    <div
+                      class="zone"
+                      style="margin-top: 12px; border-style: solid; border-color: var(--line)"
+                      id="compose"
+                      data-title="Docker Compose — deploy/compose.yml"
+                      data-spec="One image, three roles, chosen by API_ROLE"
+                      data-why="Node is single-threaded, so container count is how you use the box: one API_ROLE=all container on a 2-vCPU box would use half of it permanently."
+                    >
+                      <div class="zh">docker compose · one image · API_ROLE picks the role</div>
+
+                      <div class="row">
+                        <div class="stack" style="width: 250px">
+                          <div
+                            class="node network"
+                            id="caddy"
+                            data-title="Caddy — the front door"
+                            data-spec="Let's Encrypt over the HTTP challenge · ports 80, 443"
+                            data-why="It obtains and renews its own certificate, which removes the ALB, ACM and target groups entirely — and the trade is stated plainly: one Caddy on one box means a reboot is an outage."
+                          >
+                            <div class="t">Caddy <span class="tag">TLS + router</span></div>
+                            <div class="spec">auto-HTTPS · no ALB, no ACM</div>
+                          </div>
+
+                          <div
+                            class="node sm"
+                            id="matcher"
+                            style="margin-top: 10px"
+                            data-title="The @exam path matcher"
+                            data-spec="Exact leaf paths, never a prefix wildcard"
+                            data-why="The split is not prefix-clean — /me/performance is exam but /me/performance/report is core, and /me/attempts/*/question-report is core under a prefix exam owns — so a wildcard would route real traffic to the wrong container."
+                          >
+                            <div class="t">@exam path …/attempt …/paper …/submit …/state</div>
+                            <div class="spec">everything else falls through to core</div>
+                          </div>
+
+                          <div
+                            class="node sm"
+                            id="dyn"
+                            style="margin-top: 8px"
+                            data-title="dynamic a upstreams · refresh 10s"
+                            data-spec="fail_duration 30s · max_fails 3"
+                            data-why="Docker's DNS returns every container of a scaled service, so `--scale exam=4` is the whole of scaling out and Caddy needs no config change — passive health checks take a failing container out for 30s."
+                          >
+                            <div class="t">dynamic a → exam:3000 / core:3000</div>
+                            <div class="spec">re-resolves every 10s</div>
+                          </div>
+                        </div>
+
+                        <div class="stack" style="flex: 1">
+                          <div
+                            class="node compute"
+                            id="exam"
+                            data-title="exam container"
+                            data-spec-b="0.8 vCPU · 2 GB · heap 1536 MB · scales with the box"
+                            data-spec-a="0.8 vCPU · 1 GB · heap 384 MB · one tester"
+                            data-why="It gets the largest share because of CFS throttling: below a whole core the quota is spent early in each 100 ms window and the process is frozen for the rest, which reads as a low CPU average beside a terrible p99."
+                          >
+                            <div class="t">exam</div>
+                            <div class="spec"></div>
+                          </div>
+                          <div
+                            class="node compute"
+                            id="core"
+                            data-title="core container"
+                            data-spec-b="0.6 vCPU · 1 GB · heap 768 MB · scales with the box"
+                            data-spec-a="0.6 vCPU · 1 GB · heap 384 MB"
+                            data-why="Auth, me, results, every admin route and the importer — separated from exam so an admin running an import cannot take CPU from a hall that is mid-sitting."
+                          >
+                            <div class="t">core</div>
+                            <div class="spec"></div>
+                          </div>
+                          <div
+                            class="node compute"
+                            id="worker"
+                            data-title="worker container — exactly one, never more"
+                            data-spec-b="0.4 vCPU · 1 GB · heap 768 MB · singleton"
+                            data-spec-a="0.4 vCPU · 1 GB · heap 384 MB · singleton"
+                            data-why="concurrency: 1 in QUEUE_POLICY is the only thing stopping the 60s flush overlapping the 120s sweep, and it works inside one process — a second container puts two sweeps over the same keys with no distributed lock behind them."
+                          >
+                            <div class="t">worker <span class="tag">×1</span></div>
+                            <div class="spec"></div>
+                          </div>
+                          <div
+                            class="node compute"
+                            id="alloy"
+                            data-title="alloy — the telemetry shipper"
+                            data-spec="cpu_shares 256 · reads the Docker socket"
+                            data-why="Nothing in the API knows it exists: it ships what Docker already captured, and discovers exam, core and worker off the same Docker API — so --scale needs no edit here either. First to yield under contention, because shipping a log line is never worth a candidate's request waiting."
+                          >
+                            <div class="t">alloy <span class="tag">logs + metrics</span></div>
+                            <div class="spec">stdout → Loki · /metrics → Prometheus</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="row" style="margin-top: 10px">
+                        <div
+                          class="node sm"
+                          style="flex: 1"
+                          id="migrate"
+                          data-title="migrate — one-shot container"
+                          data-spec="prisma migrate deploy, then exits · 731 MB image"
+                          data-why="Its own image and its own container because the Prisma CLI has no business in a runtime that serves students, and because the API must not start until migrations have finished."
+                        >
+                          <div class="t">migrate <span class="tag">runs, exits</span></div>
+                          <div class="spec">API waits on it</div>
+                        </div>
+                        <div
+                          class="node sm"
+                          style="flex: 1"
+                          id="tini"
+                          data-title="tini as PID 1"
+                          data-spec="Exit 143 clean · exit 137 is SIGKILL"
+                          data-why="The kernel applies no default action to PID 1, so an unhandled SIGTERM is simply ignored and the container is killed at the end of the grace period instead of shutting Nest down."
+                        >
+                          <div class="t">tini · PID 1</div>
+                          <div class="spec">SIGTERM → clean exit</div>
+                        </div>
+                        <div
+                          class="node sm"
+                          style="flex: 1"
+                          id="envfile"
+                          data-title="deploy/.env — one file per environment"
+                          data-spec="root, chmod 600 · --env-file for substitution, env_file for the containers"
+                          data-why="The file is the unit rather than the variable: API_ROLE, the heaps and the cpu shares stay in compose.yml because they differ per role, and the file carries only what all three containers share."
+                        >
+                          <div class="t">deploy/.env <span class="tag">0600</span></div>
+                          <div class="spec">master copy in SSM</div>
+                        </div>
+                        <div
+                          class="node sm"
+                          style="flex: 1"
+                          id="boot"
+                          data-title="Boot guards — the API refuses or warns"
+                          data-spec="Unsized pool · empty CORS · dev_only_ secret · evicting Valkey"
+                          data-why="Each refusal names its variable at boot rather than failing at the first login, and the heap guard warns in both directions when --max-old-space-size does not match the container's memory limit."
+                        >
+                          <div class="t">boot refusals + heap guard</div>
+                          <div class="spec">names the role and the variable</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      class="node compute sm prod-only"
+                      style="margin-top: 12px"
+                      id="boxAs"
+                      data-title="Box A′ — staging API box"
+                      data-spec-b="EC2 t4g.small · 2 GB · same three containers"
+                      data-cost-b="$14.57/mo"
+                      data-why="Staging keeps the production shape at a tester's size, because it exists to rehearse production rather than a smaller thing — and it drops from medium to small the day images come from ECR instead of being built on the box."
+                    >
+                      <div class="t">Box A′ — staging <span class="tag">same shape</span></div>
+                      <div class="spec">
+                        heaps 384 MB · NODE_ENV=development · OTP_SENDER=console
+                      </div>
+                      <div class="cost"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- box B + rds -->
+                <div class="stack" style="width: 290px">
+                  <div
+                    class="zone sg"
+                    id="sg-data"
+                    data-title="Security group — data plane"
+                    data-spec="6379, 6380 and 5432 from sg-api only — the first of Box B's three locks"
+                    data-why="Written by group rather than by CIDR, so nothing on the internet has a rule that reaches these at all and a replacement API box is trusted the moment it joins the group."
+                  >
+                    <div class="zh">sg-data · from sg-api, by group</div>
+
+                    <div
+                      class="node compute"
+                      id="boxB"
+                      data-title="Box B — Valkey"
+                      data-spec-a="EC2 t4g.micro · 1 GB · gp3 10 GB"
+                      data-spec-b="EC2 t4g.medium · 4 GB · gp3 20 GB"
+                      data-cost-a="$8.65/mo"
+                      data-cost-b="$21.82/mo"
+                      data-why="Valkey sits off the API box so the API box becomes disposable: resize it, replace it, roll it, and every live sitting continues — with Valkey on it, that same recovery drops sitting state on the floor."
+                    >
+                      <div class="t">Box B <span class="tag">cache + queues</span></div>
+                      <div class="spec"></div>
+                      <div class="cost"></div>
+                    </div>
+
+                    <div
+                      class="node database sm"
+                      style="margin-top: 10px"
+                      id="vk-prod"
+                      data-title="valkey-prod :6379"
+                      data-spec-b="maxmemory 1.2 GB · noeviction · appendonly everysec"
+                      data-spec-a="not running yet — production does not exist"
+                      data-why="A process per environment rather than two database indexes, because maxmemory is per process: under noeviction a staging runaway filling one instance would make production's writes fail — and a password each, so staging leaking cannot open production's keyspace."
+                    >
+                      <div class="t">valkey-prod :6379 <span class="tag">requirepass</span></div>
+                      <div class="spec"></div>
+                    </div>
+
+                    <div
+                      class="node database sm"
+                      style="margin-top: 8px"
+                      id="vk-stg"
+                      data-title="valkey-staging :6380"
+                      data-spec="maxmemory 256 MB · noeviction · appendonly everysec"
+                      data-why="noeviction is not a preference — BullMQ requires it and this holds live sittings, so any eviction policy would silently drop a candidate's answers. The API refuses to boot in production against anything else."
+                    >
+                      <div class="t">valkey-staging :6380 <span class="tag">requirepass</span></div>
+                      <div class="spec">256 MB · noeviction</div>
+                    </div>
+
+                    <div
+                      class="node security sm"
+                      style="margin-top: 8px"
+                      id="locks"
+                      data-title="Three locks on Box B"
+                      data-spec="The group · the bind to PRIVATE_IP · requirepass"
+                      data-why="It holds every live sitting, every session and every OTP and it carries a routable address so it can pull images, so the password is the lock that still holds after somebody edits the security group wrong."
+                    >
+                      <div class="t">group + private bind + password</div>
+                      <div class="spec">6379 is the most-scanned port there is</div>
+                    </div>
+
+                    <div
+                      class="node sm"
+                      style="margin-top: 8px"
+                      id="aof"
+                      data-title="What sizes Box B"
+                      data-spec="AOF rewrite forks; copy-on-write can double RSS"
+                      data-why="CPU never sizes this box — Valkey is single-threaded and an event is ~960 ops/s against a core that does 100,000 — memory does, and it is the rewrite fork rather than the dataset that sets the ceiling."
+                    >
+                      <div class="t">sized by the AOF fork, not the dataset</div>
+                      <div class="spec">disk ≈ 3× dataset + ~3 GB OS</div>
+                    </div>
+
+                    <div
+                      class="node sm"
+                      style="margin-top: 8px"
+                      id="noec"
+                      data-title="Why not ElastiCache"
+                      data-spec="Serverless: no parameter groups · node cache.t4g.small: $23.94"
+                      data-why="Serverless cannot set maxmemory-policy at all, which BullMQ's own documentation rules out, and a node-based one comes back empty after a failure because no current ElastiCache engine writes to disk."
+                    >
+                      <div class="t"><span class="flag">ruled out</span> ElastiCache</div>
+                      <div class="spec">policy unsettable · no disk</div>
+                    </div>
+                  </div>
+
+                  <div
+                    class="zone subnet"
+                    id="sub-priv"
+                    data-title="Private subnets — two AZs"
+                    data-spec="No route to the internet"
+                    data-why="Only the database sits here; the second subnet is the one an RDS subnet group insists on, and it holds nothing."
+                  >
+                    <div class="zh">Private subnets · az-1a + az-1b</div>
+
+                    <div
+                      class="node database"
+                      id="rds"
+                      data-title="RDS PostgreSQL 17"
+                      data-spec-a="db.t4g.micro · 1 GB · 20 GB gp3 · 7-day PITR"
+                      data-spec-b="db.t4g.small · 2 GB · 20 GB gp3 → 100 GB · 7-day PITR"
+                      data-cost-a="$17.95/mo"
+                      data-cost-b="$33.28/mo"
+                      data-why="Managed rather than a container because the one operational move nobody should make for the first time under pressure is the one that holds marks — a container has no PITR, no backups and no storage autoscaling."
+                    >
+                      <div class="t">RDS — PostgreSQL 17</div>
+                      <div class="spec"></div>
+                      <div class="cost"></div>
+                    </div>
+
+                    <div
+                      class="node database sm"
+                      style="margin-top: 10px"
+                      id="conns"
+                      data-title="Connections size this, not load"
+                      data-spec="~112 max_connections on 1 GB · exam 8 + core 25 + worker 25 + staging 10 = 68"
+                      data-why="RDS derives max_connections from memory, so the trigger to move to db.t4g.small is a second exam container rather than any amount of traffic."
+                    >
+                      <div class="t">68 of ~112 connections</div>
+                      <div class="spec">a 2nd exam container exhausts it</div>
+                    </div>
+
+                    <div
+                      class="node database sm"
+                      style="margin-top: 8px"
+                      id="pg17"
+                      data-title="Postgres 17, not 16"
+                      data-spec="Standard support to 28 Feb 2030"
+                      data-why="RDS Extended Support costs $0.114 per vCPU-hour once a version leaves standard support — more than the instance itself — and 16 leaves a full year earlier."
+                    >
+                      <div class="t">17 over 16</div>
+                      <div class="spec">Extended Support &gt; the instance</div>
+                    </div>
+
+                    <div
+                      class="node database sm"
+                      style="margin-top: 8px"
+                      id="stgdb"
+                      data-title="Staging's database on the same instance"
+                      data-spec="CONNECTION LIMIT 10 · statement_timeout 30s · idle_in_transaction 60s"
+                      data-why="A database per environment on one instance is cheap, and those three role-level limits are what stop a staging runaway taking production's connections or holding its CPU."
+                    >
+                      <div class="t">a database per environment</div>
+                      <div class="spec">role-level limits, not trust</div>
+                    </div>
+
+                    <div
+                      class="node sm"
+                      style="margin-top: 8px"
+                      id="hop"
+                      data-title="The network hop that will not show up on a laptop"
+                      data-spec="Loopback ~50 µs · same-zone VPC 0.1–0.3 ms · 9 round trips per attempt"
+                      data-why="Scoring makes nine round trips per attempt, so moving Postgres off the box costs +1–3 ms on a 7.4 ms p50 — and that is the figure that transfers, because production always has the database on another host."
+                    >
+                      <div class="t">9 round trips × 0.1–0.3 ms</div>
+                      <div class="spec">+15–40% vs loopback benches</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ─────────────── ops ─────────────── -->
+          <div class="col" style="width: 240px">
+            <div class="coltitle">Regional services</div>
+
+            <div
+              class="node mgmt"
+              id="gha"
+              data-title="GitHub Actions — seven workflows"
+              data-spec="build-api · staging · production · scale · ci"
+              data-why="The branch is the environment: a push to staging deploys it at once, main releases at 02:00 IST behind a reviewer. Images build on ARM and go to ECR; the box only ever pulls, so a release is 30 seconds and a rollback is a tag."
+            >
+              <div class="t">GitHub Actions</div>
+              <div class="spec">staging → now · main → night</div>
+            </div>
+
+            <div
+              class="node security"
+              id="oidc"
+              data-title="examprep-github-actions, assumed by OIDC"
+              data-spec="Trust names two branches and two environments — never a wildcard"
+              data-why="No AWS key exists in GitHub: each run swaps its OIDC token for a short session. On a public repository the exact-subject trust is the whole difference — repo:…:* would let a workflow on any fork assume the role."
+            >
+              <div class="t">OIDC role <span class="tag">no keys</span></div>
+              <div class="spec">ECR push · S3 · CloudFront · SSM</div>
+            </div>
+
+            <div
+              class="node mgmt"
+              id="ecr"
+              data-title="ECR"
+              data-spec="Lifecycle keeps the last ten images"
+              data-cost="&lt;$0.20/mo"
+              data-why="Ten is where the registry stops growing and a rollback is still one pull away — and it is why the box can keep only two: the images there are a cache, the archive is here."
+            >
+              <div class="t">ECR</div>
+              <div class="spec">last 10 images</div>
+              <div class="cost">&lt;$0.20</div>
+            </div>
+
+            <div
+              class="node security"
+              id="imds"
+              data-title="IMDSv2 required, and SSM Session Manager for the shell"
+              data-spec="HttpTokens=required · HttpPutResponseHopLimit=2"
+              data-why="A public-subnet box running Node is one SSRF away from handing over its instance role, and IMDSv2 makes the attacker send a PUT first — the hop limit is 2 because the caller is inside a container."
+            >
+              <div class="t">IMDSv2 <span class="tag">required</span></div>
+              <div class="spec">no key pair · shell over SSM</div>
+            </div>
+
+            <div
+              class="node security"
+              id="ssm"
+              data-title="SSM Parameter Store — the master copy of the env file"
+              data-spec="One SecureString per environment at /examprep/&lt;env&gt;/env · free · 4 KB cap"
+              data-why="It holds the whole environment file rather than a parameter per secret, because one pull is what makes the box disposable — and nothing reads it at runtime, so the box boots whether or not AWS answers."
+            >
+              <div class="t">SSM Parameter Store</div>
+              <div class="spec">/examprep/&lt;env&gt;/env · pulled, never read at boot</div>
+            </div>
+
+            <div
+              class="node mgmt"
+              id="cw"
+              data-title="CloudWatch Logs + alarms"
+              data-spec="awslogs driver · 14 days · ~10 alarms at $0.10"
+              data-cost="~$1.30/mo"
+              data-why="The API has 35 log statements and none on the request path, which is what keeps ingest inside the free 5 GB — Caddy's JSON access log replaces the ALB's, so there is no bucket and no lifecycle to configure."
+            >
+              <div class="t">CloudWatch</div>
+              <div class="spec">14-day retention · 5 GB free</div>
+              <div class="cost">~$1.30</div>
+            </div>
+
+            <div
+              class="node mgmt"
+              id="burst"
+              data-title="Alarm — CPUSurplusCreditsCharged"
+              data-spec="t4g unlimited mode is the default · ~$0.04 per surplus vCPU-hour"
+              data-why="Past the 20%-per-vCPU baseline you are billed rather than throttled, which is the right trade for an exam — a bill beats an outage — but it is the single largest gap between the expected and the worst-case invoice, so it gets its own alarm."
+            >
+              <div class="t">burst-credit alarm</div>
+              <div class="spec">a pegged box is ~$47 extra</div>
+            </div>
+
+            <div
+              class="node mgmt"
+              id="budget"
+              data-title="Two AWS Budgets"
+              data-spec="One at the total, one anomaly detector"
+              data-cost="free"
+              data-why="Every alarm above watches something that is running; none watches something that should have stopped, and on a first AWS account a rehearsal instance left up for three weeks costs more than the mistakes the alarms catch."
+            >
+              <div class="t">Budgets ×2</div>
+              <div class="spec">free · catches what is left running</div>
+              <div class="cost">free</div>
+            </div>
+
+            <div class="coltitle" style="margin-top: 10px">Outside AWS</div>
+
+            <div
+              class="node"
+              id="grafana"
+              data-title="Grafana Cloud — free tier"
+              data-spec="Scrapes /metrics: latency, queue depth, oldest wait, live sittings"
+              data-why="It scrapes the app's own Prometheus endpoint, which already publishes what an event needs watching — Amazon Managed Prometheus and Grafana would be $14–19 for the same picture."
+            >
+              <div class="t">Grafana Cloud</div>
+              <div class="spec">free · scrapes /metrics</div>
+            </div>
+
+            <div
+              class="node"
+              id="sentry"
+              data-title="Sentry — free tier"
+              data-spec="Errors from the API and both SPAs"
+              data-why="Free at this volume, and outbound needs no gateway because the boxes are public-subnet."
+            >
+              <div class="t">Sentry</div>
+              <div class="spec">free tier</div>
+            </div>
+
+            <div
+              class="node"
+              id="sms"
+              data-title="SMS aggregator · WhatsApp · FCM"
+              data-spec="Per message · DLT registration pending"
+              data-why="Staging runs OTP_SENDER=console precisely because the DLT registration behind that SMS does not exist yet — the code comes back as devCode on the request response, so a tester signs in with no provider at all."
+            >
+              <div class="t">SMS · WhatsApp · push</div>
+              <div class="spec">per message · DLT pending</div>
+            </div>
+
+            <div
+              class="node"
+              id="cal"
+              data-title="Two ops rules with no infrastructure"
+              data-spec="Resize before opensAt · no catalog edits in a start window"
+              data-why="Pre-warming on this shape means resizing the box before opensAt rather than raising an autoscaling minimum — and any test or series write busts the whole catalog cache in one epoch bump, turning every start in the hall into a cold resolve."
+            >
+              <div class="t">on the release calendar</div>
+              <div class="spec">pre-warm · freeze the catalog</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="legend">
+        <span><i style="background: var(--compute)"></i>Compute</span>
+        <span><i style="background: var(--network)"></i>Networking &amp; CDN</span>
+        <span><i style="background: var(--database)"></i>Database &amp; cache</span>
+        <span><i style="background: var(--storage)"></i>Storage</span>
+        <span><i style="background: var(--security)"></i>Security</span>
+        <span><i style="background: var(--mgmt)"></i>Management</span>
+        <span><i style="background: var(--ext)"></i>Clients &amp; third parties</span>
+        <span><i style="background: #94a3b8"></i>solid wire = request path</span>
+        <span><i style="background: #cbd5e1"></i>dashed = control, logs, pulls</span>
+      </div>
+      <p>
+        <b>Prices</b> are US dollars a month at 730 hours in ap-south-1, from the AWS Price List
+        bulk files, re-pulled 28 September 2026 against list version 20260925 and unchanged. Add 18%
+        GST — ap-south-1 bills through AWS India — so ~$61 today and ~$130 with production.
+      </p>
+      <p>
+        <b>Sized for</b> CLAUDE.md's load and nobody else's: ~3K concurrent normally, 6K handled, 8K
+        with minor additions. Every derived figure is worked against 8,000 candidates an event,
+        thirty events a month.
+      </p>
+      <p>
+        <b>Not evidence:</b> the Graviton multiplier — “3–4× slower than the measuring machine” —
+        sits underneath every projection here and was never benchmarked. One run of
+        <code>scripts/bench-scoring.mjs</code> on the first real box replaces it.
+        docs/04-infrastructure.md §16 lists the rest.
+      </p>
+      <p>
+        Source of record: <code>docs/04-infrastructure.md</code>, <code>deploy/compose.yml</code>,
+        <code>deploy/valkey/compose.yml</code>, <code>deploy/Caddyfile</code>.
+      </p>
+    </footer>
+
+    <div id="tip"></div>
+
+    <script>
+      (function () {
+        var board = document.getElementById('board'),
+          svg = document.getElementById('wires'),
+          svg2 = document.getElementById('wires2'),
+          tip = document.getElementById('tip'),
+          scaler = document.getElementById('scaler'),
+          scale = 1;
+
+        var EDGES = [
+          ['c-student', 'r53', 'DNS', 'faint'],
+          ['c-student', 'cf-student', 'shell + assets', ''],
+          ['c-admin', 'cf-admin', '', ''],
+          ['c-student', 'cf-media', 'images', ''],
+          ['cf-student', 's3-spa', 'OAC', 'faint'],
+          ['cf-admin', 's3-spa', '', 'faint'],
+          ['cf-media', 's3-media', 'OAC', 'faint'],
+          ['c-student', 'caddy', '443 · API', 'hot'],
+          ['c-mobile', 'caddy', '443', 'hot'],
+          ['caddy', 'exam', '@exam paths', 'hot'],
+          ['caddy', 'core', 'everything else', ''],
+          ['exam', 'vk-stg', 'autosave · sittings', ''],
+          ['core', 'vk-stg', 'catalog cache', ''],
+          ['worker', 'vk-stg', 'BullMQ', ''],
+          ['exam', 'rds', '', ''],
+          ['core', 'rds', '', ''],
+          ['worker', 'rds', 'scoring writes', ''],
+          ['migrate', 'rds', 'migrate deploy', 'faint'],
+          ['ssm', 'envfile', 'pulled once', 'faint'],
+          ['gha', 'oidc', 'assume', 'faint'],
+          ['oidc', 'ecr', 'push', 'faint'],
+          ['vpc', 'ecr', '', 'faint'],
+          ['vpc', 'cw', '', 'faint'],
+          ['vpc', 'grafana', '', 'faint'],
+          ['vpc', 'sentry', '', 'faint'],
+          ['vpc', 'sms', '', 'faint'],
+        ];
+
+        function pos(el) {
+          var x = 0,
+            y = 0,
+            n = el;
+          while (n && n !== board) {
+            x += n.offsetLeft;
+            y += n.offsetTop;
+            n = n.offsetParent;
+          }
+          return { x: x, y: y, w: el.offsetWidth, h: el.offsetHeight };
+        }
+
+        function draw() {
+          [svg, svg2].forEach(function (g) {
+            g.setAttribute('width', board.offsetWidth);
+            g.setAttribute('height', board.offsetHeight);
+          });
+          var out = '',
+            hot = '';
+          EDGES.forEach(function (e) {
+            var a = document.getElementById(e[0]),
+              b = document.getElementById(e[1]);
+            if (!a || !b || !a.offsetParent || !b.offsetParent) return;
+            var p = pos(a),
+              q = pos(b),
+              x1 = p.x + p.w,
+              y1 = p.y + p.h / 2,
+              x2 = q.x,
+              y2 = q.y + q.h / 2;
+            if (x2 < x1) {
+              x1 = p.x + p.w;
+              x2 = q.x + q.w;
+            }
+            var dx = Math.max(34, Math.abs(x2 - x1) / 2);
+            var d =
+              '<path class="' +
+              e[3] +
+              '" d="M' +
+              x1 +
+              ' ' +
+              y1 +
+              ' C' +
+              (x1 + dx) +
+              ' ' +
+              y1 +
+              ',' +
+              (x2 - dx) +
+              ' ' +
+              y2 +
+              ',' +
+              x2 +
+              ' ' +
+              y2 +
+              '"/>';
+            if (e[2])
+              d +=
+                '<text class="wlabel" x="' +
+                (x1 + x2) / 2 +
+                '" y="' +
+                ((y1 + y2) / 2 - 5) +
+                '" text-anchor="middle">' +
+                e[2] +
+                '</text>';
+            if (e[3] === 'hot') hot += d;
+            else out += d;
+          });
+          svg.innerHTML = out;
+          svg2.innerHTML = hot;
+        }
+
+        function pick(el, base) {
+          var m = document.body.dataset.mode;
+          return el.getAttribute('data-' + base + '-' + m) || el.getAttribute('data-' + base) || '';
+        }
+
+        function render() {
+          document.querySelectorAll('[data-title]').forEach(function (el) {
+            var s = pick(el, 'spec'),
+              c = pick(el, 'cost');
+            var se = el.querySelector(':scope > .spec');
+            if (se && s) se.textContent = s;
+            var ce = el.querySelector(':scope > .cost');
+            if (ce) ce.innerHTML = c;
+          });
+          document.querySelectorAll('.tag[data-t-a]').forEach(function (g) {
+            g.textContent = g.getAttribute('data-t-' + document.body.dataset.mode) || g.textContent;
+          });
+          var a = document.body.dataset.mode === 'a';
+          document.getElementById('total').innerHTML =
+            (a ? '$51.82' : '$110.32') +
+            '<small> /mo · ' +
+            (a ? '~$61' : '~$130') +
+            ' with GST</small>';
+          requestAnimationFrame(draw);
+        }
+
+        function mode(m) {
+          document.body.dataset.mode = m;
+          document.getElementById('mA').setAttribute('aria-pressed', String(m === 'a'));
+          document.getElementById('mB').setAttribute('aria-pressed', String(m === 'b'));
+          render();
+        }
+        document.getElementById('mA').onclick = function () {
+          mode('a');
+        };
+        document.getElementById('mB').onclick = function () {
+          mode('b');
+        };
+
+        function zoom(d) {
+          scale = Math.min(1.4, Math.max(0.5, Math.round((scale + d) * 100) / 100));
+          scaler.style.transform = 'scale(' + scale + ')';
+          scaler.style.height = board.offsetHeight * scale + 'px';
+          document.getElementById('zl').textContent = Math.round(scale * 100) + '%';
+        }
+        document.getElementById('zi').onclick = function () {
+          zoom(0.1);
+        };
+        document.getElementById('zo').onclick = function () {
+          zoom(-0.1);
+        };
+
+        var last = null;
+        function show(el, ev) {
+          if (last && last !== el) last.classList.remove('on');
+          last = el;
+          el.classList.add('on');
+          tip.innerHTML =
+            '<div class="tt">' +
+            pick(el, 'title') +
+            '</div>' +
+            (pick(el, 'spec') ? '<div class="ts">' + pick(el, 'spec') + '</div>' : '') +
+            '<div class="tw">' +
+            el.getAttribute('data-why') +
+            '</div>' +
+            (pick(el, 'cost') ? '<div class="tc">' + pick(el, 'cost') + '</div>' : '');
+          tip.classList.add('show');
+          var w = tip.offsetWidth,
+            h = tip.offsetHeight,
+            x = Math.min(ev.clientX + 16, innerWidth - w - 12),
+            y = ev.clientY + 18;
+          if (y + h > innerHeight - 12) y = Math.max(12, ev.clientY - h - 14);
+          tip.style.left = x + 'px';
+          tip.style.top = y + 'px';
+        }
+        function hide() {
+          tip.classList.remove('show');
+          if (last) {
+            last.classList.remove('on');
+            last = null;
+          }
+        }
+
+        board.addEventListener('mouseover', function (ev) {
+          var el = ev.target.closest('[data-why]');
+          if (el) show(el, ev);
+        });
+        board.addEventListener('mousemove', function (ev) {
+          var el = ev.target.closest('[data-why]');
+          if (el && el === last) show(el, ev);
+        });
+        board.addEventListener('mouseout', function (ev) {
+          if (!ev.relatedTarget || !ev.relatedTarget.closest('[data-why]')) hide();
+        });
+        board.addEventListener('click', function (ev) {
+          var el = ev.target.closest('[data-why]');
+          if (el) show(el, ev);
+          else hide();
+        });
+
+        addEventListener('resize', draw);
+        render();
+        setTimeout(draw, 120);
+      })();
+    </script>
+  </body>
+</html>
