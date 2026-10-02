@@ -95,6 +95,7 @@ interface SectionValues {
   mandatory: boolean;
   meritOrQualifying: MeritType;
   qualifyingCutoff: string;
+  patternNote: string;
 }
 
 interface ModuleValues {
@@ -129,6 +130,7 @@ function emptySection(): SectionValues {
     moduleOrder: '',
     questionCount: '',
     marksPerQuestion: '1',
+    patternNote: '',
     negativeMarks: '0',
     durationMin: '',
     perQuestionSec: '',
@@ -197,6 +199,7 @@ function valuesOf(detail: BaseConfigDetail | null): ConfigFormValues {
       questionCount: String(section.questionCount),
       marksPerQuestion: String(section.marksPerQuestion),
       negativeMarks: String(section.negativeMarks),
+      patternNote: section.patternNote ?? '',
       durationMin: minutesFieldOf(section.durationSec),
       perQuestionSec: section.perQuestionSec === null ? '' : String(section.perQuestionSec),
       mandatory: section.mandatory,
@@ -216,6 +219,7 @@ function toSectionDraft(section: SectionValues, index: number): BaseConfigSectio
     questionCount: numberOr(section.questionCount, 0),
     marksPerQuestion: numberOr(section.marksPerQuestion, 0),
     negativeMarks: numberOr(section.negativeMarks, 0),
+    patternNote: section.patternNote.trim() || null,
     durationSec: secondsFromMinutes(section.durationMin),
     perQuestionSec: optionalNumber(section.perQuestionSec),
     mandatory: section.mandatory,
@@ -927,6 +931,15 @@ function SectionCard({
           /* ui-copy-ok: rule */ hint="Optional"
         >
           {(control) => <Input {...control} inputMode="numeric" />}
+        </FormField>
+
+        <FormField
+          form={form}
+          name={`sections.${index}.patternNote`}
+          label="Pattern note"
+          /* ui-copy-ok: rule */ hint="Reference only; nothing draws on it"
+        >
+          {(control) => <Input {...control} placeholder="Moderate-Difficult" />}
         </FormField>
 
         <FormCombobox

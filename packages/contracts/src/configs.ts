@@ -126,6 +126,8 @@ const baseConfigSectionSchema = z.object({
   mandatory: z.boolean(),
   meritOrQualifying: meritTypeSchema,
   qualifyingCutoff: z.number().nullable(),
+  /** The exam-pattern workbook's own words for this section. Reference an exam controller reads; no draw consults it. */
+  patternNote: z.string().nullable(),
 });
 export type BaseConfigSection = z.infer<typeof baseConfigSectionSchema>;
 
@@ -190,6 +192,7 @@ export type BaseConfigDetail = z.infer<typeof baseConfigDetailSchema>;
 // ============================================================================
 
 const CONFIG_NAME_MAX = 120;
+const PATTERN_NOTE_MAX = 120;
 
 const configNameSchema = displayNameSchema('config', CONFIG_NAME_MAX);
 
@@ -212,6 +215,8 @@ const baseConfigSectionDraftSchema = z.object({
   mandatory: z.boolean().optional(),
   meritOrQualifying: meritTypeSchema.optional(),
   qualifyingCutoff: questionMarksSchema.nullish(),
+  /** The paper is replaced wholesale, so the editor posts this back on every save; omitting it clears the note. */
+  patternNote: z.string().trim().max(PATTERN_NOTE_MAX).nullish(),
 });
 export type BaseConfigSectionDraft = z.infer<typeof baseConfigSectionDraftSchema>;
 

@@ -466,6 +466,7 @@ interface PaperRows {
     mandatory: boolean;
     meritOrQualifying: MeritType;
     qualifyingCutoff: number | null;
+    patternNote: string | null;
   }[];
 }
 
@@ -503,6 +504,7 @@ function paperRowsOf(
       mandatory: section.mandatory ?? true,
       meritOrQualifying: section.meritOrQualifying ?? MERIT_TYPE.MERIT,
       qualifyingCutoff: section.qualifyingCutoff ?? null,
+      patternNote: section.patternNote ?? null,
     })),
   };
 }
@@ -536,6 +538,7 @@ function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSecti
     marksPerQuestion: Number(section.marksPerQuestion),
     negativeMarks: Number(section.negativeMarks),
     durationSec: section.durationSec,
+    patternNote: section.patternNote,
   };
 }
 
@@ -596,6 +599,7 @@ function toDetail(row: DetailRow, editingBy: EditLockHolder | null): BaseConfigD
       mandatory: section.mandatory,
       meritOrQualifying: section.meritOrQualifying,
       qualifyingCutoff: section.qualifyingCutoff === null ? null : Number(section.qualifyingCutoff),
+      patternNote: section.patternNote,
     })),
   };
 }

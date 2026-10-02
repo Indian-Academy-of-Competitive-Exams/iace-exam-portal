@@ -126,6 +126,7 @@ async function editFirstSection(
       questionCount: section.questionCount,
       marksPerQuestion: section.marksPerQuestion,
       negativeMarks: section.negativeMarks,
+      patternNote: section.patternNote,
       perQuestionSec: section.perQuestionSec,
       mandatory: section.mandatory,
       meritOrQualifying: section.meritOrQualifying,
@@ -375,6 +376,29 @@ describe('BaseConfigsService — editing an unlocked config', () => {
     assert.equal(qualifying.meritOrQualifying, MERIT_TYPE.QUALIFYING);
     assert.equal(qualifying.qualifyingCutoff, 12);
     assert.equal(qualifying.perQuestionSec, 45, 'the earlier columns are still on the row');
+  });
+
+  /** THE loss: the paper is replaced wholesale on save, so a note the mapper did not carry was deleted by an edit that touched something else entirely. */
+  it("keeps a section's pattern note through a save that changes a different column", async () => {
+    const created = await service.create(draft(await makeStage(prisma)), ADMIN);
+    const noted = await editFirstSection(created.id, { patternNote: 'Moderate-Difficult' });
+    assert.equal(noted.patternNote, 'Moderate-Difficult');
+
+    const after = await editFirstSection(created.id, { questionCount: 30 });
+
+    assert.equal(after.questionCount, 30);
+    assert.equal(
+      after.patternNote,
+      'Moderate-Difficult',
+      'the workbook words survived the rewrite',
+    );
+  });
+
+  it('clears a pattern note when the editor empties it', async () => {
+    const created = await service.create(draft(await makeStage(prisma)), ADMIN);
+    await editFirstSection(created.id, { patternNote: 'Moderate-Difficult' });
+
+    assert.equal((await editFirstSection(created.id, { patternNote: null })).patternNote, null);
   });
 
   /** Switching the timer alone leaves sections the new template forbids, which Postgres would refuse raw. */
@@ -640,7 +664,7 @@ describe('BaseConfigsService — clone to evolve', () => {
   });
 
   /** The failure this prevents: a clone of the official pattern losing the workbook's own words. */
-  it('carries the pattern notes no contract shows', async () => {
+  it('carries the pattern notes across', async () => {
     const original = await seedConfig({ examStageId: await makeStage(prisma), sections: ['A'] });
     await prisma.baseConfigSection.updateMany({
       where: { baseConfigId: original },
