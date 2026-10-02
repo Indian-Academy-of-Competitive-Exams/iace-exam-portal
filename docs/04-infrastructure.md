@@ -59,24 +59,42 @@ to agonise over — §13 says when each one moves.
 |                       | What                                            | Monthly    |
 | --------------------- | ----------------------------------------------- | ---------- |
 | Box A′ — staging API  | EC2 `t4g.medium`: Caddy, exam, core, worker     | $16.35     |
-|                       | EBS gp3 30 GB + Elastic IP                      | $6.39      |
+|                       | EBS gp3 20 GB + Elastic IP                      | $5.47      |
 | Box B — Valkey        | EC2 `t4g.micro`, one process, no public ingress | $4.09      |
 |                       | EBS gp3 10 GB + public IPv4 (egress only)       | $4.56      |
 | Database              | RDS `db.t4g.micro`, 20 GB gp3, 7-day PITR       | $17.95     |
 | Frontend and media    | S3 + three CloudFront distributions             | ~$1        |
 | DNS, registry, alarms | Route 53, ECR, CloudWatch, two free Budgets     | $2.40      |
-| **Total**             |                                                 | **$52.74** |
+| **Total**             |                                                 | **$51.82** |
 
 **With production alongside it.**
 
 |                              | What                                     | Monthly     |
 | ---------------------------- | ---------------------------------------- | ----------- |
-| Box A — production API       | EC2 `t4g.large` + EBS 30 GB + Elastic IP | $39.09      |
+| Box A — production API       | EC2 `t4g.large` + EBS 20 GB + Elastic IP | $38.17      |
 | Box A′ — staging API         | EC2 `t4g.small` once builds move to ECR  | $14.57      |
 | Box B — Valkey ×2            | EC2 `t4g.medium`, 20 GB, a process each  | $21.82      |
 | Database                     | RDS `db.t4g.small`, two databases        | $33.28      |
 | Frontend, media, DNS, alarms |                                          | $3.40       |
-| **Total**                    |                                          | **$112.16** |
+| **Total**                    |                                          | **$110.32** |
+
+**20 GB and not 30, because Box A does not build.** `build-api.yml` builds on CodeBuild
+(§14), so the box only ever pulls: OS and Docker ~4 GB, two or three image versions ~4 GB, volumes
+and logs under 1 GB. Logs are not the driver anyone expects — six containers capped at 10 MB × 3
+is 180 MB — the **build** is, and one of those writes several GB of layers and BuildKit cache that
+grows every time unless pruned. If a box ever builds, prune after each one, or give it 30 GB. gp3
+grows online, so this is not a one-way door.
+
+**`deploy/prune-disk.sh` is what keeps 20 GB sufficient**, and it is safe to run at any time
+including mid-event: stopped containers, build cache, dead networks, and **every app image except
+the newest two**. It counts builds rather than days on purpose — in the first weeks a release goes
+out several times an afternoon, so "older than a week" would keep all of them and "older than a
+day" would throw away the rollback you wanted. Two is the last release and the one before it, which
+is a rollback that needs no network. `KEEP=4` before something risky. **It never touches
+volumes, and neither should you** — they hold Caddy's issued certificates and Box B's append-only
+file, and Let's Encrypt rate-limits five certificates per hostname per week, so one careless
+`docker system prune --volumes` locks you out of your own domain for seven days. Run it weekly
+from `cron`, and before any release you expect to be large.
 
 **Add 18% GST to both** — ap-south-1 bills through AWS India, so ~$62 today and ~$132 with
 production. It is input credit against the institute's GSTIN, but only if the GSTIN is on the
@@ -545,7 +563,7 @@ a log query. Revisit a dedicated tracker when volume makes issue state and relea
 a second vendor; one student pre-launch is not that.
 
 Containers log to Docker's `json-file` driver, **capped in `deploy/compose.yml` at 10 MB × 3 per
-container** — the default never rotates, and Box A has 30 GB to lose. That cap is the local safety
+container** — the default never rotates, and Box A has 20 GB to lose. That cap is the local safety
 net and stays: the shipper going down must cost visibility, never the disk, and `docker logs` keeps
 working on the box.
 
@@ -847,6 +865,24 @@ Never during an event window, and never a migration that moves data without the 
 `docs/superpowers/task-constraints.md` prescribes.
 
 ## 15. Deferred
+
+- **A CodeBuild runner for the ARM image build, the day the repository goes private.**
+  `build-api.yml` runs on `ubuntu-24.04-arm`, which GitHub gives free to PUBLIC repositories only.
+  A private repo on the Free plan loses that runner, loses branch protection and environment
+  reviewers, and is capped at 2,000 Actions minutes — and a QEMU-emulated build at 45–90 minutes
+  would eat most of that budget. The replacement is **CodeBuild as an ephemeral GitHub Actions
+  runner**: a container that exists only while a job runs, native ARM, `arm1.small` at **$0.002 a
+  minute** in ap-south-1 — about **$0.60 a month** at twenty builds, against $8.18 for an
+  always-on `t4g.small` runner and $28 for GitHub Team. It needs a classic token with `repo` and
+  `admin:repo_hook`, `aws codebuild import-source-credentials`, a project on
+  `ARM_CONTAINER`/`aws/codebuild/amazonlinux-aarch64-standard:4.0` with `privilegedMode=true`, a
+  webhook filtered to `WORKFLOW_JOB_QUEUED`, and one `runs-on` line:
+  `codebuild-<project>-${{ github.run_id }}-${{ github.run_attempt }}`. **That label must match
+  the project name and carry both parts** — wrong, and the job queues for ever with no error.
+  Nothing else in the workflow changes, and the OIDC role still does the AWS half. Only
+  `ci.yml` stays on GitHub's own runners, at ~140 of the 2,000 minutes.
+  **Self-hosted runners are only safe once the repo is private**, because a fork's pull request
+  can otherwise run code on your builder.
 
 - **The service worker never prunes its cache** (`iace-shell-v1` is a fixed name), so a student's
   device keeps up to ~1.5 MB per deploy they load. The `activate` handler already drops every cache

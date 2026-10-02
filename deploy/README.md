@@ -140,6 +140,35 @@ Before Alloy existed it was a file precisely because nothing would have carried 
 Assets first, shell second, three invalidation paths. Read the script before the first run; it
 explains why each of those matters.
 
+## Keeping the disk inside 20 GB
+
+```bash
+sudo ./deploy/prune-disk.sh
+```
+
+**Keeps the newest two builds of each app image and drops the rest**, plus stopped containers,
+build cache and dead networks. Counting builds rather than days because early on a release goes
+out several times an afternoon — two is the last one and the one before it, a rollback that needs
+no network. `KEEP=4 sudo ./deploy/prune-disk.sh` to hold more.
+
+**Every deploy runs it as its last step**, so the disk never drifts. The cron below is the backstop
+for build cache and stopped containers that accumulate between releases:
+
+```
+0 3 * * 0 /opt/examprep/deploy/prune-disk.sh >> /var/log/prune-disk.log 2>&1
+```
+
+**Why a count and not an age.** Seven days of retention bounds nothing: at three releases an
+afternoon that is twenty-one image pairs, and at ~1.3 GB each the 20 GB is gone in three or four
+days — and what breaks is not the prune but the next release, possibly at the `migrate` step with
+the API already stopped. Two is bounded by construction. Nothing is lost by it either: **the
+images on the box are a cache, the archive is ECR**, whose lifecycle policy keeps the last ten. A
+rollback past the local two is `API_TAG=<sha>` and a pull.
+
+**Never add `--volumes` to a prune.** They hold Caddy's issued certificates and Box B's
+append-only file. Let's Encrypt rate-limits five certificates per hostname per week, so one
+careless `docker system prune --volumes` can lock you out of your own domain for seven days.
+
 ## Redeploying
 
 ```bash

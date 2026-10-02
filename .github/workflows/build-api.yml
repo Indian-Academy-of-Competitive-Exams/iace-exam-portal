@@ -31,7 +31,8 @@ jobs:
   build:
     name: Build and push
     # Native arm64, because every box is Graviton. QEMU emulation would also work and takes
-    # several times as long; ARM runners are free on a public repository.
+    # several times as long. This runner is free only while the repository is PUBLIC — on a
+    # private repo on the Free plan it disappears, and docs/04 §15 carries the replacement.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}

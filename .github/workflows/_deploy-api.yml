@@ -60,7 +60,8 @@ jobs:
               \"export API_IMAGE=$REGISTRY/examprep/api MIGRATE_IMAGE=$REGISTRY/examprep/api-migrate API_TAG=${{ inputs.image_tag }}\",
               \"docker compose -f deploy/compose.yml --env-file deploy/.env pull\",
               \"docker compose -f deploy/compose.yml --env-file deploy/.env up -d\",
-              \"docker compose -f deploy/compose.yml --env-file deploy/.env ps\"
+              \"docker compose -f deploy/compose.yml --env-file deploy/.env ps\",
+              \"./deploy/prune-disk.sh\"
             ]" --query 'Command.CommandId' --output text)
           echo "cmd=$CMD" >> "$GITHUB_OUTPUT"
 
