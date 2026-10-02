@@ -31,7 +31,7 @@ function env(over: Record<string, string> = {}): Record<string, string> {
 const production = (over: Record<string, string> = {}): Record<string, string> =>
   env({
     NODE_ENV: NODE_ENVS.PRODUCTION,
-    CORS_ORIGINS: 'https://admin.iace.co.in',
+    CORS_ORIGINS: 'https://admin.examprep.iace.co.in',
     METRICS_TOKEN: 'scraper-token',
     DATABASE_URL: SIZED_POOL,
     TRUST_PROXY_HOPS: '1',
@@ -60,9 +60,9 @@ describe('CORS allowlist', () => {
   });
 
   it('boots production once the SPAs are named', () => {
-    const parsed = validateEnv(production({ CORS_ORIGINS: 'https://admin.iace.co.in' }));
+    const parsed = validateEnv(production({ CORS_ORIGINS: 'https://admin.examprep.iace.co.in' }));
 
-    assert.deepEqual(parsed.CORS_ORIGINS, ['https://admin.iace.co.in']);
+    assert.deepEqual(parsed.CORS_ORIGINS, ['https://admin.examprep.iace.co.in']);
   });
 
   it('leaves development permissive, so a new port needs no env edit', () => {
@@ -75,7 +75,9 @@ describe('CORS allowlist', () => {
   });
 
   it('answers only the named origins when there are any', () => {
-    assert.deepEqual(corsOrigin(['https://admin.iace.co.in'], true), ['https://admin.iace.co.in']);
+    assert.deepEqual(corsOrigin(['https://admin.examprep.iace.co.in'], true), [
+      'https://admin.examprep.iace.co.in',
+    ]);
   });
 });
 

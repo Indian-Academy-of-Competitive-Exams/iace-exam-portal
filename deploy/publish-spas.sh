@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds both SPAs and publishes them to S3 + CloudFront. docs/04-infrastructure.md §14 is the why.
 #
-#   ./deploy/publish-spas.sh https://api.staging.iace.co.in iace-staging-spas E1234 E5678
+#   ./deploy/publish-spas.sh https://api.staging.examprep.iace.co.in examprep-staging-spas E1234 E5678
 #
 # VITE_API_URL is substituted at COMPILE time, so an environment is a build, not a variable —
 # a staging artifact cannot be promoted to production.

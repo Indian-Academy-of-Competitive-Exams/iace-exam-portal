@@ -83,8 +83,13 @@ production. It is input credit against the institute's GSTIN, but only if the GS
 account, so that is a signup step rather than a footnote.
 
 **Why staging starts on `t4g.medium` and ends on `small`.** Day one you build on the box, and
-`pnpm install` plus two Vite builds want 2–4 GB. Once images are built elsewhere and pulled from
-ECR, 2 GB runs the three containers with room. Size for the hardest thing you do that day, then
+`pnpm install` wants 2–4 GB — and more of it than the API needs, because `apps/api/Dockerfile`
+copies **every** workspace manifest to keep the lockfile frozen, so the install resolves Expo,
+React Native and both SPA toolchains too. **No SPA is built on the box**: the image copies only
+`apps/api`, `packages` and `prisma`, and builds `@iace/api...`, which is the API plus
+`@iace/contracts` and `@iace/config`. The two Vite builds run wherever
+`deploy/publish-spas.sh` is run, which is a laptop or CI. Once images are built elsewhere and
+pulled from ECR, 2 GB runs the three containers with room. Size for the hardest thing you do that day, then
 resize down — forty cents for the privilege.
 
 For comparison, the shape this file used to describe — an ALB in front of Fargate — came to ~$142
@@ -251,7 +256,7 @@ ports 80 and 443 open. No ALB, no ACM, no target groups.
 `deploy/Caddyfile` is the real one and the source of record for the route list; its shape:
 
 ```
-api.iace.co.in {
+api.examprep.iace.co.in {
 	@exam path <the exam role's leaf paths>
 	reverse_proxy @exam exam:3000
 	reverse_proxy core:3000
@@ -326,15 +331,52 @@ operational move nobody should make for the first time under pressure is the one
 the allocated storage, and restoring staging from a PITR once is how the procedure gets rehearsed
 before it matters.
 
+**Both lines above are single-AZ, and for production that is an assumption rather than a decision.**
+It has never been argued either way; it is simply what the cost table was built on. Single-AZ means
+an instance or zone failure is a restore — tens of minutes, and a PITR restore builds a NEW
+instance, so `DATABASE_URL` is repointed and the API restarted before anybody sits anything.
+Mid-event that sitting is gone. Multi-AZ fails over in 60–120 seconds on the same endpoint, and
+costs the instance again plus the storage again: `db.t4g.small` goes from $30.66 to ~$61.32.
+**Decide it when production is sized from the load test, not before** — it is a modify operation
+with a brief failover and no data loss, so unlike a bucket name it is not a now-or-never choice.
+
+The RDS console's **Template** radio is a form pre-fill and nothing else: not stored, not visible
+afterwards, and no part of the created instance. "Production" turns Multi-AZ on and switches
+storage to Provisioned IOPS with a 100 GB and 1,000 IOPS floor, which is how a staging database
+quietly becomes a three-figure line. The fields in the table are what matter.
+
 **Connections decide the size, not load, and on `micro` they decide it early.** RDS derives
-`max_connections` from memory: about **112 on a 1 GB instance**, ~225 on 2 GB. The budget is exam 8,
-core 25, worker 25 = 58 for production plus 10 for staging = 68. That fits on `micro` with 44
-spare — but a second exam container is the thing that exhausts it, not traffic. `.env.example`
-carries the arithmetic beside the pool guidance.
+`max_connections` from memory: about **112 on a 1 GB instance**, ~225 on 2 GB.
+
+**The budget is 25 per CONTAINER, not a per-role split.** This paragraph used to read "exam 8,
+core 25, worker 25 = 58", which describes a deployment that does not exist: there is one
+`DATABASE_URL`, it carries `connection_limit=25`, and all three roles read the same one. So one
+environment at rest is exam 25 + core 25 + worker 25 = **75**, and on `db.t4g.micro` that leaves
+room for exactly one more container:
+
+| On `db.t4g.micro` (~112) | Connections    |
+| ------------------------ | -------------- |
+| exam 1, core 1, worker 1 | 75             |
+| exam 2, core 1, worker 1 | 100            |
+| exam 3, core 1, worker 1 | **125 — over** |
+
+So the trigger for `db.t4g.small` is the **third** API container, whatever its role. `scale.yml`
+computes this against the live instance class and refuses a scale-up that would exceed 90% of the
+ceiling, which is the only reason the arithmetic is now right. Per-role limits would need a
+`DATABASE_URL` per role in `compose.yml`; that is worth doing before production and is not done.
 
 Postgres 17 rather than 16 because RDS Extended Support costs $0.114 per vCPU-hour once a version
 leaves standard support — more than the instance. 16 leaves on 28 February 2029, 17 on
 28 February 2030.
+
+**`t4g` rather than `t3`, and on RDS that is free money.** Re-pulled 2 October 2026, PostgreSQL
+Single-AZ in ap-south-1: `db.t3.micro` $18.98 against `db.t4g.micro` $15.33, `small` $38.69 against
+$30.66, `medium` $77.38 against $61.32 — the same vCPU, the same memory and the same burstable
+credit model for 19–21% less. On the EC2 boxes Graviton costs something: the AMI and the images
+have to be ARM. **A database has no such cost**, because nothing of ours runs on it — Prisma,
+`psql` and `pg_dump` speak the wire protocol and cannot tell what the server was compiled for, and
+RDS ships the same extension set on both. The only case for `t3` is the weeks after a major
+launches, when a minor can reach x86 first.
 
 **What a sitting costs, measured 25 September 2026** with `scripts/bench-scoring.mjs` — the scoring
 pass only, which is the half that was re-measured after the rollup refactor:
@@ -624,12 +666,12 @@ what all three share.
 be promoted to production.
 
 **SSM Parameter Store holds the master copy, and nothing reads it at runtime.** One SecureString
-per environment at `/iace/<env>/env`, plus `/iace/valkey/env` for Box B, each holding a whole
+per environment at `/examprep/<env>/env`, plus `/examprep/valkey/env` for Box B, each holding a whole
 file:
 
 ```bash
-aws ssm put-parameter --name /iace/staging/env --type SecureString --overwrite --value file://deploy/.env
-aws ssm get-parameter --name /iace/staging/env --with-decryption --query Parameter.Value --output text > deploy/.env
+aws ssm put-parameter --name /examprep/staging/env --type SecureString --overwrite --value file://deploy/.env
+aws ssm get-parameter --name /examprep/staging/env --with-decryption --query Parameter.Value --output text > deploy/.env
 ```
 
 That one command is what makes §2's disposable box true: a replacement pulls its environment
@@ -643,7 +685,7 @@ one; a customer-managed key is $1 for no gain.
 instance profile, the AWS SDK finds it on its own, and `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`
 stay unset in production (`847db3e`) — the API refuses a half-pair, and MinIO locally is the only
 thing that needs the pair at all. That profile carries five things and no more: the media bucket,
-`ssm:GetParameter` on `/iace/<env>/*` with `kms:Decrypt` on the AWS-managed key, CloudWatch Logs
+`ssm:GetParameter` on `/examprep/<env>/*` with `kms:Decrypt` on the AWS-managed key, CloudWatch Logs
 write, ECR read, and `arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore` — which is what
 replaces the port-22 rule (§8) rather than an extra privilege for its own sake.
 
@@ -659,7 +701,11 @@ evict, and any of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` or `PIN_PEPPER` stil
   is needed only in us-east-1 for CloudFront, where it is free. The Elastic IP is also the failover
   mechanism — remapping it to a replacement instance takes seconds and needs no DNS propagation.
 - **ECR** at $0.10/GB-month with a lifecycle keeping the last ten images, under $0.20.
-- GitHub Actions pushes through an OIDC role, so no AWS keys live in GitHub either.
+- **GitHub Actions assumes `examprep-github-actions` through OIDC**, so no AWS key lives in
+  GitHub. It can push to the two ECR repositories, write the SPA bucket, invalidate CloudFront,
+  and `ssm:SendCommand` to an instance tagged `examprep-api-staging` — and nothing else. The trust
+  policy names two exact subjects rather than a wildcard, which on a public repository is the
+  difference between a scoped role and one any fork can assume.
 
 ## 12. Non-production
 
@@ -672,7 +718,7 @@ staging exists to rehearse production rather than a smaller thing.
   runaway cannot take production's connections or hold its CPU (§6).
 - **Valkey:** its own process on Box B, port 6380, `maxmemory` 256 MB (§7).
 - **`t4g.medium` while you build on the box; `t4g.small` once images come from ECR.** Three
-  containers need ~850 MB at rest, but `pnpm install` and two Vite builds want 2–4 GB.
+  containers need ~850 MB at rest, but the workspace-wide `pnpm install` wants 2–4 GB (§1).
 - **`NODE_ENV=development`, `OTP_SENDER=console`.** An admin signs in with an emailed OTP and a
   student with an SMS one, and the DLT registration behind that SMS does not exist yet; in
   development the API returns the code as `devCode` on the request response, so a tester signs in
@@ -733,6 +779,39 @@ alarm on `CPUSurplusCreditsCharged`, and it is the single largest gap between th
 worst-case invoice.
 
 ## 14. How a release goes out
+
+**Three workflows, built 2 October 2026, and the split between them is the ordering rule below
+expressed as infrastructure rather than as a habit.**
+
+| Workflow              | Trigger                                                                | What it does                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `build-api.yml`       | a merge touching `apps/api`, `packages`, `prisma`                      | Builds both targets natively on `ubuntu-24.04-arm` and pushes to ECR as `<sha>` and `staging`. **Does not deploy.** |
+| `deploy-api.yml`      | `cron` 20:30 UTC (02:00 IST), or Run workflow                          | SSM into Box A: `docker compose pull && up -d`. The dispatch form takes an image tag and a required reason          |
+| `deploy-frontend.yml` | a merge touching only client paths, or after a successful `deploy-api` | Builds both SPAs and publishes them                                                                                 |
+
+**The front end auto-deploys; the API waits for the night.** A SPA release is a file copy — no
+migration, no restart, nothing to drain. An API release runs migrations and recreates containers
+with a gap (§4), so it is a small outage at a moment nobody chose, and 02:00 IST is after the
+backup window and before anyone sits anything. `workflow_dispatch` is the override, and it demands
+a written reason so the run page says why.
+
+**`packages/contracts` is deliberately missing from the front end's trigger.** It is the wire
+format both sides share, so a change there is an API release, and the SPAs follow it through the
+`workflow_run` trigger — which is how the ordering rule below is enforced rather than remembered.
+
+**No AWS key exists in GitHub.** Each run exchanges its OIDC token for a session on
+`examprep-github-actions`, and the trust policy names exactly two subjects — this repository's
+`main` branch and its `staging` environment. That scoping is not optional on a **public**
+repository: a trust condition of `repo:…:*` would let a workflow on any fork's branch assume the
+role.
+
+Rolling back is a tag, not a rebuild: Run workflow with the previous commit's sha.
+
+**The manual path still works and is the fallback** when CI is down or the registry is
+unreachable — `git pull && docker compose up -d --build` on the box. `deploy/compose.yml` keeps
+both `image:` and `build:` for exactly that reason.
+
+### The steps, whoever performs them
 
 1. Build both targets from `apps/api/Dockerfile`: `runtime` (600 MB, 108 MB pulled) and `migrate`
    (731 MB, 163 MB pulled). The Prisma CLI is only in the migration image.

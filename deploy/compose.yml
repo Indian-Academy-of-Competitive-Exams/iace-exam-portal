@@ -30,6 +30,10 @@ x-logging: &logging
 services:
   # Runs to completion before the API starts, exactly as the one-off task does on a real release.
   migrate:
+    # `image` and `build` together: CI pushes a tag and the box PULLS it, which turns a release
+    # from a 15-minute rebuild into 30 seconds and a rollback into a tag. `up -d --build` still
+    # works unchanged when there is no registry yet, or when debugging on the box.
+    image: ${MIGRATE_IMAGE:-iace-migrate}:${API_TAG:-local}
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
@@ -40,6 +44,7 @@ services:
     logging: *logging
 
   exam:
+    image: &api-tag ${API_IMAGE:-iace-api}:${API_TAG:-local}
     build: &api-image
       context: ..
       dockerfile: apps/api/Dockerfile
@@ -68,6 +73,7 @@ services:
       start_period: 20s
 
   core:
+    image: *api-tag
     build: *api-image
     restart: unless-stopped
     logging: *logging
@@ -88,6 +94,7 @@ services:
   # EXACTLY ONE, always. concurrency 1 in QUEUE_POLICY is the only thing stopping the 60s flush
   # and the 120s sweep overlapping, and it works inside one process and nowhere else (docs/04 §3).
   worker:
+    image: *api-tag
     build: *api-image
     restart: unless-stopped
     logging: *logging

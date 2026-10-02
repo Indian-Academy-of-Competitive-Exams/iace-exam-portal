@@ -1,0 +1,92 @@
+# The front end deploys itself — but only when the change is the front end's alone.
+#
+# docs/04 §14: THE API GOES BEFORE THE SPAS, and that is not a preference. An old tab keeps its
+# old bundle until every tab closes, so the API must serve the previous client regardless; the
+# reverse is not survivable. A new bundle meeting an old API can send a field the old API strips,
+# and a submit's `last` batch was exactly that — the sitting ended, the client was told it had,
+# and the answers it carried were gone.
+#
+# So the automatic trigger lists only client-side paths. `packages/contracts` is deliberately
+# ABSENT: it is the wire format both sides share, so a change there ships with the API and this
+# workflow follows it through the `workflow_run` trigger below.
+name: Deploy frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/exams/**'
+      - 'apps/admin/**'
+      - 'packages/ui/**'
+      - 'packages/app-kit/**'
+      - 'deploy/publish-spas.sh'
+      - '.github/workflows/deploy-frontend.yml'
+  # Whatever the API release carried, the SPAs follow it immediately afterwards — never before.
+  workflow_run:
+    workflows: ['Deploy API']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+# Never two publishes at once: they would interleave an assets sync with a shell sync and serve
+# an index.html pointing at chunks the other run has not uploaded.
+concurrency:
+  group: deploy-frontend-staging
+  cancel-in-progress: false
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  publish:
+    name: Build and publish both SPAs
+    # A failed API deploy must not be followed by a new bundle: that is the ordering this
+    # workflow exists to protect, inverted.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # No long-lived AWS key exists anywhere: the run exchanges its OIDC token for a session
+      # the role will only issue to this repository's main branch.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      # VITE_API_URL is compile-time, so the origin below is what the bundle will call for ever.
+      # Promoting this artifact to production is impossible by construction, which is the point.
+      - name: Publish
+        run: |
+          ./deploy/publish-spas.sh \
+            "${{ vars.API_ORIGIN }}" \
+            "${{ vars.SPA_BUCKET }}" \
+            "${{ vars.STUDENT_DISTRIBUTION }}" \
+            "${{ vars.ADMIN_DISTRIBUTION }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Front end published"
+            echo "- commit \`${GITHUB_SHA::7}\`"
+            echo "- API origin \`${{ vars.API_ORIGIN }}\`"
+            echo "- invalidated \`/index.html\`, \`/sw.js\`, \`/manifest.webmanifest\`"
+            echo "- trigger: ${{ github.event_name }}"
+            echo ""
+            echo "A new service worker installs but does not activate until every tab of the old"
+            echo "one closes. Deploying and students seeing it are different moments."
+          } >> "$GITHUB_STEP_SUMMARY"

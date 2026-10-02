@@ -1,0 +1,93 @@
+# Builds the two API images on every merge and pushes them to ECR. It does NOT deploy — the
+# artifact is ready and waiting, and deploy-api.yml decides when it reaches a box. Separating
+# them is what makes "deploy tonight" and "deploy now" the same button with a different trigger,
+# and what makes a rollback a tag rather than a rebuild.
+name: Build API image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'prisma/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - '.github/workflows/build-api.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: build-api
+  cancel-in-progress: false
+
+env:
+  REGISTRY: 598927569098.dkr.ecr.ap-south-1.amazonaws.com
+
+jobs:
+  build:
+    name: Build and push
+    # Native arm64, because every box is Graviton. QEMU emulation would also work and takes
+    # several times as long; ARM runners are free on a public repository.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Two targets, one Dockerfile. The migration image carries the Prisma CLI — 156 MB a
+      # container serving requests never opens — which is why it is not the runtime image.
+      - name: Build runtime
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: runtime
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/examprep/api:${{ github.sha }}
+            ${{ env.REGISTRY }}/examprep/api:staging
+          cache-from: type=gha,scope=api-runtime
+          cache-to: type=gha,scope=api-runtime,mode=max
+
+      - name: Build migrate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: migrate
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/examprep/api-migrate:${{ github.sha }}
+            ${{ env.REGISTRY }}/examprep/api-migrate:staging
+          cache-from: type=gha,scope=api-migrate
+          cache-to: type=gha,scope=api-migrate,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "### Images pushed, not deployed"
+            echo "| | tag |"
+            echo "| --- | --- |"
+            echo "| \`examprep/api\` | \`${{ github.sha }}\` and \`staging\` |"
+            echo "| \`examprep/api-migrate\` | \`${{ github.sha }}\` and \`staging\` |"
+            echo ""
+            echo "These reach Box A at 02:00 IST, or immediately via **Deploy API** →"
+            echo "Run workflow. To deploy this build specifically rather than whatever"
+            echo "\`staging\` points at by then, pass \`${{ github.sha }}\` as the image tag."
+          } >> "$GITHUB_STEP_SUMMARY"

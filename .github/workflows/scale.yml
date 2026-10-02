@@ -1,0 +1,150 @@
+# Scaling Box A without a shell, and refusing the scale-ups that would break something.
+#
+# Two dials, in the order you should reach for them: more containers (seconds, free), then a
+# bigger box (two minutes, billed hourly). docs/04 §16. Deliberately manual — pre-warming for an
+# event goes on the release calendar, and nothing here should fire on its own.
+name: Scale
+
+on:
+  workflow_dispatch:
+    inputs:
+      exam:
+        description: 'exam containers'
+        required: true
+        default: '1'
+      core:
+        description: 'core containers'
+        required: true
+        default: '1'
+      instance_type:
+        description: 'Resize the box too. "keep" leaves it alone; anything else stops, resizes and starts it.'
+        required: true
+        default: keep
+        type: choice
+        options: [keep, t4g.small, t4g.medium, t4g.large, t4g.xlarge, t4g.2xlarge]
+      reason:
+        description: 'Why — an event, a load test, a cost cut'
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-api-staging
+  cancel-in-progress: false
+
+env:
+  INSTANCE_NAME: examprep-api-staging
+  COMPOSE: docker compose -f deploy/compose.yml --env-file deploy/.env
+
+jobs:
+  scale:
+    name: Resize and rescale
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: staging
+
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      # There is no `worker` input, and that is the point. concurrency 1 in QUEUE_POLICY is the
+      # only thing stopping the 60s flush overlapping the 120s sweep, and it works inside one
+      # process. Two workers put two sweeps over the same keys with nothing coordinating them.
+      - name: Refuse what cannot work
+        run: |
+          EXAM=${{ inputs.exam }}; CORE=${{ inputs.core }}
+          [ "$EXAM" -ge 1 ] && [ "$CORE" -ge 1 ] || { echo "::error::each role needs at least one"; exit 1; }
+
+          # Connections decide this, not CPU. One DATABASE_URL carries connection_limit=25 and
+          # every container reads the same one, so the budget is 25 per container INCLUDING the
+          # single worker — not the per-role split docs/04 §6 still describes.
+          CLASS=$(aws rds describe-db-instances --db-instance-identifier examprep \
+            --query 'DBInstances[0].DBInstanceClass' --output text)
+          case "$CLASS" in
+            *.micro)  CEILING=112 ;;
+            *.small)  CEILING=225 ;;
+            *.medium) CEILING=450 ;;
+            *)        CEILING=450 ;;
+          esac
+          WANT=$(( (EXAM + CORE + 1) * 25 ))
+          SAFE=$(( CEILING * 90 / 100 ))
+          echo "$CLASS allows ~$CEILING connections; exam $EXAM + core $CORE + worker 1 wants $WANT (safe up to $SAFE)"
+          if [ "$WANT" -gt "$SAFE" ]; then
+            echo "::error::$WANT connections against a $CLASS — resize the database first, or scale less"
+            exit 1
+          fi
+
+      - name: Find Box A
+        id: box
+        run: |
+          id=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=$INSTANCE_NAME" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[0].InstanceId' --output text)
+          [ -n "$id" ] && [ "$id" != "None" ] || { echo "::error::no running $INSTANCE_NAME"; exit 1; }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      # Down before the stop, so containers get their grace period: the worker finishes its tick
+      # and Valkey's last append lands. A stop without it is a SIGKILL at the hypervisor.
+      - name: Resize the box
+        if: inputs.instance_type != 'keep'
+        run: |
+          ID=${{ steps.box.outputs.id }}
+          aws ssm send-command --instance-ids "$ID" --document-name AWS-RunShellScript \
+            --parameters commands="[\"cd /opt/examprep\",\"$COMPOSE down\"]" \
+            --query 'Command.CommandId' --output text
+          sleep 45
+          aws ec2 stop-instances --instance-ids "$ID" >/dev/null
+          aws ec2 wait instance-stopped --instance-ids "$ID"
+          aws ec2 modify-instance-attribute --instance-id "$ID" \
+            --instance-type '{"Value":"${{ inputs.instance_type }}"}'
+          aws ec2 start-instances --instance-ids "$ID" >/dev/null
+          aws ec2 wait instance-running --instance-ids "$ID"
+          # The Elastic IP survives a stop/start; the SSM agent takes a moment longer than the
+          # instance does, and a send-command before it registers is simply lost.
+          for _ in $(seq 1 30); do
+            ping=$(aws ssm describe-instance-information \
+              --query "InstanceInformationList[?InstanceId=='$ID'].PingStatus" --output text)
+            [ "$ping" = "Online" ] && break || sleep 10
+          done
+
+      - name: Scale the containers
+        id: send
+        run: |
+          # --no-recreate: this workflow scales, it does not deploy. Leave the running containers
+          # alone and let Deploy API be the only thing that replaces them.
+          CMD=$(aws ssm send-command --instance-ids "${{ steps.box.outputs.id }}" \
+            --document-name AWS-RunShellScript --comment "scale exam=${{ inputs.exam }} core=${{ inputs.core }}" \
+            --parameters commands="[
+              \"set -euo pipefail\",
+              \"cd /opt/examprep\",
+              \"$COMPOSE up -d --no-recreate --scale exam=${{ inputs.exam }} --scale core=${{ inputs.core }} --scale worker=1\",
+              \"$COMPOSE ps\"
+            ]" --query 'Command.CommandId' --output text)
+          echo "cmd=$CMD" >> "$GITHUB_OUTPUT"
+
+      - name: Wait and report
+        run: |
+          ID=${{ steps.box.outputs.id }}
+          for _ in $(seq 1 40); do
+            status=$(aws ssm get-command-invocation --command-id "${{ steps.send.outputs.cmd }}" \
+              --instance-id "$ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) sleep 10 ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "${{ steps.send.outputs.cmd }}" \
+            --instance-id "$ID" --query '[Status,StandardOutputContent,StandardErrorContent]' --output text | tee /tmp/out
+          TYPE=$(aws ec2 describe-instances --instance-ids "$ID" \
+            --query 'Reservations[0].Instances[0].InstanceType' --output text)
+          {
+            echo "### Scale: $status"
+            echo "- box \`$ID\` is now \`$TYPE\`"
+            echo "- exam ×${{ inputs.exam }}, core ×${{ inputs.core }}, worker ×1"
+            echo "- reason: ${{ inputs.reason }}"
+            echo '```'; cat /tmp/out; echo '```'
+            echo "Caddy picks containers up through \`dynamic a\` within 10s, and Alloy scrapes"
+            echo "them off the same Docker API — neither needs an edit."
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$status" = "Success" ] || { echo "::error::SSM reported $status"; exit 1; }

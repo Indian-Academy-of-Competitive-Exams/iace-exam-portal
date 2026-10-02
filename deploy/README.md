@@ -39,18 +39,21 @@ cp deploy/.env.example deploy/.env     # fill it in; openssl rand -base64 48 for
 sudo chown root:root deploy/.env && sudo chmod 600 deploy/.env
 ```
 
-**Push it to SSM the moment it is right, and again every time it changes.** That copy is what a
-replacement box pulls, and it is the difference between a three-minute recovery and rebuilding
-secrets by hand at the worst possible moment:
+**Push it to SSM the moment it is right, and again every time it changes** — from a machine with
+admin credentials, **not from the box**. The instance profile carries `ssm:GetParameter` and
+deliberately not `ssm:PutParameter`: a box pulls its secrets and must not be able to overwrite
+them, or an attacker on it could poison what every replacement pulls afterwards. That copy is the
+difference between a three-minute recovery and rebuilding secrets by hand at the worst possible
+moment:
 
 ```bash
-aws ssm put-parameter --name /iace/staging/env --type SecureString --overwrite --value file://deploy/.env
+aws ssm put-parameter --name /examprep/staging/env --type SecureString --overwrite --value file://deploy/.env
 ```
 
 On a new box, one command brings the environment with it:
 
 ```bash
-aws ssm get-parameter --name /iace/staging/env --with-decryption --query Parameter.Value --output text > deploy/.env
+aws ssm get-parameter --name /examprep/staging/env --with-decryption --query Parameter.Value --output text > deploy/.env
 ```
 
 A Standard-tier parameter caps at **4 KB**, so strip the comments before pushing or pay $0.05 a
@@ -58,7 +61,7 @@ month for the Advanced tier. Nothing reads SSM at runtime — the API validates 
 nothing else, so the box boots whether or not AWS answers.
 
 **No S3 key pair on a real box.** Leave `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` unset and
-attach an instance profile carrying the media bucket, `ssm:GetParameter` on `/iace/<env>/*` with
+attach an instance profile carrying the media bucket, `ssm:GetParameter` on `/examprep/<env>/*` with
 `kms:Decrypt`, CloudWatch Logs write, and ECR read. `docs/04-infrastructure.md` §11 is the why.
 
 ## Box B — Valkey
@@ -74,7 +77,7 @@ reaches shell history. Both services are defined; bring up only the one you need
 **Three locks, and the third is the one that survives a mistake.** The security group; `PRIVATE_IP`
 publishing the port on the VPC address rather than every interface; and `requirepass`. Each
 environment's password goes into that environment's `REDIS_URL` on Box A as
-`redis://:PASSWORD@10.0.1.20:6380`. Push this file to SSM as well, at `/iace/valkey/env`.
+`redis://:PASSWORD@10.0.1.20:6380`. Push this file to SSM as well, at `/examprep/valkey/env`.
 
 ## Box A — the API
 
@@ -131,7 +134,7 @@ Before Alloy existed it was a file precisely because nothing would have carried 
 ## The SPAs
 
 ```bash
-./deploy/publish-spas.sh https://api.staging.iace.co.in iace-staging-spas E1234 E5678
+./deploy/publish-spas.sh https://api.staging.examprep.iace.co.in examprep-staging-spas E1234 E5678
 ```
 
 Assets first, shell second, three invalidation paths. Read the script before the first run; it
