@@ -1,0 +1,60 @@
+# The front-end half, shared by both environments. VITE_API_URL is compile-time, so this builds
+# per environment and a staging artifact can never be promoted — it would call the staging API.
+name: _publish-spas
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  publish:
+    name: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      # Assets first, shell second, three invalidation paths. The script explains why each of
+      # those matters; the other order serves a shell pointing at chunks that are not up yet.
+      - name: Publish
+        run: |
+          ./deploy/publish-spas.sh \
+            "${{ vars.API_ORIGIN }}" \
+            "${{ vars.SPA_BUCKET }}" \
+            "${{ vars.STUDENT_DISTRIBUTION }}" \
+            "${{ vars.ADMIN_DISTRIBUTION }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### ${{ inputs.environment }} front end published"
+            echo "- commit \`${GITHUB_SHA::7}\`, API origin \`${{ vars.API_ORIGIN }}\`"
+            echo ""
+            echo "A new service worker installs but does not activate until every tab of the old"
+            echo "one closes. Deploying and students seeing it are different moments."
+          } >> "$GITHUB_STEP_SUMMARY"

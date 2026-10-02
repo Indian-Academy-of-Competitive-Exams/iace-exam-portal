@@ -1,0 +1,84 @@
+# The API half of a release, shared by both environments so they cannot drift. Pulls an image
+# that already exists in ECR and recreates the containers; it never builds.
+name: _deploy-api
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+      reason:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  REGISTRY: 598927569098.dkr.ecr.ap-south-1.amazonaws.com
+
+jobs:
+  deploy:
+    name: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Production's environment carries a required reviewer, so this job queues until somebody
+    # clicks. That gate is what makes "we release production deliberately" a mechanism.
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Find the box
+        id: box
+        run: |
+          id=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ vars.API_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[0].InstanceId' --output text)
+          [ -n "$id" ] && [ "$id" != "None" ] || {
+            echo "::error::No running instance tagged ${{ vars.API_INSTANCE_NAME }}"; exit 1; }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      # No ssh, no key, no inbound rule: the agent dials out and runs this as root.
+      - name: Pull and recreate
+        id: send
+        run: |
+          CMD=$(aws ssm send-command --instance-ids "${{ steps.box.outputs.id }}" \
+            --document-name AWS-RunShellScript --comment "deploy ${{ inputs.image_tag }}" \
+            --parameters commands="[
+              \"set -euo pipefail\",
+              \"cd /opt/examprep\",
+              \"aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REGISTRY\",
+              \"export API_IMAGE=$REGISTRY/examprep/api MIGRATE_IMAGE=$REGISTRY/examprep/api-migrate API_TAG=${{ inputs.image_tag }}\",
+              \"docker compose -f deploy/compose.yml --env-file deploy/.env pull\",
+              \"docker compose -f deploy/compose.yml --env-file deploy/.env up -d\",
+              \"docker compose -f deploy/compose.yml --env-file deploy/.env ps\"
+            ]" --query 'Command.CommandId' --output text)
+          echo "cmd=$CMD" >> "$GITHUB_OUTPUT"
+
+      # send-command succeeds the moment it is queued, which says nothing about the deploy.
+      - name: Wait and report
+        run: |
+          ID=${{ steps.box.outputs.id }}
+          for _ in $(seq 1 60); do
+            status=$(aws ssm get-command-invocation --command-id "${{ steps.send.outputs.cmd }}" \
+              --instance-id "$ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) sleep 10 ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "${{ steps.send.outputs.cmd }}" \
+            --instance-id "$ID" --query '[Status,StandardOutputContent,StandardErrorContent]' --output text | tee /tmp/out
+          {
+            echo "### ${{ inputs.environment }} API: $status"
+            echo "- tag \`${{ inputs.image_tag }}\` on \`$ID\`"
+            echo "- reason: ${{ inputs.reason }}"
+            echo '```'; cat /tmp/out; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$status" = "Success" ] || { echo "::error::SSM reported $status"; exit 1; }

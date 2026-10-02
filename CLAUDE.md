@@ -16,6 +16,21 @@ terse reports, tests as intent not code).
 
 </binding-core>
 
+## Branches
+
+**`staging` is where work lands. `main` is production and moves only by promotion.** There is no
+production environment yet, so `main` deploys nothing today — but it is already the branch
+`.github/workflows/production.yml` watches, so nothing should land on it by habit. The binding
+rule and what to do if HEAD is wrong are in the constraints file above.
+
+```
+feat/<thing>  short-lived, optional while there is one developer
+   ↓
+staging       every session commits here; deploys the staging environment on push
+   ↓  a reviewed promotion, when production exists
+main          production
+```
+
 ## What this is
 
 A learning platform for **IACE**, a government-exam coaching institute (SSC, Banking, RRB JE,

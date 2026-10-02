@@ -35,8 +35,13 @@ One commit per coherent change, in its final step; each must build and pass on i
 `type(scope): what changed, plain words` (`feat`, `fix`, `chore`, `docs`, `refactor`); the body
 carries the why, the history, and what the change prevents.
 
-No `Co-Authored-By`, no tool attribution. Never `git push`, no PRs — commit on the current branch,
-and if HEAD is ever on `prod` or `test`, stop and ask.
+No `Co-Authored-By`, no tool attribution. Never `git push`, no PRs.
+
+**Work lands on `staging`, never on `main`.** `main` is production: it is what
+`.github/workflows/production.yml` deploys, and it moves only by a reviewed promotion from
+`staging`. `staging` is the branch every session commits to and the one that deploys the staging
+environment. **If HEAD is ever on `main`, stop and ask** — the answer is almost always
+`git switch staging`.
 
 Never `git add -A` blind — stage whole files, prettier first, `git diff --stat` clean. A partly
 staged file makes lint-staged stash the rest, and its restore has corrupted tracked files before.

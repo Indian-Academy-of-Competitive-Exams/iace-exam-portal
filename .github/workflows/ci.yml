@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Both, because work lands on `staging` and `main` only moves by promotion — CI that ran on
+    # `main` alone would never see a change until it was already production-bound.
+    branches: [staging, main]
   pull_request:
   workflow_dispatch:
   schedule:

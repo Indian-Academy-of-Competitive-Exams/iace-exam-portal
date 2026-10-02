@@ -8,6 +8,12 @@ name: Scale
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Which environment to scale'
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
       exam:
         description: 'exam containers'
         required: true
@@ -30,12 +36,13 @@ permissions:
   id-token: write
   contents: read
 
+# Shares a group with that environment's release, so a scale and a deploy never recreate
+# containers at the same moment.
 concurrency:
-  group: deploy-api-staging
+  group: ${{ inputs.environment }}-release
   cancel-in-progress: false
 
 env:
-  INSTANCE_NAME: examprep-api-staging
   COMPOSE: docker compose -f deploy/compose.yml --env-file deploy/.env
 
 jobs:
@@ -43,7 +50,7 @@ jobs:
     name: Resize and rescale
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    environment: staging
+    environment: ${{ inputs.environment }}
 
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
@@ -62,7 +69,7 @@ jobs:
           # Connections decide this, not CPU. One DATABASE_URL carries connection_limit=25 and
           # every container reads the same one, so the budget is 25 per container INCLUDING the
           # single worker — not the per-role split docs/04 §6 still describes.
-          CLASS=$(aws rds describe-db-instances --db-instance-identifier examprep \
+          CLASS=$(aws rds describe-db-instances --db-instance-identifier ${{ vars.DB_INSTANCE_ID }} \
             --query 'DBInstances[0].DBInstanceClass' --output text)
           case "$CLASS" in
             *.micro)  CEILING=112 ;;
@@ -82,9 +89,9 @@ jobs:
         id: box
         run: |
           id=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=$INSTANCE_NAME" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Name,Values=${{ vars.API_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
             --query 'Reservations[].Instances[0].InstanceId' --output text)
-          [ -n "$id" ] && [ "$id" != "None" ] || { echo "::error::no running $INSTANCE_NAME"; exit 1; }
+          [ -n "$id" ] && [ "$id" != "None" ] || { echo "::error::no running ${{ vars.API_INSTANCE_NAME }}"; exit 1; }
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
       # Down before the stop, so containers get their grace period: the worker finishes its tick

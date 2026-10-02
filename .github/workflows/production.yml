@@ -1,0 +1,58 @@
+# Production releases at night, once, and on purpose.
+#
+# The API half runs migrations and recreates containers with a gap — there is no load balancer
+# to drain through (docs/04 §4) — so it is a small outage at a moment somebody chose. 02:00 IST
+# is after the backup window and before anyone sits anything. The `production` environment
+# carries a required reviewer, so even the cron waits for a click.
+#
+# DORMANT until production infrastructure exists (docs/04 §19). Until then every run fails at
+# "find the box", which is the correct and visible way for it to not work.
+name: Production
+
+on:
+  schedule:
+    # 20:30 UTC = 02:00 IST. GitHub may start a cron late under load; nothing here is
+    # time-critical to the minute.
+    - cron: '30 20 * * *'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag. "prod" is whatever the last build from main pushed.'
+        required: true
+        default: prod
+      reason:
+        description: 'Why this is going out now rather than tonight'
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  api:
+    name: API
+    uses: ./.github/workflows/_deploy-api.yml
+    with:
+      environment: production
+      image_tag: ${{ inputs.image_tag || 'prod' }}
+      reason: ${{ inputs.reason || 'scheduled nightly release' }}
+    permissions:
+      id-token: write
+      contents: read
+
+  # Strictly after the API, never beside it. An old tab keeps its old bundle until every tab
+  # closes, so the API must serve the previous client anyway; the reverse is not survivable —
+  # a new bundle can send a submit field an old API strips, and the answers go with it.
+  spas:
+    name: SPAs
+    needs: api
+    uses: ./.github/workflows/_publish-spas.yml
+    with:
+      environment: production
+    permissions:
+      id-token: write
+      contents: read

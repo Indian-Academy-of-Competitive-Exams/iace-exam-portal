@@ -6,7 +6,7 @@ name: Build API image
 
 on:
   push:
-    branches: [main]
+    branches: [staging, main]
     paths:
       - 'apps/api/**'
       - 'packages/**'
@@ -34,10 +34,16 @@ jobs:
     # several times as long; ARM runners are free on a public repository.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
-    environment: staging
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # The branch IS the environment. `staging` and `prod` are moving tags each release
+      # advances; the sha tag is the immutable one a rollback names.
+      - name: Pick the moving tag
+        id: tag
+        run: echo "moving=${{ github.ref_name == 'main' && 'prod' || 'staging' }}" >> "$GITHUB_OUTPUT"
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -60,7 +66,7 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/examprep/api:${{ github.sha }}
-            ${{ env.REGISTRY }}/examprep/api:staging
+            ${{ env.REGISTRY }}/examprep/api:${{ steps.tag.outputs.moving }}
           cache-from: type=gha,scope=api-runtime
           cache-to: type=gha,scope=api-runtime,mode=max
 
@@ -74,7 +80,7 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/examprep/api-migrate:${{ github.sha }}
-            ${{ env.REGISTRY }}/examprep/api-migrate:staging
+            ${{ env.REGISTRY }}/examprep/api-migrate:${{ steps.tag.outputs.moving }}
           cache-from: type=gha,scope=api-migrate
           cache-to: type=gha,scope=api-migrate,mode=max
 
@@ -84,8 +90,8 @@ jobs:
             echo "### Images pushed, not deployed"
             echo "| | tag |"
             echo "| --- | --- |"
-            echo "| \`examprep/api\` | \`${{ github.sha }}\` and \`staging\` |"
-            echo "| \`examprep/api-migrate\` | \`${{ github.sha }}\` and \`staging\` |"
+            echo "| \`examprep/api\` | \`${{ github.sha }}\` and \`${{ steps.tag.outputs.moving }}\` |"
+            echo "| \`examprep/api-migrate\` | \`${{ github.sha }}\` and \`${{ steps.tag.outputs.moving }}\` |"
             echo ""
             echo "These reach Box A at 02:00 IST, or immediately via **Deploy API** →"
             echo "Run workflow. To deploy this build specifically rather than whatever"

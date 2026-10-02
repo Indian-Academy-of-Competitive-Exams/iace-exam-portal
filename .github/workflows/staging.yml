@@ -1,0 +1,69 @@
+# Staging goes out as soon as there is something to go out with. It is the environment whose
+# whole purpose is to be ahead, so nothing here waits for a person.
+name: Staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag. "staging" is whatever the last build pushed.'
+        required: true
+        default: staging
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: staging-release
+  cancel-in-progress: false
+
+jobs:
+  # Which halves this push actually needs. A README edit should not recreate containers, and a
+  # CSS change should not wait for an image build.
+  what-changed:
+    name: What changed
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.f.outputs.api }}
+      spa: ${{ steps.f.outputs.spa }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - id: f
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "api=true" >> "$GITHUB_OUTPUT"; echo "spa=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          FILES=$(git diff --name-only HEAD^ HEAD)
+          echo "$FILES"
+          grep -qE '^(apps/api|packages|prisma|pnpm-lock.yaml)' <<<"$FILES" && echo "api=true" >> "$GITHUB_OUTPUT" || echo "api=false" >> "$GITHUB_OUTPUT"
+          grep -qE '^(apps/exams|apps/admin|packages|deploy/publish-spas.sh)' <<<"$FILES" && echo "spa=true" >> "$GITHUB_OUTPUT" || echo "spa=false" >> "$GITHUB_OUTPUT"
+
+  api:
+    name: API
+    needs: what-changed
+    if: needs.what-changed.outputs.api == 'true'
+    uses: ./.github/workflows/_deploy-api.yml
+    with:
+      environment: staging
+      image_tag: ${{ inputs.image_tag || 'staging' }}
+      reason: push to staging
+    permissions:
+      id-token: write
+      contents: read
+
+  # always() so a SPA-only push still publishes, but the API job's result is still respected:
+  # a failed API deploy must never be followed by a newer bundle (docs/04 §14).
+  spas:
+    name: SPAs
+    needs: [what-changed, api]
+    if: ${{ always() && needs.what-changed.outputs.spa == 'true' && needs.api.result != 'failure' && needs.api.result != 'cancelled' }}
+    uses: ./.github/workflows/_publish-spas.yml
+    with:
+      environment: staging
+    permissions:
+      id-token: write
+      contents: read
