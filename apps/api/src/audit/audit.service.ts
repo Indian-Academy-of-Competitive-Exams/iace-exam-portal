@@ -99,6 +99,8 @@ export function rowActionWhere(
   const where: Prisma.RowActionLogWhereInput = and.length > 0 ? { AND: and } : {};
   // Outside the AND: it narrows whatever the mode built, so ANY cannot widen past the viewer.
   if (!viewer.isSuperAdmin) where.actorId = viewer.id;
+  // A student's own edits are recorded and archived, but this log is what the admins did.
+  where.actorType = { not: AUDIT_ACTOR_TYPE.STUDENT };
   return where;
 }
 

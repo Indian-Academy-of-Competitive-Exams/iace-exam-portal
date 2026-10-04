@@ -151,6 +151,17 @@ describe('AuditService.listRowActions', () => {
     assert.equal(byId.get(R2), null);
   });
 
+  /** The failure this prevents: every student's own profile edits burying what the admins did. */
+  it('leaves out what a student did themselves, even for a super admin', async () => {
+    await seeded();
+    await rowActions(prisma, [{ id: R3, actorId: STU_1, actorType: AUDIT_ACTOR_TYPE.STUDENT }]);
+
+    const page = await list({}, viewer({ isSuperAdmin: true }));
+
+    assert.equal(page.total, 2);
+    assert.ok(page.items.every((row) => row.actorType !== AUDIT_ACTOR_TYPE.STUDENT));
+  });
+
   /** The failure this prevents: a deactivated admin still reading audit history on an always-on route. */
   it('refuses a deactivated admin', async () => {
     await seeded();
