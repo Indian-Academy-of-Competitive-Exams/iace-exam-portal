@@ -72,7 +72,7 @@ jobs:
             echo "| --- | --- |"
             echo "| API | $api |"
             echo "| SPAs | $spa |"
-            [ "$api" = false ] && [ "$spa" = false ] && echo "" && echo "**Nothing to deploy.**"
+            if [ "$api" = false ] && [ "$spa" = false ]; then echo ""; echo "**Nothing to deploy.**"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   api:

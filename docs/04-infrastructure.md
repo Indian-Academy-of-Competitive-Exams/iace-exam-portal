@@ -865,6 +865,13 @@ format both sides share, so a change there is an API release, and the SPAs follo
 repository: a trust condition of `repo:…:*` would let a workflow on any fork's branch assume the
 role.
 
+**The subject is the immutable form, with the ids in it.** This repository issues
+`repo:<org>@<org id>/<repo>@<repo id>:environment:staging`, not `repo:<org>/<repo>:…`, and the
+trust policy matches with `StringEquals` — so the plain form every tutorial shows is refused with
+"Not authorized to perform sts:AssumeRoleWithWebIdentity", which reads like a permissions problem
+and is a spelling one. The prefix to copy is `sub_claim_prefix` from
+`gh api repos/<org>/<repo>/actions/oidc/customization/sub`.
+
 Rolling back is a tag, not a rebuild: Run workflow with the previous commit's sha.
 
 **The manual path still works and is the fallback** when CI is down or the registry is
