@@ -58,10 +58,11 @@ export default function ProfileScreen() {
     defaultValues: { fullName: '', profile: {} } as UpdateMeInput,
   });
 
+  // Follows the record until an edit starts: an upload or a refetch mid-edit must not wipe what was typed.
   const { reset } = form;
   useEffect(() => {
-    if (me.data) reset(valuesOf(me.data));
-  }, [me.data, reset]);
+    if (me.data && !isEditing) reset(valuesOf(me.data));
+  }, [me.data, reset, isEditing]);
 
   const save = useMutation({
     meta: { fields: FORM_FIELDS },
