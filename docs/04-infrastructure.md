@@ -316,10 +316,19 @@ and `TRUST_PROXY_HOPS` must count the real hops or every rate limit counts one a
 
 ## 5. Frontend delivery
 
-The two SPAs live in one private S3 bucket behind two CloudFront distributions, on
-pay-as-you-go: the always-free tier is 1 TB of transfer, 10M requests and 2M function invocations
-a month, which this platform stays inside. The flat-rate plans are refused deliberately — the Free
-plan allows 1M requests per distribution, and the student app passes that in a busy month.
+The two SPAs live in one private S3 bucket behind two CloudFront distributions. **Production is
+pay-as-you-go**: the always-free tier is 1 TB of transfer, 10M requests and 2M function
+invocations a month, which this platform stays inside. The flat-rate plans are refused there — the
+Free plan allows only 1M requests per distribution, and the student app passes that in a busy
+month.
+
+**Staging's three distributions take Free plans, and the reason is isolation rather than price.**
+The free tier is counted per ACCOUNT, so staging's traffic — and a load test's far more than that
+— would otherwise be drawn from the same 1 TB production needs. Three Free plans is exactly the
+account quota, which buys a wall between the environments for nothing. The cost is that a plan
+forfeits the free tier for that distribution, mandates a web ACL that cannot be detached while the
+plan is attached, and withholds custom cache and response-header policies until Business tier; on
+staging none of those bite, and on production all three would.
 
 Rules that make it work:
 
@@ -927,7 +936,11 @@ Never during an event window, and never a migration that moves data without the 
   $0.109/GB, so 23 MB a sitting would be ~$450 a month. The unsigned urls in §10 are what keep the
   edge cache working, so the bill scales with distinct images rather than with students — but the
   number is still unknown. Measure it off a real paper's Network tab; `MAX_WIDTH` and `QUALITY` in
-  `shrink-image.ts` are the knobs if it comes back high.
+  `shrink-image.ts` are the knobs if it comes back high. **That $450 is the ceiling only on
+  pay-as-you-go**: a CloudFront Pro flat-rate plan is $15 a month for 50 TB on one distribution, so
+  if the measurement comes back heavy the answer is a plan on the media distribution alone, not a
+  re-encode. Below ~1.14 TB a month pay-as-you-go stays cheaper, because a plan forfeits the 1 TB
+  free tier and brings a web ACL that cannot be detached while it is attached.
 - **Batching the scoring job.** Measured 25 September 2026: nine round trips per attempt, whose
   statements total ~0.7 ms against 1.99 ms of database CPU — so most of the database's work is
   parse, plan and transaction overhead rather than execution. Scoring N attempts per job collapses

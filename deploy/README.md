@@ -183,6 +183,24 @@ balancer. To avoid it, scale a role to two and recreate them one at a time: Cadd
 docker compose -f deploy/compose.yml --env-file deploy/.env up -d --scale exam=2
 ```
 
+## Two Docker plugins Amazon Linux does not ship
+
+`dnf install docker` gives you neither Compose v2 nor buildx, and the box needs both: Compose to
+read `compose.yml`, and buildx because `apps/api/Dockerfile` uses `RUN --mount=type=cache`, which
+is BuildKit-only — so `DOCKER_BUILDKIT=0` fails on the Dockerfile rather than working around it.
+
+```bash
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -sSL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+V=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+sudo curl -sSL "https://github.com/docker/buildx/releases/download/$V/buildx-$V.linux-arm64" -o /usr/local/lib/docker/cli-plugins/docker-buildx
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-*
+docker compose version && docker buildx version
+```
+
+`aarch64`/`arm64` — these are Graviton boxes, and the x86 binary downloads fine then fails with
+"cannot execute binary file". Box B runs no build, so it needs Compose alone.
+
 ## Before the first release: one extension
 
 `prisma migrate deploy` creates `pg_trgm`, and on RDS that needs `rds_superuser`, which the
