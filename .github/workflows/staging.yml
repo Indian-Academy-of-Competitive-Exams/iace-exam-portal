@@ -30,17 +30,50 @@ jobs:
       api: ${{ steps.f.outputs.api }}
       spa: ${{ steps.f.outputs.spa }}
     steps:
+      # Whole history, because the range below reaches back to whatever was last pushed and a
+      # shallow clone cannot see it.
       - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }
+        with: { fetch-depth: 0 }
+
       - id: f
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "api=true" >> "$GITHUB_OUTPUT"; echo "spa=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          FILES=$(git diff --name-only HEAD^ HEAD)
+          set -euo pipefail
+          both() { echo "api=true" >> "$GITHUB_OUTPUT"; echo "spa=true" >> "$GITHUB_OUTPUT"; }
+
+          # Anything that is not a push carries no range to inspect, so assume everything.
+          if [ "${{ github.event_name }}" != "push" ]; then both; exit 0; fi
+
+          BEFORE='${{ github.event.before }}'
+          # A new branch leaves BEFORE as forty zeroes, and a force-push can leave a sha this
+          # clone no longer has. Deploy both rather than guess from a range that does not exist.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then both; exit 0; fi
+
+          # THE WHOLE PUSH, not its last commit. `git diff HEAD^ HEAD` was wrong and silently so:
+          # push three commits where only the first touches apps/api and the API deploy is
+          # skipped while the run still goes green. Two dots rather than three, so a force-push
+          # whose old head is not an ancestor still compares the two trees.
+          FILES=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
           echo "$FILES"
-          grep -qE '^(apps/api|packages|prisma|pnpm-lock.yaml)' <<<"$FILES" && echo "api=true" >> "$GITHUB_OUTPUT" || echo "api=false" >> "$GITHUB_OUTPUT"
-          grep -qE '^(apps/exams|apps/admin|packages|deploy/publish-spas.sh)' <<<"$FILES" && echo "spa=true" >> "$GITHUB_OUTPUT" || echo "spa=false" >> "$GITHUB_OUTPUT"
+
+          api=false; spa=false
+          grep -qE '^(apps/api|packages|prisma|pnpm-lock\.yaml)/?' <<<"$FILES" && api=true
+          grep -qE '^(apps/exams|apps/admin|packages|deploy/publish-spas\.sh)/?' <<<"$FILES" && spa=true
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "spa=$spa" >> "$GITHUB_OUTPUT"
+
+          # A run that deploys nothing must say so. A green tick on a skipped release is how a
+          # deploy goes missing without anybody noticing.
+          {
+            echo "### What changed"
+            echo "\`$BEFORE\` → \`${{ github.sha }}\`, $(wc -l <<<"$FILES" | tr -d ' ') files"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| API | $api |"
+            echo "| SPAs | $spa |"
+            [ "$api" = false ] && [ "$spa" = false ] && echo "" && echo "**Nothing to deploy.**"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   api:
     name: API

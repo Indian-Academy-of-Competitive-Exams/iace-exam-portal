@@ -378,6 +378,31 @@ room for exactly one more container:
 | exam 2, core 1, worker 1 | 100            |
 | exam 3, core 1, worker 1 | **125 — over** |
 
+**The role's limit and the URL's are different numbers, and setting them the same breaks the
+stack.** `connection_limit=25` in `DATABASE_URL` is Prisma's pool **per container**;
+`CONNECTION LIMIT` on the Postgres role is a hard cap **across every container using it**. Three
+containers sharing one URL can grow to 75 together, so a role capped at 25 refuses the second and
+third with `FATAL: too many connections for role` as soon as load arrives. The role wants the sum
+plus the short-lived `migrate` container and a `psql` session or two — **85** for staging today.
+
+**One extension has to exist before the first migration, and only the master can create it.**
+`20260925120000_the_bank_is_searched_through_an_index` runs `CREATE EXTENSION IF NOT EXISTS
+pg_trgm`, and on RDS that needs `rds_superuser` — which the application role deliberately does not
+have. Run it once as the master user when you create the role:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+```
+
+Then the migration's `IF NOT EXISTS` is a no-op and passes. Skip it and `prisma migrate deploy`
+dies on a permission error — and because the API containers wait on `migrate` exiting zero,
+nothing starts at all.
+
+Where 25 itself comes from: the worker's processors sum to exactly **20** concurrent slots
+(`QUEUE_POLICY` in `apps/api/src/queue/queues.ts` — scoring 8, rollup 2, notifications 4, delivery
+2, and four singletons), so one container has twenty jobs wanting a connection before it serves a
+request. Prisma's default pool is `cpus × 2 + 1`, which is five on a 2-vCPU box.
+
 So the trigger for `db.t4g.small` is the **third** API container, whatever its role. `scale.yml`
 computes this against the live instance class and refuses a scale-up that would exceed 90% of the
 ceiling, which is the only reason the arithmetic is now right. Per-role limits would need a
@@ -714,6 +739,11 @@ evict, and any of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` or `PIN_PEPPER` stil
 `dev_only_` prefix `.env.example` publishes. It additionally **warns** when the heap in
 `NODE_OPTIONS` does not match the container's memory limit, naming the role that is wrong.
 
+- **`examprep.iace.co.in` is NOT free — it is a CNAME to `exam.thinkexam.in`,** the platform this
+  one replaces. So production's student hostname is not a record to add but one to repoint, with
+  students already using it. That makes the cutover a scheduled switch with the incumbent still
+  reachable behind it, not a DNS edit. The staging names are all free, and
+  `api.staging.examprep.iace.co.in` has resolved to Box A's Elastic IP since 4 October 2026.
 - **Route 53**, $0.50 a month: a free ALIAS to CloudFront for the SPAs, and an A record per
   environment to its API box's Elastic IP. **Caddy gets the API certificate itself** (§4), so ACM
   is needed only in us-east-1 for CloudFront, where it is free. The Elastic IP is also the failover
@@ -731,9 +761,12 @@ evict, and any of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` or `PIN_PEPPER` stil
 Caddy and the same three containers — the same shape as production, at a tester's size, because
 staging exists to rehearse production rather than a smaller thing.
 
-- **Postgres:** its own database on the shared RDS instance, with `CONNECTION LIMIT 10`,
+- **Postgres:** its own database on the shared RDS instance, with `CONNECTION LIMIT 85`,
   `statement_timeout` 30 s and `idle_in_transaction_session_timeout` 60 s on the role, so a staging
-  runaway cannot take production's connections or hold its CPU (§6).
+  runaway cannot take production's connections or hold its CPU (§6). It also needs
+  `REVOKE CONNECT ON DATABASE … FROM PUBLIC` on both databases the day production exists: Postgres
+  grants CONNECT to PUBLIC by default, so without it staging's role can open a connection to
+  production's database and consume a slot there.
 - **Valkey:** its own process on Box B, port 6380, `maxmemory` 256 MB (§7).
 - **`t4g.medium` while you build on the box; `t4g.small` once images come from ECR.** Three
   containers need ~850 MB at rest, but the workspace-wide `pnpm install` wants 2–4 GB (§1).
