@@ -179,7 +179,7 @@ FREE reaches everyone; STANDARD reaches a student whose current branch is on the
 _and_ whose enrolled COURSE matches the series' stage; PROGRAM reaches a program the student
 carries; EVENT reaches the candidates on its event. **The branch gate belongs to STANDARD alone** —
 the other three kinds and a `StudentGrant` carry no branch condition. A grant overrides every kind,
-and the series' own enabled switch gates all of them. There is no unlock, no prerequisite, no queue
+and a series has no switch of its own: only an `ACTIVE` test reaches anybody. There is no unlock, no prerequisite, no queue
 to ask in. Sessions and OTP live in **Redis**, never Postgres.
 
 ---

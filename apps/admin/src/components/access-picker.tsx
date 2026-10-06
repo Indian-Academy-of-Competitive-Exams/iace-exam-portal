@@ -63,16 +63,10 @@ export function EventPicker(props: Readonly<PickerProps>) {
 export interface ChosenSeries {
   id: string;
   name: string;
-  /** A grant onto a switched-off series opens nothing yet, which only the dialog can say. */
-  isEnabled: boolean;
 }
 
 /** What a cleared series picker hands back, so nothing has to spell out the empty shape twice. */
-export const NO_SERIES: ChosenSeries = {
-  id: '',
-  name: '',
-  isEnabled: false,
-};
+export const NO_SERIES: ChosenSeries = { id: '', name: '' };
 
 /** The row comes back with the id because what asks for a series next is a dialog naming it. */
 export function TestSeriesPicker({
@@ -101,7 +95,7 @@ export function TestSeriesPicker({
   const chosenOf = (value: string): ChosenSeries => {
     const row = series.items.find((held) => held.id === value);
     if (!row) return NO_SERIES;
-    return { id: row.id, name: row.name, isEnabled: row.isEnabled };
+    return { id: row.id, name: row.name };
   };
 
   return (

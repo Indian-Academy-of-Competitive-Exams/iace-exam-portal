@@ -318,7 +318,7 @@ function refusalOf(error: unknown): ProgramRefusal | null {
 
 const savedMessage = (changes: OfferChanges | null): string => {
   if (changes?.offering) return 'Test offered to students.';
-  if (changes?.retiring) return 'Test retired.';
+  if (changes?.retiring) return 'Test made inactive.';
   return 'Test saved.';
 };
 

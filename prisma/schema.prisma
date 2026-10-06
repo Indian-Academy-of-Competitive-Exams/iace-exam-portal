@@ -883,8 +883,8 @@ model AdminFeaturePermission {
 // ============================================================================
 // Access — branches, programs, series. The kind decides reach: FREE everyone,
 // STANDARD its branchIds plus the stage's course enrolled, PROGRAM its
-// programCode, EVENT its candidates. A grant overrides every kind, isEnabled
-// gates them all, and there are no groups.
+// programCode, EVENT its candidates. A grant overrides every kind, and there
+// are no groups. A series has no switch: the test's own status is the gate.
 // ============================================================================
 
 model Branch {
@@ -925,7 +925,6 @@ model TestSeries {
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
   branchIds       String[]       @default([]) @db.Uuid
-  isEnabled       Boolean        @default(false)
 
   examStage     ExamStage?     @relation(fields: [examStageId], references: [id], onDelete: Restrict)
   program       Program?       @relation(fields: [programCode], references: [code], onDelete: Restrict)

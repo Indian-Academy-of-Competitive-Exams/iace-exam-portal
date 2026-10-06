@@ -122,12 +122,12 @@ async function download(testId: string): Promise<Download> {
   return { response, sheet, headers };
 }
 
-/** A switched-on FREE series reaches every live student, so who is absent is plain to read. */
+/** A FREE series reaches every live student, so who is absent is plain to read. */
 async function freeTest(): Promise<{ catalog: Catalog; testId: string }> {
   const catalog = await makeCatalog(prisma);
   await prisma.testSeries.update({
     where: { id: catalog.testSeriesId },
-    data: { kind: TEST_SERIES_KIND.FREE, isEnabled: true },
+    data: { kind: TEST_SERIES_KIND.FREE },
   });
   return { catalog, testId: (await makeTest(prisma, catalog)).id };
 }

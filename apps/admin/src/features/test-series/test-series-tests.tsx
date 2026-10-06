@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightLeft, BarChart3, FileText, Plus } from 'lucide-react';
+import { ArrowRightLeft, BarChart3, CircleSlash, FileText, Plus, Power } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
+  AppException,
+  ErrorCodes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  TEST_STATUS,
+  testIsOpen,
   type SeriesTestRow,
   type TestSeriesDetail,
   type TestSeriesSummary,
@@ -21,6 +25,7 @@ import {
   RowActions,
   TruncatedText,
   linkVariants,
+  plural,
   type DataTableColumn,
 } from '@iace/ui';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -30,6 +35,7 @@ import { api } from '../../lib/api';
 import { QUERY_KEYS, ROUTES } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
+import { switchedOffering } from '../tests/test-offer-draft';
 import { testsKey } from './test-series-detail';
 
 interface MoveFormValues {
@@ -42,8 +48,15 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) 
   const queryClient = useQueryClient();
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [moving, setMoving] = useState<SeriesTestRow | null>(null);
+  const [switching, setSwitching] = useState<SeriesTestRow | null>(null);
   const columns = useMemo(
-    () => testColumns({ canWrite, reached: series.reachedCount, onMoving: setMoving }),
+    () =>
+      testColumns({
+        canWrite,
+        reached: series.reachedCount,
+        onMoving: setMoving,
+        onSwitching: setSwitching,
+      }),
     [canWrite, series.reachedCount],
   );
 
@@ -94,6 +107,16 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesDetail }>) 
           onMoved={moved}
         />
       ) : null}
+
+      {switching ? (
+        <StatusDialog
+          key={switching.testId}
+          series={series}
+          row={switching}
+          onClose={() => setSwitching(null)}
+          onSaved={moved}
+        />
+      ) : null}
     </FormSection>
   );
 }
@@ -105,9 +128,10 @@ function testColumns(
     canWrite: boolean;
     reached: number;
     onMoving: (row: SeriesTestRow) => void;
+    onSwitching: (row: SeriesTestRow) => void;
   }>,
 ): DataTableColumn<SeriesTestRow>[] {
-  const { canWrite, reached, onMoving } = options;
+  const { canWrite, reached, onMoving, onSwitching } = options;
 
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order ?? '—' },
@@ -174,10 +198,107 @@ function testColumns(
               Move to another series
             </DropdownMenuItem>
           ) : null}
+          {/* A draft has never been offered, and its first offer is the builder's: it freezes the paper. */}
+          {canWrite && row.status !== TEST_STATUS.DRAFT ? (
+            <DropdownMenuItem
+              destructive={row.status === TEST_STATUS.ACTIVE}
+              onSelect={() => onSwitching(row)}
+            >
+              {row.status === TEST_STATUS.ACTIVE ? (
+                <CircleSlash aria-hidden />
+              ) : (
+                <Power aria-hidden />
+              )}
+              {row.status === TEST_STATUS.ACTIVE ? 'Make inactive' : 'Make active'}
+            </DropdownMenuItem>
+          ) : null}
         </RowActions>
       ),
     },
   ];
+}
+
+/** Taking it away and bringing it back are not the same question, so they are not the same words. */
+function statusQuestion(row: SeriesTestRow, series: TestSeriesDetail) {
+  const title = row.title ?? UNTITLED;
+  const students = plural(series.reachedCount, 'student');
+
+  if (row.status === TEST_STATUS.ACTIVE) {
+    // In an ordered series the tests behind it wait only on what is active, which nobody sees from here.
+    const order = series.sequentialTests
+      ? ' The tests after it in the order stop waiting on it.'
+      : '';
+    return {
+      title: `Make ${title} inactive?`,
+      description: `It leaves the list of the ${students} reached through ${series.name} at once, and nobody can start it. Sittings already made keep their results, and one in progress is not stopped.${order}`,
+      confirmLabel: 'Make inactive',
+      destructive: true,
+      success: 'Test made inactive.',
+    };
+  }
+
+  const from = testIsOpen(row.unlockAt, new Date())
+    ? 'from now'
+    : `from ${opensLabel(row.unlockAt)}`;
+  return {
+    title: `Make ${title} active?`,
+    description: `The ${students} reached through ${series.name} can sit it ${from}, on the paper it was frozen with.`,
+    confirmLabel: 'Make active',
+    destructive: false,
+    success: 'Test made active.',
+  };
+}
+
+const MOVED_ELSEWHERE =
+  'This test has moved to another series since this list was read. Nothing was changed.';
+
+/** The test's own switch, off the list: the one thing that decides whether a student can sit it. */
+function StatusDialog({
+  series,
+  row,
+  onClose,
+  onSaved,
+}: Readonly<{
+  series: TestSeriesDetail;
+  row: SeriesTestRow;
+  onClose: () => void;
+  onSaved: () => void;
+}>) {
+  const question = statusQuestion(row, series);
+
+  const save = useMutation({
+    meta: { success: question.success },
+    // The Offer step's own write, so there is still one road to an offered test: read it, flip the one field.
+    mutationFn: async () => {
+      const detail = await api.admin.tests.detail(row.testId);
+      // The confirm named this series' students, so a test since moved out of it is not what was agreed to.
+      if (detail.testSeriesId !== series.id) {
+        throw new AppException(ErrorCodes.CONFLICT, MOVED_ELSEWHERE);
+      }
+      return api.admin.tests.saveOffering(
+        row.testId,
+        switchedOffering(detail, row.status !== TEST_STATUS.ACTIVE),
+      );
+    },
+    // Refused or not, the row is re-read: a refusal means the list was stale, and it must not be clickable again.
+    onSettled: () => {
+      onClose();
+      onSaved();
+    },
+  });
+
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      destructive={question.destructive}
+      loading={save.isPending}
+      title={question.title}
+      description={question.description}
+      confirmLabel={question.confirmLabel}
+      onConfirm={() => save.mutate()}
+    />
+  );
 }
 
 function MoveDialog({

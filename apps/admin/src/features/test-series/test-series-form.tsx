@@ -32,7 +32,7 @@ import {
   type SeriesTab,
 } from './test-series-detail';
 import { SeriesBasics } from './test-series-basics';
-import { SeriesAccess, SeriesSwitch } from './test-series-access';
+import { SeriesAccess } from './test-series-access';
 import { SeriesTests } from './test-series-tests';
 import { BranchSchedule } from './test-series-branches';
 
@@ -209,9 +209,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
             title={title}
             meta={detail ? turnoutOf(detail) : undefined}
             action={
-              // The switch saves itself, so it belongs to the record and not to the form's Edit.
               <div className="flex items-center gap-3">
-                {detail ? <SeriesSwitch series={detail} /> : null}
                 {detail ? (
                   <ExportButton
                     label="Export grants"

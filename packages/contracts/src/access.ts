@@ -6,9 +6,9 @@ import { canonicalNameSchema, displayNameSchema } from './naming';
 import { examCourseSchema } from './exams';
 
 // ============================================================================
-// Access. A series' kind decides who reaches it, a grant overrides every kind,
-// and `isEnabled` gates all of them. There are no groups, and the branch gate
-// belongs to STANDARD alone.
+// Access. A series' kind decides who reaches it and a grant overrides every
+// kind. A series has no switch of its own: what it reaches anybody WITH is its
+// offered tests. There are no groups, and the branch gate is STANDARD's alone.
 // ============================================================================
 
 /** FREE reaches everyone; STANDARD only the branches on its branchIds whose students enrolled the stage's course; PROGRAM only its program; EVENT only the candidates on its Event. */
@@ -140,8 +140,6 @@ const testSeriesSchema = z.object({
   kind: testSeriesKindSchema,
   /** Which branches run it. STANDARD only — a CHECK refuses a value on any other kind. */
   branchIds: z.array(z.string()),
-  /** Off until somebody switches it on; a series nobody enabled reaches nobody. */
-  isEnabled: z.boolean(),
   /** The event whose candidates are its roster. Required exactly when kind is EVENT. */
   eventId: z.string().nullable(),
   createdAt: z.string(),
@@ -160,7 +158,7 @@ export type TestSeriesSummary = z.infer<typeof testSeriesSummarySchema>;
 
 /** The series on its own screen: who it reaches, and how many of them have sat anything in it. */
 export const testSeriesDetailSchema = testSeriesSummarySchema.extend({
-  /** Everyone the access rules reach, counted whether or not the series is switched on. */
+  /** Everyone the access rules reach, whether or not anything in it is offered yet. */
   reachedCount: z.number().int(),
   /** Distinct students holding a sitting on any test in it, voided ones left out. */
   satCount: z.number().int(),
@@ -189,8 +187,6 @@ export const testSeriesListQuerySchema = paginationQuerySchema.extend({
   forExamStageId: z.string().optional(),
   programCode: z.string().optional(),
   kind: testSeriesKindSchema.optional(),
-  /** The series' own switch. Absent is every series, on or off. */
-  isEnabled: optionalBooleanQuery(),
   match: matchModeQuery(),
   /** A student id: drops what they already reach, so a picker cannot offer a grant that does nothing. */
   notReachedBy: z.string().optional(),
@@ -206,7 +202,6 @@ export const createTestSeriesSchema = z.object({
   programCode: z.string().nullish(),
   sequentialTests: z.boolean().optional(),
   kind: testSeriesKindSchema.optional(),
-  isEnabled: z.boolean().optional(),
   eventId: z.string().nullish(),
 });
 export type CreateTestSeriesInput = z.input<typeof createTestSeriesSchema>;

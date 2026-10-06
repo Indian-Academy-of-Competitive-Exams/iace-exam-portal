@@ -7,6 +7,7 @@ import {
   offeringBodyOf,
   passedOpenings,
   savedOffer,
+  switchedOffering,
   type OfferDraft,
 } from '../src/features/tests/test-offer-draft';
 import type { ProgramOpening } from '../src/features/tests/test-schedule-draft';
@@ -31,6 +32,45 @@ describe('the offer a test is read out of', () => {
 
     assert.equal(savedOffer({ ...detail, status: TEST_STATUS.ACTIVE }).offered, true);
     assert.equal(savedOffer({ ...detail, status: TEST_STATUS.INACTIVE }).offered, false);
+  });
+});
+
+describe('the switch on the series test list', () => {
+  const live = {
+    testSeriesId: 'srs_1',
+    testSeriesName: 'SSC CGL Mocks',
+    status: TEST_STATUS.ACTIVE,
+    opensAt: '2026-09-11T12:30:00.000Z',
+    programUnlocks: [{ programCode: 'SSC 2026', opensAt: '2026-09-11T03:30:00.000Z' }],
+    version: 9,
+  };
+
+  /** The failure this prevents: a test made inactive from the list coming back with its opening moved or its early programs gone. */
+  it('moves whether it is offered and sends the opening and its programs back as they were held', () => {
+    assert.deepEqual(switchedOffering(live, false), {
+      opensAt: live.opensAt,
+      programOpenings: live.programUnlocks,
+      offered: false,
+      expectedVersion: 9,
+    });
+  });
+
+  it('offers an inactive test again on the version it was read at', () => {
+    const idle = { ...live, status: TEST_STATUS.INACTIVE, opensAt: null, programUnlocks: [] };
+
+    assert.deepEqual(switchedOffering(idle, true), {
+      opensAt: null,
+      programOpenings: [],
+      offered: true,
+      expectedVersion: 9,
+    });
+  });
+
+  /** A stored instant carries seconds; the server compares to the minute, so the same minute must come back. */
+  it('sends back the minute an opening was stored at', () => {
+    const stamped = { ...live, opensAt: '2026-09-11T12:30:45.123Z' };
+
+    assert.equal(switchedOffering(stamped, false).opensAt, '2026-09-11T12:30:00.000Z');
   });
 });
 

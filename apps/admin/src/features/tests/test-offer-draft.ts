@@ -87,3 +87,7 @@ export const offeringBodyOf = (held: OfferDraft): SaveOfferingInput => ({
   offered: held.offered,
   expectedVersion: held.version,
 });
+
+/** The list's switch: the saved Offer step with the one field moved, so the server reads its opening and its programs as untouched. */
+export const switchedOffering = (detail: OfferSource, offered: boolean): SaveOfferingInput =>
+  offeringBodyOf({ ...savedOffer(detail), offered });

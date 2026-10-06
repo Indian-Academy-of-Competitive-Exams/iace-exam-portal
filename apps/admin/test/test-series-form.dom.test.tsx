@@ -37,7 +37,6 @@ const SERIES: TestSeriesDetail = {
   sequentialTests: false,
   kind: TEST_SERIES_KIND.STANDARD,
   branchIds: [],
-  isEnabled: false,
   eventId: null,
   createdAt: '2026-09-01T00:00:00.000Z',
   examStage: null,

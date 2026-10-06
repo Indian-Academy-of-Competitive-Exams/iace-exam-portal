@@ -403,7 +403,7 @@ export const ADMIN_ROLE_LABELS: Readonly<Record<AdminRole, string>> = {
 export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
   DRAFT: 'Draft',
   ACTIVE: 'Active',
-  INACTIVE: 'Retired',
+  INACTIVE: 'Inactive',
 };
 
 // AdminNavItem adds superAdminOnly, which is NOT a feature key — it gates the screens that decide who decides.

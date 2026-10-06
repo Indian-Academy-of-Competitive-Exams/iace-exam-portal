@@ -138,12 +138,18 @@ public rollout unchanged.
   never unlinked: the catalog walks series → tests, so a test in no series reaches nobody — a state
   with no valid ending rather than a test waiting to be placed. Once anybody has sat it, it stops
   moving: it is part of the record of everyone who did, in the series they sat it in.
-- `TestSeries.isEnabled` gates every path. A series nobody switched on reaches nobody.
+- **A series has no switch of its own; the test's status is the one gate.** Only an `ACTIVE` test
+  reaches anybody, by any route. Taking one out of service is making that test inactive (unticking
+  "Offered to students", or the same action on the series' test list); it leaves every student's
+  list at once, its sittings and results are kept, and a sitting in progress is not stopped. Taking
+  a whole series out of service is doing that to each of its tests. In an in-order series the
+  tests behind an inactive one stop waiting on it, since the order is read over active tests alone.
 - **The kind decides who reaches it.** `FREE` reaches every student. `STANDARD` reaches a student
   whose current branch is on the series' `branchIds` and whose enrolled courses include the course of
   the series' stage. `PROGRAM` reaches only students carrying its program code. `EVENT` reaches only
   the candidates on its `Event`.
-- A `StudentGrant` overrides every kind. It does not override the enable switch.
+- A `StudentGrant` overrides every kind. It does not override a test's status: a granted student
+  reaches the series' offered tests and no others.
 - **The branch gate is `STANDARD`'s alone.** A student with no branch is still reached by a free
   series, a program, an event and a grant.
 - **Four CHECK constraints hold a series to its kind**, and they are CHECKs precisely because Prisma

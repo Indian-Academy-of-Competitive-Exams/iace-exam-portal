@@ -682,7 +682,6 @@ Table TestSeries {
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   branchIds uuid [not null, note: 'array']
-  isEnabled boolean [not null, default: false]
   indexes {
     (examStageId)
     (programCode)

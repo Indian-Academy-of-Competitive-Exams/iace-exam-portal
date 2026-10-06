@@ -186,8 +186,7 @@ export class DashboardService {
   private async windows(): Promise<DashboardWindows> {
     // Open from when students may begin it, which is `testIsOpen`'s grace before the hour.
     const sittable = new Date(Date.now() + START_GRACE_MS);
-    // A test in a series nobody can reach is not a window, however open its own clock is.
-    const live = { status: TEST_STATUS.ACTIVE, testSeries: { isEnabled: true } } as const;
+    const live = { status: TEST_STATUS.ACTIVE } as const;
 
     const [open, upcoming] = await Promise.all([
       this.prisma.test.findMany({

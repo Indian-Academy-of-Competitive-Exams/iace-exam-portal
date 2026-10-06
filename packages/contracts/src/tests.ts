@@ -554,7 +554,7 @@ export type SeriesTestRow = z.infer<typeof seriesTestRowSchema>;
 
 /** The whole Offer step in one save: when the test opens, which programs open it early, and whether students get it. */
 export const saveOfferingSchema = z.object({
-  /** The same instant for every branch; null opens it with the series. */
+  /** The same instant for every branch; null opens it the moment it is active. */
   opensAt: z.iso.datetime().nullable(),
   /** Every program opening the test keeps; one left out is taken away. */
   programOpenings: z.array(

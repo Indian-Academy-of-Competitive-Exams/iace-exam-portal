@@ -9,7 +9,6 @@ import {
 } from '@iace/contracts';
 import { CircleSlash, Power } from 'lucide-react';
 import {
-  Alert,
   Button,
   EmptyState,
   EMPTY_STATE_KINDS,
@@ -76,15 +75,6 @@ export function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary 
 
   return (
     <FormSection title="Branches">
-      {series.isEnabled ? null : (
-        <Alert variant="warning">
-          <span>
-            {series.name} is switched off, so a branch switched on here opens nothing. Enabled,
-            under Access, is what lets anybody sit it.
-          </span>
-        </Alert>
-      )}
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <StatRow
           label="Switched on at"
@@ -215,7 +205,7 @@ function offerQuestion(
   if (next) {
     return {
       title: `Offer ${series.name} at ${row.name}?`,
-      description: `Every student whose current branch is ${row.name} and who reaches this series by their enrolment can start its ${tests} from then on, for as long as the series itself is switched on. When each test opens is the test's own, not this switch.`,
+      description: `Every student whose current branch is ${row.name} and who reaches this series by their enrolment can start its ${tests} from then on. When each test opens is the test's own, not this switch.`,
       confirmLabel: 'Offer it here',
       destructive: false,
     };

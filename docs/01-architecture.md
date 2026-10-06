@@ -98,7 +98,8 @@ practice, certificates.
 - **Instant results:** score, correct/wrong/unattempted, full solutions per question, and cohort
   rank + percentile.
 - **Access:** student → test series → test. There are no groups and no student↔test link. A
-  `StudentGrant` overrides every kind and `isEnabled` gates every path, grant included. `FREE`
+  `StudentGrant` overrides every kind, and a series has no switch of its own: the gate is each
+  test's status, so only an offered (`ACTIVE`) test reaches anybody, grant included. `FREE`
   reaches everyone, `PROGRAM` matches a program, `EVENT` matches its own candidates; none of the
   three looks at a branch. `STANDARD` is the only branch-gated kind: the series' own `branchIds` (a
   GIN-indexed array) must hold the student's current branch _and_ the stage's exam course must be

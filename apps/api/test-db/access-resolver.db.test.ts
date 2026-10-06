@@ -71,11 +71,10 @@ interface SeriesOverrides {
   name?: string;
   kind?: TestSeriesKind;
   branchIds?: string[];
-  isEnabled?: boolean;
   sequentialTests?: boolean;
 }
 
-/** A switched-on series of the kind asked for, carrying exactly what its kind's CHECK demands. */
+/** A series of the kind asked for, carrying exactly what its kind's CHECK demands. */
 async function series(at: Place, over: SeriesOverrides = {}): Promise<string> {
   const kind = over.kind ?? TEST_SERIES_KIND.STANDARD;
   const row = await prisma.testSeries.create({
@@ -84,7 +83,6 @@ async function series(at: Place, over: SeriesOverrides = {}): Promise<string> {
       name: over.name ?? `${kind} series`,
       kind,
       examStageId: at.catalog.examStageId,
-      isEnabled: over.isEnabled ?? true,
       sequentialTests: over.sequentialTests ?? false,
       branchIds: over.branchIds ?? (kind === TEST_SERIES_KIND.STANDARD ? [at.branch] : []),
       programCode: kind === TEST_SERIES_KIND.PROGRAM ? PROGRAM : null,
@@ -109,6 +107,10 @@ const testIn = async (
     )
   ).id;
 
+/** What unticking "Offered to students" writes: the one way a live test leaves every list. */
+const retire = (testId: string) =>
+  prisma.test.update({ where: { id: testId }, data: { status: TEST_STATUS.INACTIVE } });
+
 const studentAt = async (at: Place, over: StudentOverrides = {}) =>
   (await makeStudent(prisma, { currentBranchId: at.branch, enrolledCourses: [COURSE], ...over }))
     .id;
@@ -126,6 +128,9 @@ const resolverOn = (client: PrismaService = prisma) =>
   new AccessResolverService(client, new FakeRedis().asService());
 
 const seriesIds = (catalog: StudentCatalog) => catalog.series.map((row) => row.id);
+
+const testIds = (catalog: StudentCatalog) =>
+  catalog.series.flatMap((row) => row.tests.map((test) => test.id));
 
 /** How many times the shared copy was built: the one read that is not per student. */
 const builds = (calls: readonly string[]) =>
@@ -232,16 +237,6 @@ describe('AccessResolverService — how a series is reached', () => {
     }
 
     assert.deepEqual((await reached(outsider)).toSorted(), granted.toSorted());
-  });
-
-  /** THE failure this prevents: a series pulled out of service still reaching its grantees. */
-  it('reaches nothing in a series nobody switched on', async () => {
-    const at = await place();
-    const off = await series(at, { isEnabled: false });
-    const student = await studentAt(at);
-    await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: off } });
-
-    assert.deepEqual(await reached(student), []);
   });
 
   it('treats a soft-deleted student as one that is not there', async () => {
@@ -469,7 +464,7 @@ describe('AccessResolverService — the shared copy', () => {
 
   /** THE race a held copy must survive: a bump landing mid-build must not leave that build in charge. */
   it('honours a bump that lands while the copy is being built', async () => {
-    const { student, seriesId } = await reachable();
+    const { student, testId } = await reachable();
     const { hook, resolver } = watched();
     hook.before = async (call) => {
       if (call !== 'testSeries.findMany') return;
@@ -477,25 +472,25 @@ describe('AccessResolverService — the shared copy', () => {
       await resolver.invalidateAll();
     };
 
-    assert.deepEqual(seriesIds(await resolver.catalog(student, NOW)), [seriesId]);
-    await prisma.testSeries.update({ where: { id: seriesId }, data: { isEnabled: false } });
+    assert.deepEqual(testIds(await resolver.catalog(student, NOW)), [testId]);
+    await retire(testId);
 
-    assert.deepEqual(seriesIds(await resolver.catalog(student, NOW)), []);
+    assert.deepEqual(testIds(await resolver.catalog(student, NOW)), []);
   });
 
   /** THE failure this prevents: a Valkey reset leaving every process on its old copy through the next bump. */
   it('rebuilds after a bump even when the counter went backwards', async () => {
-    const { student, seriesId } = await reachable();
+    const { student, testId } = await reachable();
     const redis = new FakeRedis();
     const resolver = new AccessResolverService(prisma, redis.asService());
     await redis.client.set(redisKeys.catalogEpoch, '42');
-    await resolver.catalog(student, NOW);
+    assert.deepEqual(testIds(await resolver.catalog(student, NOW)), [testId]);
 
     await redis.client.del(redisKeys.catalogEpoch);
-    await prisma.testSeries.update({ where: { id: seriesId }, data: { isEnabled: false } });
+    await retire(testId);
     await resolver.invalidateAll();
 
-    assert.deepEqual(seriesIds(await resolver.catalog(student, NOW)), []);
+    assert.deepEqual(testIds(await resolver.catalog(student, NOW)), []);
   });
 
   /** THE failure this prevents: a Valkey blip 500ing the catalog, the paper and the start guard at once. */
@@ -734,23 +729,19 @@ describe('reading about a test', () => {
     await refused(resolverOn().reachableTest(student, testId), ErrorCodes.NOT_FOUND);
   });
 
-  /** The bug this prevents: a drafted paper readable because only the catalog filtered on status. */
+  /** THE failure this prevents: a test taken out of service still open to the students its series reaches. */
   it('reads a test that is not ACTIVE as missing, however reachable its series', async () => {
     const at = await place();
     const seriesId = await series(at);
     const drafted = await testIn(at, seriesId, 1, { status: TEST_STATUS.DRAFT });
+    const retired = await testIn(at, seriesId, 2, { status: TEST_STATUS.INACTIVE });
     const student = await studentAt(at);
+    await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: seriesId } });
 
     await refused(resolverOn().reachableTest(student, drafted), ErrorCodes.NOT_FOUND);
-  });
-
-  it('reads everything in a switched-off series as missing', async () => {
-    const at = await place();
-    const off = await series(at, { isEnabled: false });
-    const testId = await testIn(at, off, 1);
-    const student = await studentAt(at);
-
-    await refused(resolverOn().reachableTest(student, testId), ErrorCodes.NOT_FOUND);
+    await refused(resolverOn().reachableTest(student, retired), ErrorCodes.NOT_FOUND);
+    await refused(resolverOn().assertCanStart(student, retired, NOW), ErrorCodes.FORBIDDEN);
+    assert.deepEqual(testIds(await resolverOn().catalog(student, NOW)), []);
   });
 
   /** A grant overrides the kind, reading about a test exactly as it does sitting one. */
@@ -828,16 +819,6 @@ describe('AccessResolverService.audienceCount', () => {
     assert.equal(await counted(elsewhere), 1);
   });
 
-  /** The switch is not the cohort: a series switched off has the same students waiting behind it. */
-  it('counts the cohort of a series nobody switched on', async () => {
-    const at = await place();
-    const off = await series(at, { isEnabled: false });
-    await studentAt(at);
-
-    assert.equal(await counted(off), 1);
-    assert.equal((await resolverOn().studentsReaching(off)).length, 0);
-  });
-
   it('leaves out a soft-deleted student and a deactivated one', async () => {
     const at = await place();
     const seriesId = await series(at);
@@ -894,7 +875,6 @@ describe('what an admin reads a student reaching', () => {
     const event = await series(at, { name: 'C event', kind: TEST_SERIES_KIND.EVENT });
     const granted = await series(at, { name: 'D granted', branchIds: [uid()] });
     const elsewhere = await series(at, { name: 'E elsewhere', branchIds: [uid()] });
-    const off = await series(at, { name: 'F off', isEnabled: false });
     const student = await studentAt(at, { programs: [PROGRAM] });
     await prisma.eventCandidate.create({ data: { eventId: at.event, studentId: student } });
     await prisma.studentGrant.create({ data: { studentId: student, testSeriesId: granted } });
@@ -918,10 +898,7 @@ describe('what an admin reads a student reaching', () => {
       admin.filter((row) => row.grantedAt !== null).map((row) => row.id),
       [granted],
     );
-    assert.deepEqual(
-      await pickerFor(student),
-      [elsewhere, off, at.catalog.testSeriesId].toSorted(),
-    );
+    assert.deepEqual(await pickerFor(student), [elsewhere, at.catalog.testSeriesId].toSorted());
   });
 
   /** Deactivation empties the student's own catalog; the admin deciding whether to reactivate them still needs the list. */
