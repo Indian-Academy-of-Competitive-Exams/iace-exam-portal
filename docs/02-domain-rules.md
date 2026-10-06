@@ -474,7 +474,11 @@ and needs no mapping at all.
 - **Subject and topic settle when something DEPENDS on the question, not when it is published.**
   Taxonomy is what a section draws on, so moving it afterwards would change what a finalized paper
   was built from — and a `PaperQuestion` records no subject of its own, so a moved question would be
-  served inside a section it no longer belongs to and counted there.
+  served inside a section it no longer belongs to and counted there. **A topic the question never
+  had is the exception: it may be given one at any time.** That fills in what was never said rather
+  than moving anything — nothing drew it by a topic it did not have — and it is how a proof-reader
+  files what a typist could not. Once it has one, the topic settles like the subject. Tags and
+  difficulty never settle; a difficulty changed after the paper was drawn leaves the paper as drawn.
 - **Option ids carry over by position.** A sitting stores the id it was shown, so a position that
   already had an id keeps it and only a genuinely new position gets a new one — editing an option's
   wording can never orphan an answer.

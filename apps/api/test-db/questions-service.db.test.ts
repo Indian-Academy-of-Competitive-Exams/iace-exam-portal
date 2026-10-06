@@ -945,6 +945,28 @@ describe('QuestionsService — being depended on settles what a question is', ()
     assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
   });
 
+  /** The failure this prevents: a question typed without a topic that nobody can ever file once it is on a paper. */
+  it('gives a drawn question the topic it never had', async () => {
+    const { questions } = await build();
+    const created = await questions.create(draft({ topicId: null }), ADMIN);
+    await heldBy('paper', created.id, await currentVersionOf(created.id));
+
+    await questions.update(created.id, draft({ topicId: BANK.ALGEBRA }), ADMIN);
+
+    assert.equal((await questionRow(created.id)).topicId, BANK.ALGEBRA);
+  });
+
+  it('refuses to move a drawn question off the topic it has, or to take it away', async () => {
+    const { questions } = await build();
+    const created = await questions.create(draft(), ADMIN);
+    await heldBy('paper', created.id, await currentVersionOf(created.id));
+
+    for (const topicId of [BANK.ALGEBRA, null]) {
+      await assert.rejects(() => questions.update(created.id, draft({ topicId }), ADMIN), conflict);
+    }
+    assert.equal((await questionRow(created.id)).topicId, BANK.ARITHMETIC);
+  });
+
   /** The failure this prevents: the scorer reads a typed answer off a paper that pinned four options. */
   it('refuses to retype a question a paper has drawn', async () => {
     const { questions } = await build();

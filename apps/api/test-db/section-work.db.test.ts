@@ -792,6 +792,28 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
   });
 });
 
+describe('SectionWorkService — what a reader files a question under', () => {
+  /** The failure this prevents: a typist who did not know them leaves a paper question unfiled for good. */
+  it('lets the reader give a paper question its topic, its tags and its difficulty', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typistDone } = await aSection();
+    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(question);
+    await typistDone();
+
+    const filed = await work.edit(
+      pair,
+      question.id,
+      draft({ topicId: BANK.ARITHMETIC, tags: ['percentages'], difficulty: DIFFICULTY_LEVEL.HIGH }),
+      viewer(READER),
+    );
+
+    assert.equal(filed.topic?.id, BANK.ARITHMETIC);
+    assert.deepEqual(filed.tags, ['percentages']);
+    assert.equal(filed.difficulty, DIFFICULTY_LEVEL.HIGH);
+  });
+});
+
 describe('SectionWorkService — the reader’s review', () => {
   it('checks, sends back with a reason, takes the fix, and checks again', async () => {
     const { work } = await build();

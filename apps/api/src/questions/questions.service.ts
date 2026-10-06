@@ -510,8 +510,9 @@ export class QuestionsService {
   ): Promise<void> {
     // A typed answer and a set of options are different questions, so a retype replaces rather than edits.
     const retyped = draft.type !== before.type;
-    const moved =
-      draft.subjectId !== before.subjectId || (draft.topicId ?? null) !== before.topicId;
+    // A topic it never had is filled in, not moved: nothing drew it by a topic that was not there.
+    const retopiced = before.topicId !== null && (draft.topicId ?? null) !== before.topicId;
+    const moved = draft.subjectId !== before.subjectId || retopiced;
     if (!retyped && !moved) return;
     if (!(await this.isUsed(tx, before.id))) return;
 
