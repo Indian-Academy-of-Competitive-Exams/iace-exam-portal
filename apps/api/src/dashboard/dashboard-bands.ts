@@ -19,10 +19,15 @@ export interface DashboardBands {
   /** The audit trail is every admin's own, so the feed is the one band no key gates. */
   feed: boolean;
   windows: boolean;
+  /** The caller's own sections: whoever can be handed one. */
+  work: boolean;
 }
 
 /** The bank is authoring's screen too: a typist holds QUESTION_AUTHORING and not the bank key. */
 const BANK_KEYS = [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.QUESTION_AUTHORING] as const;
+
+/** The two keys a section can be handed to somebody under. */
+const WORK_KEYS = [FEATURE_KEYS.QUESTION_AUTHORING, FEATURE_KEYS.QUESTION_PROOFREAD] as const;
 
 /** Scheduling lives on the test since the access revamp, so a test manager reads windows too. */
 const WINDOW_KEYS = [FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, FEATURE_KEYS.TEST_MANAGEMENT] as const;
@@ -42,5 +47,6 @@ export function bandsFor(user: AuthenticatedUser): DashboardBands {
     sittings: holds(user, SITTING_KEYS),
     feed: user.isActive,
     windows: holds(user, WINDOW_KEYS),
+    work: holds(user, WORK_KEYS),
   };
 }

@@ -26,6 +26,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit';
+import { AssignmentsService } from '../assignments';
 import { type AuthenticatedUser } from '../common/security';
 import { bandsFor, type DashboardBands } from './dashboard-bands';
 
@@ -44,19 +45,21 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly assignments: AssignmentsService,
   ) {}
 
   async overview(user: AuthenticatedUser): Promise<Dashboard> {
     const bands = bandsFor(user);
 
-    const [headline, bank, activity, windows] = await Promise.all([
+    const [headline, bank, activity, windows, work] = await Promise.all([
       this.headline(bands),
       bands.bank ? this.bank() : undefined,
       this.activity(bands, user),
       bands.windows ? this.windows() : undefined,
+      bands.work ? this.assignments.summary(user.id) : undefined,
     ]);
 
-    return { headline, bank, activity, windows };
+    return { headline, bank, activity, windows, work };
   }
 
   private async headline(bands: DashboardBands): Promise<DashboardHeadline | undefined> {

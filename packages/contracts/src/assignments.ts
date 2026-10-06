@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { adminRoleSchema } from './admins';
-import { csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
+import { civilDate, csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
-import { dateOnlySchema } from './students';
+import { dateOnlySchema, todayISO } from './students';
 import { difficultyMixSchema } from './tests';
 
 // ============================================================================
@@ -15,8 +15,17 @@ export const ASSIGNMENT_ROLES = {
   TYPIST: 'TYPIST',
   PROOFREADER: 'PROOFREADER',
 } as const;
-const assignmentRoleSchema = z.enum(ASSIGNMENT_ROLES);
+export const assignmentRoleSchema = z.enum(ASSIGNMENT_ROLES);
 export type AssignmentRole = z.infer<typeof assignmentRoleSchema>;
+
+/** Where a row stands against its due day, judged in institute days: due on the 9th is on time until the 9th ends. */
+export const DUE_STANDINGS = {
+  ON_TIME: 'ON_TIME',
+  LATE: 'LATE',
+  OVERDUE: 'OVERDUE',
+} as const;
+const dueStandingSchema = z.enum(DUE_STANDINGS);
+export type DueStanding = z.infer<typeof dueStandingSchema>;
 
 export const assignmentSchema = z.object({
   id: z.string(),
@@ -26,10 +35,14 @@ export const assignmentSchema = z.object({
   assigneeId: z.string(),
   assigneeName: z.string(),
   role: assignmentRoleSchema,
-  /** An informal reminder. It gates nothing and blocks nothing. */
+  /** The day it is wanted by; it gates nothing. Null only on a row from before one was required. */
   dueAt: z.string().nullable(),
   /** The whole state: null is outstanding, set is done. */
   finalizedAt: z.string().nullable(),
+  /** Against its due day, the server's call. Null where nothing is owed on it, or it is open with the day not over. */
+  standing: dueStandingSchema.nullable(),
+  /** Seconds its holder has had the section's questions on screen. Null where the viewer is not sent that seat's time. */
+  secondsSpent: z.number().int().nullable(),
   /** Questions written under ANY assignment on this section — a section fact, not this row's own. */
   writtenCount: z.number().int(),
   /** The typist's Done would be taken now — the server's gate, so a screen never offers a refused one. */
@@ -59,7 +72,7 @@ export const createAssignmentSchema = z.object({
   baseConfigSectionId: z.string().min(1, 'Choose a section'),
   assigneeId: z.string().min(1, 'Choose an assignee'),
   role: assignmentRoleSchema,
-  dueAt: z.string().nullable().optional(),
+  dueAt: z.string().min(1, 'Choose a due date').pipe(dateOnlySchema),
 });
 export type CreateAssignmentInput = z.input<typeof createAssignmentSchema>;
 export type CreateAssignmentBody = z.infer<typeof createAssignmentSchema>;
@@ -95,6 +108,54 @@ export const typistDoneSchema = z.object({
 export type TypistDoneInput = z.input<typeof typistDoneSchema>;
 export type TypistDoneBody = z.infer<typeof typistDoneSchema>;
 
+/** Null where there is nothing to judge: no due day, or still open with the day not yet over. */
+export function dueStanding(
+  row: { dueAt: Date | string | null; finalizedAt: Date | string | null },
+  today: string = todayISO(),
+): DueStanding | null {
+  if (row.dueAt === null) return null;
+  const due = civilDate(new Date(row.dueAt));
+  if (row.finalizedAt === null) return today > due ? DUE_STANDINGS.OVERDUE : null;
+  return civilDate(new Date(row.finalizedAt)) > due ? DUE_STANDINGS.LATE : DUE_STANDINGS.ON_TIME;
+}
+
+/** How many open sections a summary names, soonest due first. */
+export const ASSIGNMENT_SUMMARY_NEXT_ROWS = 5;
+
+/** One role's standing across the sections its holder has now. */
+const assignmentRoleSummarySchema = z.object({
+  role: assignmentRoleSchema,
+  assigned: z.number().int(),
+  completed: z.number().int(),
+  /** Completed by the end of its due day. A row with no due day counts in neither this nor `overdue`. */
+  onTime: z.number().int(),
+  /** Still owed past its due day. */
+  overdue: z.number().int(),
+  secondsSpent: z.number().int(),
+});
+export type AssignmentRoleSummary = z.infer<typeof assignmentRoleSummarySchema>;
+
+const assignmentSummaryRowSchema = z.object({
+  assignmentId: z.string(),
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  baseConfigSectionId: z.string(),
+  sectionName: z.string(),
+  role: assignmentRoleSchema,
+  dueAt: z.string().nullable(),
+  standing: dueStandingSchema.nullable(),
+  secondsSpent: z.number().int(),
+});
+export type AssignmentSummaryRow = z.infer<typeof assignmentSummaryRowSchema>;
+
+/** One admin's own typing and proof-reading: a role they hold nothing under is left out. */
+export const assignmentSummarySchema = z.object({
+  roles: z.array(assignmentRoleSummarySchema),
+  /** The sections still owed, soonest due first. */
+  next: z.array(assignmentSummaryRowSchema),
+});
+export type AssignmentSummary = z.infer<typeof assignmentSummarySchema>;
+
 // ============================================================================
 // Section progress. A super admin's read-only view of how the institute's
 // typing and proof-reading are going: one row per (test, section) whether or
@@ -109,6 +170,9 @@ const sectionRoleProgressSchema = z.object({
   assigneeName: z.string().nullable(),
   dueAt: z.string().nullable(),
   finalizedAt: z.string().nullable(),
+  standing: dueStandingSchema.nullable(),
+  /** Seconds its holder has had the section's questions on screen; zero where nobody holds it. */
+  secondsSpent: z.number().int(),
 });
 export type SectionRoleProgress = z.infer<typeof sectionRoleProgressSchema>;
 

@@ -835,6 +835,13 @@ describe('SectionWorkService — time on a question', () => {
 
     assert.deepEqual(await timeFor(viewer(READER)), { own: 20, typist: null, reader: null });
     assert.deepEqual(await timeFor(viewer(OWNER, OWNS)), { own: 0, typist: 60, reader: 20 });
+
+    const wholeFor = async (who: SectionViewer) => {
+      const seen = await work.one(pair, who);
+      return [seen.typist?.secondsSpent, seen.reader?.secondsSpent];
+    };
+    assert.deepEqual(await wholeFor(viewer(READER)), [null, 20]);
+    assert.deepEqual(await wholeFor(viewer(OWNER, OWNS)), [60, 20]);
   });
 
   it('counts nobody without a seat, and nothing outside the section', async () => {

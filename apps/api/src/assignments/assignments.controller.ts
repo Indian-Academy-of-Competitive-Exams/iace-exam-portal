@@ -69,8 +69,11 @@ export class AssignmentsController {
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('tests/:testId')
-  forTest(@Param('testId') testId: string): Promise<Assignment[]> {
-    return this.assignments.forTest(testId);
+  forTest(
+    @Param('testId') testId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<Assignment[]> {
+    return this.assignments.forTest(testId, user);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)

@@ -5,6 +5,11 @@ import {
   DIFFICULTY_LEVEL,
   QUESTION_STATUSES,
   TEST_STATUSES,
+  clockText,
+  instituteDayLabel,
+  type AssignmentRole,
+  type AssignmentSummary,
+  type AssignmentSummaryRow,
   type Dashboard,
   type DashboardBank,
   type DashboardCoverage,
@@ -46,10 +51,12 @@ import {
   TEST_STATUS_LABELS,
 } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
+import { DueStandingBadge } from '../../components/due-standing-badge';
+import { TimeSpent } from '../../components/time-spent';
 
 const UNTITLED = 'Untitled test';
 
-/** The one admin screen that is a composed grid: four bands, each present only if its key is. */
+/** The one admin screen that is a composed grid: five bands, each present only if its key is. */
 export function DashboardPage() {
   const { identity: admin } = useAuth();
   const dashboard = useQuery({
@@ -94,6 +101,7 @@ function DashboardBody({
 function Bands({ data }: Readonly<{ data: Dashboard }>) {
   return (
     <div className="flex flex-col gap-6 pb-4">
+      {data.work ? <WorkCard work={data.work} /> : null}
       {data.headline ? <Headline headline={data.headline} /> : null}
       <div className="grid items-start gap-4 lg:grid-cols-3">
         {data.bank ? <BankFigure bank={data.bank} /> : null}
@@ -328,6 +336,88 @@ function WindowList({
         ))}
       </ul>
     </div>
+  );
+}
+
+// --------------------------------------------------------------------------- Band E — own sections
+// ---------------------------------------------------------------------------
+
+/** What each role's work is called here, its own queue, and the page one of its sections opens on. */
+const ROLE_WORK: Readonly<
+  Record<
+    AssignmentRole,
+    { title: string; queue: string; section: (testId: string, sectionId: string) => string }
+  >
+> = {
+  TYPIST: { title: 'Typing', queue: ROUTES.AUTHORING_ASSIGNMENTS, section: ROUTES.TYPING_SECTION },
+  PROOFREADER: {
+    title: 'Proof-reading',
+    queue: ROUTES.PROOFREADING_ASSIGNMENTS,
+    section: ROUTES.READING_SECTION,
+  },
+};
+
+function WorkCard({ work }: Readonly<{ work: AssignmentSummary }>) {
+  return (
+    <Card className="grid items-start gap-4 p-4 lg:grid-cols-3">
+      <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+        <SectionHeading title="My sections" />
+        {work.roles.map((role) => (
+          <div key={role.role} className="flex flex-col gap-3">
+            <SectionHeading
+              level={3}
+              title={ROLE_WORK[role.role].title}
+              action={
+                <Link
+                  to={ROLE_WORK[role.role].queue}
+                  className={cn(linkVariants(), 'inline-flex items-center gap-1 [&_svg]:size-4')}
+                >
+                  All
+                  <ChevronRight aria-hidden />
+                </Link>
+              }
+            />
+            <MetricGroup className="sm:gap-0 sm:[&>*]:px-4">
+              <Metric size="md" label="Assigned" value={role.assigned} />
+              <Metric size="md" label="Completed" value={role.completed} />
+              <Metric size="md" label="On time" value={role.onTime} />
+              <Metric size="md" label="Overdue" value={role.overdue} />
+              <Metric size="md" label="Time spent" value={clockText(role.secondsSpent)} />
+            </MetricGroup>
+          </div>
+        ))}
+      </div>
+      <div className="flex min-w-0 flex-col gap-2">
+        <SectionHeading level={3} title="Due next" meta={String(work.next.length)} />
+        {work.next.length === 0 ? (
+          <EmptyState level={3} size="sm" title="Nothing owed" />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {work.next.map((row) => (
+              <OwedSection key={row.assignmentId} row={row} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function OwedSection({ row }: Readonly<{ row: AssignmentSummaryRow }>) {
+  return (
+    <li className="flex min-w-0 flex-col gap-0.5 text-sm">
+      <Link
+        to={ROLE_WORK[row.role].section(row.testId, row.baseConfigSectionId)}
+        className={linkVariants()}
+      >
+        <TruncatedText>{`${row.sectionName} · ${row.testTitle ?? UNTITLED}`}</TruncatedText>
+      </Link>
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        {row.dueAt ? `Due ${instituteDayLabel(row.dueAt)}` : 'No due date'}
+        <DueStandingBadge standing={row.standing} />
+        <TimeSpent seconds={row.secondsSpent} />
+      </span>
+    </li>
   );
 }
 

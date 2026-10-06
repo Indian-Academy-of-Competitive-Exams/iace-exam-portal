@@ -616,7 +616,7 @@ model QuestionAssignment {
   baseConfigSectionId String         @db.Uuid
   assigneeId          String         @db.Uuid
   role                AssignmentRole
-  // An informal reminder. It gates nothing and blocks nothing.
+  // The day it is wanted by, kept as its last instant at the institute. It gates nothing; null only on a row from before one was required.
   dueAt               DateTime?      @db.Timestamptz(3)
   // The whole state: null is outstanding, set is done. No status enum to keep in step.
   finalizedAt         DateTime?      @db.Timestamptz(3)

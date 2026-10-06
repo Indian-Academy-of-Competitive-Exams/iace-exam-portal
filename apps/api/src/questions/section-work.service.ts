@@ -470,7 +470,11 @@ export class SectionWorkService {
       : null;
     if (!test || !section) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
 
-    const rows = await this.assignments.sectionAssignments(pair.testId, pair.baseConfigSectionId);
+    const rows = await this.assignments.sectionAssignments(
+      pair.testId,
+      pair.baseConfigSectionId,
+      viewer,
+    );
     const active = rows.filter((row) => row.replacedAt === null);
     const own = rows.filter((row) => row.assigneeId === viewer.id);
     const mine = own.find((row) => row.replacedAt === null) ?? own.at(-1) ?? null;

@@ -25,6 +25,8 @@ import { useAuth } from '../../providers/auth';
 import { useTestSectionFilters } from './use-test-section-filters';
 import { AdminMultiPicker } from '../../components/admin-multi-picker';
 import { SuperAdminOnly } from '../admins/super-admin-only';
+import { DueStandingBadge } from '../../components/due-standing-badge';
+import { TimeSpent } from '../../components/time-spent';
 
 /** How every section of every live test is going. Read only: nothing here assigns, finalizes or takes up. */
 
@@ -47,12 +49,31 @@ function SectionProgress({ row }: Readonly<{ row: SectionProgressRow }>) {
   );
 }
 
-/** Who holds one half of a section, whether they have finished, and when it is wanted. */
+/** Finished, begun or untouched: begun is any time on its questions, or for typing a question written. */
+function stateOf(
+  held: SectionRoleProgress,
+  doneLabel: string,
+  written: number,
+): { label: string; variant: BadgeProps['variant'] } {
+  if (held.finalizedAt) return { label: doneLabel, variant: 'success' };
+  return held.secondsSpent > 0 || written > 0
+    ? { label: 'In progress', variant: 'info' }
+    : { label: 'Not started', variant: 'neutral' };
+}
+
+/** Who holds one half of a section, how far they are, when it is wanted, and the time they have given it. */
 function RoleCell({
   held,
   doneLabel,
+  written = 0,
   href,
-}: Readonly<{ held: SectionRoleProgress | null; doneLabel: string; href: string | null }>) {
+}: Readonly<{
+  held: SectionRoleProgress | null;
+  doneLabel: string;
+  /** Questions that count as this role's own start; a reader starts by reading, so theirs is none. */
+  written?: number;
+  href: string | null;
+}>) {
   // The paper's source gives this role nothing to do — a picked paper is drawn, never typed.
   if (held === null) return <TruncatedText>{null}</TruncatedText>;
   if (held.assignmentId === null) {
@@ -61,6 +82,7 @@ function RoleCell({
   }
 
   const name = <TruncatedText>{held.assigneeName}</TruncatedText>;
+  const state = stateOf(held, doneLabel, written);
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -72,13 +94,17 @@ function RoleCell({
         ) : (
           name
         )}
-        <Badge variant={held.finalizedAt ? 'success' : 'neutral'} className="shrink-0">
-          {held.finalizedAt ? doneLabel : 'Outstanding'}
+        <Badge variant={state.variant} className="shrink-0">
+          {state.label}
         </Badge>
+        <DueStandingBadge standing={held.standing} />
       </div>
-      <TruncatedText className="text-xs text-muted-foreground">
-        {held.dueAt ? `Due ${instituteDayLabel(held.dueAt)}` : null}
-      </TruncatedText>
+      <div className="flex min-w-0 items-center gap-2">
+        <TruncatedText className="text-xs text-muted-foreground">
+          {held.dueAt ? `Due ${instituteDayLabel(held.dueAt)}` : 'No due date'}
+        </TruncatedText>
+        <TimeSpent seconds={held.secondsSpent} />
+      </div>
     </div>
   );
 }
@@ -124,11 +150,12 @@ function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {
     {
       key: 'typing',
       header: 'Typing',
-      className: 'max-w-[15rem]',
+      className: 'max-w-[18rem]',
       cell: (row) => (
         <RoleCell
           held={row.typing}
           doneLabel="Written"
+          written={row.writtenCount}
           href={sectionHref(row, row.typing, adminId)}
         />
       ),
@@ -136,7 +163,7 @@ function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {
     {
       key: 'reading',
       header: 'Proof-reading',
-      className: 'max-w-[15rem]',
+      className: 'max-w-[18rem]',
       cell: (row) => (
         <RoleCell
           held={row.reading}

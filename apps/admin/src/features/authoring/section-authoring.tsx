@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, Info, Send, Timer, Trash2, Upload } from 'lucide-react';
+import { CheckCheck, Info, Send, Trash2, Upload } from 'lucide-react';
 import {
   AppException,
   DIFFICULTY_LEVEL,
@@ -10,6 +10,7 @@ import {
   SECTION_SEATS,
   SEND_BACK_REASONS,
   clockText,
+  instituteDayLabel,
   type Assignment,
   type QuestionTime,
   type ReviewState,
@@ -71,6 +72,8 @@ import {
 import { headerOf, stateOf, toDraft } from './question-scaffold';
 import { FinalizeAssignmentDialog } from './finalize-assignment-dialog';
 import { useWorkClock } from './use-work-clock';
+import { DueStandingBadge } from '../../components/due-standing-badge';
+import { TimeSpent } from '../../components/time-spent';
 import { type WorkClock } from './work-clock';
 
 const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
@@ -353,6 +356,7 @@ function SectionTitle({
   elsewhere,
   blocked,
 }: Readonly<{ work: SectionWork; elsewhere: string | null; blocked: boolean }>) {
+  const own = [work.typist, work.reader].find((row) => row?.id === work.seatAssignmentId);
   return (
     <span className="flex min-w-0 items-center gap-2">
       {elsewhere ? <EditingElsewhere name={elsewhere} blocked={blocked} /> : null}
@@ -360,6 +364,14 @@ function SectionTitle({
       <TruncatedText className="text-sm text-muted-foreground">
         {work.testTitle ?? 'Untitled test'}
       </TruncatedText>
+      {own?.dueAt ? (
+        <>
+          <span className="flex-none text-sm text-muted-foreground">
+            {`Due ${instituteDayLabel(own.dueAt)}`}
+          </span>
+          <DueStandingBadge standing={own.standing} />
+        </>
+      ) : null}
     </span>
   );
 }
@@ -480,22 +492,7 @@ function cardOf(
 /** The viewer's own time on one question, running while it is the one on screen. */
 function OwnClock({ clock, id, held }: Readonly<{ clock: WorkClock; id: string; held: number }>) {
   const seconds = useSyncExternalStore(clock.subscribe, () => clock.shown(id, held));
-  return <TimeSpent seconds={seconds} />;
-}
-
-/** One time on one question: the viewer's own behind a glyph, or a seat's behind its name. */
-function TimeSpent({ seconds, seat }: Readonly<{ seconds: number; seat?: string }>) {
-  return (
-    <span className="flex flex-none items-center gap-1 text-xs tabular-nums text-muted-foreground [&_svg]:size-3.5">
-      {seat ?? (
-        <>
-          <Timer aria-hidden />
-          <span className="sr-only">Time on this question</span>
-        </>
-      )}
-      {clockText(seconds)}
-    </span>
-  );
+  return <TimeSpent seconds={seconds} label="Time on this question" />;
 }
 
 /** Each seat's time on the question, for the owner and a super admin, who are sent both. */
@@ -776,6 +773,7 @@ function ProgressPanel({
       </TabsList>
       <TabsContent value="typist" className="flex flex-col gap-3 pt-3">
         <Holder holder={work.typist} earlier={earlierOf(work, 'TYPIST')} />
+        <DueStat holder={work.typist} />
         <Stat label="Written" value={`${counts.written} of ${work.questionCount}`} />
         <Stat label="Sent back to fix" value={counts.sentBack} />
         <TimeStat seconds={seatTime(work, 'typist')} />
@@ -791,6 +789,7 @@ function ProgressPanel({
       </TabsContent>
       <TabsContent value="reader" className="flex flex-col gap-3 pt-3">
         <Holder holder={work.reader} earlier={earlierOf(work, 'PROOFREADER')} />
+        <DueStat holder={work.reader} />
         <Stat label="Checked" value={`${counts.checked} of ${work.questions.length}`} />
         <Stat label="Sent back" value={counts.sentBack} />
         <Stat label="Fixed, to check again" value={counts.fixed} />
@@ -838,6 +837,10 @@ function Holder({
       ) : null}
     </div>
   );
+}
+
+function DueStat({ holder }: Readonly<{ holder: Assignment | null }>) {
+  return holder?.dueAt ? <Stat label="Due" value={instituteDayLabel(holder.dueAt)} /> : null;
 }
 
 function TimeStat({ seconds }: Readonly<{ seconds: number | null }>) {

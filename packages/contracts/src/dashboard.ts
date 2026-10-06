@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { assignmentSummarySchema } from './assignments';
 import { rowActionSchema } from './audit';
 import { difficultyLevelSchema, questionStatusSchema } from './questions';
 import { testStatusSchema } from './tests';
 
 // ============================================================================
-// The admin landing screen: four bands of counts, each gated by the FEATURE_KEYS
+// The admin landing screen: five bands of counts, each gated by the FEATURE_KEYS
 // its caller holds. A band the caller cannot reach is ABSENT from the payload,
 // never zeroed — a zero is a number about the platform, and this is the one
 // screen every admin lands on whatever they hold.
@@ -97,6 +98,8 @@ export const dashboardSchema = z.object({
   bank: dashboardBankSchema.optional(),
   activity: dashboardActivitySchema.optional(),
   windows: dashboardWindowsSchema.optional(),
+  /** Band E. The caller's own sections; absent until they hold one. */
+  work: assignmentSummarySchema.optional(),
 });
 export type Dashboard = z.infer<typeof dashboardSchema>;
 

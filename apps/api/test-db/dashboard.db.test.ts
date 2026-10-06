@@ -13,6 +13,7 @@ import {
   type AdminPermissions,
   type FeatureKey,
 } from '@iace/contracts';
+import { AssignmentsService } from '../src/assignments/assignments.service';
 import { DashboardService } from '../src/dashboard/dashboard.service';
 import { type AuthenticatedUser } from '../src/common/security';
 import { type PrismaService } from '../src/prisma/prisma.service';
@@ -40,9 +41,12 @@ const DAY_MS = 86_400_000;
 /** Relative to the real clock the service reads: a pinned date turns "upcoming" into "open" on its own. */
 const daysFromNow = (days: number) => new Date(Date.now() + days * DAY_MS);
 
+/** A real id's shape: the caller's own sections are looked up by it. */
+const CALLER = uid();
+
 function admin(over: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
   return {
-    id: 'adm_1',
+    id: CALLER,
     actor: ActorTypes.ADMIN,
     sessionId: 'ses_1',
     isSuperAdmin: false,
@@ -75,7 +79,9 @@ function build(client: PrismaService = prisma) {
       return Reflect.get(target, key) as unknown;
     },
   });
-  return { touched, service: new DashboardService(watched, fakeAudit() as never) };
+  // The summary never asks who may hold a section, so the admins service it would ask is left out.
+  const assignments = new AssignmentsService(watched, undefined as never);
+  return { touched, service: new DashboardService(watched, fakeAudit() as never, assignments) };
 }
 
 /** Three accounts (one closed), four branches, two programs, seven exams, and a small bank. */
@@ -224,6 +230,37 @@ describe('the outstanding assignments tile', () => {
 
     assert.equal(sections.finalized, 1);
     assert.equal(payload.bank?.openAssignments, 3);
+  });
+});
+
+describe('the caller’s own sections', () => {
+  it('is absent while every section is somebody else’s', async () => {
+    await assignedSections(1, 0);
+    const { service } = build();
+
+    const payload = await service.overview(holding(FEATURE_KEYS.QUESTION_AUTHORING));
+
+    assert.equal(payload.work, undefined);
+  });
+
+  it('counts the sections the caller holds, and nobody else’s', async () => {
+    await assignedSections(2, 1);
+    const holder = await prisma.questionAssignment.findFirstOrThrow({
+      select: { assigneeId: true },
+    });
+    const { service } = build();
+
+    const payload = await service.overview(
+      admin({
+        id: holder.assigneeId,
+        permissions: { [FEATURE_KEYS.QUESTION_AUTHORING]: PERMISSION_LEVELS.WRITE },
+      }),
+    );
+
+    assert.deepEqual(
+      payload.work?.roles.map((role) => [role.role, role.assigned, role.completed]),
+      [[ASSIGNMENT_ROLES.TYPIST, 3, 1]],
+    );
   });
 });
 

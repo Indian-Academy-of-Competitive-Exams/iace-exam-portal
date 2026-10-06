@@ -459,6 +459,17 @@ and needs no mapping at all.
   seat is counted, and not once the test is offered; an owner looking in is not. Each seat reads
   its own time; the test's owner and a super admin read both seats', per question and in total.
   A discarded draft takes its time with it.
+- **A section is handed out with the day it is wanted by.** `QuestionAssignment.dueAt` is required
+  on a new assignment and kept as that day's last instant at the institute; it gates nothing. A row
+  from before the date was required has none, and is judged neither way. Where a row stands is
+  derived, never stored (`dueStanding`), in institute days: on time when finished on or before the
+  day, late when after it, overdue while still open past it. Nothing is owed on a role that has
+  passed on, on a section still open when its test was offered, or by a typist on a picked paper,
+  who has no Done to give. A holder's whole time on a
+  section is the sum of their `QuestionWorkTime` in that seat, and travels with the assignment
+  under the same rule as a question's time: each seat its own, the owner and a super admin both.
+  The dashboard gives whoever holds the authoring or the proof-reading key their own standing per
+  role — assigned, completed, completed on time, overdue, time spent — and the sections still owed.
 - **Releasing a section needs every question on its paper checked** and none still with the
   typist. It sets the reader's `finalizedAt` and ends their authority over it. A question added,
   drawn or swapped onto the paper after the release that the reader has not checked sends the

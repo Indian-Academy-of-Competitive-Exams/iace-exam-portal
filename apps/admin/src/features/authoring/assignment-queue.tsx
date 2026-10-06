@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ASSIGNMENT_ROLES,
+  clockText,
   instituteDayLabel,
   type AssignmentRole,
   type AssignmentWithTest,
@@ -26,6 +27,7 @@ import { NAV_ITEMS, QUERY_KEYS, ROUTES, myAssignmentsQueryKey } from '../../lib/
 import { useTestSectionFilters } from './use-test-section-filters';
 import { TypistDoneDialog } from './typist-done-dialog';
 import { FinalizeAssignmentDialog } from './finalize-assignment-dialog';
+import { DueStandingBadge } from '../../components/due-standing-badge';
 
 /** One section handed to one admin, from either side of it, and the screen a row of it opens. */
 
@@ -112,11 +114,14 @@ function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
     {
       key: 'due',
       header: 'Due',
-      className: 'max-w-40',
+      className: 'max-w-56',
       cell: (row) => (
-        <TruncatedText className="text-muted-foreground">
-          {row.dueAt ? instituteDayLabel(row.dueAt) : 'No due date'}
-        </TruncatedText>
+        <div className="flex min-w-0 items-center gap-2">
+          <TruncatedText className="text-muted-foreground">
+            {row.dueAt ? instituteDayLabel(row.dueAt) : 'No due date'}
+          </TruncatedText>
+          <DueStandingBadge standing={row.standing} />
+        </div>
       ),
     },
     {
@@ -128,6 +133,16 @@ function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
       key: 'state',
       header: 'State',
       cell: (row) => <StateBadge row={row} />,
+    },
+    {
+      key: 'time',
+      header: 'Time spent',
+      className: 'max-w-28 tabular-nums',
+      cell: (row) => (
+        <TruncatedText className="text-muted-foreground">
+          {row.secondsSpent === null ? null : clockText(row.secondsSpent)}
+        </TruncatedText>
+      ),
     },
     {
       key: 'actions',
