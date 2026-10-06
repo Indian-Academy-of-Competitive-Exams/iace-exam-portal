@@ -6,9 +6,11 @@ import { endedSittingQueryKey } from './constants';
 export const {
   briefQuery,
   catalogQuery,
+  fieldEffortQuery,
   overviewQuery,
   performanceQuery,
   questionReportQuery,
+  scoreCardAheadQuery,
   scoreCardQuery,
   testPaperQuery,
   solutionsQuery,

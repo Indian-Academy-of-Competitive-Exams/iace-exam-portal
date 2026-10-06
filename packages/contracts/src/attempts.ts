@@ -316,13 +316,15 @@ export interface SectionEffort {
   total: number;
   attempted: number;
   unattempted: number;
+  /** The clock on every question served here, answered or not. */
+  timeSpentSec: number;
 }
 
 /** What a handed-in paper says about itself before anything is marked, section by section. */
 export function sectionEffort(
   sections: readonly ExamSection[],
   questions: readonly { questionId: string; baseConfigSectionId: string }[],
-  answers: Readonly<Record<string, { state: AnswerState }>>,
+  answers: Readonly<Record<string, { state: AnswerState; timeSpentSec?: number }>>,
 ): SectionEffort[] {
   const attempted = new Set<AnswerState>(ANSWERED_STATES);
 
@@ -341,10 +343,36 @@ export function sectionEffort(
         total: served.length,
         attempted: answered,
         unattempted: served.length - answered,
+        timeSpentSec: served.reduce(
+          (sum, row) => sum + (answers[row.questionId]?.timeSpentSec ?? 0),
+          0,
+        ),
       },
     ];
   });
 }
+
+/** One section's effort with no mark in it, which is why it can be read before a paper is marked. */
+const sectionEffortFigureSchema = z.object({
+  baseConfigSectionId: z.string(),
+  attempted: z.number(),
+  timeSpentSec: z.number(),
+});
+export type SectionEffortFigure = z.infer<typeof sectionEffortFigureSchema>;
+
+/** Who a handed-in paper stands beside, in effort alone: it answers the same marked or unmarked. */
+export const fieldEffortSchema = z.object({
+  testId: z.string(),
+  attemptNo: z.number().int(),
+  /** Ranked sittings behind `average`. Zero while nobody is ranked, and `average` is then empty. */
+  cohortSize: z.number().int(),
+  average: z.array(sectionEffortFigureSchema),
+  /** Null while nobody is ranked, and when the topper is the very sitting that asked. */
+  topper: z.array(sectionEffortFigureSchema).nullable(),
+  /** Their own last marked sitting of this paper. Null on a first attempt. */
+  previous: z.array(sectionEffortFigureSchema).nullable(),
+});
+export type FieldEffort = z.infer<typeof fieldEffortSchema>;
 
 /** The same tally per section, because a palette only ever draws the section it stands in. */
 export function sectionPaletteCounts(
@@ -442,6 +470,7 @@ export const ME_ATTEMPT_ROUTES = {
   state: (attemptId: string) => `/me/attempts/${attemptId}/state`,
   submit: (attemptId: string) => `/me/attempts/${attemptId}/submit`,
   scoreCard: (attemptId: string) => `/me/attempts/${attemptId}/scorecard`,
+  field: (attemptId: string) => `/me/attempts/${attemptId}/field`,
   solutions: (attemptId: string) => `/me/attempts/${attemptId}/solutions`,
   questionReport: (attemptId: string) => `/me/attempts/${attemptId}/question-report`,
   performance: '/me/performance',

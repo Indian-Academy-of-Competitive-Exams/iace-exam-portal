@@ -13,6 +13,7 @@ export {
   createAppQueryClient,
   isWorthAskingAgain,
   retryDelayMs,
+  shouldRetryRead,
   type AppMutationMeta,
   type Notifier,
 } from './query-client';
@@ -59,7 +60,17 @@ export {
 } from './exam/exam-view';
 export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
-export { isMarkingPending } from './marking';
+export { MARKING_TRIES, isMarkingPending, retryWhileMarking } from './marking';
+export {
+  EFFORT_RUNNERS,
+  FIELD_SAMPLE_FLOOR,
+  effortLine,
+  paperEffort,
+  sectionReadings,
+  type EffortReading,
+  type EffortRunner,
+  type PaperEffort,
+} from './handed-in';
 export { markNotificationRead } from './notifications';
 export {
   greetingFor,
@@ -99,6 +110,7 @@ export {
   savedFacetsQueryKey,
   bookmarksInAttemptQueryKey,
   scoreCardQueryKey,
+  fieldEffortQueryKey,
   solutionsQueryKey,
   questionReportQueryKey,
   PERFORMANCE_QUERY_KEY,

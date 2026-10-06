@@ -31,6 +31,7 @@ import {
   ME_ATTEMPT_ROUTES,
   examBriefSchema,
   examPaperSchema,
+  fieldEffortSchema,
   performanceTrendSchema,
   solutionReportSchema,
   attemptSaveAckSchema,
@@ -41,6 +42,7 @@ import {
   type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
+  type FieldEffort,
   type SharedPaper,
   type StartedAttempt,
   type PerformanceTrend,
@@ -179,6 +181,10 @@ export function meClient(core: ApiCore) {
     /** Marks, standing and the cohort beside them, for every report tab. Refused until marked. */
     scoreCard: (attemptId: string): Promise<ScoreCard> =>
       get(ME_ATTEMPT_ROUTES.scoreCard(attemptId), scoreCardSchema),
+
+    /** The cohort's effort beside a handed-in paper. Answers before the paper is marked. */
+    fieldEffort: (attemptId: string): Promise<FieldEffort> =>
+      get(ME_ATTEMPT_ROUTES.field(attemptId), fieldEffortSchema),
 
     /** One section's worked solutions, or one question's. Refused until the paper has been marked. */
     solutions: (attemptId: string, query: SolutionsQuery = {}): Promise<SolutionReport> =>

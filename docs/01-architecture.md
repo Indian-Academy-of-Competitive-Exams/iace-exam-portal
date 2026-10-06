@@ -199,6 +199,15 @@ synchronous transactions fighting each other — nobody waits on it, but it is n
 §3 measures the drain at a minute or two for a full hall, and that is the figure to watch on the
 day.
 
+**The handed-in page waits on none of it.** It draws the sitting's own effort — questions answered
+and time, section by section — beside the cohort's average, the topper's and the student's last
+attempt, from `GET /me/attempts/:id/field`. That read carries no mark, so it answers a sitting that
+is not marked yet, and a sitting that is the topper is never drawn as one: equal bars would hand
+over a rank on a page with no marks on it. The result is the page's last step. While the student
+reads, the score card is asked for behind the page; a marked paper's reads ask again by themselves
+three times on the client's jittered backoff and then say the marks are not in. That is bounded,
+where the poll `905bae5` removed ran for as long as the drain did.
+
 **Rank and percentile are counted live from Postgres.** A test's cohort is its graded, evaluated,
 scored sittings, ordered by marks, then time taken, then id. The partial index `Attempt_ranking_idx`
 serves a sitting's standing, an index-only count per sitting, and "N sat": on 200 tests of 5,000
