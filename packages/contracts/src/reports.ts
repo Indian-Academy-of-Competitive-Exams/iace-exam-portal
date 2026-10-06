@@ -14,6 +14,7 @@ export const REPORT_GROUPS = {
   STUDENTS: 'students',
   PERFORMANCE: 'performance',
   ENROLMENT: 'enrolment',
+  CONTENT: 'content',
 } as const;
 export type ReportGroup = (typeof REPORT_GROUPS)[keyof typeof REPORT_GROUPS];
 
@@ -80,6 +81,12 @@ export const REPORT_KEYS = {
   MANUAL_GRANTS: 'manual-grants',
   EVENT_CANDIDATES: 'event-candidates',
   MOBILE_CHANGES: 'mobile-changes',
+  AUTHORING_PROGRESS: 'authoring-progress',
+  OVERDUE_ASSIGNMENTS: 'overdue-assignments',
+  STAFF_OUTPUT: 'staff-output',
+  SEND_BACKS: 'send-backs',
+  BANK_INVENTORY: 'bank-inventory',
+  QUESTION_USAGE: 'question-usage',
 } as const;
 export const reportKeySchema = z.enum(REPORT_KEYS);
 export type ReportKey = z.infer<typeof reportKeySchema>;
@@ -108,6 +115,12 @@ const THE_ROLL_OVER_A_MONTH = {
   group: REPORT_GROUPS.ENROLMENT,
   needs: [REPORT_PARAMS.PERIOD],
   period: REPORT_PERIODS.THIS_MONTH,
+} as const;
+const THE_BANK = { group: REPORT_GROUPS.CONTENT, needs: [] } as const;
+const THE_DESK_OVER_A_WEEK = {
+  group: REPORT_GROUPS.CONTENT,
+  needs: [REPORT_PARAMS.PERIOD],
+  period: REPORT_PERIODS.LAST_WEEK,
 } as const;
 const ONE_STUDENT = { group: REPORT_GROUPS.STUDENTS, needs: [REPORT_PARAMS.STUDENT] } as const;
 const A_STUDENTS_PERIOD = {
@@ -224,6 +237,20 @@ export const REPORTS = {
     title: 'Event candidates',
   },
   [REPORT_KEYS.MOBILE_CHANGES]: { ...THE_ROLL_OVER_A_MONTH, title: 'Mobile number changes' },
+  [REPORT_KEYS.AUTHORING_PROGRESS]: {
+    group: REPORT_GROUPS.CONTENT,
+    needs: [REPORT_PARAMS.TEST],
+    title: 'Authoring progress',
+  },
+  [REPORT_KEYS.OVERDUE_ASSIGNMENTS]: { ...THE_BANK, title: 'Overdue sections' },
+  [REPORT_KEYS.STAFF_OUTPUT]: { ...THE_DESK_OVER_A_WEEK, title: 'Staff output' },
+  [REPORT_KEYS.SEND_BACKS]: { ...THE_DESK_OVER_A_WEEK, title: 'Questions sent back' },
+  [REPORT_KEYS.BANK_INVENTORY]: { ...THE_BANK, title: 'Question bank inventory' },
+  [REPORT_KEYS.QUESTION_USAGE]: {
+    ...THE_BANK,
+    title: 'Question usage',
+    takes: [REPORT_PARAMS.TOP],
+  },
 } as const satisfies Record<ReportKey, ReportSpec>;
 
 /** What heads every printed page. */

@@ -35,6 +35,7 @@ import {
   type ReportSources,
 } from './report';
 import { COHORT_REPORTS } from './cohort-reports';
+import { CONTENT_REPORTS } from './content-reports';
 import { ENROLMENT_REPORTS } from './enrolment-reports';
 import { PERIOD_REPORTS } from './period-reports';
 import { reportChoices } from './report-choices';
@@ -47,6 +48,7 @@ const BUILDERS: ReportBuilders = {
   ...STUDENT_REPORTS,
   ...COHORT_REPORTS,
   ...ENROLMENT_REPORTS,
+  ...CONTENT_REPORTS,
 };
 
 /** The read model behind every report. It writes nothing, and owns no table (docs/03 §4). */

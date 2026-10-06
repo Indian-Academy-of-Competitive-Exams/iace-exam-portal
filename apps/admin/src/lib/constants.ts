@@ -533,6 +533,7 @@ export const REPORT_GROUP_LABELS: Readonly<Record<ReportGroup, string>> = {
   [REPORT_GROUPS.STUDENTS]: 'Students',
   [REPORT_GROUPS.PERFORMANCE]: 'Performance',
   [REPORT_GROUPS.ENROLMENT]: 'Enrolment',
+  [REPORT_GROUPS.CONTENT]: 'Content',
 };
 
 /** The periods a report's bar offers by name. */
