@@ -244,6 +244,7 @@ enum AuditFeature {
   EVENT
   ANNOUNCEMENT
   AUDIT_LOG
+  REPORT
 }
 
 enum AuditAction {
@@ -753,6 +754,8 @@ model Attempt {
   @@index([testId, status])
   // The cohort sweep's watermark: which tests something has landed on since they were counted.
   @@index([testId, updatedAt])
+  // A report's period: the one read of sittings by when they were handed in, whoever sat them.
+  @@index([submittedAt])
 }
 
 // One sitting's answers in one row: `answers` holds a slot per paper row in paper order, `verdicts` the scorer's marks for each.

@@ -260,6 +260,7 @@ export const AUDIT_FEATURE_LABELS: Readonly<Record<AuditFeature, string>> = {
   EVENT: 'Event',
   ANNOUNCEMENT: 'Announcement',
   AUDIT_LOG: 'Audit log',
+  REPORT: 'Report',
 };
 
 /** What an audit row's `action` is called on screen. */

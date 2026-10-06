@@ -207,6 +207,7 @@ Enum AuditFeature {
   EVENT
   ANNOUNCEMENT
   AUDIT_LOG
+  REPORT
 }
 
 Enum AuditAction {
@@ -568,6 +569,7 @@ Table Attempt {
     (studentId, createdAt)
     (testId, status)
     (testId, updatedAt)
+    (submittedAt)
   }
 }
 

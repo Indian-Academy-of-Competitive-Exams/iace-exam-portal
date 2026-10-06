@@ -128,6 +128,13 @@ A module is a **bounded context**. Six rules make it extraction-ready:
   landing screen's read model: a facade call per table would be eight new count methods on eight
   modules, each existing for one screen. The audit feed, which has scoping rules of its own, does
   go through `AuditService`.
+- `reports` reads across `Attempt`, `Test`, `BaseConfigSection`, `Student` and `Admin`, and writes
+  nothing: it is the read model behind every printed report, as `dashboard` is behind the landing
+  screen. **Where an owner already defines a figure it does not count that figure again** — a
+  test's analytics and result sheet come from `attempts` (`TestAnalyticsService`,
+  `TestReportSheets`), who a test reaches from `AccessResolverService`, a person's columns from
+  `students` — so a page cannot say something its screen does not. What it reads directly is what
+  no owner computes: a grouping or a period nobody else asks for.
 - `me` aggregates `students`, `auth`, `access` and `notifications`. This is the one to copy —
   everything arrives through a module barrel.
 
@@ -155,7 +162,7 @@ erodes.
 | notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`                          |
 | saved         | `SavedQuestion`                                                                                                   |
 
-`auth`, `imports`, `me`, `dashboard` and `health` own no table. The rollups belong to `attempts` because the
+`auth`, `imports`, `me`, `dashboard`, `reports` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
 owns the sitting owns the derivation.
 
@@ -366,6 +373,15 @@ Built and in use. Reach for these rather than adding a second of any of them.
   the admin's own upload, so that download takes the preview's permission, with no `DATA_EXPORT`
   and no audit row. Where the file goes back through an importer, its columns are that importer's,
   and a db test proves the round trip.
+- **A report is one shape with three outputs.** A builder in `reports` returns what it covers, its
+  headline figures and its sheets, and a sheet is the same `ExportSheet` an export writes. The
+  screen and the printed page read it as a `ReportDocument`, the download as a workbook, both off
+  one column list — a column marked `fileOnly` is the only thing a file holds that a page does
+  not. The catalogue is code-owned (`REPORTS` in contracts): a row names what the report cannot be
+  built without, and the builder's query type is derived from that row, so a builder cannot read a
+  parameter its row does not require. `REPORTS` READ opens every report; the workbook also needs
+  `DATA_EXPORT` and writes its `EXPORT` audit row against the admin, under the `REPORT` feature.
+  Rank and percentile are live, so a document carries `asOf` and a printed page says it.
 
 ---
 

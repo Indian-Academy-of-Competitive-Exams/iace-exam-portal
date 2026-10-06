@@ -36,6 +36,13 @@ import {
   type UpdateAdminBody,
 } from '../admins';
 import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from '../dashboard';
+import {
+  ADMIN_REPORT_ROUTES,
+  reportDocumentSchema,
+  type ReportDocument,
+  type ReportKey,
+  type ReportQueryInput,
+} from '../reports';
 import { erasureReceiptSchema, type ErasureReceipt } from '../me';
 import {
   ADMIN_BRANCH_ROUTES,
@@ -999,6 +1006,15 @@ export function adminClient(core: ApiCore) {
     /** The landing screen. One payload, carrying only the bands the caller may see. */
     dashboard: {
       get: (): Promise<Dashboard> => get(ADMIN_DASHBOARD_ROUTES.get, dashboardSchema),
+    },
+
+    /** One document a report: the screen previews it, the printer takes it whole. */
+    reports: {
+      read: (key: ReportKey, query: ReportQueryInput): Promise<ReportDocument> =>
+        get(`${ADMIN_REPORT_ROUTES.read(key)}${queryString({ ...query })}`, reportDocumentSchema),
+
+      export: (key: ReportKey, query: ReportQueryInput): Promise<Blob> =>
+        requestBlob(ADMIN_REPORT_ROUTES.export(key), { ...query }),
     },
 
     audit: {

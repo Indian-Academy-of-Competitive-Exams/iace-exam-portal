@@ -1,3 +1,4 @@
+import { type ReportKey } from './reports';
 import { todayISO } from './students';
 
 /** The most rows one export writes; counted before any row is read. */
@@ -14,7 +15,8 @@ export const EXPORT_KINDS = {
   SERIES_GRANTS: 'series-grants',
   IMPORT_ERRORS: 'import-errors',
 } as const;
-export type ExportKind = (typeof EXPORT_KINDS)[keyof typeof EXPORT_KINDS];
+/** A report downloads under its own key, so ten of them do not land as ten files of one name. */
+export type ExportKind = (typeof EXPORT_KINDS)[keyof typeof EXPORT_KINDS] | ReportKey;
 
 export function exportFilename(kind: ExportKind): string {
   return `${kind}-${todayISO()}.xlsx`;

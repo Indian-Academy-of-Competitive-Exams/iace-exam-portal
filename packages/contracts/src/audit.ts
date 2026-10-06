@@ -32,6 +32,7 @@ export const AUDIT_FEATURE = {
   EVENT: 'EVENT',
   ANNOUNCEMENT: 'ANNOUNCEMENT',
   AUDIT_LOG: 'AUDIT_LOG',
+  REPORT: 'REPORT',
 } as const;
 export const auditFeatureSchema = z.enum(AUDIT_FEATURE);
 export type AuditFeature = z.infer<typeof auditFeatureSchema>;

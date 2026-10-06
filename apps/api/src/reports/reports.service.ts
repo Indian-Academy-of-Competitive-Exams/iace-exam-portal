@@ -1,0 +1,75 @@
+import { Injectable } from '@nestjs/common';
+import {
+  AppException,
+  ErrorCodes,
+  REPORTS,
+  reportFieldsMissing,
+  type AdminAuthority,
+  type ReportDocument,
+  type ReportKey,
+  type ReportQuery,
+  type ReportSpec,
+} from '@iace/contracts';
+import { AccessResolverService } from '../access';
+import { TestAnalyticsService } from '../attempts';
+import { writeWorkbook } from '../common/exporting';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  aboutSheet,
+  rowsIn,
+  toDocument,
+  type Report,
+  type ReportBuilder,
+  type ReportBuilders,
+  type ReportSources,
+} from './report';
+import { TEST_REPORTS } from './test-reports';
+
+const BUILDERS: ReportBuilders = { ...TEST_REPORTS };
+
+/** The read model behind every report. It writes nothing, and owns no table (docs/03 §4). */
+@Injectable()
+export class ReportsService {
+  private readonly sources: ReportSources;
+
+  constructor(
+    prisma: PrismaService,
+    analytics: TestAnalyticsService,
+    access: AccessResolverService,
+  ) {
+    this.sources = { prisma, analytics, access };
+  }
+
+  async document(
+    key: ReportKey,
+    query: ReportQuery,
+    viewer: AdminAuthority,
+  ): Promise<ReportDocument> {
+    return toDocument(key, await this.build(key, query, viewer));
+  }
+
+  async workbook(
+    key: ReportKey,
+    query: ReportQuery,
+    viewer: AdminAuthority,
+  ): Promise<{ workbook: Buffer; rows: number }> {
+    const report = await this.build(key, query, viewer);
+    const workbook = await writeWorkbook([aboutSheet(key, report), ...report.sheets]);
+    return { workbook, rows: rowsIn(report) };
+  }
+
+  private build(key: ReportKey, query: ReportQuery, viewer: AdminAuthority): Promise<Report> {
+    const spec: ReportSpec = REPORTS[key];
+    if (spec.superAdminOnly && !viewer.isSuperAdmin) {
+      throw new AppException(ErrorCodes.FORBIDDEN, 'Only a super admin may open this report');
+    }
+    const missing = reportFieldsMissing(key, query);
+    if (missing.length > 0) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'This report needs more to go on', {
+        fieldErrors: Object.fromEntries(missing.map((field) => [field, ['Required']])),
+      });
+    }
+    // The catalogue row was just checked, which is all each builder's narrower query assumes.
+    return (BUILDERS[key] as ReportBuilder)(this.sources, query);
+  }
+}
