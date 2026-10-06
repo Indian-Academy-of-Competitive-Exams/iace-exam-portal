@@ -1,4 +1,13 @@
-import { BarChart3, Bell, Bookmark, ClipboardList, KeyRound, Trophy, User } from 'lucide-react';
+import {
+  BarChart3,
+  Bell,
+  Bookmark,
+  ClipboardList,
+  Download,
+  KeyRound,
+  Trophy,
+  User,
+} from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { ANSWER_STATE, type AnswerState } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -33,6 +42,8 @@ export const ROUTES = {
   LEADERBOARD: '/leaderboard',
   /** Both lists, tabbed: what they starred, and what they got wrong. */
   SAVED: '/saved',
+  /** Their own reports, to print or keep. */
+  DOWNLOADS: '/downloads',
   NOTIFICATIONS: '/notifications',
   /** Under the bell, so the trail reads Notifications > Settings and the rail stays on the bell. */
   NOTIFICATION_SETTINGS: '/notifications/settings',
@@ -50,6 +61,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },
   { to: ROUTES.LEADERBOARD, label: 'Leaderboard', icon: Trophy },
   { to: ROUTES.SAVED, label: 'Saved questions', icon: Bookmark },
+  { to: ROUTES.DOWNLOADS, label: 'Downloads', icon: Download },
   { to: ROUTES.NOTIFICATIONS, label: 'Notifications', icon: Bell },
 ];
 

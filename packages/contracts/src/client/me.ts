@@ -55,6 +55,13 @@ import {
   type LiveAttemptState,
 } from '../attempts';
 import {
+  ME_REPORT_ROUTES,
+  reportDocumentSchema,
+  type ReportDocument,
+  type ReportQueryInput,
+  type StudentReportKey,
+} from '../reports';
+import {
   OVERVIEW_ROUTES,
   questionReportSchema,
   scoreCardSchema,
@@ -206,6 +213,10 @@ export function meClient(core: ApiCore) {
 
     /** Their whole career off the two rollup tables: standing, disposition and subjects. */
     overview: (): Promise<StudentOverview> => get(OVERVIEW_ROUTES.me, studentOverviewSchema),
+
+    /** One of their own reports, as the document a screen previews and a printer takes. */
+    report: (key: StudentReportKey, query: ReportQueryInput = {}): Promise<ReportDocument> =>
+      get(`${ME_REPORT_ROUTES.read(key)}${queryString({ ...query })}`, reportDocumentSchema),
 
     /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
     leaderboard: (query: LeaderboardQuery): Promise<Leaderboard> =>

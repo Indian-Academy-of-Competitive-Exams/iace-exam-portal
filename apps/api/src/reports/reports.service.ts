@@ -12,6 +12,7 @@ import {
   type ReportKey,
   type ReportQuery,
   type ReportSpec,
+  type StudentReportKey,
 } from '@iace/contracts';
 import { AccessResolverService } from '../access';
 import { AuditService } from '../audit';
@@ -95,6 +96,15 @@ export class ReportsService {
     viewer: ReportViewer,
   ): Promise<ReportDocument> {
     return toDocument(key, await this.build(key, query, viewer));
+  }
+
+  /** A student's own report: whatever the query says, the student is the caller. */
+  own(studentId: string, key: StudentReportKey, query: ReportQuery): Promise<ReportDocument> {
+    return this.document(
+      key,
+      { ...query, studentId },
+      { id: studentId, isSuperAdmin: false, isActive: true },
+    );
   }
 
   async workbook(

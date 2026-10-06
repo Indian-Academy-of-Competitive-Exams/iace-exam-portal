@@ -10,6 +10,7 @@ import {
   reportChoicesQuerySchema,
   reportKeySchema,
   reportQuerySchema,
+  studentReportKeySchema,
   type Paginated,
   type ReportChoice,
   type ReportChoiceParam,
@@ -17,6 +18,7 @@ import {
   type ReportDocument,
   type ReportKey,
   type ReportQuery,
+  type StudentReportKey,
 } from '@iace/contracts';
 import { Audit, AuditContext } from '../audit';
 import { chosenFilters, sendWorkbook } from '../common/exporting';
@@ -76,5 +78,21 @@ export class ReportsController {
       rows: { from: null, to: rows },
     });
     sendWorkbook(response, key, workbook);
+  }
+}
+
+/** A student's own reports. Only the keys that are about one student are served, and that student is the caller. */
+@Controller('me/reports')
+@Actors(ActorTypes.STUDENT)
+export class MeReportsController {
+  constructor(private readonly reports: ReportsService) {}
+
+  @Get(':key')
+  read(
+    @Param('key', new ZodParam(studentReportKeySchema)) key: StudentReportKey,
+    @Query(new ZodQuery(reportQuerySchema)) query: ReportQuery,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ReportDocument> {
+    return this.reports.own(user.id, key, query);
   }
 }

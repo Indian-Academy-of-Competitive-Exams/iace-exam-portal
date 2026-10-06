@@ -248,6 +248,31 @@ describe('the tests missed', () => {
   });
 });
 
+describe('a student’s own reports', () => {
+  it('reads the caller’s report whoever the query names', async () => {
+    const paper = await twoSections('Mock 2');
+    const ana = await student('Ana');
+    const bala = await student('Bala');
+    await sit(paper, ana, [RIGHT_OPTION, WRONG], IN_WEEK);
+    await sit(paper, bala, [RIGHT_OPTION, RIGHT_OPTION], IN_WEEK);
+
+    const document = await reports.own(ana, REPORT_KEYS.STUDENT_CUMULATIVE, { studentId: bala });
+
+    assert.deepEqual(document.about[0], { label: 'Student', value: 'Ana' });
+  });
+
+  it('refuses the score card of a sitting that is somebody else’s', async () => {
+    const paper = await twoSections('Mock 2');
+    const ana = await student('Ana');
+    const balas = await sit(paper, await student('Bala'), [RIGHT_OPTION, WRONG], IN_WEEK);
+
+    await assert.rejects(
+      reports.own(ana, REPORT_KEYS.STUDENT_SCORE_CARD, { attemptId: balas }),
+      refusal(ErrorCodes.NOT_FOUND),
+    );
+  });
+});
+
 describe('a report’s choices', () => {
   const asked = (input: unknown) => reportChoicesQuerySchema.parse(input);
 

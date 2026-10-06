@@ -42,6 +42,9 @@ const ExamPage = React.lazy(() =>
 const SolutionPanel = React.lazy(() =>
   import('./features/review/review').then((module) => ({ default: module.SolutionPanel })),
 );
+const DownloadsPage = React.lazy(() =>
+  import('./features/downloads/downloads').then((module) => ({ default: module.DownloadsPage })),
+);
 const SavedPage = React.lazy(() =>
   import('./features/review/saved').then((module) => ({ default: module.SavedPage })),
 );
@@ -158,6 +161,10 @@ export function App() {
             element={whileLoading(<NotificationSettingsPage />, <PageSkeleton />)}
           />
           <Route path={ROUTES.SAVED} element={whileLoading(<SavedPage />, <PageSkeleton />)} />
+          <Route
+            path={ROUTES.DOWNLOADS}
+            element={whileLoading(<DownloadsPage />, <PageSkeleton />)}
+          />
           <Route
             path={ROUTES.SERIES_PATTERN}
             element={whileLoading(<SeriesPage />, <PageSkeleton />)}

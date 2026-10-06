@@ -451,6 +451,21 @@ export const reportChoicesQuerySchema = paginationQuerySchema.extend({
 export type ReportChoicesQuery = z.infer<typeof reportChoicesQuerySchema>;
 export type ReportChoicesQueryInput = z.input<typeof reportChoicesQuerySchema>;
 
+/** The reports a student may read of themselves. Each is asked for without a student: that is the caller. */
+export const STUDENT_REPORT_KEYS = [
+  REPORT_KEYS.STUDENT_SCORE_CARD,
+  REPORT_KEYS.STUDENT_WEEKLY,
+  REPORT_KEYS.STUDENT_MONTHLY,
+  REPORT_KEYS.STUDENT_CUMULATIVE,
+  REPORT_KEYS.STUDENT_TOPICS,
+] as const;
+export const studentReportKeySchema = z.enum(STUDENT_REPORT_KEYS);
+export type StudentReportKey = z.infer<typeof studentReportKeySchema>;
+
+export const ME_REPORT_ROUTES = {
+  read: (key: StudentReportKey) => `/me/reports/${key}`,
+} as const;
+
 export const ADMIN_REPORT_ROUTES = {
   read: (key: ReportKey) => `/admin/reports/${key}`,
   export: (key: ReportKey) => `/admin/reports/${key}/export`,
