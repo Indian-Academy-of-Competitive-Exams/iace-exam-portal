@@ -47,6 +47,8 @@ export interface ScaffoldEditorProps {
   imageLimits?: ImageLimits;
   /** At the toolbar's right end, for a control over the whole box. */
   toolbarEnd?: React.ReactNode;
+  /** Shown and not typed into: the grey a disabled field wears, and no toolbar. */
+  disabled?: boolean;
   lang?: string;
   'aria-label': string;
   className?: string;
@@ -56,6 +58,9 @@ const SHELL = [
   'flex flex-col rounded-md border border-input bg-surface text-sm text-foreground shadow-sm',
   'transition-[box-shadow,border-color] focus-within:border-ring focus-within:shadow-focus',
 ].join(' ');
+
+/** The same grey a disabled `RichText` wears, so one question reads as off the same way everywhere. */
+const OFF = 'cursor-not-allowed border-disabled-border bg-disabled text-disabled-foreground';
 
 const CONTENT =
   'scaffold-content rich-content outline-none [&_.ProseMirror]:outline-none [&_p]:m-0';
@@ -147,6 +152,7 @@ export function ScaffoldEditor({
   onUploadImage,
   imageLimits,
   toolbarEnd,
+  disabled = false,
   script = null,
   lang,
   'aria-label': label,
@@ -175,7 +181,7 @@ export function ScaffoldEditor({
   );
 
   const { editor, math, setMath } = useQuestionEditor({
-    editable: true,
+    editable: !disabled,
     extensions: EXTENSIONS,
     content: docFrom(regions),
     onUpdate: (current) => emit.current(regionsOf(current)),
@@ -196,12 +202,17 @@ export function ScaffoldEditor({
     loaded.current = docKey;
     whileLoadingScaffold(() => editor.commands.setContent(docFrom(regions), { emitUpdate: false }));
     // Back at the first slot, which after a save is the stem of the next question.
-    editor.commands.focus('start');
-  }, [editor, docKey, regions]);
+    if (!disabled) editor.commands.focus('start');
+  }, [editor, docKey, regions, disabled]);
 
   return (
-    <div className={cn(SHELL, className)} data-focus-ring="wrapper">
-      {editor ? (
+    <div
+      className={cn(SHELL, disabled && OFF, className)}
+      aria-disabled={disabled || undefined}
+      data-focus-ring="wrapper"
+    >
+      {/* No toolbar when it is off: a row of dead buttons says nothing the grey does not. */}
+      {editor && !disabled ? (
         <RichTextToolbar
           // Pinned: the box runs the height of the column, and the tools have to stay reachable.
           className="sticky top-0 z-[--z-sticky] px-3"

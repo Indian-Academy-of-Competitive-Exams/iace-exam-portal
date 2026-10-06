@@ -56,6 +56,24 @@ function selectWholeDocument(): void {
   selection?.addRange(range);
 }
 
+describe('a box that is switched off', () => {
+  /** The failure this prevents: a question held by somebody else that still takes typing and still offers its tools. */
+  it('shows the question, takes no typing and offers no tools', () => {
+    const { box } = mount({ disabled: true, toolbarEnd: <button type="button">Language</button> });
+
+    assert.deepEqual(bodies().slice(0, 2), ['What is 20% of 150?', '25']);
+    assert.equal(box.getAttribute('contenteditable'), 'false');
+    assert.equal(screen.queryAllByRole('button').length, 0);
+  });
+
+  it('takes typing again once it is switched back on', () => {
+    const { box } = mount();
+
+    assert.equal(box.getAttribute('contenteditable'), 'true');
+    assert.ok(screen.queryAllByRole('button').length > 0);
+  });
+});
+
 describe('the scaffold labels', () => {
   it('are drawn for every slot, in order', () => {
     mount();

@@ -75,7 +75,7 @@ export function QuestionPanes({
         {lead || readOnly ? (
           <PanelHeading lead={lead} action={readOnly ? languages : undefined} />
         ) : null}
-        <div inert={readOnly} className={cn(SCROLLS, readOnly && 'opacity-60')}>
+        <div className={SCROLLS}>
           <ScaffoldEditor
             aria-label="Question"
             regions={regionsFor(state, language)}
@@ -89,7 +89,8 @@ export function QuestionPanes({
             imageLimits={IMAGE_LIMITS}
             lang={language}
             script={script}
-            toolbarEnd={readOnly ? undefined : languages}
+            toolbarEnd={languages}
+            disabled={readOnly}
             // The card is the frame: the box it fills draws no ring or border of its own.
             className="flex-1 rounded-none border-0 shadow-none focus-within:border-transparent focus-within:shadow-none"
           />
