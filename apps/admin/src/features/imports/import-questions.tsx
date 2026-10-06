@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, PanelsTopLeft, Upload } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Ban, PanelsTopLeft, Undo2, Upload } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   LANGUAGE_LABELS,
@@ -15,8 +15,10 @@ import {
   Alert,
   Badge,
   Button,
+  DropdownMenuItem,
   ImportView,
   PageHeader,
+  RowActions,
   Table,
   TableBody,
   TableCell,
@@ -132,6 +134,12 @@ export function ImportQuestionsPage() {
     setStartAt(line);
     setLeftRun(null);
   };
+  // Held against the run like a correction, so every row is judged again and a left-out one can come back.
+  const leaveOut = useMutation({
+    mutationFn: ({ run, line, leftOut }: { run: string; line: number; leftOut: boolean }) =>
+      api.admin.imports.leaveOutQuestionRow(run, line, { leftOut }),
+    onSuccess: (judged) => intake.stage(intake.file, judged),
+  });
   const blurry = plan?.rows.reduce((count, row) => count + row.warnings.length, 0) ?? 0;
   // A section's typist previews through authoring, which this bank-wide route does not answer for.
   const errorRows = useErrorRows(into ? null : intake.file, plan?.summary.invalid ?? 0, (file) =>
@@ -237,13 +245,14 @@ export function ImportQuestionsPage() {
             <TableHead>Filed under</TableHead>
             <TableHead>Languages</TableHead>
             <TableHead>What happens</TableHead>
+            <TableHead />
           </TableRow>
         </thead>
         <TableBody>
           <TableState
             isLoading={false}
             isEmpty={plan === null || plan.rows.length === 0}
-            colSpan={4}
+            colSpan={5}
             empty={
               plan === null
                 ? {
@@ -258,6 +267,12 @@ export function ImportQuestionsPage() {
                 key={row.line}
                 row={row}
                 onOpen={reviewable ? () => review(String(row.line)) : undefined}
+                onLeaveOut={
+                  reviewable
+                    ? (leftOut) =>
+                        leaveOut.mutate({ run: plan.importLogId, line: row.line, leftOut })
+                    : undefined
+                }
               />
             ))}
           </TableState>
@@ -270,8 +285,15 @@ export function ImportQuestionsPage() {
 function ImportRow({
   row,
   onOpen,
-}: Readonly<{ row: QuestionImportRow; onOpen: (() => void) | undefined }>) {
+  onLeaveOut,
+}: Readonly<{
+  row: QuestionImportRow;
+  onOpen: (() => void) | undefined;
+  /** Sets the row aside from Import or brings it back; absent once there is nothing left to import. */
+  onLeaveOut: ((leftOut: boolean) => void) | undefined;
+}>) {
   const filedUnder = [row.subjectName, row.topicName].filter(Boolean).join(' / ');
+  const leftOut = row.action === 'left_out';
 
   return (
     <TableRow>
@@ -294,6 +316,16 @@ function ImportRow({
       </TableCell>
       <TableCell>
         <RowOutcome row={row} />
+      </TableCell>
+      <TableCell className="w-10">
+        {onLeaveOut ? (
+          <RowActions label={`Row ${row.line}`}>
+            <DropdownMenuItem onSelect={() => onLeaveOut(!leftOut)}>
+              {leftOut ? <Undo2 aria-hidden /> : <Ban aria-hidden />}
+              {leftOut ? 'Bring back' : 'Leave out'}
+            </DropdownMenuItem>
+          </RowActions>
+        ) : null}
       </TableCell>
     </TableRow>
   );
