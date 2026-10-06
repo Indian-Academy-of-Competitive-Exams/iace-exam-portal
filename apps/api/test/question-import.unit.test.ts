@@ -300,8 +300,6 @@ describe('the question sheet — a cell is text', () => {
   it('recognises the question the form wrote as the one the sheet repeats', () => {
     const authored = computeStemHash({
       type: QUESTION_TYPE.SINGLE_MCQ,
-      subjectId: SUBJECT,
-      difficulty: 'MEDIUM',
       stem: { en: '<div><p>What is <em>20%</em> of 150?</p></div>' },
       options: [25, 30, 35, 40].map((text, index) => ({
         position: index + 1,
@@ -309,7 +307,6 @@ describe('the question sheet — a cell is text', () => {
         text: { en: `<div><p>${text}</p></div>` },
       })),
       answerKey: null,
-      tags: [],
     });
 
     const row = plan([MCQ_ROW], {

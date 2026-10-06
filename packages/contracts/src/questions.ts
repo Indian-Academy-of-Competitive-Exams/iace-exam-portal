@@ -377,6 +377,12 @@ export const questionDraftSchema = z.object({
 export type QuestionDraft = z.infer<typeof questionDraftSchema>;
 export type QuestionDraftInput = z.input<typeof questionDraftSchema>;
 
+/** What a question's identity is read from — all a stored version still has once the draft is gone. */
+export const questionIdentitySchema = questionDraftSchema
+  .pick({ type: true, stem: true, options: true })
+  .extend({ answerKey: answerKeyDraftSchema.pick({ answers: true }).nullable().optional() });
+export type QuestionIdentity = z.infer<typeof questionIdentitySchema>;
+
 // ============================================================================
 // Validation. One code vocabulary for both entry paths: the form maps a code to
 // a field and the import preview prints it against a line. React to `code`.

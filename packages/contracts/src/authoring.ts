@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { csvIdQuery } from './common';
 import {
   questionDetailSchema,
-  questionDraftSchema,
+  questionIdentitySchema,
   questionListQuerySchema,
   questionStatusSchema,
 } from './questions';
@@ -70,8 +70,8 @@ export type AuthoringSaveResult = z.infer<typeof authoringSaveResultSchema>;
 export const authoringDuplicateSchema = z.object({ duplicateOf: duplicateRefSchema });
 export type AuthoringDuplicate = z.infer<typeof authoringDuplicateSchema>;
 
-/** The draft as typed, plus the question being edited, which is never its own duplicate. */
-export const authoringDuplicateQuerySchema = questionDraftSchema.extend({
+/** Only what identity is read from, so a half-written draft can be asked; the question being edited is never its own duplicate. */
+export const authoringDuplicateQuerySchema = questionIdentitySchema.extend({
   exceptId: z.string().nullable().default(null),
 });
 export type AuthoringDuplicateQuery = z.infer<typeof authoringDuplicateQuerySchema>;
