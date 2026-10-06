@@ -25,7 +25,9 @@ import { PaperSheetService } from './paper-sheet.service';
 import {
   applyBatch,
   forwardOrderOf,
+  heldElsewhere,
   heldIn,
+  isHeartbeat,
   sittingRefusal,
   isStale,
   creditedEndsAt,
@@ -64,6 +66,8 @@ export interface SittingOpened {
   startedAt: Date;
   endsAt: Date;
   forwardOnly?: ForwardOrder;
+  /** The sign-in opening it. Absent, nothing is held against another one. */
+  session?: string;
 }
 
 @Injectable()
@@ -76,19 +80,26 @@ export class AttemptStateService {
 
   /** Seeded when the sitting starts, so no later save has to ask Postgres whose attempt this is. */
   async open(attempt: SittingOpened, tab?: string, now: Date = new Date()): Promise<void> {
+    // The tab and its sign-in are taken together; a caller naming no tab takes neither.
+    const holder = tab === undefined ? {} : { tab, session: attempt.session };
     await this.patch(
       attempt.id,
-      (held) => ({
-        ...held,
-        testId: attempt.testId,
-        startedAt: attempt.startedAt.toISOString(),
-        // Postgres is the deadline of record, so a resume's credit reaches the key that admits saves.
-        endsAt: attempt.endsAt.toISOString(),
-        // Picked up again: the clock starts counting from here, not from where it was put down.
-        lastSeenAt: now.toISOString(),
-        tab: tab ?? held.tab,
-        forwardOnly: attempt.forwardOnly,
-      }),
+      (held) => {
+        // Judged inside the swap: of two sign-ins opening at once, the first to land holds it.
+        const refused = heldElsewhere(held, attempt.session, now);
+        if (refused) throw refused;
+        return {
+          ...held,
+          testId: attempt.testId,
+          startedAt: attempt.startedAt.toISOString(),
+          // Postgres is the deadline of record, so a resume's credit reaches the key that admits saves.
+          endsAt: attempt.endsAt.toISOString(),
+          // Picked up again: the clock starts counting from here, not from where it was put down.
+          lastSeenAt: now.toISOString(),
+          forwardOnly: attempt.forwardOnly,
+          ...holder,
+        };
+      },
       () => ({
         attemptId: attempt.id,
         studentId: attempt.studentId,
@@ -99,8 +110,8 @@ export class AttemptStateService {
         lastSeenAt: now.toISOString(),
         answers: {},
         sections: {},
-        tab,
         forwardOnly: attempt.forwardOnly,
+        ...holder,
       }),
     );
 
@@ -159,7 +170,7 @@ export class AttemptStateService {
       () => this.durableState(studentId, attemptId),
     );
     // Marked AFTER the write: a flush that unmarks this sitting has seen this state or a later one.
-    await this.markDirty(attemptId);
+    if (!isHeartbeat(batch)) await this.markDirty(attemptId);
 
     return { ...acked(next, now), applied };
   }
@@ -376,7 +387,9 @@ function answered(
   if (!isInTime(held, now)) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
   const refused = sittingRefusal(held, batch.tab);
   if (refused) throw refused;
-  return { ...applyBatch(held, batch, now), tab: batch.tab ?? held.tab };
+  // Stale or not, a batch from the tab holding it is that tab being here.
+  const seen = { lastSeenAt: now.toISOString(), tab: batch.tab ?? held.tab };
+  return { ...applyBatch(held, batch, now), ...seen };
 }
 
 /** The row's own deadline stands, because an extension moves it there first. */

@@ -44,6 +44,8 @@ export {
 } from './exam/use-exam-view';
 export {
   beginChoice,
+  HELD_ELSEWHERE_SAYS,
+  isHeldElsewhere,
   shouldRetryStart,
   useStartedSitting,
   type BeginChoice,

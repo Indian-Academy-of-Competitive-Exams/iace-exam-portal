@@ -10,6 +10,8 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppException, ErrorCodes, type ExamQuestion } from '@iace/contracts';
 import {
+  HELD_ELSEWHERE_SAYS,
+  isHeldElsewhere,
   stoodDownSays,
   useExamView,
   useStartedSitting,
@@ -89,6 +91,19 @@ export default function ExamScreen() {
     const { error } = attempt;
     if (resume && AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED) {
       return <Redirect href={DETAIL_ROUTES.SUBMITTED(resume)} />;
+    }
+    if (isHeldElsewhere(error)) {
+      return (
+        <View className="flex-1 justify-center bg-background p-6">
+          <EmptyState
+            kind={EMPTY_STATE_KINDS.REFUSED}
+            title={HELD_ELSEWHERE_SAYS.title}
+            /* ui-copy-ok: rule — the other device going quiet is the one thing that releases it */
+            hint={HELD_ELSEWHERE_SAYS.hint}
+            action={<Button onPress={() => void attempt.refetch()}>Try again</Button>}
+          />
+        </View>
+      );
     }
     return (
       <View className="flex-1 justify-center bg-background p-6">

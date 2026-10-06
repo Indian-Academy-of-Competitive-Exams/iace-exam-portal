@@ -237,6 +237,17 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   device since; the fix is a per-question version the server's save checks. A sitting held by nobody, because
   its key was rebuilt from Postgres, is adopted by the first tab back. A reclaim names its attempt
   and never starts a new one: once that sitting has ended, it is refused with `SITTING_ENDED`.
+- **A sitting stays with the sign-in answering it.** Web and the app are two sign-ins. A second tab
+  of the SAME sign-in takes the sitting at once, as above — that is a crashed browser coming back.
+  The OTHER sign-in is refused with `SITTING_HELD_ELSEWHERE` until the holder has been silent for
+  `PRESENT_GRACE_SEC`, and takes it as above once it has. Two sign-ins opening one sitting together
+  resolve to the first to land. Silence has to mean absence for that to hold, so an idle screen
+  still saves on its autosave tick: an empty batch that moves `lastSeenAt` and flushes nothing. The
+  same heartbeat is what stops a quiet reader banking pause credit on a reload. It only CONTINUES
+  a presence, never restores one: a screen the server has not answered for `PRESENT_GRACE_SEC`
+  stops beating until the student answers or reloads, so a laptop waking from sleep does not spend
+  the pause its reload would be given back. Known limits: a sign-in that was replaced still holds
+  for the window, and a key rebuilt from Postgres is held by nobody until its next open.
 - **A pause is credited, not stopped.** Falling silent longer than the reload grace
   (`PRESENT_GRACE_SEC`) moves the deadline, and every open section's clock, out by the gap — a
   laptop sleeping, a dropped network or a genuine multi-hour pause costs the student nothing. That

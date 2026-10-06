@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ErrorCodes, type AppException } from '@iace/contracts';
+import { ErrorCodes, PRESENT_GRACE_SEC, type AppException } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import {
   heldIn,
@@ -262,5 +262,103 @@ describe('AttemptStateService — a handover racing a save', () => {
     assert.equal(refused?.code, ErrorCodes.CONFLICT);
     assert.deepEqual(await heldOf(redis), written);
     assert.deepEqual(await state.dirtyIds(), []);
+  });
+});
+
+/** Web and the app are two sign-ins: the second may not take a paper the first is still answering. */
+describe('AttemptStateService — a sitting stays with the sign-in answering it', () => {
+  const OPENED_AT = new Date('2026-01-01T00:00:00.000Z');
+  const after = (sec: number) => new Date(OPENED_AT.getTime() + sec * 1000);
+  const by = (session: string) => ({ ...sitting('att_1'), session });
+
+  /** The failure this prevents: a second device lifting a paper out from under the one writing it. */
+  it('refuses another sign-in while the one holding it is still being heard from', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(by('web'), 'tab_a', OPENED_AT);
+
+    const refused = await refusal(state.open(by('app'), 'tab_b', after(PRESENT_GRACE_SEC - 1)));
+
+    assert.equal(refused?.code, ErrorCodes.SITTING_HELD_ELSEWHERE);
+    assert.equal(await tabOf(redis, 'att_1'), 'tab_a');
+    const ack = await state.save('stu_1', 'att_1', {
+      revision: 1,
+      answers: [answer('q1')],
+      tab: 'tab_a',
+    });
+    assert.equal(ack.applied, true);
+  });
+
+  it('hands it to another sign-in once the holder has been quiet for the grace', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(by('web'), 'tab_a', OPENED_AT);
+
+    await state.open(by('app'), 'tab_b', after(PRESENT_GRACE_SEC));
+
+    const taken = await heldOf(redis);
+    assert.equal(taken?.tab, 'tab_b');
+    assert.equal(taken?.session, 'app');
+  });
+
+  /** A crashed browser reopens under a new tab id; the student must not wait out their own device. */
+  it('hands it to a new tab of the same sign-in at once', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(by('web'), 'tab_a', OPENED_AT);
+
+    await state.open(by('web'), 'tab_b', after(1));
+
+    assert.equal(await tabOf(redis, 'att_1'), 'tab_b');
+  });
+
+  /** The failure this prevents: a student reading a long passage looking like a device that dropped. */
+  it('counts an idle heartbeat as the holder still being here, and flushes nothing for it', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(by('web'), 'tab_a', OPENED_AT);
+
+    await state.save('stu_1', 'att_1', { revision: 1, answers: [], tab: 'tab_a' }, after(50));
+    const refused = await refusal(state.open(by('app'), 'tab_b', after(90)));
+
+    assert.equal(refused?.code, ErrorCodes.SITTING_HELD_ELSEWHERE);
+    assert.deepEqual(await state.dirtyIds(), []);
+  });
+
+  /** A reloaded screen whose counter is behind still proves it is here, though its batch moves nothing. */
+  it('counts a batch behind the held revision as the holder still being here', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(by('web'), 'tab_a', OPENED_AT);
+    await state.save('stu_1', 'att_1', { revision: 5, answers: [answer('q1')], tab: 'tab_a' });
+
+    await state.save('stu_1', 'att_1', { revision: 1, answers: [], tab: 'tab_a' }, after(50));
+    const refused = await refusal(state.open(by('app'), 'tab_b', after(90)));
+
+    assert.equal(refused?.code, ErrorCodes.SITTING_HELD_ELSEWHERE);
+  });
+
+  it('gives a refused resume no credit and leaves the holder as it was', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(by('web'), 'tab_a', OPENED_AT);
+    const before = await heldOf(redis);
+
+    const refused = await refusal(state.resume(by('app'), 'tab_b', after(30)));
+
+    assert.equal(refused?.code, ErrorCodes.SITTING_HELD_ELSEWHERE);
+    assert.deepEqual(await heldOf(redis), before);
+  });
+
+  /** Both devices pressing Start together: one holds the paper, and the other is told so. */
+  it('gives a sitting two sign-ins open at once to the first one to land', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    interleave(redis, () => state.open(by('app'), 'tab_b', OPENED_AT));
+
+    const refused = await refusal(state.open(by('web'), 'tab_a', OPENED_AT));
+
+    assert.equal(refused?.code, ErrorCodes.SITTING_HELD_ELSEWHERE);
+    assert.equal((await heldOf(redis))?.session, 'app');
   });
 });

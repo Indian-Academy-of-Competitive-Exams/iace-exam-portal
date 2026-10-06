@@ -139,6 +139,9 @@ export type LiveAttempt = z.infer<typeof liveAttemptSchema>;
 // moves it, so a student answering a hundred questions writes Postgres never.
 // ============================================================================
 
+/** A gap this short is a reload or a quiet minute of reading, not an absence — it is spent, not given back. */
+export const PRESENT_GRACE_SEC = 60;
+
 /** Seconds on one question: a day, which no sitting reaches, so a crafted total is refused. */
 export const QUESTION_TIME_MAX_SEC = 24 * 60 * 60;
 
