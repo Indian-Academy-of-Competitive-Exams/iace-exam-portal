@@ -1,4 +1,5 @@
 import {
+  REPORT_INACTIVE_DAYS_DEFAULT,
   REPORT_PARAMS,
   REPORT_PERIODS,
   REPORT_TOP_DEFAULT,
@@ -15,6 +16,7 @@ import { REPORT_PARAM_LABELS, REPORT_PERIOD_LABELS } from '../../lib/constants';
 import { ReportChoicePicker } from './report-choice-picker';
 
 const TOP_CHOICES = [25, 50, 100] as const;
+const DAYS_CHOICES = [7, 30, 60, 90] as const;
 const PERIODS: readonly ReportPeriod[] = Object.values(REPORT_PERIODS);
 
 type Field = keyof ReportQuery;
@@ -140,7 +142,18 @@ const PARAM_FILTERS: Record<ReportParam, Drawn> = {
       ],
     },
   ],
-  [REPORT_PARAMS.DAYS]: () => [],
+  [REPORT_PARAMS.DAYS]: () => [
+    {
+      key: 'days',
+      kind: 'choice',
+      label: REPORT_PARAM_LABELS[REPORT_PARAMS.DAYS],
+      primary: true,
+      items: [
+        { value: '', label: `${REPORT_INACTIVE_DAYS_DEFAULT} days` },
+        ...DAYS_CHOICES.map((days) => ({ value: String(days), label: `${days} days` })),
+      ],
+    },
+  ],
 };
 
 /** The bar a report is asked through, read off its catalogue row: what it needs, then what narrows it. */

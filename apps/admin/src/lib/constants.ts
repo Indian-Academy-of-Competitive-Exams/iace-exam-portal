@@ -531,6 +531,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
 export const REPORT_GROUP_LABELS: Readonly<Record<ReportGroup, string>> = {
   [REPORT_GROUPS.TESTS]: 'Tests',
   [REPORT_GROUPS.STUDENTS]: 'Students',
+  [REPORT_GROUPS.PERFORMANCE]: 'Performance',
 };
 
 /** The periods a report's bar offers by name. */

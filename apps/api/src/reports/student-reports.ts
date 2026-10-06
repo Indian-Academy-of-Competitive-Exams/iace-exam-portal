@@ -15,17 +15,13 @@ import {
   type ReportFact,
   type ReportQueryOf,
 } from '@iace/contracts';
-import { questionTalliesOf, sectionScoresIn } from '../attempts';
-import {
-  EXPORT_DATE_FORMATS,
-  exportInstant,
-  type ExportColumn,
-  type ExportSheet,
-} from '../common/exporting';
+import { questionTalliesOf } from '../attempts';
+import { EXPORT_DATE_FORMATS, exportInstant, type ExportColumn } from '../common/exporting';
 import { aboutPeriod, periodBefore, periodOf, type Period } from './period';
 import { type Report, type ReportBuilder, type ReportSources } from './report';
 import { groupBy, highestOf, meanOf, minutesOf, percentOf } from './report-figures';
 import { branchOf, cardsOf } from './report-people';
+import { subjectSheet } from './report-subjects';
 import { TEST_NAME, TEST_OPENED, TEST_SERIES, testRowsOf } from './report-tests';
 
 type StudentBuilder = ReportBuilder<ReportQueryOf<typeof REPORT_KEYS.STUDENT_CUMULATIVE>>;
@@ -159,52 +155,6 @@ const accuracyOf = (sittings: readonly Sitting[]): number | null => {
   return percentOf(correct, correct + sumOf(sittings, (sitting) => sitting.wrong));
 };
 
-interface SubjectRow {
-  subject: string;
-  correct: number;
-  wrong: number;
-  blank: number;
-  timeSpentSec: number;
-}
-
-const SUBJECT_COLUMNS: ExportColumn<SubjectRow>[] = [
-  { header: 'Subject', width: 30, value: (row) => row.subject },
-  { header: 'Correct', width: 9, value: (row) => row.correct },
-  { header: 'Wrong', width: 9, value: (row) => row.wrong },
-  { header: 'Blank', width: 9, value: (row) => row.blank },
-  {
-    header: 'Accuracy (%)',
-    width: 13,
-    value: (row) => percentOf(row.correct, row.correct + row.wrong),
-  },
-  { header: 'Time (min)', width: 11, value: (row) => minutesOf(row.timeSpentSec) },
-];
-
-/** Summed off each sitting's own section scores; a section filed under no subject reads by its name. */
-async function subjectsOf(
-  { prisma }: ReportSources,
-  sittings: readonly Sitting[],
-): Promise<ExportSheet<SubjectRow>> {
-  const scores = sittings.flatMap((sitting) => sectionScoresIn(sitting.sectionScores) ?? []);
-  const sections = await prisma.baseConfigSection.findMany({
-    where: { id: { in: [...new Set(scores.map((score) => score.baseConfigSectionId))] } },
-    select: { id: true, name: true, subject: { select: { name: true } } },
-  });
-  const subjectOf = new Map(
-    sections.map((section) => [section.id, section.subject?.name ?? section.name]),
-  );
-  const rows = [...groupBy(scores, (score) => subjectOf.get(score.baseConfigSectionId) ?? '')]
-    .map(([subject, held]) => ({
-      subject,
-      correct: held.reduce((sum, score) => sum + score.correctCount, 0),
-      wrong: held.reduce((sum, score) => sum + score.wrongCount, 0),
-      blank: held.reduce((sum, score) => sum + score.unattemptedCount, 0),
-      timeSpentSec: held.reduce((sum, score) => sum + score.timeSpentSec, 0),
-    }))
-    .sort((a, b) => a.subject.localeCompare(b.subject));
-  return { name: 'Subjects', columns: SUBJECT_COLUMNS, rows };
-}
-
 const scoreCard: ScoreCardBuilder = async (sources, { studentId, attemptId }) => {
   const who = await whoIs(sources, studentId);
   const card = await sources.performance.scoreCard(studentId, attemptId);
@@ -272,7 +222,10 @@ async function periodReport(
     ],
     sheets: [
       { name: 'Sittings', columns: SITTING_COLUMNS, rows: sittings },
-      await subjectsOf(sources, sittings),
+      await subjectSheet(
+        sources,
+        sittings.map((sitting) => sitting.sectionScores),
+      ),
     ],
   };
 }

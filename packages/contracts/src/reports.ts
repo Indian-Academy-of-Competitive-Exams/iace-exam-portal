@@ -12,6 +12,7 @@ import { dateOnlySchema, todayISO } from './students';
 export const REPORT_GROUPS = {
   TESTS: 'tests',
   STUDENTS: 'students',
+  PERFORMANCE: 'performance',
 } as const;
 export type ReportGroup = (typeof REPORT_GROUPS)[keyof typeof REPORT_GROUPS];
 
@@ -60,6 +61,16 @@ export const REPORT_KEYS = {
   STUDENT_PARENT_LETTER: 'student-parent-letter',
   STUDENT_TOPICS: 'student-topics',
   STUDENT_MISSED: 'student-missed',
+  PERFORMANCE_BY_BRANCH: 'performance-by-branch',
+  PERFORMANCE_BY_PROGRAM: 'performance-by-program',
+  PERFORMANCE_BY_EXAM: 'performance-by-exam',
+  TOP_PERFORMERS: 'top-performers',
+  MOST_IMPROVED: 'most-improved',
+  WEAK_SUBJECTS: 'weak-subjects',
+  WEAK_TOPICS: 'weak-topics',
+  ABSENTEES: 'absentees',
+  INACTIVE_STUDENTS: 'inactive-students',
+  RETAKES: 'retakes',
 } as const;
 export const reportKeySchema = z.enum(REPORT_KEYS);
 export type ReportKey = z.infer<typeof reportKeySchema>;
@@ -78,6 +89,11 @@ export interface ReportSpec {
 
 const ONE_TEST = { group: REPORT_GROUPS.TESTS, needs: [REPORT_PARAMS.TEST] } as const;
 const A_PERIOD = { needs: [REPORT_PARAMS.PERIOD] } as const;
+const A_MONTH_OF_SITTINGS = {
+  group: REPORT_GROUPS.PERFORMANCE,
+  needs: [REPORT_PARAMS.PERIOD],
+  period: REPORT_PERIODS.LAST_MONTH,
+} as const;
 const ONE_STUDENT = { group: REPORT_GROUPS.STUDENTS, needs: [REPORT_PARAMS.STUDENT] } as const;
 const A_STUDENTS_PERIOD = {
   group: REPORT_GROUPS.STUDENTS,
@@ -146,6 +162,33 @@ export const REPORTS = {
   },
   [REPORT_KEYS.STUDENT_TOPICS]: { ...ONE_STUDENT, title: 'Topic-wise accuracy' },
   [REPORT_KEYS.STUDENT_MISSED]: { ...ONE_STUDENT, title: 'Tests missed' },
+  [REPORT_KEYS.PERFORMANCE_BY_BRANCH]: { ...A_MONTH_OF_SITTINGS, title: 'Branch performance' },
+  [REPORT_KEYS.PERFORMANCE_BY_PROGRAM]: { ...A_MONTH_OF_SITTINGS, title: 'Program performance' },
+  [REPORT_KEYS.PERFORMANCE_BY_EXAM]: { ...A_MONTH_OF_SITTINGS, title: 'Exam performance' },
+  [REPORT_KEYS.TOP_PERFORMERS]: {
+    ...A_MONTH_OF_SITTINGS,
+    title: 'Top performers',
+    takes: [REPORT_PARAMS.BRANCH, REPORT_PARAMS.TOP],
+  },
+  [REPORT_KEYS.MOST_IMPROVED]: {
+    ...A_MONTH_OF_SITTINGS,
+    title: 'Most improved',
+    takes: [REPORT_PARAMS.BRANCH, REPORT_PARAMS.TOP],
+  },
+  [REPORT_KEYS.WEAK_SUBJECTS]: {
+    ...A_MONTH_OF_SITTINGS,
+    title: 'Subject-wise accuracy',
+    takes: [REPORT_PARAMS.BRANCH],
+  },
+  [REPORT_KEYS.WEAK_TOPICS]: { ...A_MONTH_OF_SITTINGS, title: 'Topic-wise difficulty' },
+  [REPORT_KEYS.ABSENTEES]: { ...A_MONTH_OF_SITTINGS, title: 'Absentees across tests' },
+  [REPORT_KEYS.INACTIVE_STUDENTS]: {
+    group: REPORT_GROUPS.PERFORMANCE,
+    needs: [],
+    takes: [REPORT_PARAMS.DAYS, REPORT_PARAMS.BRANCH],
+    title: 'Inactive students',
+  },
+  [REPORT_KEYS.RETAKES]: { ...A_MONTH_OF_SITTINGS, title: 'Retakes' },
 } as const satisfies Record<ReportKey, ReportSpec>;
 
 /** What heads every printed page. */
@@ -154,6 +197,9 @@ export const REPORT_LETTERHEAD = 'IACE';
 /** How many rows a merit list or a top-performers table carries when nobody says. */
 export const REPORT_TOP_DEFAULT = 10;
 export const REPORT_TOP_MAX = 500;
+
+/** How long without a sitting makes a student inactive when nobody says. */
+export const REPORT_INACTIVE_DAYS_DEFAULT = 14;
 
 /** The most rows one table of a document carries; a spreadsheet carries them all. */
 export const REPORT_MAX_ROWS = 5_000;

@@ -34,12 +34,18 @@ import {
   type ReportBuilders,
   type ReportSources,
 } from './report';
+import { COHORT_REPORTS } from './cohort-reports';
 import { PERIOD_REPORTS } from './period-reports';
 import { reportChoices } from './report-choices';
 import { STUDENT_REPORTS } from './student-reports';
 import { TEST_REPORTS } from './test-reports';
 
-const BUILDERS: ReportBuilders = { ...TEST_REPORTS, ...PERIOD_REPORTS, ...STUDENT_REPORTS };
+const BUILDERS: ReportBuilders = {
+  ...TEST_REPORTS,
+  ...PERIOD_REPORTS,
+  ...STUDENT_REPORTS,
+  ...COHORT_REPORTS,
+};
 
 /** The read model behind every report. It writes nothing, and owns no table (docs/03 §4). */
 @Injectable()
