@@ -75,6 +75,9 @@ export const REPORTS = {
   [REPORT_KEYS.TEST_VOIDED]: { ...ONE_TEST, title: 'Void sittings' },
 } as const satisfies Record<ReportKey, ReportSpec>;
 
+/** What heads every printed page. */
+export const REPORT_LETTERHEAD = 'IACE';
+
 /** How many rows a merit list or a top-performers table carries when nobody says. */
 export const REPORT_TOP_DEFAULT = 10;
 export const REPORT_TOP_MAX = 500;
@@ -173,6 +176,14 @@ const reportTableSchema = z.object({
   total: z.number().int(),
 });
 export type ReportTable = z.infer<typeof reportTableSchema>;
+
+/** A column of figures is one where every cell that holds anything holds a number; a page sets it right-aligned. */
+export function holdsFigures(table: Pick<ReportTable, 'rows'>, at: number): boolean {
+  return (
+    table.rows.some((row) => typeof row[at] === 'number') &&
+    table.rows.every((row) => typeof row[at] !== 'string')
+  );
+}
 
 export const reportDocumentSchema = z.object({
   key: reportKeySchema,

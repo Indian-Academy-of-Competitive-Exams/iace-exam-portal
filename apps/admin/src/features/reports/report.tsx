@@ -1,0 +1,241 @@
+import { useMemo } from 'react';
+import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Printer } from 'lucide-react';
+import {
+  FEATURE_KEYS,
+  REPORTS,
+  REPORT_PARAM_FIELDS,
+  holdsFigures,
+  instituteDateTimeLabel,
+  reportFieldsMissing,
+  reportKeySchema,
+  reportQuerySchema,
+  type ReportCell,
+  type ReportDocument,
+  type ReportKey,
+  type ReportParam,
+  type ReportQueryInput,
+  type ReportSpec,
+  type ReportTable,
+} from '@iace/contracts';
+import { reportHtml } from '@iace/app-kit';
+import { PageCrumbs, printHtml, useFilterSpec, useFilters } from '@iace/app-kit/browser';
+import {
+  EMPTY_STATE_KINDS,
+  Alert,
+  Button,
+  DataTable,
+  EmptyState,
+  Metric,
+  MetricGroup,
+  PageFrame,
+  PageHeader,
+  SectionHeading,
+  Skeleton,
+  SkeletonParagraph,
+  StatRow,
+  TruncatedText,
+  plural,
+  type DataTableColumn,
+} from '@iace/ui';
+import { api } from '../../lib/api';
+import { ExportButton } from '../../components/export-button';
+import { NotFoundPage } from '../../components/not-found';
+import { NAV_ITEMS, REPORT_PARAM_LABELS, reportQueryKey } from '../../lib/constants';
+import { useAuth } from '../../providers/auth';
+import { reportFilters } from './report-filters';
+
+/** A screen previews a report; the printer and the spreadsheet carry it whole. */
+const PREVIEW_ROWS = 200;
+
+export function ReportPage() {
+  const { key = '' } = useParams();
+  const parsed = reportKeySchema.safeParse(key);
+  return parsed.success ? <Report reportKey={parsed.data} /> : <NotFoundPage />;
+}
+
+const paramsOf = (spec: ReportSpec): readonly ReportParam[] => [
+  ...spec.needs,
+  ...(spec.takes ?? []),
+];
+
+function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
+  const spec: ReportSpec = REPORTS[reportKey];
+  const { can } = useAuth();
+  const url = useFilters<string>();
+
+  const query: ReportQueryInput = Object.fromEntries(
+    paramsOf(spec)
+      .flatMap((param): readonly string[] => REPORT_PARAM_FIELDS[param])
+      .map((field) => [field, url.get(field)] as const)
+      .filter(([, value]) => value !== ''),
+  );
+  const asked = reportQuerySchema.safeParse(query);
+  const missing = asked.success ? reportFieldsMissing(reportKey, asked.data) : [];
+  const ready = asked.success && missing.length === 0;
+
+  const report = useQuery({
+    queryKey: reportQueryKey(reportKey, query),
+    queryFn: () => api.admin.reports.read(reportKey, query),
+    enabled: ready,
+  });
+
+  const filters = reportFilters(spec, report.data?.about ?? []);
+  // What a report is asked by is not narrowed any-or-all, so the bar is handed no match toggle.
+  const { values, setFilter, clearFilters } = useFilterSpec(filters);
+
+  if (!can(FEATURE_KEYS.REPORTS)) {
+    return (
+      <PageFrame>
+        <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="Reports are not open to you" />
+      </PageFrame>
+    );
+  }
+
+  return (
+    <PageFrame
+      header={
+        <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: spec.title }]} />}
+          title={spec.title}
+          meta={report.data ? `As of ${instituteDateTimeLabel(report.data.asOf)}` : undefined}
+          action={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Printer aria-hidden />}
+                disabled={!report.data}
+                onClick={() => report.data && printHtml(reportHtml(report.data))}
+              >
+                Print
+              </Button>
+              <ExportButton
+                kind={reportKey}
+                disabled={!ready}
+                download={() => api.admin.reports.export(reportKey, query)}
+              />
+            </div>
+          }
+        />
+      }
+      filters={{ spec: filters, state: { values, setFilter, clearFilters } }}
+    >
+      <Body spec={spec} ready={ready} report={report} />
+    </PageFrame>
+  );
+}
+
+function Body({
+  spec,
+  ready,
+  report,
+}: Readonly<{
+  spec: ReportSpec;
+  ready: boolean;
+  report: { data?: ReportDocument; isError: boolean; refetch: () => void };
+}>) {
+  if (!ready) {
+    const [first] = spec.needs;
+    const wanted = first ? REPORT_PARAM_LABELS[first].toLowerCase() : 'report';
+    return <EmptyState title={`No ${wanted} chosen`} />;
+  }
+  if (report.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load this report"
+        onRetry={report.refetch}
+      />
+    );
+  }
+  if (!report.data) {
+    return (
+      <div className="flex flex-col gap-5">
+        <Skeleton variant="title" />
+        <SkeletonParagraph lines={8} />
+      </div>
+    );
+  }
+
+  const { about, figures, tables } = report.data;
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex max-w-xl flex-col gap-1.5">
+        {about.map((fact) => (
+          <StatRow key={fact.label} label={fact.label} value={fact.value ?? DASH} />
+        ))}
+      </div>
+      {figures.length === 0 ? null : (
+        <MetricGroup>
+          {figures.map((figure) => (
+            <Metric
+              key={figure.label}
+              size="sm"
+              label={figure.label}
+              value={figure.value ?? DASH}
+            />
+          ))}
+        </MetricGroup>
+      )}
+      {tables.map((table) => (
+        <TablePreview key={table.title} table={table} />
+      ))}
+    </div>
+  );
+}
+
+const DASH = '—';
+
+interface PreviewRow {
+  id: string;
+  cells: readonly ReportCell[];
+}
+
+function TablePreview({ table }: Readonly<{ table: ReportTable }>) {
+  const rows = useMemo(
+    () => table.rows.slice(0, PREVIEW_ROWS).map((cells, at) => ({ id: String(at), cells })),
+    [table.rows],
+  );
+  const columns = useMemo(
+    () =>
+      table.columns.map((header, at): DataTableColumn<PreviewRow> => ({
+        key: String(at),
+        header,
+        numeric: holdsFigures(table, at),
+        className: 'max-w-[18rem]',
+        cell: (row) => cellOf(row.cells[at] ?? null),
+      })),
+    [table],
+  );
+
+  return (
+    <section className="flex flex-col gap-3">
+      <SectionHeading title={table.title} meta={plural(table.total, 'row')} />
+      {table.total > rows.length ? (
+        <Alert variant="info">{hiddenRows(table, rows.length)}</Alert>
+      ) : null}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.id}
+        isLoading={false}
+        empty="No rows"
+      />
+    </section>
+  );
+}
+
+function cellOf(value: ReportCell) {
+  return typeof value === 'number' ? value : <TruncatedText>{value}</TruncatedText>;
+}
+
+const count = (rows: number) => rows.toLocaleString('en-IN');
+
+function hiddenRows(table: ReportTable, shown: number): string {
+  const first = `The first ${count(shown)} of ${count(table.total)} rows.`;
+  return table.total > table.rows.length
+    ? `${first} Print carries ${count(table.rows.length)}, and Export every one.`
+    : `${first} Print and Export carry every one.`;
+}

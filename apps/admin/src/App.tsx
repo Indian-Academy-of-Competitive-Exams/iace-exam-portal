@@ -137,6 +137,12 @@ const AnnouncementsPage = React.lazy(() =>
     default: module.AnnouncementsPage,
   })),
 );
+const ReportsPage = React.lazy(() =>
+  import('./features/reports/reports').then((module) => ({ default: module.ReportsPage })),
+);
+const ReportPage = React.lazy(() =>
+  import('./features/reports/report').then((module) => ({ default: module.ReportPage })),
+);
 const LiveOpsPage = React.lazy(() =>
   import('./features/live-ops/live-ops').then((module) => ({ default: module.LiveOpsPage })),
 );
@@ -244,6 +250,8 @@ export function App() {
           <Route path={ROUTES.ADMINS} element={whileLoading(<AdminsPage />)} />
           <Route path={ROUTES.PERMISSIONS} element={whileLoading(<PermissionsPage />)} />
           <Route path={ROUTES.ANNOUNCEMENTS} element={whileLoading(<AnnouncementsPage />)} />
+          <Route path={ROUTES.REPORTS} element={whileLoading(<ReportsPage />)} />
+          <Route path={ROUTES.REPORT_PATTERN} element={whileLoading(<ReportPage />)} />
           <Route path={ROUTES.AUDIT} element={whileLoading(<AuditActivityPage />)} />
           <Route path={ROUTES.AUDIT_IMPORTS} element={whileLoading(<AuditImportsPage />)} />
         </Route>

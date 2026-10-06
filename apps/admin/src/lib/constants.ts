@@ -3,6 +3,7 @@ import {
   Building2,
   PenLine,
   ClipboardList,
+  FileChartColumn,
   FolderTree,
   GraduationCap,
   History,
@@ -44,6 +45,12 @@ import {
   type QuestionStatus,
   type QuestionType,
   PERFORMANCE_SCOPES,
+  REPORT_GROUPS,
+  REPORT_PARAMS,
+  type ReportGroup,
+  type ReportKey,
+  type ReportParam,
+  type ReportQueryInput,
   type PerformanceScope,
   STUDENT_TYPE,
   type StudentSeriesSource,
@@ -141,6 +148,10 @@ export const ROUTES = {
   PERMISSIONS: '/permissions',
   /** Watching a test's sittings while they run, and resolving the ones that broke. */
   LIVE_OPS: '/live-ops',
+  /** The catalogue, and one report under it: the key is the catalogue's own. */
+  REPORTS: '/reports',
+  REPORT: (key: ReportKey) => `/reports/${key}`,
+  REPORT_PATTERN: '/reports/:key',
   /** Every admin reaches these — the service, not the route, scopes what they see. */
   ANNOUNCEMENTS: '/announcements',
   AUDIT: '/audit',
@@ -482,6 +493,12 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     children: [{ to: ROUTES.LIVE_OPS, label: 'Sittings', icon: Radar }],
   },
   {
+    label: 'Reports',
+    icon: FileChartColumn,
+    featureKey: FEATURE_KEYS.REPORTS,
+    children: [{ to: ROUTES.REPORTS, label: 'All reports', icon: FileChartColumn }],
+  },
+  {
     label: 'Administration',
     icon: ShieldCheck,
     superAdminOnly: true,
@@ -506,6 +523,24 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     ],
   },
 ];
+
+/** What each group of reports is called on its tab. */
+export const REPORT_GROUP_LABELS: Readonly<Record<ReportGroup, string>> = {
+  [REPORT_GROUPS.TESTS]: 'Tests',
+};
+
+/** What a report is asked for by, as the catalogue names it. */
+export const REPORT_PARAM_LABELS: Readonly<Record<ReportParam, string>> = {
+  [REPORT_PARAMS.TEST]: 'Test',
+  [REPORT_PARAMS.STUDENT]: 'Student',
+  [REPORT_PARAMS.ATTEMPT]: 'Sitting',
+  [REPORT_PARAMS.SERIES]: 'Series',
+  [REPORT_PARAMS.EVENT]: 'Event',
+  [REPORT_PARAMS.BRANCH]: 'Branch',
+  [REPORT_PARAMS.PERIOD]: 'Period',
+  [REPORT_PARAMS.TOP]: 'Rows',
+  [REPORT_PARAMS.DAYS]: 'Days',
+};
 
 /** Strips `superAdminOnly`. `featureKey` is the shell's job, and every other key is a peer. */
 export function filterAdminNav(
@@ -547,6 +582,7 @@ export const QUERY_KEYS = {
   SECTION_THREAD: [ADMIN, 'section-thread'],
   SUBJECTS: [ADMIN, 'subjects'],
   TEST: [ADMIN, 'tests', 'detail'],
+  REPORTS: [ADMIN, 'reports'],
   TEST_ANALYTICS: [ADMIN, 'test-analytics'],
   TEST_PAPER: [ADMIN, 'test-paper'],
   TEST_SERIES: [ADMIN, 'test-series'],
@@ -727,6 +763,12 @@ export const testQueryKey = (testId: string) => [...QUERY_KEYS.TEST, testId] as 
 
 export const namedTestQueryKey = (examStageId: string | undefined, stem: string) =>
   [...QUERY_KEYS.TESTS, QUERY_SCOPES.NAMED, examStageId, stem] as const;
+
+export const reportQueryKey = (key: ReportKey, query: ReportQueryInput) =>
+  [...QUERY_KEYS.REPORTS, key, query] as const;
+
+/** Every test, live or not: a report is asked for long after the hall has emptied. */
+export const testPickerQueryKey = () => [...QUERY_KEYS.TESTS, QUERY_SCOPES.PICKER] as const;
 
 export const testAnalyticsQueryKey = (testId: string) =>
   [...QUERY_KEYS.TEST_ANALYTICS, testId] as const;
