@@ -47,9 +47,11 @@ import {
   PERFORMANCE_SCOPES,
   REPORT_GROUPS,
   REPORT_PARAMS,
+  REPORT_PERIODS,
   type ReportGroup,
   type ReportKey,
   type ReportParam,
+  type ReportPeriod,
   type ReportQueryInput,
   type PerformanceScope,
   STUDENT_TYPE,
@@ -527,6 +529,14 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
 /** What each group of reports is called on its tab. */
 export const REPORT_GROUP_LABELS: Readonly<Record<ReportGroup, string>> = {
   [REPORT_GROUPS.TESTS]: 'Tests',
+};
+
+/** The periods a report's bar offers by name. */
+export const REPORT_PERIOD_LABELS: Readonly<Record<ReportPeriod, string>> = {
+  [REPORT_PERIODS.THIS_WEEK]: 'This week',
+  [REPORT_PERIODS.LAST_WEEK]: 'Last week',
+  [REPORT_PERIODS.THIS_MONTH]: 'This month',
+  [REPORT_PERIODS.LAST_MONTH]: 'Last month',
 };
 
 /** What a report is asked for by, as the catalogue names it. */

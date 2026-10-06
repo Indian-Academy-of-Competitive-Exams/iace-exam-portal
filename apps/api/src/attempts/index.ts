@@ -1,6 +1,8 @@
 /** The attempts module's public surface (docs/03 §4.1). The rules stay private. */
 export { AttemptsModule } from './attempts.module';
-export { LeaderboardService } from './leaderboard.service';
+export { LeaderboardService, type CohortFigures, type CohortSitting } from './leaderboard.service';
+/** What makes a sitting count, lent so a report's own grouping cannot redefine it. */
+export { COHORT_WHERE, IN_COHORT } from './ranking-sql';
 export {
   StudentOverviewService,
   type StudentRollup,

@@ -15,7 +15,7 @@ import {
   type ReportTable,
 } from '@iace/contracts';
 import { type AccessResolverService } from '../access';
-import { type TestAnalyticsService } from '../attempts';
+import { type LeaderboardService, type TestAnalyticsService } from '../attempts';
 import {
   EXPORT_DATE_FORMATS,
   exportInstant,
@@ -36,6 +36,7 @@ export interface ReportSources {
   prisma: PrismaService;
   analytics: TestAnalyticsService;
   access: AccessResolverService;
+  leaderboard: LeaderboardService;
 }
 
 /** A builder names the query it reads; the registry holds it to what its catalogue row requires. */

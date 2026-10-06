@@ -19,22 +19,13 @@ import {
   MERIT_TYPE,
   REPORT_KEYS,
   TEST_SERIES_KIND,
-  type AdminAuthority,
-  type ReportCell,
-  type ReportDocument,
-  type ReportKey,
-  type ReportQuery,
 } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
 import { AuditContext, AuditContextMiddleware, AuditInterceptor } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
 import { packedSections } from '../src/attempts/score-paper';
-import { TestAnalyticsService } from '../src/attempts/test-analytics.service';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { ReportsController } from '../src/reports/reports.controller';
-import { ReportsService } from '../src/reports/reports.service';
-import { FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
+import { FakeStorage } from '../test/support/fakes';
 import {
   makeAdmin,
   makeBranch,
@@ -49,19 +40,13 @@ import {
   uid,
   type Catalog,
 } from './support/database';
+import { VIEWER, figureOf, reportsOver, tableOf } from './support/reports';
 
 const prisma = testPrisma();
 
-const access = new AccessResolverService(prisma, new FakeRedis().asService());
-const analytics = new TestAnalyticsService(
-  prisma,
-  new RollupQueue(new FakeQueue().asQueue()),
-  access,
-);
-const reports = new ReportsService(prisma, analytics, access);
+const { reports, read } = reportsOver(prisma);
 const auditContext = new AuditContext();
 
-const VIEWER: AdminAuthority = { isActive: true, isSuperAdmin: false, permissions: {} };
 const ADMIN_ID = uid();
 
 /** tsx emits no decorator metadata, so Nest cannot inject by type; the routes are inherited whole. */
@@ -112,21 +97,6 @@ after(async () => {
   await app.close();
   await prisma.$disconnect();
 });
-
-const read = (key: ReportKey, query: ReportQuery): Promise<ReportDocument> =>
-  reports.document(key, query, VIEWER);
-
-/** One table of a document, a row an object keyed by its column. */
-function tableOf(document: ReportDocument, title: string): Record<string, ReportCell>[] {
-  const table = document.tables.find((candidate) => candidate.title === title);
-  assert.ok(table, `no table called ${title}`);
-  return table.rows.map((row) =>
-    Object.fromEntries(table.columns.map((column, at) => [column, row[at] ?? null])),
-  );
-}
-
-const figureOf = (document: ReportDocument, label: string): ReportCell | undefined =>
-  document.figures.find((figure) => figure.label === label)?.value;
 
 /** A FREE series reaches every live student, so who a test reaches is plain to read. */
 async function freeTest(): Promise<{ catalog: Catalog; testId: string }> {

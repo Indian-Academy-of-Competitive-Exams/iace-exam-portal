@@ -5,16 +5,20 @@ import { Printer } from 'lucide-react';
 import {
   FEATURE_KEYS,
   REPORTS,
+  REPORT_PARAMS,
   REPORT_PARAM_FIELDS,
+  REPORT_PERIODS,
   holdsFigures,
   instituteDateTimeLabel,
   reportFieldsMissing,
   reportKeySchema,
+  reportPeriodOf,
   reportQuerySchema,
   type ReportCell,
   type ReportDocument,
   type ReportKey,
   type ReportParam,
+  type ReportPeriodRange,
   type ReportQueryInput,
   type ReportSpec,
   type ReportTable,
@@ -65,12 +69,20 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
   const { can } = useAuth();
   const url = useFilters<string>();
 
-  const query: ReportQueryInput = Object.fromEntries(
+  // A report that cannot be read without a period opens on its row's own, so it is never blank.
+  const opensOn: Partial<ReportPeriodRange> = spec.needs.includes(REPORT_PARAMS.PERIOD)
+    ? reportPeriodOf(spec.period ?? REPORT_PERIODS.THIS_WEEK)
+    : {};
+  const held = (field: string): string =>
+    url.get(field) || (opensOn[field as keyof ReportPeriodRange] ?? '');
+
+  const fields: Record<string, string> = Object.fromEntries(
     paramsOf(spec)
       .flatMap((param): readonly string[] => REPORT_PARAM_FIELDS[param])
-      .map((field) => [field, url.get(field)] as const)
+      .map((field) => [field, held(field)] as const)
       .filter(([, value]) => value !== ''),
   );
+  const query: ReportQueryInput = fields;
   const asked = reportQuerySchema.safeParse(query);
   const missing = asked.success ? reportFieldsMissing(reportKey, asked.data) : [];
   const ready = asked.success && missing.length === 0;
@@ -81,9 +93,14 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
     enabled: ready,
   });
 
-  const filters = reportFilters(spec, report.data?.about ?? []);
+  const filters = reportFilters(spec, {
+    about: report.data?.about ?? [],
+    period: { from: query.from, to: query.to },
+    setPeriod: (period) => url.set({ ...period }),
+  });
   // What a report is asked by is not narrowed any-or-all, so the bar is handed no match toggle.
   const { values, setFilter, clearFilters } = useFilterSpec(filters);
+  const shown = { ...values, ...fields };
 
   if (!can(FEATURE_KEYS.REPORTS)) {
     return (
@@ -120,7 +137,7 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
           }
         />
       }
-      filters={{ spec: filters, state: { values, setFilter, clearFilters } }}
+      filters={{ spec: filters, state: { values: shown, setFilter, clearFilters } }}
     >
       <Body spec={spec} ready={ready} report={report} />
     </PageFrame>

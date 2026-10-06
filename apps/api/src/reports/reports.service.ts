@@ -11,7 +11,7 @@ import {
   type ReportSpec,
 } from '@iace/contracts';
 import { AccessResolverService } from '../access';
-import { TestAnalyticsService } from '../attempts';
+import { LeaderboardService, TestAnalyticsService } from '../attempts';
 import { writeWorkbook } from '../common/exporting';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -23,9 +23,10 @@ import {
   type ReportBuilders,
   type ReportSources,
 } from './report';
+import { PERIOD_REPORTS } from './period-reports';
 import { TEST_REPORTS } from './test-reports';
 
-const BUILDERS: ReportBuilders = { ...TEST_REPORTS };
+const BUILDERS: ReportBuilders = { ...TEST_REPORTS, ...PERIOD_REPORTS };
 
 /** The read model behind every report. It writes nothing, and owns no table (docs/03 §4). */
 @Injectable()
@@ -36,8 +37,9 @@ export class ReportsService {
     prisma: PrismaService,
     analytics: TestAnalyticsService,
     access: AccessResolverService,
+    leaderboard: LeaderboardService,
   ) {
-    this.sources = { prisma, analytics, access };
+    this.sources = { prisma, analytics, access, leaderboard };
   }
 
   async document(

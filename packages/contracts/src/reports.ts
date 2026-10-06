@@ -45,6 +45,11 @@ export const REPORT_KEYS = {
   TEST_BRANCHES: 'test-branches',
   TEST_CUTOFFS: 'test-cutoffs',
   TEST_VOIDED: 'test-voided',
+  TEST_ACTIVITY_WEEKLY: 'test-activity-weekly',
+  TEST_ACTIVITY_MONTHLY: 'test-activity-monthly',
+  SERIES_PROGRESS: 'series-progress',
+  TEST_SCHEDULE: 'test-schedule',
+  PARTICIPATION_TREND: 'participation-trend',
 } as const;
 export const reportKeySchema = z.enum(REPORT_KEYS);
 export type ReportKey = z.infer<typeof reportKeySchema>;
@@ -62,6 +67,7 @@ export interface ReportSpec {
 }
 
 const ONE_TEST = { group: REPORT_GROUPS.TESTS, needs: [REPORT_PARAMS.TEST] } as const;
+const A_PERIOD = { needs: [REPORT_PARAMS.PERIOD] } as const;
 
 export const REPORTS = {
   [REPORT_KEYS.TEST_RESULTS]: { ...ONE_TEST, title: 'Result sheet' },
@@ -73,6 +79,35 @@ export const REPORTS = {
   [REPORT_KEYS.TEST_BRANCHES]: { ...ONE_TEST, title: 'Branch comparison' },
   [REPORT_KEYS.TEST_CUTOFFS]: { ...ONE_TEST, title: 'Sectional cutoffs' },
   [REPORT_KEYS.TEST_VOIDED]: { ...ONE_TEST, title: 'Void sittings' },
+  [REPORT_KEYS.TEST_ACTIVITY_WEEKLY]: {
+    ...A_PERIOD,
+    group: REPORT_GROUPS.TESTS,
+    title: 'Weekly test activity',
+    period: REPORT_PERIODS.LAST_WEEK,
+  },
+  [REPORT_KEYS.TEST_ACTIVITY_MONTHLY]: {
+    ...A_PERIOD,
+    group: REPORT_GROUPS.TESTS,
+    title: 'Monthly test summary',
+    period: REPORT_PERIODS.LAST_MONTH,
+  },
+  [REPORT_KEYS.SERIES_PROGRESS]: {
+    group: REPORT_GROUPS.TESTS,
+    needs: [REPORT_PARAMS.SERIES],
+    title: 'Series progress',
+  },
+  [REPORT_KEYS.TEST_SCHEDULE]: {
+    ...A_PERIOD,
+    group: REPORT_GROUPS.TESTS,
+    title: 'Test schedule',
+    period: REPORT_PERIODS.THIS_WEEK,
+  },
+  [REPORT_KEYS.PARTICIPATION_TREND]: {
+    ...A_PERIOD,
+    group: REPORT_GROUPS.TESTS,
+    title: 'Participation trend',
+    period: REPORT_PERIODS.THIS_MONTH,
+  },
 } as const satisfies Record<ReportKey, ReportSpec>;
 
 /** What heads every printed page. */
