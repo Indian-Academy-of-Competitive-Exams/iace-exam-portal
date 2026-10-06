@@ -2,6 +2,7 @@ import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { type Queue } from 'bullmq';
 import { PrismaModule } from '../prisma/prisma.module';
+import { keepScheduled } from '../queue/keep-scheduled';
 import { QueueModule } from '../queue/queue.module';
 import { AUDIT_ARCHIVE_CRON, QUEUE_NAMES } from '../queue/queues';
 import { AuditArchiveProcessor } from './audit-archive.processor';
@@ -26,9 +27,11 @@ export class AuditModule implements OnModuleInit {
     // The container that runs the jobs is the one that schedules them.
     if (!servesRole(API_ROLES.WORKER)) return;
 
-    await this.archiveQueue.upsertJobScheduler(QUEUE_NAMES.AUDIT_ARCHIVE, {
-      pattern: AUDIT_ARCHIVE_CRON,
-      tz: 'UTC',
+    await keepScheduled(this.archiveQueue, async () => {
+      await this.archiveQueue.upsertJobScheduler(QUEUE_NAMES.AUDIT_ARCHIVE, {
+        pattern: AUDIT_ARCHIVE_CRON,
+        tz: 'UTC',
+      });
     });
   }
 }

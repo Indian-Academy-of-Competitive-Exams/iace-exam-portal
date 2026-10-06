@@ -5,6 +5,7 @@ import { ATTEMPT_FLUSH_EVERY_MS, ATTEMPT_SWEEP_EVERY_MS, QUEUE_NAMES } from '../
 import { API_ROLES, onRole, servesRole } from '../config/api-role';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
+import { keepScheduled } from '../queue/keep-scheduled';
 import { QueueModule } from '../queue/queue.module';
 import { AccessModule } from '../access';
 import { NotificationsModule } from '../notifications';
@@ -97,11 +98,13 @@ export class AttemptsModule implements OnModuleInit {
     // The container that runs the jobs is the one that schedules them.
     if (!servesRole(API_ROLES.WORKER)) return;
 
-    await this.flushQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_FLUSH, {
-      every: ATTEMPT_FLUSH_EVERY_MS,
-    });
-    await this.sweepQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_SWEEP, {
-      every: ATTEMPT_SWEEP_EVERY_MS,
+    await keepScheduled(this.flushQueue, async () => {
+      await this.flushQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_FLUSH, {
+        every: ATTEMPT_FLUSH_EVERY_MS,
+      });
+      await this.sweepQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_SWEEP, {
+        every: ATTEMPT_SWEEP_EVERY_MS,
+      });
     });
   }
 }
