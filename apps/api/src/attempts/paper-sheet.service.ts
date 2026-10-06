@@ -133,13 +133,16 @@ export class PaperSheetService {
 
   /** The same paper for every candidate, so it is read once. */
   servedOf(testId: string): Promise<ServedPaperRow[]> {
-    return hold(this.served, testId, () =>
-      this.prisma.paperQuestion.findMany({
-        where: { testId },
-        orderBy: { order: 'asc' },
-        select: SERVED_ROW_SELECT,
-      }),
-    );
+    return hold(this.served, testId, () => this.servedNow(testId));
+  }
+
+  /** The same rows read fresh and never held, for a reader that is not a sitting: an unsat paper can still change. */
+  servedNow(testId: string): Promise<ServedPaperRow[]> {
+    return this.prisma.paperQuestion.findMany({
+      where: { testId },
+      orderBy: { order: 'asc' },
+      select: SERVED_ROW_SELECT,
+    });
   }
 
   /** Every reader of one paper's review gets the same rows, so a results storm reads it once. */

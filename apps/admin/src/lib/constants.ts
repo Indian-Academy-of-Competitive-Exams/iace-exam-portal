@@ -132,6 +132,9 @@ export const ROUTES = {
   /** The paper on its own screen: the extra segment outranks `/tests/:id`. */
   TEST_PAPER: (id: string) => `/tests/${id}/paper`,
   TEST_PAPER_PATTERN: '/tests/:id/paper',
+  /** The paper in full, as a hall is handed it. The extra segment outranks the paper's own screen. */
+  TEST_PAPER_PRINT: (id: string) => `/tests/${id}/paper/print`,
+  TEST_PAPER_PRINT_PATTERN: '/tests/:id/paper/print',
   /** How the cohort did on it, off the rollups. Same shape of segment as the paper. */
   TEST_ANALYTICS: (id: string) => `/tests/${id}/analytics`,
   TEST_ANALYTICS_PATTERN: '/tests/:id/analytics',
@@ -630,6 +633,8 @@ const QUERY_SCOPES = {
   HELD: 'held',
   /** Every row in one read, so a paged view of the same list is a separate entry. */
   ALL: 'all',
+  /** A record in full for the printer, apart from the screen it is printed from. */
+  PRINT: 'print',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -792,6 +797,10 @@ export const testAnalyticsQueryKey = (testId: string) =>
   [...QUERY_KEYS.TEST_ANALYTICS, testId] as const;
 
 export const testPaperQueryKey = (testId: string) => [...QUERY_KEYS.TEST_PAPER, testId] as const;
+
+/** The printed paper is its own entry: it is the whole content, and each read of it is logged. */
+export const testPaperPrintQueryKey = (testId: string, languages: string, withKey: boolean) =>
+  [...QUERY_KEYS.TEST_PAPER, testId, QUERY_SCOPES.PRINT, languages, withKey] as const;
 
 export const seriesQueryKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id] as const;
 

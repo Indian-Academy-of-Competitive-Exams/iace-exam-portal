@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { SlidersHorizontal } from 'lucide-react';
+import { Printer, SlidersHorizontal } from 'lucide-react';
 import {
   ASSIGNMENT_ROLES,
   AppException,
@@ -192,6 +192,16 @@ function TestPaperScreen({
         `${chosen} of ${detail.totalQuestions} chosen`,
         durationLabel(detail.durationSec),
       ].join(' · ')}
+      action={
+        chosen > 0 ? (
+          <Button asChild variant="outline" size="sm">
+            <Link to={ROUTES.TEST_PAPER_PRINT(detail.id)}>
+              <Printer aria-hidden />
+              Print
+            </Link>
+          </Button>
+        ) : undefined
+      }
     />
   );
 

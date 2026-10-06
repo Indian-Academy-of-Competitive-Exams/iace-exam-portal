@@ -26,6 +26,7 @@ import { AttemptsService } from './attempts.service';
 import { AttemptResolutionService } from './attempt-resolution.service';
 import { LiveOpsService } from './live-ops.service';
 import { AttemptPaperService } from './attempt-paper.service';
+import { AdminPaperPrintController } from './paper-print.controller';
 import { AttemptReportService } from './attempt-report.service';
 import { AttemptStateService } from './attempt-state.service';
 import { PaperSheetService } from './paper-sheet.service';
@@ -57,6 +58,7 @@ import { SubmitService } from './submit.service';
         MeOverviewController,
         MeQuestionReportController,
         AdminTestAnalyticsController,
+        AdminPaperPrintController,
       ],
     ),
   ],

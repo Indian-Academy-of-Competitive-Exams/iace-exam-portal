@@ -634,6 +634,12 @@ number means a week later.
   history, so a week of it cannot be told from a month.
 - **The answer key is for a super admin.** It is read fresh from the terms the scorer marks
   against, never through the scorer's own held copy, since a paper nobody has sat can still change.
+- **The question paper prints from the test's own paper screen, not from Reports.** It is the
+  paper a candidate is served — paper order, unshuffled, no solution — behind `TEST_MANAGEMENT`,
+  the key that opens the paper, because `REPORTS` is a grant a branch office holds and an unsat
+  paper is the most sensitive thing on the platform. It too is read fresh, so a draft prints as it
+  stands; its key goes with it only for a super admin; and each read is logged as an export of
+  the test, since that is the moment the paper leaves the building.
 
 Who may read what: `REPORTS` READ opens every report and its pickers; the spreadsheet also needs
 `DATA_EXPORT`. The answer key, admin activity and the permissions matrix are a super admin's. The

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { csvQuery, optionalBooleanQuery } from './common';
 import { languageCodeSchema } from './exams';
 import {
   examTemplateSchema,
@@ -555,6 +556,37 @@ export const sharedPaperSchema = examPaperSchema
     shuffleOptions: z.boolean(),
   });
 export type SharedPaper = z.infer<typeof sharedPaperSchema>;
+
+/** Which languages a printed paper carries, and whether its key goes with it. */
+export const printablePaperQuerySchema = z.object({
+  /** None named means every language the paper has. */
+  languages: csvQuery(languageCodeSchema),
+  answerKey: optionalBooleanQuery(),
+});
+export type PrintablePaperQuery = z.infer<typeof printablePaperQuerySchema>;
+export type PrintablePaperQueryInput = z.input<typeof printablePaperQuerySchema>;
+
+/** One question's answer as a paper names it: an option's letter, or what a typed answer must read. */
+const printedAnswerSchema = z.object({ questionId: z.string(), answer: z.string() });
+
+/** A test's whole paper as a hall is handed it: paper order, unshuffled, and no answer unless the key was asked for. */
+export const printablePaperSchema = z.object({
+  testId: z.string(),
+  title: z.string().nullable(),
+  series: z.string(),
+  /** The languages printed, and every one the paper could be printed in. */
+  languages: z.array(languageCodeSchema),
+  available: z.array(languageCodeSchema),
+  durationSec: z.number().int(),
+  maxMarks: z.number(),
+  sections: z.array(examSectionSchema),
+  questions: z.array(examQuestionSchema),
+  answerKey: z.array(printedAnswerSchema).nullable(),
+});
+export type PrintablePaper = z.infer<typeof printablePaperSchema>;
+
+/** How an option is named on paper: by its place, as a letter. */
+export const optionLetter = (place: number): string => String.fromCodePoint(65 + place);
 
 /** The sitting and its paper in one answer; null paper means build it failed, so the screen asks. */
 export const startedAttemptSchema = liveAttemptSchema.extend({

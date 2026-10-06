@@ -100,6 +100,11 @@ const TestBuilderPage = React.lazy(() =>
 const TestPaperPage = React.lazy(() =>
   import('./features/tests/test-paper').then((module) => ({ default: module.TestPaperPage })),
 );
+const TestPaperPrintPage = React.lazy(() =>
+  import('./features/tests/test-paper-print').then((module) => ({
+    default: module.TestPaperPrintPage,
+  })),
+);
 const TestAnalyticsPage = React.lazy(() =>
   import('./features/tests/test-analytics').then((module) => ({
     default: module.TestAnalyticsPage,
@@ -241,6 +246,10 @@ export function App() {
           <Route path={ROUTES.TEST_NEW} element={whileLoading(<TestBuilderPage />)} />
           <Route path={ROUTES.TEST_PATTERN} element={whileLoading(<TestBuilderPage />)} />
           <Route path={ROUTES.TEST_PAPER_PATTERN} element={whileLoading(<TestPaperPage />)} />
+          <Route
+            path={ROUTES.TEST_PAPER_PRINT_PATTERN}
+            element={whileLoading(<TestPaperPrintPage />)}
+          />
           <Route
             path={ROUTES.TEST_ANALYTICS_PATTERN}
             element={whileLoading(<TestAnalyticsPage />)}

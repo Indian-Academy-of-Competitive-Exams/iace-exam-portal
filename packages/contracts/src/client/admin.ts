@@ -35,6 +35,11 @@ import {
   type PermissionChanges,
   type UpdateAdminBody,
 } from '../admins';
+import {
+  printablePaperSchema,
+  type PrintablePaper,
+  type PrintablePaperQueryInput,
+} from '../attempts';
 import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from '../dashboard';
 import {
   ADMIN_REPORT_ROUTES,
@@ -577,6 +582,13 @@ export function adminClient(core: ApiCore) {
       /** The paper as it stands, built a question or a section at a time. */
       readPaper: (id: string): Promise<TestPaper> =>
         get(ADMIN_TEST_PAPER_ROUTES.read(id), testPaperSchema),
+
+      /** The whole paper in full, to print; its key travels only when asked for, and only to a super admin. */
+      printablePaper: (id: string, query: PrintablePaperQueryInput = {}): Promise<PrintablePaper> =>
+        get(
+          `${ADMIN_TEST_PAPER_ROUTES.print(id)}${queryString({ ...query })}`,
+          printablePaperSchema,
+        ),
 
       /** Several at once, in the next free places its section has. */
       addPaperQuestions: (id: string, input: AddPaperQuestionInput): Promise<TestPaper> =>

@@ -615,6 +615,8 @@ export type AddPaperQuestionBody = z.infer<typeof addPaperQuestionSchema>;
 
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
+  /** The whole paper in full, to print. Served by the attempts module, which shapes a paper for a candidate. */
+  print: (id: string) => `/admin/tests/${id}/paper/print`,
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   removeQuestions: (id: string) => `/admin/tests/${id}/paper/questions`,
   /** Draws the rest of one section from its own spec, around the rows already on it. */
