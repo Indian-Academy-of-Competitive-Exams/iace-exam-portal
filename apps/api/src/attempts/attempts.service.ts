@@ -83,6 +83,8 @@ export class AttemptsService {
         orderBy: { attemptNo: 'desc' },
       }),
       this.findTest(testId),
+      // Whichever test is asked for: a sitting their other sign-in is answering is not set aside.
+      this.state.assertFree(studentId, session),
     ]);
     // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
     const live = sittings.find((row) => row.status === LIVE) ?? null;

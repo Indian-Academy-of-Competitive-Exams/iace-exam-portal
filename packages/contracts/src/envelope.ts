@@ -74,7 +74,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCodes.CONFLICT]: 'That already exists',
   [ErrorCodes.SITTING_TAKEN_OVER]: 'This test was continued somewhere else',
   [ErrorCodes.SITTING_SET_ASIDE]: 'Another of your tests was opened',
-  [ErrorCodes.SITTING_HELD_ELSEWHERE]: 'This test is being answered on your other device',
+  [ErrorCodes.SITTING_HELD_ELSEWHERE]: 'A test is being answered on your other device',
   [ErrorCodes.SITTING_ENDED]: 'This sitting has already ended',
   [ErrorCodes.RATE_LIMITED]: 'Too many requests. Please wait a moment',
   [ErrorCodes.OTP_INVALID]: 'Incorrect code',

@@ -137,6 +137,14 @@ export class AttemptStateService {
     return endsAt;
   }
 
+  /** Refuses a sign-in ANY sitting while the student's other one is still answering theirs. */
+  async assertFree(studentId: string, session?: string, now: Date = new Date()): Promise<void> {
+    const claimed = await this.redis.client.get(redisKeys.sittingClaim(studentId));
+    const held = claimed === null ? null : await this.read(claimed);
+    const refused = held === null ? null : heldElsewhere(held, session, now);
+    if (refused) throw refused;
+  }
+
   /** One sitting at a time per student: opening this one stands down whatever tab held the last. */
   private async takeClaim(studentId: string, attemptId: string): Promise<void> {
     const key = redisKeys.sittingClaim(studentId);

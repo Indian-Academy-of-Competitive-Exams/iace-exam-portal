@@ -362,3 +362,53 @@ describe('AttemptStateService — a sitting stays with the sign-in answering it'
     assert.equal((await heldOf(redis))?.session, 'app');
   });
 });
+
+/** Opening another test stands the last one down, so the hold has to cover every test, not one. */
+describe('AttemptStateService — the other sign-in may open no test while one is being answered', () => {
+  const OPENED_AT = new Date('2026-01-01T00:00:00.000Z');
+  const after = (sec: number) => new Date(OPENED_AT.getTime() + sec * 1000);
+
+  /** The failure this prevents: the app opening any other test to knock the web sitting aside. */
+  it('refuses the other sign-in while the claimed sitting is still being heard from', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open({ ...sitting('att_1'), session: 'web' }, 'tab_a', OPENED_AT);
+
+    const refused = await refusal(state.assertFree('stu_1', 'app', after(PRESENT_GRACE_SEC - 1)));
+
+    assert.equal(refused?.code, ErrorCodes.SITTING_HELD_ELSEWHERE);
+  });
+
+  it('lets it through once that sitting has been quiet for the grace', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open({ ...sitting('att_1'), session: 'web' }, 'tab_a', OPENED_AT);
+
+    const refused = await refusal(state.assertFree('stu_1', 'app', after(PRESENT_GRACE_SEC)));
+
+    assert.equal(refused, null);
+  });
+
+  it('never refuses the sign-in that holds it, nor a student holding nothing', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    const holdingNothing = await refusal(state.assertFree('stu_1', 'app', OPENED_AT));
+    await state.open({ ...sitting('att_1'), session: 'web' }, 'tab_a', OPENED_AT);
+
+    const holder = await refusal(state.assertFree('stu_1', 'web', after(1)));
+
+    assert.equal(holdingNothing, null);
+    assert.equal(holder, null);
+  });
+
+  it('lets it through once the claimed sitting has been handed in', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open({ ...sitting('att_1'), session: 'web' }, 'tab_a', OPENED_AT);
+    await state.take('att_1');
+
+    const refused = await refusal(state.assertFree('stu_1', 'app', after(1)));
+
+    assert.equal(refused, null);
+  });
+});

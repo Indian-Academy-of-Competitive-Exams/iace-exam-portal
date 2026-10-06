@@ -25,14 +25,14 @@ const START_TRIES = 3;
 export const shouldRetryStart = (failures: number, error: unknown): boolean =>
   failures < START_TRIES - 1 && isWorthAskingAgain(error);
 
-/** A start refused because the student's other sign-in is still answering this sitting. */
+/** A start refused because the student's other sign-in is still answering a sitting, this one or another. */
 export const isHeldElsewhere = (error: unknown): boolean =>
   AppException.is(error) && error.code === ErrorCodes.SITTING_HELD_ELSEWHERE;
 
 /** The hold screen's words, the same on both apps: what holds the paper, and what releases it. */
 export const HELD_ELSEWHERE_SAYS = {
-  title: 'This test is open on your other device',
-  hint: 'It can be continued here once that device has been quiet for a minute.',
+  title: 'A test is open on your other device',
+  hint: 'This one opens here once that device has been quiet for a minute.',
 } as const;
 
 export interface BeginChoice {
