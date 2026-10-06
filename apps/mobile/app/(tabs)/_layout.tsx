@@ -22,7 +22,7 @@ const ITEM_STYLE = {
 const UIKIT_BAR_HEIGHT = 49;
 const BAR_HEIGHT = UIKIT_BAR_HEIGHT + 8;
 
-/** The five-tab shell every signed-in screen lives under. */
+/** The tab shell every signed-in screen lives under. */
 export default function TabLayout() {
   const activeColor = useTokenColor('--primary');
   const inactiveColor = useTokenColor('--muted-foreground');
