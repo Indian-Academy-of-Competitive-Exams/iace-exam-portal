@@ -74,7 +74,7 @@ export default function MathField({ value, onChange, invalid }: Readonly<MathFie
             '[&::part(menu-toggle)]:hidden [&::part(virtual-keyboard-toggle)]:hidden',
           ),
           // Expanded, so MathLive's own shorthands reach KaTeX as commands it knows.
-          onInput: (event: React.FormEvent<MathfieldElement>) =>
+          onInput: (event: React.SyntheticEvent<MathfieldElement>) =>
             onChange(event.currentTarget.getValue('latex-expanded')),
         },
         initial,

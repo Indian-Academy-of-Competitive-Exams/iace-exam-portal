@@ -250,15 +250,7 @@ function planRow(
 ): PlannedRow {
   const issues: ValidationIssue[] = [];
   const warnings: ImportWarning[] = [];
-
-  // A corrected line is judged as corrected; its cells still name the pictures it may keep showing.
-  const content = rowContent(row, edit ? [] : issues, edit ? [] : warnings);
-  const names = edit
-    ? namesOf(edit, catalog)
-    : { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
-  const draft = edit
-    ? withImportTag(edit)
-    : buildDraft(row, content, readType(row, issues), names, catalog, issues);
+  const { content, names, draft } = readRow(row, catalog, edit, issues, warnings);
 
   // The core rules run on every row, whatever the sheet got wrong: an admin fixing one column should see the rest of that row's problems in the same pass.
   issues.push(...validateQuestion(draft, catalog.context));
@@ -270,16 +262,8 @@ function planRow(
   // Only a row that would be written can clash: a row that is already in the bank is carrying the code it was imported with, and re-uploading last week's sheet must not turn every coded row into an error.
   const code = draft.questionCode;
   if (code && !duplicateOf && !leftOut) {
-    if (dedup.questionIdByCode.has(code) || codesInFile.has(code)) {
-      issues.push({
-        code: CODE.QUESTION_CODE_TAKEN,
-        message: `The code ${code} is already used by another question`,
-        field: 'questionCode',
-        column: 'question_code',
-      });
-    } else {
-      codesInFile.add(code);
-    }
+    const taken = claimCode(code, dedup, codesInFile);
+    if (taken) issues.push(taken);
   }
 
   const outside = scope ? outsideSection(draft, scope) : null;
@@ -310,6 +294,53 @@ function planRow(
     pictures: content.pictures,
     editable: draft,
     edited: edit !== undefined,
+  };
+}
+
+/** A row as the question it reads as, the pictures its cells carry, and the names it is filed under. */
+interface ReadRow {
+  content: RowContent;
+  names: { subject: string; topic: string };
+  draft: QuestionDraft;
+}
+
+/** A corrected line is judged as corrected; its cells still name the pictures it may keep showing. */
+function readRow(
+  row: CsvRow,
+  catalog: TaxonomyCatalog,
+  edit: QuestionDraft | undefined,
+  issues: ValidationIssue[],
+  warnings: ImportWarning[],
+): ReadRow {
+  if (edit) {
+    return {
+      content: rowContent(row, [], []),
+      names: namesOf(edit, catalog),
+      draft: withImportTag(edit),
+    };
+  }
+
+  const content = rowContent(row, issues, warnings);
+  const names = { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
+  const draft = buildDraft(row, content, readType(row, issues), names, catalog, issues);
+  return { content, names, draft };
+}
+
+/** The first row that would write a code holds it; the bank's own and an earlier line's are a clash. */
+function claimCode(
+  code: string,
+  dedup: ImportDedupContext,
+  codesInFile: Set<string>,
+): ValidationIssue | null {
+  if (!dedup.questionIdByCode.has(code) && !codesInFile.has(code)) {
+    codesInFile.add(code);
+    return null;
+  }
+  return {
+    code: CODE.QUESTION_CODE_TAKEN,
+    message: `The code ${code} is already used by another question`,
+    field: 'questionCode',
+    column: 'question_code',
   };
 }
 

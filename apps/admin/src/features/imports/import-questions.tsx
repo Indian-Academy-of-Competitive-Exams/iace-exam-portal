@@ -91,6 +91,18 @@ function BlurryNotice({ count }: Readonly<{ count: number }>) {
   );
 }
 
+/** A row repeated inside the file is counted apart from one already in the bank; a count of none is left out. */
+function statsOf({ summary }: QuestionImportPlan, repeated: number) {
+  return [
+    { label: 'Rows read', value: summary.total },
+    { label: 'New questions', value: summary.willCreate },
+    { label: 'Already in the bank', value: summary.duplicates - repeated },
+    ...(repeated > 0 ? [{ label: 'Repeated in this file', value: repeated }] : []),
+    { label: 'Skipped (have problems)', value: summary.invalid },
+    ...(summary.leftOut > 0 ? [{ label: 'Left out', value: summary.leftOut }] : []),
+  ];
+}
+
 /** Registered only while the sheet is on screen: the authoring page over it registers its own. */
 function SheetTour() {
   usePageTour({ id: TOUR_IDS.IMPORT_QUESTIONS, steps: IMPORT_QUESTIONS_TOUR, ready: true });
@@ -224,20 +236,7 @@ export function ImportQuestionsPage() {
       fileErrors={plan?.fileErrors}
       outcome={intake.result ? <ImportOutcome result={intake.result} into={into} /> : null}
       errorRows={errorRows}
-      stats={
-        plan
-          ? [
-              { label: 'Rows read', value: plan.summary.total },
-              { label: 'New questions', value: plan.summary.willCreate },
-              { label: 'Already in the bank', value: plan.summary.duplicates - repeated },
-              ...(repeated > 0 ? [{ label: 'Repeated in this file', value: repeated }] : []),
-              { label: 'Skipped (have problems)', value: plan.summary.invalid },
-              ...(plan.summary.leftOut > 0
-                ? [{ label: 'Left out', value: plan.summary.leftOut }]
-                : []),
-            ]
-          : undefined
-      }
+      stats={plan ? statsOf(plan, repeated) : undefined}
     >
       <BlurryNotice count={blurry} />
 
