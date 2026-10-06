@@ -480,6 +480,7 @@ model Question {
   questionStats  TestQuestionStat[]
   savedBy        SavedQuestion[]
   reviews        QuestionReview[]
+  workTimes      QuestionWorkTime[]
   assignment     QuestionAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
   // Unique, not just indexed: the duplicate pre-check reads outside the write, so two commits can race past it.
@@ -551,19 +552,20 @@ model Test {
   // When students were told it had opened. The sweep's watermark: set once, never read as a date.
   announcedAt        DateTime?    @db.Timestamptz(3)
 
-  baseConfig      BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
-  examStage       ExamStage            @relation(fields: [examStageId], references: [id])
-  paperQuestions  PaperQuestion[]
-  assignments     QuestionAssignment[]
-  sectionComments SectionComment[]
-  questionReviews QuestionReview[]
-  attempts        Attempt[]
-  notifications   Notification[]
-  stat            TestStat?
-  sectionStats    TestSectionStat[]
-  questionStats   TestQuestionStat[]
-  programUnlocks  TestProgramUnlock[]
-  testSeries      TestSeries           @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
+  baseConfig        BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
+  examStage         ExamStage            @relation(fields: [examStageId], references: [id])
+  paperQuestions    PaperQuestion[]
+  assignments       QuestionAssignment[]
+  sectionComments   SectionComment[]
+  questionReviews   QuestionReview[]
+  questionWorkTimes QuestionWorkTime[]
+  attempts          Attempt[]
+  notifications     Notification[]
+  stat              TestStat?
+  sectionStats      TestSectionStat[]
+  questionStats     TestQuestionStat[]
+  programUnlocks    TestProgramUnlock[]
+  testSeries        TestSeries           @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -657,6 +659,27 @@ model QuestionReview {
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([testId, questionId])
+  @@index([testId, baseConfigSectionId])
+  @@index([questionId])
+}
+
+// How long one admin has had one question of one test on screen, in the seat they worked it from.
+// A running total, added to in batches from the authoring page; nothing reads a history of it.
+model QuestionWorkTime {
+  id                  String         @id @default(uuid(7)) @db.Uuid
+  testId              String         @db.Uuid
+  baseConfigSectionId String         @db.Uuid
+  questionId          String         @db.Uuid
+  // An actor id without a foreign key, as in QuestionReview: the time outlives whoever spent it.
+  adminId             String         @db.Uuid
+  role                AssignmentRole
+  seconds             Int            @default(0)
+  updatedAt           DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+
+  test     Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, questionId, adminId, role])
   @@index([testId, baseConfigSectionId])
   @@index([questionId])
 }

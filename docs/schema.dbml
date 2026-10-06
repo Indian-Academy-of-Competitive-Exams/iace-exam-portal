@@ -304,7 +304,6 @@ Table BaseConfig {
   shuffleQuestions boolean [not null, default: true]
   shuffleOptions boolean [not null, default: true]
   calculatorEnabled boolean [not null, default: false]
-  featureFlags jsonb
   scoringVersion integer [not null, default: 1]
   createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
@@ -379,19 +378,20 @@ Table Question {
   currentVersionId uuid
   tags text [not null, note: 'array']
   stemHash text
+  searchText text
   stemHashVersion integer [not null, default: 1]
   assignmentId uuid
   createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {
+    (stemHash) [unique]
     (subjectId, difficulty, status)
     (topicId)
-    (stemHash)
     (createdById)
     (assignmentId)
     (tags)
-    (questionCode)
+    (searchText)
     (status)
     (createdAt, id)
   }
@@ -461,6 +461,7 @@ Table PaperQuestion {
     (questionId)
     (questionVersionId)
     (baseConfigId, baseConfigSectionId)
+    (testId, baseConfigSectionId)
   }
 }
 
@@ -500,6 +501,22 @@ Table QuestionReview {
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (testId, questionId) [unique]
+    (testId, baseConfigSectionId)
+    (questionId)
+  }
+}
+
+Table QuestionWorkTime {
+  id uuid [pk, default: `uuid(7)`]
+  testId uuid [not null]
+  baseConfigSectionId uuid [not null]
+  questionId uuid [not null]
+  adminId uuid [not null]
+  role AssignmentRole [not null]
+  seconds integer [not null, default: 0]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (testId, questionId, adminId, role) [unique]
     (testId, baseConfigSectionId)
     (questionId)
   }
@@ -690,7 +707,6 @@ Table Event {
   name text [not null]
   description text
   isActive boolean [not null, default: true]
-  createdById uuid
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
 }
@@ -753,7 +769,6 @@ Table RowActionLog {
   id uuid [pk, default: `uuid(7)`]
   feature AuditFeature [not null]
   entityId uuid [not null]
-  entityLabel text
   action AuditAction [not null]
   actorType ActorType [not null]
   actorId uuid
@@ -782,8 +797,8 @@ Table Notification {
   testSeriesId uuid
   announcementId uuid
   isRead boolean [not null, default: false]
-  openedVia DeliveryChannel
   pushedAt timestamptz(3)
+  nextPushAt timestamptz(3)
   createdAt timestamptz(3) [not null, default: `now()`]
   indexes {
     (studentId, createdAt, isRead)
@@ -816,7 +831,6 @@ Table NotificationDelivery {
   status DeliveryStatus [not null, default: 'PENDING']
   skipReason text
   templateId text
-  providerMessageId text
   attempts integer [not null, default: 0]
   lastError text
   queuedAt timestamptz(3) [not null, default: `now()`]
@@ -963,6 +977,8 @@ Ref: QuestionAssignment.(baseConfigId, baseConfigSectionId) > BaseConfigSection.
 Ref: QuestionAssignment.assigneeId > Admin.id [delete: restrict]
 Ref: QuestionReview.testId > Test.id [delete: cascade]
 Ref: QuestionReview.questionId > Question.id [delete: cascade]
+Ref: QuestionWorkTime.testId > Test.id [delete: cascade]
+Ref: QuestionWorkTime.questionId > Question.id [delete: cascade]
 Ref: SectionComment.testId > Test.id [delete: cascade]
 Ref: SectionComment.authorId > Admin.id [delete: restrict]
 Ref: Attempt.testId > Test.id
@@ -1034,6 +1050,8 @@ TableGroup "Tests & Papers" { // color: #2E7D5B
   PaperQuestion
   QuestionAssignment
   SectionComment
+  QuestionReview
+  QuestionWorkTime
 }
 
 TableGroup "Attempts" { // color: #2563A8

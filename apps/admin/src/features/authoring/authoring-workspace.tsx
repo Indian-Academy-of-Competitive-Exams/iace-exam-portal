@@ -62,7 +62,12 @@ export interface WorkspaceSource {
   /** Only where a copy of a bank question refuses the save; an import row just becomes a duplicate. */
   checkDuplicates: boolean;
   /** A blank card after the last, for writing the next question; absent where nothing new is written. */
-  create?: { header: AuthoringHeader; save: (held: Held) => Promise<unknown> };
+  create?: {
+    header: AuthoringHeader;
+    save: (held: Held) => Promise<unknown>;
+    /** After the blank card's own name, in its bar. */
+    lead?: React.ReactNode;
+  };
   /** Somebody else holds every card: none of them takes an edit until they hand it on. */
   blocked?: boolean;
 }
@@ -335,7 +340,9 @@ export function AuthoringWorkspace({
         >
           {keys.map((key, index) => {
             const card = source.cards.find((one) => one.key === key);
-            const lead = <CardLead title={title}>{leadOf(key, card)}</CardLead>;
+            const lead = (
+              <CardLead title={title}>{leadOf(key, card, source.create?.lead)}</CardLead>
+            );
             return (
               <section
                 key={key}
@@ -443,9 +450,18 @@ function scrollToCard(card: HTMLElement | undefined) {
   else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 }
 
-function leadOf(key: string, card: WorkspaceCard | undefined): React.ReactNode {
-  if (key === NEW_CARD) return <span className="text-sm font-semibold">New question</span>;
-  return card?.lead;
+function leadOf(
+  key: string,
+  card: WorkspaceCard | undefined,
+  blankLead: React.ReactNode,
+): React.ReactNode {
+  if (key !== NEW_CARD) return card?.lead;
+  return (
+    <>
+      <span className="text-sm font-semibold">New question</span>
+      {blankLead}
+    </>
+  );
 }
 
 /** The progress panel over the cards' right edge, like the app shell's menu: nothing moves under it. */

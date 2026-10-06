@@ -45,6 +45,14 @@ export const SECTION_SEATS = {
 const sectionSeatSchema = z.enum(SECTION_SEATS);
 export type SectionSeat = z.infer<typeof sectionSeatSchema>;
 
+/** Seconds one question has been on screen. A seat sees its own; the owner and a super admin see both seats' as well. */
+const questionTimeSchema = z.object({
+  own: z.number().int(),
+  typist: z.number().int().nullable(),
+  reader: z.number().int().nullable(),
+});
+export type QuestionTime = z.infer<typeof questionTimeSchema>;
+
 const sectionQuestionSchema = z.object({
   questionId: z.string(),
   preview: z.string(),
@@ -58,6 +66,7 @@ const sectionQuestionSchema = z.object({
   editable: z.boolean(),
   /** Whether THIS viewer may delete it now: a draft of theirs, typed here, off the paper, still theirs to change. */
   deletable: z.boolean(),
+  time: questionTimeSchema,
 });
 export type SectionQuestion = z.infer<typeof sectionQuestionSchema>;
 
@@ -94,6 +103,19 @@ export const sendBackSchema = z.object({
 export type SendBackInput = z.input<typeof sendBackSchema>;
 export type SendBackBody = z.infer<typeof sendBackSchema>;
 
+/** The most one report may add: a page reports every half minute, so an hour is a blank card typed slowly, never a forgery worth making. */
+export const WORK_TIME_REPORT_MAX_SECONDS = 3600;
+
+export const workTimeSchema = z.object({
+  seconds: z.number().int().min(1).max(WORK_TIME_REPORT_MAX_SECONDS),
+});
+export type WorkTimeInput = z.input<typeof workTimeSchema>;
+export type WorkTimeBody = z.infer<typeof workTimeSchema>;
+
+/** The caller's own total on that question after the report. */
+export const workTimeTotalSchema = z.object({ seconds: z.number().int() });
+export type WorkTimeTotal = z.infer<typeof workTimeTotalSchema>;
+
 const sectionPath = (testId: string, sectionId: string) => `/admin/sections/${testId}/${sectionId}`;
 
 /** Every read and write of one section, the caller's seat on it resolved by the server. */
@@ -119,6 +141,9 @@ export const ADMIN_SECTION_WORK_ROUTES = {
     `/admin/sections/${testId}/${sectionId}/questions/${questionId}`,
   otherTests: (testId: string, sectionId: string, questionId: string) =>
     `/admin/sections/${testId}/${sectionId}/questions/${questionId}/other-tests`,
+  /** POST adds the seconds the caller has just had this question on screen. */
+  time: (testId: string, sectionId: string, questionId: string) =>
+    `/admin/sections/${testId}/${sectionId}/questions/${questionId}/time`,
   /** POST ticks it; DELETE takes the tick back. */
   check: (testId: string, sectionId: string, questionId: string) =>
     `/admin/sections/${testId}/${sectionId}/questions/${questionId}/check`,

@@ -258,6 +258,9 @@ import {
   sectionWorkSchema,
   type SectionWork,
   type SendBackInput,
+  type WorkTimeInput,
+  type WorkTimeTotal,
+  workTimeTotalSchema,
 } from '../section-work';
 import { queryString, type ApiCore } from './core';
 
@@ -748,6 +751,20 @@ export function adminClient(core: ApiCore) {
           'POST',
           ADMIN_SECTION_WORK_ROUTES.sendBack(testId, sectionId, questionId),
           sectionWorkSchema,
+          input,
+        ),
+
+      /** Seconds this question has just been on screen, added to the caller's own total. */
+      spend: (
+        testId: string,
+        sectionId: string,
+        questionId: string,
+        input: WorkTimeInput,
+      ): Promise<WorkTimeTotal> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.time(testId, sectionId, questionId),
+          workTimeTotalSchema,
           input,
         ),
 

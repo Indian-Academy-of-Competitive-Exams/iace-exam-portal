@@ -22,6 +22,7 @@ import {
   questionDraftSchema,
   questionImportCommitSchema,
   sendBackSchema,
+  workTimeSchema,
   type QuestionDetail,
   type QuestionDraft,
   type QuestionImportCommitBody,
@@ -30,6 +31,8 @@ import {
   type QuestionOnOtherTest,
   type SectionWork,
   type SendBackBody,
+  type WorkTimeBody,
+  type WorkTimeTotal,
 } from '@iace/contracts';
 import {
   Actors,
@@ -166,6 +169,21 @@ export class SectionWorkController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionOnOtherTest[]> {
     return this.work.otherTests({ testId, baseConfigSectionId: sectionId }, questionId, user);
+  }
+
+  /** Time on screen is not an edit: it is counted for whoever holds a seat, and audited by nobody. */
+  @RequiresAnyFeature(SECTION_KEYS, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Post('questions/:questionId/time')
+  spend(
+    @Param('testId') testId: string,
+    @Param('sectionId') sectionId: string,
+    @Param('questionId') questionId: string,
+    @Body(new ZodBody(workTimeSchema)) body: WorkTimeBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<WorkTimeTotal> {
+    const pair = { testId, baseConfigSectionId: sectionId };
+    return this.work.spend(pair, questionId, body.seconds, user);
   }
 
   @RequiresAnyFeature(SECTION_KEYS, PERMISSION_LEVELS.WRITE)

@@ -446,6 +446,13 @@ and needs no mapping at all.
   spelling mistake, a data correction, or no suitable option as the answer — and an optional note.
   Only the sent-back questions go back; the rest stay with the reader. The typist fixes one and
   marks it fixed, and it returns to be checked again. A minor fix the reader makes directly.
+- **Time on a question is kept per person and per seat** (`QuestionWorkTime`): a running total in
+  seconds for one question of one test, counted by the authoring page while that question is the
+  one on screen in a visible tab — all of that time, typing or not — and added in batches of at
+  most an hour. A blank card's time goes to the question its save creates. Only whoever holds a
+  seat is counted, and not once the test is offered; an owner looking in is not. Each seat reads
+  its own time; the test's owner and a super admin read both seats', per question and in total.
+  A discarded draft takes its time with it.
 - **Releasing a section needs every question on its paper checked** and none still with the
   typist. It sets the reader's `finalizedAt` and ends their authority over it. A question added,
   drawn or swapped onto the paper after the release that the reader has not checked sends the

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, Info, Send, Trash2, Upload } from 'lucide-react';
+import { CheckCheck, Info, Send, Timer, Trash2, Upload } from 'lucide-react';
 import {
   AppException,
   DIFFICULTY_LEVEL,
@@ -9,7 +9,9 @@ import {
   REVIEW_STATES,
   SECTION_SEATS,
   SEND_BACK_REASONS,
+  clockText,
   type Assignment,
+  type QuestionTime,
   type ReviewState,
   type SectionQuestion,
   type SectionWork,
@@ -68,6 +70,8 @@ import {
 } from './authoring-workspace';
 import { headerOf, stateOf, toDraft } from './question-scaffold';
 import { FinalizeAssignmentDialog } from './finalize-assignment-dialog';
+import { useWorkClock } from './use-work-clock';
+import { type WorkClock } from './work-clock';
 
 const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.UNCHECKED]: 'neutral',
@@ -197,10 +201,29 @@ function SectionWorkspace({
   const [releasing, setReleasing] = useState(false);
   const { testId, baseConfigSectionId: sectionId } = work;
 
+  // Time is counted for whoever holds a seat, while the paper can still change.
+  const counting = !work.seatReplaced && work.seat !== SECTION_SEATS.OWNER && !work.offered;
+  const [inView, setInView] = useState<string | null>(null);
+  const clock = useWorkClock(testId, sectionId, counting ? inView : null);
+  const follow = useCallback(
+    (key: string) => {
+      setInView(key);
+      onActive(key);
+    },
+    [onActive],
+  );
+
   const source = useMemo((): WorkspaceSource => {
     return {
       cards: work.questions.map((question, index) =>
-        cardOf(work, question, index, seat, onChanged, onSettle),
+        cardOf(
+          work,
+          question,
+          index,
+          { seat, clock: counting ? clock : null },
+          onChanged,
+          onSettle,
+        ),
       ),
       query: (id) => ({
         queryKey: sectionWorkHeldQueryKey(testId, sectionId, id),
@@ -233,17 +256,19 @@ function SectionWorkspace({
               tags: '',
             },
             save: async (held) => {
-              await api.admin.sectionWork.create(
+              const created = await api.admin.sectionWork.create(
                 testId,
                 sectionId,
                 toDraft(held.state, held.header),
               );
+              clock.move(NEW_CARD, created.id);
               await onSettle();
             },
+            lead: counting ? <OwnClock clock={clock} id={NEW_CARD} held={0} /> : undefined,
           }
         : undefined,
     };
-  }, [work, seat, blocked, testId, sectionId, onChanged, onSettle]);
+  }, [work, seat, blocked, counting, clock, testId, sectionId, onChanged, onSettle]);
 
   const extra = (
     <>
@@ -287,7 +312,7 @@ function SectionWorkspace({
         <AuthoringWorkspace
           source={source}
           startAt={startAt}
-          onActive={onActive}
+          onActive={follow}
           title={title}
           saveLabel="Save and next"
           extraActions={
@@ -420,11 +445,11 @@ function cardOf(
   work: SectionWork,
   question: SectionQuestion,
   index: number,
-  seat: ReturnType<typeof seatOf>,
+  { seat, clock }: { seat: ReturnType<typeof seatOf>; clock: WorkClock | null },
   onChanged: (next: SectionWork) => void,
   onSettle: (savedId?: string) => Promise<void>,
 ): WorkspaceCard {
-  const { review } = question;
+  const { review, time } = question;
   return {
     key: question.questionId,
     editable: question.editable,
@@ -434,6 +459,9 @@ function cardOf(
           {`Question ${index + 1} of ${work.questions.length}`}
         </span>
         <Badge variant={REVIEW_BADGE[review.state]}>{REVIEW_STATE_LABELS[review.state]}</Badge>
+        {clock ? <OwnClock clock={clock} id={question.questionId} held={time.own} /> : null}
+        {!clock && work.seat !== SECTION_SEATS.OWNER ? <TimeSpent seconds={time.own} /> : null}
+        <SeatTimes time={time} />
       </>
     ),
     actions: (
@@ -447,6 +475,49 @@ function cardOf(
     ),
     notice: <CardNotice work={work} question={question} />,
   };
+}
+
+/** The viewer's own time on one question, running while it is the one on screen. */
+function OwnClock({ clock, id, held }: Readonly<{ clock: WorkClock; id: string; held: number }>) {
+  const seconds = useSyncExternalStore(clock.subscribe, () => clock.shown(id, held));
+  return <TimeSpent seconds={seconds} />;
+}
+
+/** One time on one question: the viewer's own behind a glyph, or a seat's behind its name. */
+function TimeSpent({ seconds, seat }: Readonly<{ seconds: number; seat?: string }>) {
+  return (
+    <span className="flex flex-none items-center gap-1 text-xs tabular-nums text-muted-foreground [&_svg]:size-3.5">
+      {seat ?? (
+        <>
+          <Timer aria-hidden />
+          <span className="sr-only">Time on this question</span>
+        </>
+      )}
+      {clockText(seconds)}
+    </span>
+  );
+}
+
+/** Each seat's time on the question, for the owner and a super admin, who are sent both. */
+function SeatTimes({ time }: Readonly<{ time: QuestionTime }>) {
+  if (time.typist === null || time.reader === null) return null;
+  return (
+    <>
+      <TimeSpent seat="Typist" seconds={time.typist} />
+      <TimeSpent seat="Proof-reader" seconds={time.reader} />
+    </>
+  );
+}
+
+/** A seat's whole time on the section: every seat's for the owner, and their own for whoever holds one. */
+function seatTime(work: SectionWork, seat: 'typist' | 'reader'): number | null {
+  const own = work.seat === (seat === 'typist' ? SECTION_SEATS.TYPIST : SECTION_SEATS.READER);
+  let total: number | null = null;
+  for (const { time } of work.questions) {
+    const seconds = time[seat] ?? (own ? time.own : null);
+    if (seconds !== null) total = (total ?? 0) + seconds;
+  }
+  return total;
 }
 
 /** Why a question came back, in the reader's words, and where else an edit to it would land. */
@@ -707,6 +778,7 @@ function ProgressPanel({
         <Holder holder={work.typist} earlier={earlierOf(work, 'TYPIST')} />
         <Stat label="Written" value={`${counts.written} of ${work.questionCount}`} />
         <Stat label="Sent back to fix" value={counts.sentBack} />
+        <TimeStat seconds={seatTime(work, 'typist')} />
         {seat.typing ? (
           <Button asChild size="sm" variant="outline">
             <Link to={ROUTES.AUTHORING_IMPORT(work.testId, work.baseConfigSectionId)}>
@@ -722,6 +794,7 @@ function ProgressPanel({
         <Stat label="Checked" value={`${counts.checked} of ${work.questions.length}`} />
         <Stat label="Sent back" value={counts.sentBack} />
         <Stat label="Fixed, to check again" value={counts.fixed} />
+        <TimeStat seconds={seatTime(work, 'reader')} />
         {tiles}
       </TabsContent>
     </Tabs>
@@ -765,6 +838,10 @@ function Holder({
       ) : null}
     </div>
   );
+}
+
+function TimeStat({ seconds }: Readonly<{ seconds: number | null }>) {
+  return seconds === null ? null : <Stat label="Time spent" value={clockText(seconds)} />;
 }
 
 function Stat({ label, value }: Readonly<{ label: string; value: string | number }>) {

@@ -807,6 +807,54 @@ describe('SectionWorkService — what a reader files a question under', () => {
   });
 });
 
+describe('SectionWorkService — time on a question', () => {
+  it('adds a seat holder’s seconds to their own total, report after report', async () => {
+    const { work } = await build();
+    const { pair, typed } = await aSection();
+    const question = await typed();
+
+    await work.spend(pair, question.id, 30, viewer(TYPIST));
+    const total = await work.spend(pair, question.id, 45, viewer(TYPIST));
+
+    assert.equal(total.seconds, 75);
+    const seen = (await work.one(pair, viewer(TYPIST))).questions[0]?.time;
+    assert.deepEqual(seen, { own: 75, typist: null, reader: null });
+  });
+
+  /** The failure this prevents: a typist reading how long their reader took, or the two seats' time merging. */
+  it('keeps each seat’s time apart, and shows both only to the owner', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typed, typistDone } = await aSection();
+    const question = await typed();
+    await work.spend(pair, question.id, 60, viewer(TYPIST));
+    await onPaper({ id: question.id, versionId: question.versionId });
+    await typistDone();
+    await work.spend(pair, question.id, 20, viewer(READER));
+    const timeFor = async (who: SectionViewer) =>
+      (await work.one(pair, who)).questions.find((row) => row.questionId === question.id)?.time;
+
+    assert.deepEqual(await timeFor(viewer(READER)), { own: 20, typist: null, reader: null });
+    assert.deepEqual(await timeFor(viewer(OWNER, OWNS)), { own: 0, typist: 60, reader: 20 });
+  });
+
+  it('counts nobody without a seat, and nothing outside the section', async () => {
+    const { work } = await build();
+    const { pair, typed } = await aSection();
+    const question = await typed();
+    const elsewhere = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+
+    await assert.rejects(
+      () => work.spend(pair, question.id, 30, viewer(OWNER, OWNS)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    await assert.rejects(
+      () => work.spend(pair, elsewhere.id, 30, viewer(TYPIST)),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+    assert.equal(await prisma.questionWorkTime.count(), 0);
+  });
+});
+
 describe('SectionWorkService — the reader’s review', () => {
   it('checks, sends back with a reason, takes the fix, and checks again', async () => {
     const { work } = await build();
