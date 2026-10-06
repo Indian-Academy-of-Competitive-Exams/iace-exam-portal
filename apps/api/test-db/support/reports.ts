@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import {
-  type AdminAuthority,
   type ReportCell,
   type ReportDocument,
   type ReportKey,
   type ReportQuery,
 } from '@iace/contracts';
 import { AccessResolverService } from '../../src/access/access-resolver.service';
+import { AuditService } from '../../src/audit/audit.service';
 import { AttemptReportService } from '../../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../../src/attempts/leaderboard.service';
 import { StudentOverviewService } from '../../src/attempts/overview.service';
@@ -15,11 +16,13 @@ import { PerformanceAnalyticsService } from '../../src/attempts/performance.serv
 import { RollupQueue } from '../../src/attempts/rollup-queue';
 import { TestAnalyticsService } from '../../src/attempts/test-analytics.service';
 import { type PrismaService } from '../../src/prisma/prisma.service';
+import { type ReportViewer } from '../../src/reports/report';
 import { ReportsService } from '../../src/reports/reports.service';
 import { FakeQueue, FakeRedis, FakeStorage } from '../../test/support/fakes';
 
-export const VIEWER: AdminAuthority = { isActive: true, isSuperAdmin: false, permissions: {} };
-export const SUPER_ADMIN: AdminAuthority = { ...VIEWER, isSuperAdmin: true };
+/** A fixed admin, so a row scoped to its actor can be written against it before the read. */
+export const VIEWER: ReportViewer = { id: randomUUID(), isActive: true, isSuperAdmin: false };
+export const SUPER_ADMIN: ReportViewer = { ...VIEWER, isSuperAdmin: true };
 
 /** The reports service over the real database, with only Redis and the queue stood in for. */
 export function reportsOver(prisma: PrismaService) {
@@ -40,11 +43,12 @@ export function reportsOver(prisma: PrismaService) {
     new StudentOverviewService(prisma, leaderboard),
     new AttemptReportService(prisma, leaderboard, new FakeStorage() as never, papers),
     papers,
+    new AuditService(prisma, new FakeStorage() as never),
   );
   const read = (
     key: ReportKey,
     query: ReportQuery,
-    viewer: AdminAuthority = VIEWER,
+    viewer: ReportViewer = VIEWER,
   ): Promise<ReportDocument> => reports.document(key, query, viewer);
   return { reports, read };
 }

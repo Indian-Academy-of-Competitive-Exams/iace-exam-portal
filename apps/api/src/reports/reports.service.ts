@@ -4,7 +4,6 @@ import {
   ErrorCodes,
   REPORTS,
   reportFieldsMissing,
-  type AdminAuthority,
   type Paginated,
   type ReportChoice,
   type ReportChoiceParam,
@@ -15,6 +14,7 @@ import {
   type ReportSpec,
 } from '@iace/contracts';
 import { AccessResolverService } from '../access';
+import { AuditService } from '../audit';
 import {
   AttemptReportService,
   LeaderboardService,
@@ -33,9 +33,12 @@ import {
   type ReportBuilder,
   type ReportBuilders,
   type ReportSources,
+  type ReportViewer,
 } from './report';
 import { COHORT_REPORTS } from './cohort-reports';
 import { CONTENT_REPORTS } from './content-reports';
+import { DIGEST_REPORTS } from './digest-report';
+import { OPERATIONS_REPORTS } from './operations-reports';
 import { ENROLMENT_REPORTS } from './enrolment-reports';
 import { PERIOD_REPORTS } from './period-reports';
 import { reportChoices } from './report-choices';
@@ -49,6 +52,8 @@ const BUILDERS: ReportBuilders = {
   ...COHORT_REPORTS,
   ...ENROLMENT_REPORTS,
   ...CONTENT_REPORTS,
+  ...OPERATIONS_REPORTS,
+  ...DIGEST_REPORTS,
 };
 
 /** The read model behind every report. It writes nothing, and owns no table (docs/03 §4). */
@@ -65,6 +70,7 @@ export class ReportsService {
     overview: StudentOverviewService,
     attemptReport: AttemptReportService,
     papers: PaperSheetService,
+    audit: AuditService,
   ) {
     this.sources = {
       prisma,
@@ -75,6 +81,7 @@ export class ReportsService {
       overview,
       attemptReport,
       papers,
+      audit,
     };
   }
 
@@ -85,7 +92,7 @@ export class ReportsService {
   async document(
     key: ReportKey,
     query: ReportQuery,
-    viewer: AdminAuthority,
+    viewer: ReportViewer,
   ): Promise<ReportDocument> {
     return toDocument(key, await this.build(key, query, viewer));
   }
@@ -93,14 +100,14 @@ export class ReportsService {
   async workbook(
     key: ReportKey,
     query: ReportQuery,
-    viewer: AdminAuthority,
+    viewer: ReportViewer,
   ): Promise<{ workbook: Buffer; rows: number }> {
     const report = await this.build(key, query, viewer);
     const workbook = await writeWorkbook([aboutSheet(key, report), ...report.sheets]);
     return { workbook, rows: rowsIn(report) };
   }
 
-  private build(key: ReportKey, query: ReportQuery, viewer: AdminAuthority): Promise<Report> {
+  private build(key: ReportKey, query: ReportQuery, viewer: ReportViewer): Promise<Report> {
     const spec: ReportSpec = REPORTS[key];
     if (spec.superAdminOnly && !viewer.isSuperAdmin) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'Only a super admin may open this report');
@@ -112,6 +119,6 @@ export class ReportsService {
       });
     }
     // The catalogue row was just checked, which is all each builder's narrower query assumes.
-    return (BUILDERS[key] as ReportBuilder)(this.sources, query);
+    return (BUILDERS[key] as ReportBuilder)(this.sources, query, viewer);
   }
 }

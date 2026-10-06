@@ -24,6 +24,7 @@ import {
   exportInstant,
   writeWorkbook,
   type ExportColumn,
+  type ExportSheet,
 } from '../common/exporting';
 import { importFileContentType } from '../common/importing';
 import { matchFilters } from '../common/match-filters';
@@ -113,12 +114,13 @@ const ROW_ACTION_COLUMNS: ExportColumn<RowAction>[] = [
   },
   { header: 'Feature', width: 20, value: (row) => row.feature },
   { header: 'Action', width: 12, value: (row) => row.action },
-  { header: 'Record', width: 38, text: true, value: (row) => row.entityId },
+  { header: 'Record', width: 38, text: true, fileOnly: true, value: (row) => row.entityId },
   { header: 'Actor type', width: 12, value: (row) => row.actorType },
   { header: 'Actor', width: 28, value: (row) => row.actorName },
   {
     header: 'Changed',
     width: 60,
+    fileOnly: true,
     value: (row) => (row.changed ? JSON.stringify(row.changed) : null),
   },
 ];
@@ -197,20 +199,26 @@ export class AuditService {
     query: RowActionExportQuery,
     viewer: AuditViewer,
   ): Promise<{ workbook: Buffer; rows: number }> {
+    const sheet = await this.rowActionSheet(query, viewer);
+    return { workbook: await writeWorkbook([sheet]), rows: sheet.rows.length };
+  }
+
+  /** The log as one sheet, scoped as the list is: the export writes it and a report prints it. */
+  async rowActionSheet(
+    query: RowActionExportQuery,
+    viewer: AuditViewer,
+  ): Promise<ExportSheet<RowAction>> {
     this.assertActive(viewer);
     const where = rowActionWhere(query, viewer);
     assertExportable(await this.prisma.rowActionLog.count({ where }));
 
     const rows = await this.prisma.rowActionLog.findMany({ where, orderBy: ROW_ACTION_ORDER });
     const names = await this.namesFor(rows);
-    const workbook = await writeWorkbook([
-      {
-        name: 'Audit log',
-        columns: ROW_ACTION_COLUMNS,
-        rows: rows.map((row) => this.toRowAction(row, names)),
-      },
-    ]);
-    return { workbook, rows: rows.length };
+    return {
+      name: 'Audit log',
+      columns: ROW_ACTION_COLUMNS,
+      rows: rows.map((row) => this.toRowAction(row, names)),
+    };
   }
 
   /** Same scoping rule as `listRowActions` — imports are always admin-initiated, so only `admin` resolves. */

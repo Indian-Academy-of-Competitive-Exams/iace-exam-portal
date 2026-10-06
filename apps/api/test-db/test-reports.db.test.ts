@@ -47,8 +47,6 @@ const prisma = testPrisma();
 const { reports, read } = reportsOver(prisma);
 const auditContext = new AuditContext();
 
-const ADMIN_ID = uid();
-
 /** tsx emits no decorator metadata, so Nest cannot inject by type; the routes are inherited whole. */
 class Controller extends ReportsController {
   constructor() {
@@ -77,7 +75,7 @@ class ReportsTestModule implements NestModule {
     const middleware = new AuditContextMiddleware(auditContext);
     consumer
       .apply((request: { user?: unknown }, _response: unknown, next: () => void) => {
-        request.user = { ...VIEWER, id: ADMIN_ID, actor: ActorTypes.ADMIN, sessionId: uid() };
+        request.user = { ...VIEWER, permissions: {}, actor: ActorTypes.ADMIN, sessionId: uid() };
         next();
       }, middleware.use.bind(middleware))
       .forRoutes('*');
@@ -339,7 +337,7 @@ describe('GET admin/reports/:key/export', () => {
     assert.equal(audit.length, 1);
     assert.equal(audit[0]?.feature, AUDIT_FEATURE.REPORT);
     assert.equal(audit[0]?.action, AUDIT_ACTION.EXPORT);
-    assert.equal(audit[0]?.entityId, ADMIN_ID);
+    assert.equal(audit[0]?.entityId, VIEWER.id);
     assert.deepEqual(audit[0]?.changed, {
       report: { from: null, to: REPORT_KEYS.TEST_MERIT },
       filters: { from: null, to: { testId } },

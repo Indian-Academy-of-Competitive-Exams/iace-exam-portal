@@ -16,6 +16,7 @@ import {
   reportQuerySchema,
   type ReportCell,
   type ReportDocument,
+  type ReportFact,
   type ReportKey,
   type ReportParam,
   type ReportPeriodRange,
@@ -189,23 +190,35 @@ function Body({
         ))}
       </div>
       <Letter lines={preface} />
-      {figures.length === 0 ? null : (
-        <MetricGroup>
-          {figures.map((figure) => (
-            <Metric
-              key={figure.label}
-              size="sm"
-              label={figure.label}
-              value={figure.value ?? DASH}
-            />
-          ))}
-        </MetricGroup>
-      )}
+      <Figures figures={figures} />
       {tables.map((table) => (
         <TablePreview key={table.title} table={table} />
       ))}
       <Letter lines={closing} />
     </div>
+  );
+}
+
+/** A headline holds four figures; past that a report's figures are a table, and are set as one. */
+const HEADLINE_FIGURES = 4;
+
+function Figures({ figures }: Readonly<{ figures: readonly ReportFact[] }>) {
+  if (figures.length === 0) return null;
+  if (figures.length > HEADLINE_FIGURES) {
+    return (
+      <div className="grid max-w-3xl gap-x-10 gap-y-1.5 sm:grid-cols-2">
+        {figures.map((figure) => (
+          <StatRow key={figure.label} label={figure.label} value={figure.value ?? DASH} />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <MetricGroup>
+      {figures.map((figure) => (
+        <Metric key={figure.label} size="sm" label={figure.label} value={figure.value ?? DASH} />
+      ))}
+    </MetricGroup>
   );
 }
 

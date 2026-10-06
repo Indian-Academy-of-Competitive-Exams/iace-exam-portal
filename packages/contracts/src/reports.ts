@@ -10,11 +10,13 @@ import { dateOnlySchema, todayISO } from './students';
 // ============================================================================
 
 export const REPORT_GROUPS = {
+  INSTITUTE: 'institute',
   TESTS: 'tests',
   STUDENTS: 'students',
   PERFORMANCE: 'performance',
   ENROLMENT: 'enrolment',
   CONTENT: 'content',
+  OPERATIONS: 'operations',
 } as const;
 export type ReportGroup = (typeof REPORT_GROUPS)[keyof typeof REPORT_GROUPS];
 
@@ -87,6 +89,12 @@ export const REPORT_KEYS = {
   SEND_BACKS: 'send-backs',
   BANK_INVENTORY: 'bank-inventory',
   QUESTION_USAGE: 'question-usage',
+  AUDIT_TRAIL: 'audit-trail',
+  ADMIN_ACTIVITY: 'admin-activity',
+  ANNOUNCEMENTS: 'announcements',
+  PERMISSIONS_MATRIX: 'permissions-matrix',
+  DIGEST_WEEKLY: 'digest-weekly',
+  DIGEST_MONTHLY: 'digest-monthly',
 } as const;
 export const reportKeySchema = z.enum(REPORT_KEYS);
 export type ReportKey = z.infer<typeof reportKeySchema>;
@@ -119,6 +127,11 @@ const THE_ROLL_OVER_A_MONTH = {
 const THE_BANK = { group: REPORT_GROUPS.CONTENT, needs: [] } as const;
 const THE_DESK_OVER_A_WEEK = {
   group: REPORT_GROUPS.CONTENT,
+  needs: [REPORT_PARAMS.PERIOD],
+  period: REPORT_PERIODS.LAST_WEEK,
+} as const;
+const THE_OFFICE_OVER_A_WEEK = {
+  group: REPORT_GROUPS.OPERATIONS,
   needs: [REPORT_PARAMS.PERIOD],
   period: REPORT_PERIODS.LAST_WEEK,
 } as const;
@@ -250,6 +263,35 @@ export const REPORTS = {
     ...THE_BANK,
     title: 'Question usage',
     takes: [REPORT_PARAMS.TOP],
+  },
+  [REPORT_KEYS.AUDIT_TRAIL]: { ...THE_OFFICE_OVER_A_WEEK, title: 'Audit trail' },
+  [REPORT_KEYS.ADMIN_ACTIVITY]: {
+    ...THE_OFFICE_OVER_A_WEEK,
+    title: 'Admin activity',
+    superAdminOnly: true,
+  },
+  [REPORT_KEYS.ANNOUNCEMENTS]: {
+    ...THE_OFFICE_OVER_A_WEEK,
+    title: 'Announcements and their cost',
+    period: REPORT_PERIODS.LAST_MONTH,
+  },
+  [REPORT_KEYS.PERMISSIONS_MATRIX]: {
+    group: REPORT_GROUPS.OPERATIONS,
+    needs: [],
+    title: 'Admins and permissions',
+    superAdminOnly: true,
+  },
+  [REPORT_KEYS.DIGEST_WEEKLY]: {
+    ...A_PERIOD,
+    group: REPORT_GROUPS.INSTITUTE,
+    title: 'Weekly institute report',
+    period: REPORT_PERIODS.LAST_WEEK,
+  },
+  [REPORT_KEYS.DIGEST_MONTHLY]: {
+    ...A_PERIOD,
+    group: REPORT_GROUPS.INSTITUTE,
+    title: 'Monthly institute report',
+    period: REPORT_PERIODS.LAST_MONTH,
   },
 } as const satisfies Record<ReportKey, ReportSpec>;
 

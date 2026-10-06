@@ -15,6 +15,7 @@ import {
   type ReportTable,
 } from '@iace/contracts';
 import { type AccessResolverService } from '../access';
+import { type AuditService } from '../audit';
 import {
   type AttemptReportService,
   type LeaderboardService,
@@ -51,12 +52,21 @@ export interface ReportSources {
   overview: StudentOverviewService;
   attemptReport: AttemptReportService;
   papers: PaperSheetService;
+  audit: AuditService;
+}
+
+/** Who is asking, for the two reads whose owner scopes its rows to them. */
+export interface ReportViewer {
+  id: string;
+  isSuperAdmin: boolean;
+  isActive: boolean;
 }
 
 /** A builder names the query it reads; the registry holds it to what its catalogue row requires. */
 export type ReportBuilder<Query extends ReportQuery = ReportQuery> = (
   sources: ReportSources,
   query: Query,
+  viewer: ReportViewer,
 ) => Promise<Report>;
 
 export type ReportBuilders = { [K in ReportKey]: ReportBuilder<ReportQueryOf<K>> };
