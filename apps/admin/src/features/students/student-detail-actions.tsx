@@ -246,7 +246,7 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
         title={isActive ? `Suspend sign-in for ${name}?` : `Restore sign-in for ${name}?`}
         description={
           isActive
-            ? 'They cannot sign in at all, on any device. A session they already have open is not revoked; it lasts until its token expires. Their record, attempts and results are kept.'
+            ? 'They are signed out on every device straight away, and cannot sign in again until this is restored. Their record, attempts and results are kept.'
             : 'They can sign in again. Whether they may sit a test is the other switch, and this does not change it.'
         }
         confirmLabel={isActive ? 'Suspend sign-in' : 'Restore sign-in'}
