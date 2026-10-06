@@ -230,6 +230,6 @@ export class TypistDoneController {
     const pair = { testId, baseConfigSectionId: sectionId };
     const typing = await this.work.actingTypist(pair, user);
     await this.paper.typistDone(typing.id, body);
-    return this.work.one(pair, user);
+    return this.work.handedOver(pair, user);
   }
 }

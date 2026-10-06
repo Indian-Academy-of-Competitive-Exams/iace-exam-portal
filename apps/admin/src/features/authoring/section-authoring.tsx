@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, Send, Trash2, Upload } from 'lucide-react';
+import { CheckCheck, Info, Send, Trash2, Upload } from 'lucide-react';
 import {
   AppException,
   DIFFICULTY_LEVEL,
@@ -37,6 +37,9 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   TruncatedText,
   cn,
   type BadgeProps,
@@ -73,6 +76,9 @@ const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.FIXED]: 'info',
 };
 
+/** How often a blocked screen asks whether the claim on its section has been given up. */
+const CLAIM_POLL_MS = 10_000;
+
 const REASON_ORDER = [
   SEND_BACK_REASONS.SPELLING,
   SEND_BACK_REASONS.DATA_CORRECTION,
@@ -94,11 +100,24 @@ export function SectionAuthoringPage() {
   const { testId = '', sectionId = '' } = useParams();
   const [search, setSearch] = useSearchParams();
   const queryClient = useQueryClient();
+  const { identity } = useAuth();
   const work = useQuery({
     queryKey: sectionWorkQueryKey(testId, sectionId),
     queryFn: () => api.admin.sectionWork.one(testId, sectionId),
     retry: false,
+    refetchInterval: (query) =>
+      editingElsewhere(query.state.data, identity?.id) ? CLAIM_POLL_MS : false,
   });
+
+  // The holder's saves landed while this screen was blocked, so its open cards read again before they are typed into.
+  const blocked = editingElsewhere(work.data, identity?.id) !== null;
+  const wasBlocked = useRef(false);
+  useEffect(() => {
+    if (wasBlocked.current && !blocked) {
+      void queryClient.invalidateQueries({ queryKey: sectionWorkQueryKey(testId, sectionId) });
+    }
+    wasBlocked.current = blocked;
+  }, [blocked, queryClient, testId, sectionId]);
 
   // Only the section and the card just written are read again; the queues and duplicate checks wait until next opened.
   const settle = useCallback(
@@ -170,6 +189,10 @@ function SectionWorkspace({
   onSettle: (savedId?: string) => Promise<void>;
 }>) {
   const seat = useMemo(() => seatOf(work), [work]);
+  const { identity } = useAuth();
+  const elsewhere = editingElsewhere(work, identity?.id);
+  // A super admin's save takes the claim over, so they are told and never stopped.
+  const blocked = elsewhere !== null && !identity?.isSuperAdmin;
   const [finishing, setFinishing] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const { testId, baseConfigSectionId: sectionId } = work;
@@ -199,6 +222,7 @@ function SectionWorkspace({
         await onSettle(id);
       },
       subjectLocked: work.sectionSubjectId !== null,
+      blocked,
       checkDuplicates: seat.typing,
       create: seat.typing
         ? {
@@ -219,7 +243,7 @@ function SectionWorkspace({
           }
         : undefined,
     };
-  }, [work, seat, testId, sectionId, onChanged, onSettle]);
+  }, [work, seat, blocked, testId, sectionId, onChanged, onSettle]);
 
   const extra = (
     <>
@@ -238,6 +262,7 @@ function SectionWorkspace({
     </>
   );
 
+  const title = <SectionTitle work={work} elsewhere={elsewhere} blocked={blocked} />;
   const empty = source.cards.length === 0 && !source.create;
   const thread = (
     <SectionThreadButton
@@ -253,7 +278,7 @@ function SectionWorkspace({
       {empty ? (
         <>
           <div className="flex flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2">
-            <SectionTitle work={work} />
+            {title}
             {thread}
           </div>
           <EmptyState title={emptyTitle(work)} />
@@ -263,7 +288,7 @@ function SectionWorkspace({
           source={source}
           startAt={startAt}
           onActive={onActive}
-          title={<SectionTitle work={work} />}
+          title={title}
           saveLabel="Save and next"
           extraActions={
             <>
@@ -298,9 +323,14 @@ function emptyTitle(work: SectionWork): string {
 }
 
 /** Which section of which test, ahead of the question in every card's language bar. */
-function SectionTitle({ work }: Readonly<{ work: SectionWork }>) {
+function SectionTitle({
+  work,
+  elsewhere,
+  blocked,
+}: Readonly<{ work: SectionWork; elsewhere: string | null; blocked: boolean }>) {
   return (
     <span className="flex min-w-0 items-center gap-2">
+      {elsewhere ? <EditingElsewhere name={elsewhere} blocked={blocked} /> : null}
       <TruncatedText className="text-sm font-semibold">{work.sectionName}</TruncatedText>
       <TruncatedText className="text-sm text-muted-foreground">
         {work.testTitle ?? 'Untitled test'}
@@ -309,28 +339,40 @@ function SectionTitle({ work }: Readonly<{ work: SectionWork }>) {
   );
 }
 
+/** Somebody else holds the section: a glyph in every card's bar says who, and takes no row from the question. */
+function EditingElsewhere({ name, blocked }: Readonly<{ name: string; blocked: boolean }>) {
+  const label = blocked
+    ? `${name} is editing this section. It opens to you when they hand it on.`
+    : `${name} is editing this section. Your save takes it over.`;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        type="button"
+        aria-label={label}
+        className="flex size-6 flex-none animate-pulse items-center justify-center rounded-full bg-warning-subtle text-warning-ink focus-visible:shadow-focus focus-visible:outline-none motion-reduce:animate-none [&_svg]:size-4"
+      >
+        <Info aria-hidden />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** Where the section stands, in the words each seat reads it by — only when there is something to say. */
 function SectionState({ work }: Readonly<{ work: SectionWork }>) {
   const state = contextOf(work);
-  const elsewhere = useEditingElsewhere(work);
-  if (!state && !elsewhere) return null;
+  if (!state) return null;
   return (
     <div className="flex flex-none flex-col gap-2 border-b border-border bg-surface px-4 py-2">
-      {state ? <Alert variant={state.variant}>{state.text}</Alert> : null}
-      {elsewhere ? (
-        <Alert variant="warning">
-          {`${elsewhere} is editing this section. Their changes have to land first.`}
-        </Alert>
-      ) : null}
+      <Alert variant={state.variant}>{state.text}</Alert>
     </div>
   );
 }
 
-/** Who else is in this section right now, read with it so the warning lands before the work. */
-function useEditingElsewhere(work: SectionWork): string | null {
-  const { identity } = useAuth();
-  const { editingBy } = work;
-  if (!editingBy || editingBy.adminId === identity?.id) return null;
+/** Who else holds this section right now, by name; nobody when it is free or the viewer's own. */
+function editingElsewhere(work: SectionWork | undefined, viewerId: string | undefined) {
+  const editingBy = work?.editingBy;
+  if (!editingBy || editingBy.adminId === viewerId) return null;
   return editingBy.fullName ?? 'Another admin';
 }
 

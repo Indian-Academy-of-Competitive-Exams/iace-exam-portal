@@ -65,6 +65,8 @@ export interface WorkspaceSource {
   checkDuplicates: boolean;
   /** A blank card after the last, for writing the next question; absent where nothing new is written. */
   create?: { header: AuthoringHeader; save: (held: Held) => Promise<unknown> };
+  /** Somebody else holds every card: what the viewer could edit shows its editor, frozen. */
+  blocked?: boolean;
 }
 
 interface PanelPosition {
@@ -170,7 +172,9 @@ export function AuthoringWorkspace({
   });
   const base = isNew ? blank : (activeBase.data ?? null);
   const shown = edits[active] ?? base;
-  const editable = isNew || Boolean(source.cards.find((card) => card.key === active)?.editable);
+  const writable = isNew || Boolean(source.cards.find((card) => card.key === active)?.editable);
+  const blocked = writable && Boolean(source.blocked);
+  const editable = writable && !blocked;
 
   const held = useRef(active);
   useEffect(() => {
@@ -274,7 +278,8 @@ export function AuthoringWorkspace({
   const dirty = active in edits;
   const anyDirty = Object.keys(edits).length > 0;
   useEffect(() => onDirtyChange?.(anyDirty), [anyDirty, onDirtyChange]);
-  const canSave = !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
+  const canSave =
+    !editable || !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
 
   const saveAndNext = () => {
     const held = edits[active];
@@ -302,11 +307,12 @@ export function AuthoringWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
-      {editable && shown ? (
+      {writable && shown ? (
         <AuthoringHeaderBar
           header={shown.header}
           state={shown.state}
           subjectLocked={source.subjectLocked}
+          disabled={blocked}
           onHeaderChange={(next) => edit(active, (current) => ({ ...current, header: next }))}
           onStateChange={(next) => {
             edit(active, (current) => ({ ...current, state: next }));
@@ -352,6 +358,7 @@ export function AuthoringWorkspace({
                         blank={blank}
                         held={edits[key]}
                         editable={key === NEW_CARD || Boolean(card?.editable)}
+                        blocked={Boolean(source.blocked)}
                         lead={lead}
                         actions={card?.actions}
                         view={views[key] ?? FIRST_VIEW}
@@ -497,6 +504,7 @@ function CardBody({
   blank,
   held,
   editable,
+  blocked,
   lead,
   actions,
   view,
@@ -511,6 +519,7 @@ function CardBody({
   blank: Held;
   held: Held | undefined;
   editable: boolean;
+  blocked: boolean;
   lead: React.ReactNode;
   actions: React.ReactNode;
   view: View;
@@ -545,6 +554,7 @@ function CardBody({
     <EditBody
       questionKey={isNew ? '' : questionKey}
       shown={shown}
+      blocked={blocked}
       lead={lead}
       actions={actions}
       view={view}
@@ -601,6 +611,7 @@ function ReadBody({
 function EditBody({
   questionKey,
   shown,
+  blocked,
   lead,
   actions,
   view,
@@ -612,6 +623,7 @@ function EditBody({
 }: Readonly<{
   questionKey: string;
   shown: Held;
+  blocked: boolean;
   lead: React.ReactNode;
   actions: React.ReactNode;
   view: View;
@@ -634,7 +646,8 @@ function EditBody({
       state={shown.state}
       language={view.language}
       romanised={romanised}
-      canSave
+      canSave={!blocked}
+      blocked={blocked}
       boxVersion={view.box}
       checks={checks}
       onRegions={(regions: ScaffoldRegion[]) =>

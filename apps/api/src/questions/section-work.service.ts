@@ -30,7 +30,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { assertSourceChosen } from '../common/paper-edit';
 import { RedisService } from '../redis/redis.service';
-import { sectionEditingBy, takeSectionEditLock } from '../common/edit-lock';
+import { releaseSectionEditLock, sectionEditingBy, takeSectionEditLock } from '../common/edit-lock';
 import { AssignmentsService } from '../assignments';
 import { stemPreviewOf } from './question-core';
 import { QuestionImportService } from './question-import.service';
@@ -185,6 +185,18 @@ export class SectionWorkService {
     return actingAs(await this.load(pair, viewer), ASSIGNMENT_ROLES.TYPIST);
   }
 
+  /** The section as a Done leaves it: it is the reader's now, so no typing claim outlives it. */
+  async handedOver(pair: Pair, viewer: SectionViewer): Promise<SectionWork> {
+    await releaseSectionEditLock(this.redis, pair);
+    return this.one(pair, viewer);
+  }
+
+  /** The viewer's turn has ended: their own claim goes, and the section answers as it now stands. */
+  private async passedOn(context: Context): Promise<SectionWork> {
+    await releaseSectionEditLock(this.redis, context.pair, context.viewer.id);
+    return this.workOf(context);
+  }
+
   /** A question typed for the section, under the open typing job the viewer acts through. */
   async create(pair: Pair, draft: QuestionDraft, viewer: SectionViewer): Promise<QuestionDetail> {
     const typing = typingRow(await this.load(pair, viewer));
@@ -218,6 +230,7 @@ export class SectionWorkService {
   async release(pair: Pair, viewer: SectionViewer): Promise<SectionWork> {
     const reading = actingAs(await this.load(pair, viewer), ASSIGNMENT_ROLES.PROOFREADER);
     await this.assignments.finalize(reading.id);
+    await releaseSectionEditLock(this.redis, pair, viewer.id);
     return this.one(pair, viewer);
   }
 
@@ -330,7 +343,7 @@ export class SectionWorkService {
       create: { ...pair, questionId, ...checked },
       update: checked,
     });
-    return this.workOf(context);
+    return this.passedOn(context);
   }
 
   async uncheck(pair: Pair, questionId: string, viewer: SectionViewer): Promise<SectionWork> {
@@ -371,7 +384,7 @@ export class SectionWorkService {
       create: { ...pair, questionId, ...sent },
       update: sent,
     });
-    return this.workOf(context);
+    return this.passedOn(context);
   }
 
   /** The typist's answer to a send-back: it goes back to the reader to be checked again. */
@@ -391,7 +404,7 @@ export class SectionWorkService {
       where: { testId_questionId: { testId: pair.testId, questionId } },
       data: { fixedAt: new Date(), fixedById: viewer.id },
     });
-    return this.workOf(context);
+    return this.passedOn(context);
   }
 
   private async load(pair: Pair, viewer: SectionViewer): Promise<Context> {

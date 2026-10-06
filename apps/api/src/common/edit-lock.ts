@@ -1,8 +1,9 @@
 // One admin's advisory claim on one record, so two editing it minutes apart do not silently
 // overwrite each other — the optimistic lock beside it only refuses the second save, after the work.
 // TAKEN BEFORE THE TRANSACTION: Redis is not transactional with Postgres, so a claim taken inside
-// one that then rolls back is a claim nobody released. There is no release and no heartbeat — it
-// lapses 15 minutes after the last real edit, and a super admin stands a stale one down.
+// one that then rolls back is a claim nobody released. There is no heartbeat — it lapses 15 minutes
+// after the last real edit, a section's is given up at each hand-over, and a super admin stands a
+// stale one down.
 
 import { AppException, ErrorCodes, FORM_LEVEL_FIELD, type EditLockHolder } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -99,3 +100,14 @@ export const sectionEditingBy = (
     prisma,
     redisKeys.sectionEditLock(section.testId, section.baseConfigSectionId),
   );
+
+/** A hand-over gives the claim up: the holder's own, or with nobody named whoever's it is. */
+export async function releaseSectionEditLock(
+  redis: RedisService,
+  section: { testId: string; baseConfigSectionId: string },
+  holderId?: string,
+): Promise<void> {
+  const key = redisKeys.sectionEditLock(section.testId, section.baseConfigSectionId);
+  if (holderId === undefined) await redis.del(key);
+  else await redis.releaseLock(key, holderId);
+}

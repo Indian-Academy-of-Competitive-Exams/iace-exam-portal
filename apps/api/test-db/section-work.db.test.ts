@@ -718,6 +718,43 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
 
     assert.equal((await work.one(pair, viewer(READER))).editingBy?.adminId, TYPIST);
   });
+
+  it('gives the typing claim up once the section is handed over, whoever marks it done', async () => {
+    const { work } = await build();
+    const { pair } = await aSection();
+    await work.create(pair, draft(), viewer(TYPIST));
+
+    const handed = await work.handedOver(pair, viewer(CHIEF, {}, true));
+
+    assert.equal(handed.editingBy, null);
+  });
+
+  it('gives a claim up at a check, a send back and a fix, and only the caller’s own', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typistDone } = await aSection();
+    const first = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    const second = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(first);
+    await onPaper(second);
+    await typistDone();
+    const holder = async () => (await work.one(pair, viewer(READER))).editingBy?.adminId ?? null;
+    let stems = 0;
+    const edit = (questionId: string, who: string) =>
+      work.edit(pair, questionId, draft({ stem: { en: `Stem ${++stems}` } }), viewer(who));
+
+    await edit(first.id, READER);
+    assert.equal(await holder(), READER);
+    assert.equal((await work.check(pair, first.id, viewer(READER))).editingBy, null);
+
+    await edit(second.id, READER);
+    await work.sendBack(pair, second.id, { reason: SEND_BACK_REASONS.SPELLING }, viewer(READER));
+    assert.equal(await holder(), null);
+
+    await edit(second.id, TYPIST);
+    await work.check(pair, first.id, viewer(READER));
+    assert.equal(await holder(), TYPIST);
+    assert.equal((await work.fixed(pair, second.id, viewer(TYPIST))).editingBy, null);
+  });
 });
 
 describe('SectionWorkService — the reader’s review', () => {
