@@ -603,3 +603,46 @@ another — Tier 2 has a different structure, different negative marking and sec
 is a separate blueprint rather than a setting on this one. And **the totals are a display cache**: a
 config's question count and total marks are the sums of its sections, and a seed test asserts they
 agree.
+
+## 14. Reports
+
+A report is a page somebody carries out of the building, so its rules are about what a printed
+number means a week later.
+
+- **A sitting belongs to the institute day it was handed in.** A period is two civil dates, both
+  inclusive, bounded at IST midnight; a sitting handed in at half past midnight on Monday is
+  Monday's. Nothing files a sitting by when it was started or marked.
+- **A test's own figures are its cohort's to date.** A test opens and never shuts, so "how did Mock
+  3 go" has no end to wait for. A period report says both things: the sittings handed in during the
+  period, and the ranking as it stands now.
+- **A percentile is always against the whole test.** A branch's average is the average of each
+  sitting's place in its own test's cohort. Ranking a branch among itself would make every branch
+  average fifty.
+- **Rank and percentile are live, so a report is true as of when it was built.** Every document
+  carries `asOf` and every printed page says it. Two printings of one report a day apart can
+  differ, and that is the ranking moving, not a bug.
+- **A test that opened and that nobody sat is a row.** A weekly report built only from sittings
+  would leave out the one line a superior most needs.
+- **"Reached" is today's audience.** Who a series reaches is resolved now, from each student's
+  current branch, programs and grants; there is no history of it. A report about last month files
+  a student who has since moved under the branch they are in today.
+- **A student carrying two of a thing counts under both.** Two programs, two exams: the rows of a
+  by-program report do not sum to the headcount, and the report gives the headcount beside them.
+- **Improvement compares only students ranked in both periods.** A newcomer has nothing to have
+  moved from, and counting them as a gain from nothing would put every new joiner at the top.
+- **Staff output counts stamped rows, never hours.** Time on a question is a running total with no
+  history, so a week of it cannot be told from a month.
+- **The answer key is for a super admin.** It is read fresh from the terms the scorer marks
+  against, never through the scorer's own held copy, since a paper nobody has sat can still change.
+
+Who may read what: `REPORTS` READ opens every report and its pickers; the spreadsheet also needs
+`DATA_EXPORT`. The answer key, admin activity and the permissions matrix are a super admin's. The
+audit trail shows an admin their own rows, as its screen does. A student reads five reports, all
+of them their own — the score card, the weekly and monthly report, every test, and topic-wise
+accuracy — and whatever the request names, the student is whoever holds the token.
+
+A table on a page carries at most `REPORT_MAX_ROWS`; the spreadsheet carries every row. A period
+wide enough to hold more sittings than one spreadsheet does is refused, not read into memory.
+
+Not reported, because the platform does not hold it: sign-in history (sessions live in Redis),
+class attendance and fees, a student's past branches, and item discrimination.

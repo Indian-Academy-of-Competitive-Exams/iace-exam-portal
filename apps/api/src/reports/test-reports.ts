@@ -5,19 +5,24 @@
  */
 import {
   MERIT_TYPE,
+  PAPER_QUESTION_STATUS,
+  QUESTION_TYPE,
   REPORT_KEYS,
   REPORT_TOP_DEFAULT,
   instituteDateTimeLabel,
+  type LocalizedContent,
+  type PaperQuestionStatus,
   type ReportFact,
   type ReportQueryOf,
 } from '@iace/contracts';
-import { TestReportSheets, type ResultRow } from '../attempts';
+import { TestReportSheets, type PaperTerm, type ResultRow } from '../attempts';
 import {
   EXPORT_DATE_FORMATS,
   exportInstant,
   type ExportColumn,
   type ExportSheet,
 } from '../common/exporting';
+import { stemPreviewOf } from '../questions';
 import { STUDENT_CARD_SELECT, type StudentCard } from '../students';
 import { type ReportBuilder, type ReportSources } from './report';
 import { groupBy, highestOf, meanOf, minutesOf, percentOf } from './report-figures';
@@ -312,6 +317,90 @@ const voided: TestBuilder = async (sources, { testId }) => {
   return { about, figures: [{ label: 'Void sittings', value: rows.length }], sheets: [sheet] };
 };
 
+interface Keyed {
+  order: number;
+  section: string;
+  code: string | null;
+  stem: string;
+  answer: string | null;
+  marks: number;
+  negativeMarks: number;
+  status: PaperQuestionStatus;
+}
+
+const DISPOSITION_LABELS = {
+  [PAPER_QUESTION_STATUS.ACTIVE]: null,
+  [PAPER_QUESTION_STATUS.DROPPED]: 'Dropped',
+  [PAPER_QUESTION_STATUS.BONUS]: 'Bonus',
+} as const satisfies Record<PaperQuestionStatus, string | null>;
+
+const KEY_COLUMNS: ExportColumn<Keyed>[] = [
+  { header: '#', width: 6, value: (row) => row.order },
+  { header: 'Section', width: 24, value: (row) => row.section },
+  { header: 'Code', width: 14, text: true, value: (row) => row.code },
+  { header: 'Question', width: 60, value: (row) => row.stem },
+  { header: 'Answer', width: 18, value: (row) => row.answer },
+  { header: 'Marks', width: 8, value: (row) => row.marks },
+  { header: 'Negative marks', width: 14, value: (row) => row.negativeMarks },
+  { header: 'Marked as', width: 11, value: (row) => DISPOSITION_LABELS[row.status] },
+];
+
+/** An option is named by its place in the paper's own pinned order, which is the order it is printed in. */
+function answerOf(term: PaperTerm): string | null {
+  if (term.type === QUESTION_TYPE.TEXT_FIELD) {
+    const accepted = Object.values(term.answerKey?.answers ?? {}).filter(
+      (answer): answer is string => typeof answer === 'string',
+    );
+    return accepted[0] ?? null;
+  }
+  const places = term.correctOptionIds
+    .map((id) => term.optionIds.indexOf(id) + 1)
+    .filter((place) => place > 0)
+    .sort((a, b) => a - b);
+  return places.length === 0 ? null : `Option ${places.join(', ')}`;
+}
+
+/** The key the scorer marks against, read fresh: never through the scorer's own held copy. */
+const answerKey: TestBuilder = async (sources, { testId }) => {
+  const { about } = await openTest(sources, testId);
+  const [terms, rows] = await Promise.all([
+    sources.papers.termsNow(testId),
+    sources.prisma.paperQuestion.findMany({
+      where: { testId },
+      select: {
+        id: true,
+        order: true,
+        baseConfigSection: { select: { name: true } },
+        question: { select: { questionCode: true } },
+        questionVersion: { select: { content: true } },
+      },
+    }),
+  ]);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const keyed = terms.flatMap((term): Keyed[] => {
+    const row = byId.get(term.id);
+    if (!row) return [];
+    const content = (row.questionVersion.content as LocalizedContent | null) ?? {};
+    return [
+      {
+        order: row.order,
+        section: row.baseConfigSection.name,
+        code: row.question.questionCode,
+        stem: stemPreviewOf(content),
+        answer: answerOf(term),
+        marks: term.marks,
+        negativeMarks: term.negativeMarks,
+        status: term.status,
+      },
+    ];
+  });
+  return {
+    about,
+    figures: [{ label: 'Questions', value: keyed.length }],
+    sheets: [{ name: 'Answer key', columns: KEY_COLUMNS, rows: keyed }],
+  };
+};
+
 export const TEST_REPORTS = {
   [REPORT_KEYS.TEST_RESULTS]: results,
   [REPORT_KEYS.TEST_SUMMARY]: summary,
@@ -322,4 +411,5 @@ export const TEST_REPORTS = {
   [REPORT_KEYS.TEST_BRANCHES]: branches,
   [REPORT_KEYS.TEST_CUTOFFS]: cutoffs,
   [REPORT_KEYS.TEST_VOIDED]: voided,
+  [REPORT_KEYS.TEST_ANSWER_KEY]: answerKey,
 };

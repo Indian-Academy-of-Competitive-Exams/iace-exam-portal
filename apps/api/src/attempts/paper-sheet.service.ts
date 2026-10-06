@@ -153,9 +153,14 @@ export class PaperSheetService {
     );
   }
 
-  /** The answer key rides here: scoring is the only caller. A drop bumps the revision, so a stale copy is unreachable. */
+  /** The answer key rides here, held: scoring is the only caller. A drop bumps the revision, so a stale copy is unreachable. */
   termsOf(testId: string, paperRevision: number): Promise<PaperTerm[]> {
     return hold(this.terms, `${testId}:${paperRevision}`, () => this.readTerms(testId));
+  }
+
+  /** The same terms read fresh and never held, for a reader that is not the scorer: an unsat paper can still change. */
+  termsNow(testId: string): Promise<PaperTerm[]> {
+    return this.readTerms(testId);
   }
 
   private async readTerms(testId: string): Promise<PaperTerm[]> {

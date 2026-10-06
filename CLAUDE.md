@@ -70,7 +70,7 @@ Do not break these — they are why the live test holds at 6–8K:
   boundary, the service diagram, live-test scaling, the deployment topology.
 - `docs/02-domain-rules.md` — the rules the schema cannot state: the catalog and the blueprint,
   building and finalizing a test, lock on first attempt, access, scheduling, the sitting, results
-  and ranking, rollups, render modes and skins, the question bank, question import.
+  and ranking, rollups, render modes and skins, the question bank, question import, reports.
 - `docs/03-conventions.md` — where code goes: packaging, module boundaries, the table-ownership map,
   the event catalog, service tiers, and what CI mechanically enforces. Its section numbers are an
   interface that source comments cite, so renumbering is a breaking change.

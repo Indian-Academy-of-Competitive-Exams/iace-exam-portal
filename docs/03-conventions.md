@@ -128,13 +128,16 @@ A module is a **bounded context**. Six rules make it extraction-ready:
   landing screen's read model: a facade call per table would be eight new count methods on eight
   modules, each existing for one screen. The audit feed, which has scoping rules of its own, does
   go through `AuditService`.
-- `reports` reads across `Attempt`, `Test`, `BaseConfigSection`, `Student` and `Admin`, and writes
-  nothing: it is the read model behind every printed report, as `dashboard` is behind the landing
-  screen. **Where an owner already defines a figure it does not count that figure again** — a
-  test's analytics and result sheet come from `attempts` (`TestAnalyticsService`,
-  `TestReportSheets`), who a test reaches from `AccessResolverService`, a person's columns from
-  `students` — so a page cannot say something its screen does not. What it reads directly is what
-  no owner computes: a grouping or a period nobody else asks for.
+- `reports` reads across nearly every table and writes none: it is the read model behind every
+  printed report, as `dashboard` is behind the landing screen. **Where an owner already defines a
+  figure it does not count that figure again.** What makes a sitting count (`COHORT_WHERE`,
+  `IN_COHORT`), rank and percentile (`LeaderboardService`), a test's analytics and result sheet
+  (`TestAnalyticsService`, `TestReportSheets`), a sitting's card and a paper's marks
+  (`PerformanceAnalyticsService`, `AttemptReportService`), the key (`PaperSheetService`), who a
+  test reaches (`AccessResolverService`), the roster's filter (`studentWhere`) and the audit log's
+  scoping (`AuditService`) all arrive through their module's barrel — so a page cannot say
+  something its screen does not. What it reads directly is what no owner computes: a grouping or a
+  period nobody else asks for.
 - `me` aggregates `students`, `auth`, `access` and `notifications`. This is the one to copy —
   everything arrives through a module barrel.
 

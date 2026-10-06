@@ -27,6 +27,7 @@ import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { ReportsController } from '../src/reports/reports.controller';
 import { FakeStorage } from '../test/support/fakes';
 import {
+  RIGHT_OPTION,
   makeAdmin,
   makeBranch,
   makeCatalog,
@@ -40,7 +41,7 @@ import {
   uid,
   type Catalog,
 } from './support/database';
-import { VIEWER, figureOf, reportsOver, tableOf } from './support/reports';
+import { SUPER_ADMIN, VIEWER, figureOf, reportsOver, tableOf } from './support/reports';
 
 const prisma = testPrisma();
 
@@ -289,6 +290,35 @@ describe('the void sittings', () => {
     assert.deepEqual(
       rows.map((row) => [row.Student, row.Reason, row['Void by']]),
       [['Esha', 'Power cut in the hall', 'Hall Supervisor']],
+    );
+  });
+});
+
+describe('the answer key', () => {
+  it('names each question’s right option by its place on the paper, for a super admin only', async () => {
+    const paper = await makePaper(prisma, { questions: ['Maths', 'English'] });
+    const rightAt = (
+      await prisma.paperQuestion.findFirstOrThrow({
+        where: { testId: paper.testId, order: 1 },
+        select: { optionIds: true },
+      })
+    ).optionIds.indexOf(RIGHT_OPTION);
+
+    const rows = tableOf(
+      await read(REPORT_KEYS.TEST_ANSWER_KEY, { testId: paper.testId }, SUPER_ADMIN),
+      'Answer key',
+    );
+
+    assert.deepEqual(
+      rows.map((row) => [row['#'], row.Answer, row.Marks, row['Negative marks']]),
+      [
+        [1, `Option ${rightAt + 1}`, 2, 0.5],
+        [2, `Option ${rightAt + 1}`, 2, 0.5],
+      ],
+    );
+    await assert.rejects(
+      read(REPORT_KEYS.TEST_ANSWER_KEY, { testId: paper.testId }),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.FORBIDDEN,
     );
   });
 });

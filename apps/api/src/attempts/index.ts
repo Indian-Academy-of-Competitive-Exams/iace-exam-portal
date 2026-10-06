@@ -16,5 +16,5 @@ export { TestReportSheets, type ResultRow, type SummaryRow } from './test-report
 export { PerformanceAnalyticsService } from './performance.service';
 export { AttemptReportService } from './attempt-report.service';
 export { sectionScoresIn } from './score-paper';
-export { PaperSheetService } from './paper-sheet.service';
+export { PaperSheetService, type PaperTerm } from './paper-sheet.service';
 export { questionTalliesOf, type QuestionTally } from './question-tallies';
