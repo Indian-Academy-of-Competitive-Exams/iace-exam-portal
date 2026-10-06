@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ImportSource, Prisma } from '@prisma/client';
 import {
+  ASSIGNMENT_ROLES,
   AUDIT_FEATURE,
   AppException,
   AUDIT_ACTION,
@@ -34,6 +35,7 @@ import {
   planQuestionImport,
   withoutDrafts,
   type ImportDedupContext,
+  type ImportScope,
   type PlannedRow,
   type QuestionImportPlanning,
 } from './question-import';
@@ -79,7 +81,7 @@ export class QuestionImportService {
     actorId: string,
     section?: ImportSection,
   ): Promise<QuestionImportPlan> {
-    const planning = await this.plan(file);
+    const planning = await this.plan(file, undefined, targetOf(section));
     // Judged before the run exists: a file nothing can be planned from would leave a total-0 row and a sheet in storage nothing ever fetches.
     if (planning.fileErrors.length > 0) return withoutDrafts(planning, NO_RUN);
 
@@ -130,7 +132,7 @@ export class QuestionImportService {
     if (log.target !== null && log.target !== targetOf(into.section)) {
       throw formRefusal(ErrorCodes.CONFLICT, PREVIEWED_ELSEWHERE);
     }
-    const planning = await this.plan(file, await this.overlayOf(log.id));
+    const planning = await this.plan(file, await this.overlayOf(log.id), log.target);
     const creatable = planning.rows.filter(
       (row): row is PlannedRow & { draft: NonNullable<PlannedRow['draft']> } =>
         row.action === 'create' && row.draft !== null,
@@ -225,7 +227,7 @@ export class QuestionImportService {
   /** Every row's question as the review window opens it, pictures given urls it can draw. */
   async drafts(importLogId: string, actorId: string): Promise<QuestionImportDraft[]> {
     const { log, file } = await this.openRun(importLogId, actorId);
-    const planning = await this.plan(file, await this.overlayOf(log.id));
+    const planning = await this.plan(file, await this.overlayOf(log.id), log.target);
     return planning.rows.map((row) => ({ line: row.line, draft: this.drawable(row.editable) }));
   }
 
@@ -270,7 +272,8 @@ export class QuestionImportService {
       update: change,
     });
 
-    return withoutDrafts(await this.planTable(table, await this.overlayOf(log.id)), log.id);
+    const planning = await this.planTable(table, await this.overlayOf(log.id), log.target);
+    return withoutDrafts(planning, log.id);
   }
 
   /** A previewed, uncommitted run, and only for the admin who previewed it — a super admin included. */
@@ -312,18 +315,51 @@ export class QuestionImportService {
   }
 
   /** Read, resolve, judge — the one path a preview and a commit both take. */
-  private async plan(file: Buffer, overlay?: RowOverlay): Promise<QuestionImportPlanning> {
-    return this.planTable(await readQuestionTable(file), overlay);
+  private async plan(
+    file: Buffer,
+    overlay?: RowOverlay,
+    target?: string | null,
+  ): Promise<QuestionImportPlanning> {
+    return this.planTable(await readQuestionTable(file), overlay, target);
   }
 
-  private async planTable(table: CsvTable, overlay?: RowOverlay): Promise<QuestionImportPlanning> {
-    const catalog = await loadTaxonomyCatalog(this.prisma);
+  private async planTable(
+    table: CsvTable,
+    overlay?: RowOverlay,
+    target?: string | null,
+  ): Promise<QuestionImportPlanning> {
+    const [catalog, scope] = await Promise.all([
+      loadTaxonomyCatalog(this.prisma),
+      this.scopeOf(target ?? null),
+    ]);
     const { drafts, leftOut } = overlay ?? {};
 
     // Planned twice: the first pass only harvests the keys the bank is then asked about.
     const harvest = planQuestionImport(table, catalog, NO_DEDUP, drafts, leftOut);
     const dedup = await this.dedupContext(harvest.rows);
-    return planQuestionImport(table, catalog, dedup, drafts, leftOut);
+    return planQuestionImport(table, catalog, dedup, drafts, leftOut, scope);
+  }
+
+  /** What a section's own run is judged against, read afresh each time; the bank's has no such bounds. */
+  private async scopeOf(target: string | null): Promise<ImportScope | null> {
+    if (target === null || target === IMPORT_TARGET_BANK) return null;
+    const [testId = '', baseConfigSectionId = ''] = target.split('/');
+    const [section, written] = await Promise.all([
+      this.prisma.baseConfigSection.findUnique({
+        where: { id: baseConfigSectionId },
+        select: { name: true, questionCount: true, subject: { select: { id: true, name: true } } },
+      }),
+      this.prisma.question.count({
+        where: { assignment: { testId, baseConfigSectionId, role: ASSIGNMENT_ROLES.TYPIST } },
+      }),
+    ]);
+    if (!section) return null;
+    return {
+      sectionName: section.name,
+      subject: section.subject,
+      questionCount: section.questionCount,
+      room: Math.max(section.questionCount - written, 0),
+    };
   }
 
   /** Only the rows this sheet could clash with: the whole bank was read to answer a few hundred asks. */

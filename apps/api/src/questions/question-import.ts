@@ -55,6 +55,14 @@ export interface PlannedRow extends QuestionImportRow {
   editable: QuestionDraft;
 }
 
+/** The one section a sheet is imported into: the subject it takes, and how many more it has room for. */
+export interface ImportScope {
+  sectionName: string;
+  subject: { id: string; name: string } | null;
+  questionCount: number;
+  room: number;
+}
+
 /** No row corrected yet: the sheet speaks for every line. */
 const NO_EDITS: ReadonlyMap<number, QuestionDraft> = new Map();
 
@@ -169,6 +177,7 @@ export function planQuestionImport(
   dedup: ImportDedupContext,
   edits: ReadonlyMap<number, QuestionDraft> = NO_EDITS,
   leftOut: ReadonlySet<number> = NO_LINES,
+  scope: ImportScope | null = null,
 ): QuestionImportPlanning {
   const fileErrors = fileLevelErrors(table);
   if (fileErrors.length > 0) {
@@ -182,11 +191,14 @@ export function planQuestionImport(
   // Two rows of the same question in one file is the commonest sheet mistake, and the second one has to be reported against the line that repeats it.
   const lineByHash = new Map<string, number>();
   const codesInFile = new Set<string>();
+  // Spent in sheet order, and only by a row that would be written: leaving one out makes room for the next.
+  const room = { left: scope?.room ?? 0 };
 
   const rows = table.rows.map((row) =>
     planRow(row, catalog, dedup, lineByHash, codesInFile, {
       edit: edits.get(row.line),
       leftOut: leftOut.has(row.line),
+      within: scope ? { scope, room } : null,
     }),
   );
 
@@ -234,7 +246,7 @@ function planRow(
   dedup: ImportDedupContext,
   lineByHash: Map<string, number>,
   codesInFile: Set<string>,
-  { edit, leftOut }: { edit: QuestionDraft | undefined; leftOut: boolean },
+  { edit, leftOut, within }: RowJudgement,
 ): PlannedRow {
   const issues: ValidationIssue[] = [];
   const warnings: ImportWarning[] = [];
@@ -269,6 +281,10 @@ function planRow(
       codesInFile.add(code);
     }
   }
+
+  const writes = issues.length === 0 && !duplicateOf && !leftOut;
+  const outside = within ? outsideSection(draft, within, writes) : null;
+  if (outside) issues.push(outside);
 
   const reported = dedupeIssues(issues);
 
@@ -314,6 +330,40 @@ function withImportTag(draft: QuestionDraft): QuestionDraft {
   return draft.tags.includes(QUESTION_IMPORT_TAG)
     ? draft
     : { ...draft, tags: [QUESTION_IMPORT_TAG, ...draft.tags] };
+}
+
+/** How one line is judged beyond its own cells: a correction, a setting aside, and the section it lands in. */
+interface RowJudgement {
+  edit: QuestionDraft | undefined;
+  leftOut: boolean;
+  within: { scope: ImportScope; room: { left: number } } | null;
+}
+
+/** Why the section cannot hold this row: filed under another subject, or one more than it has room for. */
+function outsideSection(
+  draft: QuestionDraft,
+  { scope, room }: NonNullable<RowJudgement['within']>,
+  writes: boolean,
+): ValidationIssue | null {
+  const { subject, sectionName, questionCount } = scope;
+  if (subject && draft.subjectId && draft.subjectId !== subject.id) {
+    return {
+      code: CODE.SUBJECT_OUTSIDE_SECTION,
+      message: `Only ${subject.name} questions go into ${sectionName}`,
+      field: 'subjectId',
+      column: 'subject',
+    };
+  }
+  if (!writes) return null;
+  if (room.left > 0) {
+    room.left -= 1;
+    return null;
+  }
+  const full =
+    scope.room === 0
+      ? `${sectionName} already has its ${questionCount} questions`
+      : `${sectionName} takes ${questionCount} questions and has room for ${scope.room} more; this row is past that`;
+  return { code: CODE.SECTION_FULL, message: full };
 }
 
 /** A row with anything to report is never written, so the duplicate it repeats does not matter. */

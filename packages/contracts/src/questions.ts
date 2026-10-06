@@ -416,6 +416,10 @@ export const QUESTION_VALIDATION_CODE = {
   DUPLICATE_IN_FILE: 'DUPLICATE_IN_FILE',
   /** The same stem is already in the bank. */
   DUPLICATE_IN_BANK: 'DUPLICATE_IN_BANK',
+  /** A sheet imported into one section of a test, with a row filed under a subject the section does not take. */
+  SUBJECT_OUTSIDE_SECTION: 'SUBJECT_OUTSIDE_SECTION',
+  /** A row past the number of questions that section still has room for. */
+  SECTION_FULL: 'SECTION_FULL',
 } as const;
 const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
 

@@ -15,11 +15,13 @@ import { computeStemHash, emptyTaxonomy } from '../src/questions/question-core';
 import {
   planQuestionImport,
   type ImportDedupContext,
+  type ImportScope,
   type QuestionImportPlanning,
 } from '../src/questions/question-import';
 import { topicKey, type TaxonomyCatalog } from '../src/questions/taxonomy-context';
 import { rowAt } from './support/fakes';
 
+const CODE = QUESTION_VALIDATION_CODE;
 const SUBJECT = 'sub_quant';
 const TOPIC = 'top_arithmetic';
 const ALGEBRA = 'top_algebra';
@@ -91,6 +93,50 @@ const plan = (
   rows: Partial<Record<QuestionImportColumnKey, string>>[],
   dedup: ImportDedupContext = noDedup(),
 ): QuestionImportPlanning => planQuestionImport(table(...rows), catalog(), dedup);
+
+describe('a sheet imported into one section of a test', () => {
+  const stems = ['What is 10% of 150?', 'What is 20% of 150?', 'What is 40% of 150?'];
+  const rows = stems.map((stem_en) => ({ ...MCQ_ROW, stem_en }));
+  const within = (scope: Partial<ImportScope>, leftOut: number[] = []) =>
+    planQuestionImport(table(...rows), catalog(), noDedup(), undefined, new Set(leftOut), {
+      sectionName: 'Quant',
+      subject: { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' },
+      questionCount: 25,
+      room: 25,
+      ...scope,
+    });
+  const codes = (planning: QuestionImportPlanning) =>
+    planning.rows.map((row) => row.issues[0]?.code ?? row.action);
+
+  it('skips a row filed under a subject the section does not take', () => {
+    const planning = within({ subject: { id: 'sub_english', name: 'ENGLISH' } });
+
+    assert.deepEqual(
+      codes(planning),
+      stems.map(() => CODE.SUBJECT_OUTSIDE_SECTION),
+    );
+    assert.match(
+      planning.rows[0]?.issues[0]?.message ?? '',
+      /Only ENGLISH questions go into Quant/,
+    );
+  });
+
+  it('takes any subject where the section names none', () => {
+    assert.deepEqual(codes(within({ subject: null })), ['create', 'create', 'create']);
+  });
+
+  it('writes rows in sheet order until the section is full, and skips the rest', () => {
+    assert.deepEqual(codes(within({ room: 2 })), ['create', 'create', CODE.SECTION_FULL]);
+    assert.deepEqual(
+      codes(within({ room: 0 })),
+      stems.map(() => CODE.SECTION_FULL),
+    );
+  });
+
+  it('gives a left-out row’s place to the next one', () => {
+    assert.deepEqual(codes(within({ room: 2 }, [2])), ['left_out', 'create', 'create']);
+  });
+});
 
 describe('the question sheet', () => {
   it('plans a complete row as a create', () => {

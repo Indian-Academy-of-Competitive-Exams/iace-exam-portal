@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, Undo2 } from 'lucide-react';
 import {
+  QUESTION_VALIDATION_CODE,
   type QuestionImportDraft,
   type QuestionImportPlan,
   type QuestionImportRow,
 } from '@iace/contracts';
 import {
+  Alert,
   Badge,
   Button,
   Tooltip,
@@ -43,6 +45,23 @@ function Outcome({ row }: Readonly<{ row: QuestionImportRow }>) {
       </TooltipTrigger>
       <TooltipContent>{row.issues.map((issue) => issue.message).join('; ')}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** Refusals about where the row is going, which nothing in its own editor can show. */
+const SECTION_REFUSALS: ReadonlySet<string> = new Set([
+  QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
+  QUESTION_VALIDATION_CODE.SECTION_FULL,
+]);
+
+/** Why the section will not take this row, on the row's own card. */
+function SectionRefusal({ row }: Readonly<{ row: QuestionImportRow }>) {
+  const refused = row.issues.filter((issue) => SECTION_REFUSALS.has(issue.code));
+  if (refused.length === 0) return null;
+  return (
+    <div className="px-4 pt-3">
+      <Alert variant="warning">{refused.map((issue) => issue.message).join('. ')}</Alert>
+    </div>
   );
 }
 
@@ -120,6 +139,7 @@ export function ImportWorkspace({
         key: String(row.line),
         lead: <RowLead row={row} index={index} total={rows.length} />,
         actions: <LeaveOut row={row} leave={(leftOut) => leave(row.line, leftOut)} />,
+        notice: <SectionRefusal row={row} />,
         editable: row.action !== 'left_out',
       })),
       query: (line) => ({

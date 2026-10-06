@@ -11,6 +11,7 @@ import {
   PAPER_SOURCES,
   PERMISSION_LEVELS,
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_VALIDATION_CODE,
   REVIEW_STATES,
   SECTION_SEATS,
   SEND_BACK_REASONS,
@@ -450,23 +451,27 @@ describe('SectionWorkService.remove', () => {
   });
 });
 
-/** One good row, written out as CSV: the section import reads the bank's own sheet. */
-function oneRowSheet(stem = 'What is 30% of 150?'): Buffer {
-  const row: Partial<Record<QuestionImportColumnKey, string>> = {
-    subject: 'Quantitative Aptitude',
-    difficulty: 'medium',
-    stem_en: stem,
-    option1_en: '25',
-    option2_en: '45',
-    option3_en: '35',
-    option4_en: '40',
-    correct_option: '2',
-  };
+/** Good rows written out as CSV, one per stem: the section import reads the bank's own sheet. */
+function sheetOf(...rows: { stem: string; subject?: string }[]): Buffer {
   const cells = (pick: (column: (typeof QUESTION_IMPORT_COLUMNS)[number]) => string) =>
     QUESTION_IMPORT_COLUMNS.map(pick).join(',');
-  const line = cells((column) => row[column.key as QuestionImportColumnKey] ?? '');
-  return Buffer.from([cells((column) => column.header), line].join('\n'));
+  const lines = rows.map(({ stem, subject = 'Quantitative Aptitude' }) => {
+    const row: Partial<Record<QuestionImportColumnKey, string>> = {
+      subject,
+      difficulty: 'medium',
+      stem_en: stem,
+      option1_en: '25',
+      option2_en: '45',
+      option3_en: '35',
+      option4_en: '40',
+      correct_option: '2',
+    };
+    return cells((column) => row[column.key as QuestionImportColumnKey] ?? '');
+  });
+  return Buffer.from([cells((column) => column.header), ...lines].join('\n'));
 }
+
+const oneRowSheet = (stem = 'What is 30% of 150?'): Buffer => sheetOf({ stem });
 
 describe('SectionWorkService — writes taken under the seat the caller holds', () => {
   /** The failure this prevents: a question landing in a section under somebody else's typing job. */
@@ -597,6 +602,36 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
 
     assert.equal(result.created, 1);
     assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 1);
+  });
+
+  /** The failure this prevents: a sheet filling a section with another subject's questions, or more than it takes. */
+  it('imports only the rows of the section’s subject, and no more than it has room for', async () => {
+    const { work } = await build();
+    const { pair, typing } = await aSection();
+    await prisma.baseConfigSection.update({
+      where: { id: pair.baseConfigSectionId },
+      data: { subjectId: BANK.QUANT, questionCount: 3 },
+    });
+    await work.create(pair, draft(), viewer(TYPIST));
+    const sheet = sheetOf(
+      { stem: 'Who founded the Maurya empire?', subject: 'General Awareness' },
+      { stem: 'What is 10% of 150?' },
+      { stem: 'What is 40% of 150?' },
+      { stem: 'What is 50% of 150?' },
+    );
+
+    const plan = await work.previewImport(pair, sheet, viewer(TYPIST));
+
+    const why = plan.rows.map((row) => row.issues[0]?.code ?? row.action);
+    assert.deepEqual(why, [
+      QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
+      'create',
+      'create',
+      QUESTION_VALIDATION_CODE.SECTION_FULL,
+    ]);
+    const result = await work.commitImport(pair, plan.importLogId, viewer(TYPIST));
+    assert.equal(result.created, 2);
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 3);
   });
 
   /** The failure this prevents: a run previewed for one importer landing through another. */

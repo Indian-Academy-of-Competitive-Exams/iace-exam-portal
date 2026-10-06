@@ -532,6 +532,14 @@ letter-based answer key are why real uploads were rejected wholesale.
 - **A row can be left out, and brought back.** Leaving one out is held on the same `ImportRowEdit`,
   so a corrected row brought back keeps its correction. A row left out writes nothing and claims
   neither its stem nor its code, so a later copy of it in the same file imports as Create.
+- **A sheet imported into one section of a test is held to that section.** A row filed under a
+  subject the section does not take is skipped with that reason, and so is every row past the room
+  the section has left — its question count less what its typists have already written — counted in
+  sheet order over the rows that would be written. Leaving a row out gives its place to the next,
+  and correcting a row's subject brings it back. Both are judged afresh at every re-plan and again
+  at Import, so a question typed in between takes its place first. The bank's own importer has no
+  such bounds. Typing by hand is not counted either: its editor holds the subject to the section's,
+  and whatever is written beyond the count is chosen between at Done.
 - Every imported question carries the `imported` tag, so one filter finds what an upload brought in.
 - An upload is bounded so it stays a single synchronous request.
 
