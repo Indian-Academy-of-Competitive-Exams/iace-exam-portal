@@ -7,6 +7,8 @@ import {
   previewTextOf,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_MAX_ROWS,
+  SECTION_IMPORT_MAX_ROWS,
+  fileDuplicateOf,
   QUESTION_IMPORT_TAG,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
@@ -55,12 +57,10 @@ export interface PlannedRow extends QuestionImportRow {
   editable: QuestionDraft;
 }
 
-/** The one section a sheet is imported into: the subject it takes, and how many more it has room for. */
+/** The one section a sheet is imported into, and the subject it takes. */
 export interface ImportScope {
   sectionName: string;
   subject: { id: string; name: string } | null;
-  questionCount: number;
-  room: number;
 }
 
 /** No row corrected yet: the sheet speaks for every line. */
@@ -179,7 +179,7 @@ export function planQuestionImport(
   leftOut: ReadonlySet<number> = NO_LINES,
   scope: ImportScope | null = null,
 ): QuestionImportPlanning {
-  const fileErrors = fileLevelErrors(table);
+  const fileErrors = fileLevelErrors(table, scope);
   if (fileErrors.length > 0) {
     return {
       rows: [],
@@ -191,14 +191,12 @@ export function planQuestionImport(
   // Two rows of the same question in one file is the commonest sheet mistake, and the second one has to be reported against the line that repeats it.
   const lineByHash = new Map<string, number>();
   const codesInFile = new Set<string>();
-  // Spent in sheet order, and only by a row that would be written: leaving one out makes room for the next.
-  const room = { left: scope?.room ?? 0 };
 
   const rows = table.rows.map((row) =>
     planRow(row, catalog, dedup, lineByHash, codesInFile, {
       edit: edits.get(row.line),
       leftOut: leftOut.has(row.line),
-      within: scope ? { scope, room } : null,
+      scope,
     }),
   );
 
@@ -215,7 +213,7 @@ export function planQuestionImport(
   };
 }
 
-function fileLevelErrors(table: CsvTable): string[] {
+function fileLevelErrors(table: CsvTable, scope: ImportScope | null): string[] {
   const errors: string[] = [];
 
   if (table.rows.length === 0) {
@@ -223,9 +221,11 @@ function fileLevelErrors(table: CsvTable): string[] {
     return errors;
   }
 
-  if (table.rows.length > QUESTION_IMPORT_MAX_ROWS) {
+  const most = scope ? SECTION_IMPORT_MAX_ROWS : QUESTION_IMPORT_MAX_ROWS;
+  if (table.rows.length > most) {
+    const where = scope ? ` into ${scope.sectionName}` : '';
     errors.push(
-      `That file has ${table.rows.length} rows. Import at most ${QUESTION_IMPORT_MAX_ROWS} at a time.`,
+      `That file has ${table.rows.length} rows. Import at most ${most} at a time${where}.`,
     );
   }
 
@@ -246,7 +246,7 @@ function planRow(
   dedup: ImportDedupContext,
   lineByHash: Map<string, number>,
   codesInFile: Set<string>,
-  { edit, leftOut, within }: RowJudgement,
+  { edit, leftOut, scope }: RowJudgement,
 ): PlannedRow {
   const issues: ValidationIssue[] = [];
   const warnings: ImportWarning[] = [];
@@ -282,8 +282,7 @@ function planRow(
     }
   }
 
-  const writes = issues.length === 0 && !duplicateOf && !leftOut;
-  const outside = within ? outsideSection(draft, within, writes) : null;
+  const outside = scope ? outsideSection(draft, scope) : null;
   if (outside) issues.push(outside);
 
   const reported = dedupeIssues(issues);
@@ -336,34 +335,19 @@ function withImportTag(draft: QuestionDraft): QuestionDraft {
 interface RowJudgement {
   edit: QuestionDraft | undefined;
   leftOut: boolean;
-  within: { scope: ImportScope; room: { left: number } } | null;
+  scope: ImportScope | null;
 }
 
-/** Why the section cannot hold this row: filed under another subject, or one more than it has room for. */
-function outsideSection(
-  draft: QuestionDraft,
-  { scope, room }: NonNullable<RowJudgement['within']>,
-  writes: boolean,
-): ValidationIssue | null {
-  const { subject, sectionName, questionCount } = scope;
-  if (subject && draft.subjectId && draft.subjectId !== subject.id) {
-    return {
-      code: CODE.SUBJECT_OUTSIDE_SECTION,
-      message: `Only ${subject.name} questions go into ${sectionName}`,
-      field: 'subjectId',
-      column: 'subject',
-    };
-  }
-  if (!writes) return null;
-  if (room.left > 0) {
-    room.left -= 1;
-    return null;
-  }
-  const full =
-    scope.room === 0
-      ? `${sectionName} already has its ${questionCount} questions`
-      : `${sectionName} takes ${questionCount} questions and has room for ${scope.room} more; this row is past that`;
-  return { code: CODE.SECTION_FULL, message: full };
+/** A row filed under a subject the section it is going into does not take. */
+function outsideSection(draft: QuestionDraft, scope: ImportScope): ValidationIssue | null {
+  const { subject, sectionName } = scope;
+  if (!subject || !draft.subjectId || draft.subjectId === subject.id) return null;
+  return {
+    code: CODE.SUBJECT_OUTSIDE_SECTION,
+    message: `Only ${subject.name} questions go into ${sectionName}`,
+    field: 'subjectId',
+    column: 'subject',
+  };
 }
 
 /** A row with anything to report is never written, so the duplicate it repeats does not matter. */
@@ -382,7 +366,7 @@ function duplicateFor(
   if (existing) return existing;
 
   const earlier = lineByHash.get(stemHash);
-  return earlier === undefined ? null : `line ${earlier}`;
+  return earlier === undefined ? null : fileDuplicateOf(earlier);
 }
 
 function readType(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['type'] {

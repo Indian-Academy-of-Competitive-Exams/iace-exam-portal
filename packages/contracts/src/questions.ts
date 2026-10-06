@@ -418,8 +418,6 @@ export const QUESTION_VALIDATION_CODE = {
   DUPLICATE_IN_BANK: 'DUPLICATE_IN_BANK',
   /** A sheet imported into one section of a test, with a row filed under a subject the section does not take. */
   SUBJECT_OUTSIDE_SECTION: 'SUBJECT_OUTSIDE_SECTION',
-  /** A row past the number of questions that section still has room for. */
-  SECTION_FULL: 'SECTION_FULL',
 } as const;
 const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
 
@@ -660,8 +658,22 @@ export const QUESTION_IMPORT_SHEETS = {
   LISTS: 'Lists',
 } as const;
 
-/** Bounded so one upload stays a single synchronous request. */
-export const QUESTION_IMPORT_MAX_ROWS = 1000;
+/** Bounded so one upload stays a single synchronous request, and a sheet stays something a person can review. */
+export const QUESTION_IMPORT_MAX_ROWS = 100;
+
+/** Smaller where the sheet lands in one section of a test: every row there is read again by a proof-reader. */
+export const SECTION_IMPORT_MAX_ROWS = 50;
+
+/** How `duplicateOf` names an earlier line of the same file, where anything else is a question id in the bank. */
+const FILE_DUPLICATE_PREFIX = 'line ';
+
+export const fileDuplicateOf = (line: number): string => `${FILE_DUPLICATE_PREFIX}${line}`;
+
+/** The earlier line of the same file a row repeats; null when it repeats the bank, or nothing. */
+export function repeatedLineOf(duplicateOf: string | null): number | null {
+  if (!duplicateOf?.startsWith(FILE_DUPLICATE_PREFIX)) return null;
+  return Number(duplicateOf.slice(FILE_DUPLICATE_PREFIX.length));
+}
 
 /** Several tags in one cell. */
 export const TAG_SEPARATOR = ',';

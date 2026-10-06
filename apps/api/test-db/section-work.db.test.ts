@@ -604,34 +604,27 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
     assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 1);
   });
 
-  /** The failure this prevents: a sheet filling a section with another subject's questions, or more than it takes. */
-  it('imports only the rows of the section’s subject, and no more than it has room for', async () => {
+  /** The failure this prevents: a sheet filling a section with another subject's questions. */
+  it('imports only the rows filed under the section’s subject', async () => {
     const { work } = await build();
     const { pair, typing } = await aSection();
     await prisma.baseConfigSection.update({
       where: { id: pair.baseConfigSectionId },
-      data: { subjectId: BANK.QUANT, questionCount: 3 },
+      data: { subjectId: BANK.QUANT },
     });
-    await work.create(pair, draft(), viewer(TYPIST));
     const sheet = sheetOf(
       { stem: 'Who founded the Maurya empire?', subject: 'General Awareness' },
       { stem: 'What is 10% of 150?' },
       { stem: 'What is 40% of 150?' },
-      { stem: 'What is 50% of 150?' },
     );
 
     const plan = await work.previewImport(pair, sheet, viewer(TYPIST));
 
     const why = plan.rows.map((row) => row.issues[0]?.code ?? row.action);
-    assert.deepEqual(why, [
-      QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
-      'create',
-      'create',
-      QUESTION_VALIDATION_CODE.SECTION_FULL,
-    ]);
+    assert.deepEqual(why, [QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION, 'create', 'create']);
     const result = await work.commitImport(pair, plan.importLogId, viewer(TYPIST));
     assert.equal(result.created, 2);
-    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 3);
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 2);
   });
 
   /** The failure this prevents: a run previewed for one importer landing through another. */

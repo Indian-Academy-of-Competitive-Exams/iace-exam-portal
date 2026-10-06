@@ -536,16 +536,18 @@ letter-based answer key are why real uploads were rejected wholesale.
 - **A row can be left out, and brought back.** Leaving one out is held on the same `ImportRowEdit`,
   so a corrected row brought back keeps its correction. A row left out writes nothing and claims
   neither its stem nor its code, so a later copy of it in the same file imports as Create.
-- **A sheet imported into one section of a test is held to that section.** A row filed under a
-  subject the section does not take is skipped with that reason, and so is every row past the room
-  the section has left — its question count less what its typists have already written — counted in
-  sheet order over the rows that would be written. Leaving a row out gives its place to the next,
-  and correcting a row's subject brings it back. Both are judged afresh at every re-plan and again
-  at Import, so a question typed in between takes its place first. The bank's own importer has no
-  such bounds. Typing by hand is not counted either: its editor holds the subject to the section's,
-  and whatever is written beyond the count is chosen between at Done.
+- **A sheet imported into one section of a test is held to that section's subject.** A row filed
+  under a subject the section does not take is skipped with that reason, and correcting its subject
+  in the review window brings it back; a section that names no subject takes any. The count is not
+  held: a typist may bring in more than the section takes and choose between them at Done, exactly
+  as with questions typed by hand.
+- **A sheet is bounded by where it lands**: `QUESTION_IMPORT_MAX_ROWS` (100) into the bank and
+  `SECTION_IMPORT_MAX_ROWS` (50) into a section of a test, where every row is read again by a
+  proof-reader. A longer file is refused whole, before any row is judged.
+- **A row repeating an earlier line of the same file is told apart from one already in the bank.**
+  Both are skipped as duplicates, but `duplicateOf` names the line for the first and a question id
+  for the second (`repeatedLineOf`), and the preview says which.
 - Every imported question carries the `imported` tag, so one filter finds what an upload brought in.
-- An upload is bounded so it stays a single synchronous request.
 
 Two intake paths: this sheet for bulk MCQs, pictures included, and the rich manual editor for
 typed equations, tables and for placing a picture the sheet could only put after the text.

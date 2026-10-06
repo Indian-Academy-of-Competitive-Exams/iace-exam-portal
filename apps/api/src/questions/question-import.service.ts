@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ImportSource, Prisma } from '@prisma/client';
 import {
-  ASSIGNMENT_ROLES,
   AUDIT_FEATURE,
   AppException,
   AUDIT_ACTION,
@@ -340,26 +339,15 @@ export class QuestionImportService {
     return planQuestionImport(table, catalog, dedup, drafts, leftOut, scope);
   }
 
-  /** What a section's own run is judged against, read afresh each time; the bank's has no such bounds. */
+  /** What a section's own run is judged against; the bank's has no such bounds. */
   private async scopeOf(target: string | null): Promise<ImportScope | null> {
     if (target === null || target === IMPORT_TARGET_BANK) return null;
-    const [testId = '', baseConfigSectionId = ''] = target.split('/');
-    const [section, written] = await Promise.all([
-      this.prisma.baseConfigSection.findUnique({
-        where: { id: baseConfigSectionId },
-        select: { name: true, questionCount: true, subject: { select: { id: true, name: true } } },
-      }),
-      this.prisma.question.count({
-        where: { assignment: { testId, baseConfigSectionId, role: ASSIGNMENT_ROLES.TYPIST } },
-      }),
-    ]);
-    if (!section) return null;
-    return {
-      sectionName: section.name,
-      subject: section.subject,
-      questionCount: section.questionCount,
-      room: Math.max(section.questionCount - written, 0),
-    };
+    const [, baseConfigSectionId = ''] = target.split('/');
+    const section = await this.prisma.baseConfigSection.findUnique({
+      where: { id: baseConfigSectionId },
+      select: { name: true, subject: { select: { id: true, name: true } } },
+    });
+    return section && { sectionName: section.name, subject: section.subject };
   }
 
   /** Only the rows this sheet could clash with: the whole bank was read to answer a few hundred asks. */

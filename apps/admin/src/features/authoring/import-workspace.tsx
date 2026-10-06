@@ -1,22 +1,13 @@
 import { useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ban, Undo2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   QUESTION_VALIDATION_CODE,
+  repeatedLineOf,
   type QuestionImportDraft,
   type QuestionImportPlan,
   type QuestionImportRow,
 } from '@iace/contracts';
-import {
-  Alert,
-  Badge,
-  Button,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  TruncatedText,
-  cn,
-} from '@iace/ui';
+import { Alert, Badge, Tooltip, TooltipContent, TooltipTrigger, TruncatedText, cn } from '@iace/ui';
 import { api } from '../../lib/api';
 import { importDraftQueryKey, importDraftsQueryKey } from '../../lib/constants';
 import { AuthoringWorkspace, type Held, type WorkspaceSource } from './authoring-workspace';
@@ -25,7 +16,11 @@ import { headerOfDraft, stateOfDraft, toDraft } from './question-scaffold';
 /** What Import will do with a row, said the way the preview table says it. */
 function OutcomeBadge({ row }: Readonly<{ row: QuestionImportRow }>) {
   if (row.action === 'create') return <Badge variant="success">Create</Badge>;
-  if (row.action === 'duplicate') return <Badge variant="info">Already in the bank</Badge>;
+  if (row.action === 'duplicate') {
+    const repeats = repeatedLineOf(row.duplicateOf);
+    if (repeats !== null) return <Badge variant="warning">{`Same as row ${repeats}`}</Badge>;
+    return <Badge variant="info">Already in the bank</Badge>;
+  }
   if (row.action === 'left_out') return <Badge variant="neutral">Left out</Badge>;
   return <Badge variant="danger">Skip</Badge>;
 }
@@ -48,19 +43,15 @@ function Outcome({ row }: Readonly<{ row: QuestionImportRow }>) {
   );
 }
 
-/** Refusals about where the row is going, which nothing in its own editor can show. */
-const SECTION_REFUSALS: ReadonlySet<string> = new Set([
-  QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
-  QUESTION_VALIDATION_CODE.SECTION_FULL,
-]);
-
-/** Why the section will not take this row, on the row's own card. */
+/** Why the section will not take this row: it is about where the row is going, which its own editor cannot show. */
 function SectionRefusal({ row }: Readonly<{ row: QuestionImportRow }>) {
-  const refused = row.issues.filter((issue) => SECTION_REFUSALS.has(issue.code));
-  if (refused.length === 0) return null;
+  const refused = row.issues.find(
+    (issue) => issue.code === QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
+  );
+  if (!refused) return null;
   return (
     <div className="px-4 pt-3">
-      <Alert variant="warning">{refused.map((issue) => issue.message).join('. ')}</Alert>
+      <Alert variant="warning">{refused.message}</Alert>
     </div>
   );
 }
@@ -81,27 +72,6 @@ function RowLead({
       ) : null}
       {row.edited ? <Badge variant="neutral">Edited</Badge> : null}
     </>
-  );
-}
-
-/** Sets a row aside from Import, or brings it back; either way nothing is written until Import. */
-function LeaveOut({
-  row,
-  leave,
-}: Readonly<{ row: QuestionImportRow; leave: (leftOut: boolean) => Promise<void> }>) {
-  const leftOut = row.action === 'left_out';
-  const change = useMutation({ mutationFn: () => leave(!leftOut) });
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      loading={change.isPending}
-      onClick={() => change.mutate()}
-    >
-      {leftOut ? <Undo2 aria-hidden /> : <Ban aria-hidden />}
-      {leftOut ? 'Bring back' : 'Leave out'}
-    </Button>
   );
 }
 
@@ -130,15 +100,10 @@ export function ImportWorkspace({
       queryFn: () => api.admin.imports.questionDrafts(importLogId),
     };
 
-    const leave = async (line: number, leftOut: boolean) => {
-      onPlan(await api.admin.imports.leaveOutQuestionRow(importLogId, line, { leftOut }));
-    };
-
     return {
       cards: rows.map((row, index) => ({
         key: String(row.line),
         lead: <RowLead row={row} index={index} total={rows.length} />,
-        actions: <LeaveOut row={row} leave={(leftOut) => leave(row.line, leftOut)} />,
         notice: <SectionRefusal row={row} />,
         editable: row.action !== 'left_out',
       })),

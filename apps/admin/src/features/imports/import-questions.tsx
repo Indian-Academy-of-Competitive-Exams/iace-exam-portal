@@ -7,6 +7,7 @@ import {
   LANGUAGE_LABELS,
   QUESTION_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
+  repeatedLineOf,
   type QuestionImportPlan,
   type QuestionImportRow,
   type QuestionImportResult,
@@ -141,6 +142,7 @@ export function ImportQuestionsPage() {
     onSuccess: (judged) => intake.stage(intake.file, judged),
   });
   const blurry = plan?.rows.reduce((count, row) => count + row.warnings.length, 0) ?? 0;
+  const repeated = plan?.rows.filter((row) => repeatedLineOf(row.duplicateOf) !== null).length ?? 0;
   // A section's typist previews through authoring, which this bank-wide route does not answer for.
   const errorRows = useErrorRows(into ? null : intake.file, plan?.summary.invalid ?? 0, (file) =>
     api.admin.imports.questionErrors(file),
@@ -227,7 +229,8 @@ export function ImportQuestionsPage() {
           ? [
               { label: 'Rows read', value: plan.summary.total },
               { label: 'New questions', value: plan.summary.willCreate },
-              { label: 'Already in the bank', value: plan.summary.duplicates },
+              { label: 'Already in the bank', value: plan.summary.duplicates - repeated },
+              ...(repeated > 0 ? [{ label: 'Repeated in this file', value: repeated }] : []),
               { label: 'Skipped (have problems)', value: plan.summary.invalid },
               ...(plan.summary.leftOut > 0
                 ? [{ label: 'Left out', value: plan.summary.leftOut }]
@@ -359,13 +362,15 @@ function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
 
   // A repeat is not an error — re-uploading last week's sheet with ten new rows added is normal use.
   if (row.action === 'duplicate') {
+    const repeats = repeatedLineOf(row.duplicateOf);
     return (
       <span className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="info">Already in the bank</Badge>
+        {repeats === null ? (
+          <Badge variant="info">Already in the bank</Badge>
+        ) : (
+          <Badge variant="warning">{`Same as row ${repeats}`}</Badge>
+        )}
         {edited}
-        {row.duplicateOf?.startsWith('line ') ? (
-          <span className="text-xs text-muted-foreground">same as {row.duplicateOf}</span>
-        ) : null}
       </span>
     );
   }

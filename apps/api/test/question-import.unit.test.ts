@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_IMPORT_MAX_ROWS,
   QUESTION_IMPORT_TAG,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
+  SECTION_IMPORT_MAX_ROWS,
   TAG_SEPARATOR,
   TAGS_MAX,
   type QuestionImportColumnKey,
@@ -95,25 +97,26 @@ const plan = (
 ): QuestionImportPlanning => planQuestionImport(table(...rows), catalog(), dedup);
 
 describe('a sheet imported into one section of a test', () => {
-  const stems = ['What is 10% of 150?', 'What is 20% of 150?', 'What is 40% of 150?'];
-  const rows = stems.map((stem_en) => ({ ...MCQ_ROW, stem_en }));
-  const within = (scope: Partial<ImportScope>, leftOut: number[] = []) =>
-    planQuestionImport(table(...rows), catalog(), noDedup(), undefined, new Set(leftOut), {
+  const QUANT = { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' };
+  const sheetOf = (count: number) =>
+    Array.from({ length: count }, (_, at) => ({
+      ...MCQ_ROW,
+      stem_en: `What is ${at + 1}% of 9731?`,
+    }));
+  const within = (subject: ImportScope['subject'], count = 3) =>
+    planQuestionImport(table(...sheetOf(count)), catalog(), noDedup(), undefined, undefined, {
       sectionName: 'Quant',
-      subject: { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' },
-      questionCount: 25,
-      room: 25,
-      ...scope,
+      subject,
     });
   const codes = (planning: QuestionImportPlanning) =>
     planning.rows.map((row) => row.issues[0]?.code ?? row.action);
 
   it('skips a row filed under a subject the section does not take', () => {
-    const planning = within({ subject: { id: 'sub_english', name: 'ENGLISH' } });
+    const planning = within({ id: 'sub_english', name: 'ENGLISH' });
 
     assert.deepEqual(
       codes(planning),
-      stems.map(() => CODE.SUBJECT_OUTSIDE_SECTION),
+      [1, 2, 3].map(() => CODE.SUBJECT_OUTSIDE_SECTION),
     );
     assert.match(
       planning.rows[0]?.issues[0]?.message ?? '',
@@ -122,19 +125,23 @@ describe('a sheet imported into one section of a test', () => {
   });
 
   it('takes any subject where the section names none', () => {
-    assert.deepEqual(codes(within({ subject: null })), ['create', 'create', 'create']);
+    assert.deepEqual(codes(within(null)), ['create', 'create', 'create']);
   });
 
-  it('writes rows in sheet order until the section is full, and skips the rest', () => {
-    assert.deepEqual(codes(within({ room: 2 })), ['create', 'create', CODE.SECTION_FULL]);
-    assert.deepEqual(
-      codes(within({ room: 0 })),
-      stems.map(() => CODE.SECTION_FULL),
+  /** The failure this prevents: a sheet of hundreds landing on one proof-reader in one go. */
+  it('refuses a sheet past the section’s limit, which is tighter than the bank’s', () => {
+    const over = SECTION_IMPORT_MAX_ROWS + 1;
+
+    assert.equal(within(QUANT, SECTION_IMPORT_MAX_ROWS).fileErrors.length, 0);
+    assert.match(
+      within(QUANT, over).fileErrors[0] ?? '',
+      new RegExp(`${over} rows. Import at most ${SECTION_IMPORT_MAX_ROWS} at a time into Quant`),
     );
-  });
-
-  it('gives a left-out row’s place to the next one', () => {
-    assert.deepEqual(codes(within({ room: 2 }, [2])), ['left_out', 'create', 'create']);
+    assert.equal(plan(sheetOf(over)).fileErrors.length, 0);
+    assert.match(
+      plan(sheetOf(QUESTION_IMPORT_MAX_ROWS + 1)).fileErrors[0] ?? '',
+      new RegExp(`Import at most ${QUESTION_IMPORT_MAX_ROWS} at a time\\.`),
+    );
   });
 });
 
