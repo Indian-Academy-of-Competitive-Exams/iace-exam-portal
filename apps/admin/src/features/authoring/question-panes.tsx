@@ -34,7 +34,7 @@ export function QuestionPanes({
   onSave,
   lead,
   previewAction,
-  blocked = false,
+  readOnly = false,
 }: Readonly<{
   questionId: string;
   state: AuthoringState;
@@ -51,8 +51,8 @@ export function QuestionPanes({
   lead?: React.ReactNode;
   /** At the preview's end: what may be done to this question. */
   previewAction?: React.ReactNode;
-  /** Somebody else holds the question: the editor shows, and takes nothing. */
-  blocked?: boolean;
+  /** Not the viewer's to change, or held by somebody else: the editor shows, and takes nothing. */
+  readOnly?: boolean;
 }>) {
   const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
   const languages = (
@@ -72,10 +72,10 @@ export function QuestionPanes({
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section className="flex min-h-0 flex-col border-border lg:border-r">
         {/* Which language is read is navigation, so it leaves the editor that is frozen under it. */}
-        {lead || blocked ? (
-          <PanelHeading lead={lead} action={blocked ? languages : undefined} />
+        {lead || readOnly ? (
+          <PanelHeading lead={lead} action={readOnly ? languages : undefined} />
         ) : null}
-        <div inert={blocked} className={cn(SCROLLS, blocked && 'opacity-60')}>
+        <div inert={readOnly} className={cn(SCROLLS, readOnly && 'opacity-60')}>
           <ScaffoldEditor
             aria-label="Question"
             regions={regionsFor(state, language)}
@@ -89,7 +89,7 @@ export function QuestionPanes({
             imageLimits={IMAGE_LIMITS}
             lang={language}
             script={script}
-            toolbarEnd={blocked ? undefined : languages}
+            toolbarEnd={readOnly ? undefined : languages}
             // The card is the frame: the box it fills draws no ring or border of its own.
             className="flex-1 rounded-none border-0 shadow-none focus-within:border-transparent focus-within:shadow-none"
           />

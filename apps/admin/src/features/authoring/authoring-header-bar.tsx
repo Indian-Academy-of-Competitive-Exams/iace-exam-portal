@@ -46,7 +46,7 @@ export function AuthoringHeaderBar({
   lead?: React.ReactNode;
   /** The section a scoped editor was opened on names the subject; a typist must not write past it. */
   subjectLocked?: boolean;
-  /** Somebody else holds the question: the settings show, and take nothing. */
+  /** Not the viewer's to change, or held by somebody else: the settings show, and take nothing. */
   disabled?: boolean;
   onHeaderChange: (next: AuthoringHeader) => void;
   onStateChange: (next: AuthoringState) => void;
