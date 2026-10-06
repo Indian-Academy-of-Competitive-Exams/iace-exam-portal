@@ -435,6 +435,14 @@ h3 {
   display: none;
 }
 
+/* The empty line a slot ends on is somewhere to type, and a read-only box takes no typing. */
+.scaffold-content[contenteditable='false']
+  .scaffold-body
+  > :not(p)
+  + p:last-child:has(> .ProseMirror-trailingBreak:only-child) {
+  display: none;
+}
+
 /* Clicking a figure still selects it when read-only, but Backspace is gone, so the ring says nothing. */
 .ProseMirror[contenteditable='false'] .ProseMirror-selectednode {
   outline: none;
