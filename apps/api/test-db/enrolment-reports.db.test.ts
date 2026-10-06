@@ -21,7 +21,7 @@ import {
   uid,
   type StudentOverrides,
 } from './support/database';
-import { figureOf, reportsOver, tableOf } from './support/reports';
+import { SUPER_ADMIN, figureOf, reportsOver, tableOf } from './support/reports';
 
 const prisma = testPrisma();
 const { read } = reportsOver(prisma);
@@ -149,7 +149,7 @@ describe('the suspended, blocked and deleted students', () => {
       { entityId: suspended, action: AUDIT_ACTION.DEACTIVATE, actorId: admin.id },
     ]);
 
-    const rows = tableOf(await read(REPORT_KEYS.STUDENT_STATUS, {}), 'Students');
+    const rows = tableOf(await read(REPORT_KEYS.STUDENT_STATUS, {}, SUPER_ADMIN), 'Students');
 
     assert.deepEqual(
       rows.map((row) => [row.Student, row.Status, row.By]),
@@ -158,6 +158,41 @@ describe('the suspended, blocked and deleted students', () => {
         ['Suspended', 'Sign-in suspended', 'Branch Head'],
       ],
     );
+  });
+
+  it('names who did it only to a super admin, as the audit log itself would', async () => {
+    const other = await makeAdmin(prisma, { fullName: 'Somebody Else' });
+    const suspended = await student('Suspended', { isActive: false });
+    await rowActions(prisma, [
+      { entityId: suspended, action: AUDIT_ACTION.DEACTIVATE, actorId: other.id },
+    ]);
+
+    const [row] = tableOf(await read(REPORT_KEYS.STUDENT_STATUS, {}), 'Students');
+
+    assert.deepEqual(
+      [row?.Student, row?.Status, row?.By],
+      ['Suspended', 'Sign-in suspended', null],
+    );
+  });
+
+  it('reads the date and the name off the action that matches how the student stands now', async () => {
+    const blocker = await makeAdmin(prisma, { fullName: 'Blocker' });
+    const suspender = await makeAdmin(prisma, { fullName: 'Suspender' });
+    const blocked = await student('Blocked', { isTestBlocked: true });
+    await rowActions(prisma, [
+      { entityId: blocked, action: AUDIT_ACTION.BLOCK, actorId: blocker.id },
+      // Suspended later and let back in since: the newest row on file is not about the block.
+      {
+        entityId: blocked,
+        action: AUDIT_ACTION.DEACTIVATE,
+        actorId: suspender.id,
+        createdAt: new Date(Date.now() + 60_000),
+      },
+    ]);
+
+    const [row] = tableOf(await read(REPORT_KEYS.STUDENT_STATUS, {}, SUPER_ADMIN), 'Students');
+
+    assert.deepEqual([row?.Status, row?.By], ['Tests blocked', 'Blocker']);
   });
 });
 

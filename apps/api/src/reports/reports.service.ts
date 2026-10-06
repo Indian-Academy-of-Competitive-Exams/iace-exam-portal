@@ -16,17 +16,10 @@ import {
 } from '@iace/contracts';
 import { AccessResolverService } from '../access';
 import { AuditService } from '../audit';
-import {
-  AttemptReportService,
-  LeaderboardService,
-  PaperSheetService,
-  PerformanceAnalyticsService,
-  StudentOverviewService,
-  TestAnalyticsService,
-} from '../attempts';
 import { writeWorkbook } from '../common/exporting';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  SittingFigures,
   aboutSheet,
   rowsIn,
   toDocument,
@@ -64,25 +57,20 @@ export class ReportsService {
 
   constructor(
     prisma: PrismaService,
-    analytics: TestAnalyticsService,
     access: AccessResolverService,
-    leaderboard: LeaderboardService,
-    performance: PerformanceAnalyticsService,
-    overview: StudentOverviewService,
-    attemptReport: AttemptReportService,
-    papers: PaperSheetService,
     audit: AuditService,
+    figures: SittingFigures,
   ) {
     this.sources = {
       prisma,
-      analytics,
       access,
-      leaderboard,
-      performance,
-      overview,
-      attemptReport,
-      papers,
       audit,
+      analytics: figures.analytics,
+      leaderboard: figures.leaderboard,
+      performance: figures.performance,
+      overview: figures.overview,
+      attemptReport: figures.attemptReport,
+      papers: figures.papers,
     };
   }
 

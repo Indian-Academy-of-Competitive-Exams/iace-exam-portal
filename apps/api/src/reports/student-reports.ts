@@ -9,6 +9,7 @@ import {
   ErrorCodes,
   REPORT_KEYS,
   REPORT_LETTERHEAD,
+  REPORT_SITTINGS_MAX,
   TEST_STATUS,
   instituteDateTimeLabel,
   measureOf,
@@ -16,13 +17,17 @@ import {
   type ReportQueryOf,
 } from '@iace/contracts';
 import { questionTalliesOf } from '../attempts';
-import { EXPORT_DATE_FORMATS, exportInstant, type ExportColumn } from '../common/exporting';
+import {
+  EXPORT_DATE_FORMATS,
+  exportInstant,
+  readInBatches,
+  type ExportColumn,
+} from '../common/exporting';
 import { aboutPeriod, periodBefore, periodOf, type Period } from './period';
 import { type Report, type ReportBuilder, type ReportSources } from './report';
 import { groupBy, highestOf, meanOf, minutesOf, percentOf } from './report-figures';
 import { branchOf, cardsOf } from './report-people';
 import { subjectSheet } from './report-subjects';
-import { TEST_NAME, TEST_OPENED, TEST_SERIES, testRowsOf } from './report-tests';
 
 type StudentBuilder = ReportBuilder<ReportQueryOf<typeof REPORT_KEYS.STUDENT_CUMULATIVE>>;
 type StudentPeriodBuilder = ReportBuilder<ReportQueryOf<typeof REPORT_KEYS.STUDENT_WEEKLY>>;
@@ -36,7 +41,7 @@ interface Who {
   about: ReportFact[];
 }
 
-async function whoIs({ prisma }: ReportSources, studentId: string): Promise<Who> {
+async function whoIs({ prisma }: Pick<ReportSources, 'prisma'>, studentId: string): Promise<Who> {
   const [student] = await cardsOf(prisma, [studentId]);
   if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'That student does not exist');
   const name = student.fullName ?? student.mobile;
@@ -69,19 +74,21 @@ interface Sitting {
   cohortSize: number | null;
 }
 
-/** A student's marked sittings, oldest first, each at the standing its cohort gives it now. */
+/** A student's marked sittings, oldest first, each at the standing its cohort gives it now; the newest `REPORT_SITTINGS_MAX` of them. */
 async function sittingsOf(
   { prisma, leaderboard, attemptReport }: ReportSources,
   studentId: string,
   period?: Period,
 ): Promise<Sitting[]> {
-  const rows = await prisma.attempt.findMany({
+  // Newest first under the bound, then turned round: what a long career loses is its oldest.
+  const newest = await prisma.attempt.findMany({
     where: {
       studentId,
       status: ATTEMPT_STATUS.EVALUATED,
       ...(period ? { submittedAt: period.within } : {}),
     },
-    orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
+    orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+    take: REPORT_SITTINGS_MAX,
     select: {
       id: true,
       testId: true,
@@ -97,6 +104,7 @@ async function sittingsOf(
       test: { select: { title: true } },
     },
   });
+  const rows = newest.reverse();
   const [standings, marks] = await Promise.all([
     leaderboard.standingsOf(rows.map((row) => row.id)),
     attemptReport.paperMarks([...new Set(rows.map((row) => row.testId))]),
@@ -330,10 +338,13 @@ const TOPIC_COLUMNS: ExportColumn<TopicRow>[] = [
 const topics: StudentBuilder = async (sources, { studentId }) => {
   const who = await whoIs(sources, studentId);
   const tallies = await questionTalliesOf(sources, studentId);
-  const questions = await sources.prisma.question.findMany({
-    where: { id: { in: [...tallies.keys()] } },
-    select: { id: true, subjectId: true, topicId: true },
-  });
+  // A long career meets tens of thousands of questions, past what one statement can bind.
+  const questions = await readInBatches([...tallies.keys()], (batch) =>
+    sources.prisma.question.findMany({
+      where: { id: { in: batch } },
+      select: { id: true, subjectId: true, topicId: true },
+    }),
+  );
   const [subjects, named] = await Promise.all([
     sources.prisma.subject.findMany({
       where: { id: { in: [...new Set(questions.map((question) => question.subjectId))] } },
@@ -341,7 +352,7 @@ const topics: StudentBuilder = async (sources, { studentId }) => {
     }),
     sources.prisma.topic.findMany({
       where: {
-        id: { in: questions.flatMap((question) => (question.topicId ? [question.topicId] : [])) },
+        id: { in: [...new Set(questions.flatMap((question) => question.topicId ?? []))] },
       },
       select: { id: true, name: true },
     }),
@@ -375,17 +386,38 @@ const topics: StudentBuilder = async (sources, { studentId }) => {
   };
 };
 
+interface MissedTest {
+  title: string | null;
+  opensAt: Date | null;
+  testSeries: { name: string };
+}
+
+const MISSED_COLUMNS: ExportColumn<MissedTest>[] = [
+  { header: 'Test', width: 36, value: (row) => row.title ?? UNTITLED },
+  { header: 'Series', width: 30, value: (row) => row.testSeries.name },
+  {
+    header: 'Opened',
+    width: 18,
+    date: EXPORT_DATE_FORMATS.INSTANT,
+    value: (row) => exportInstant(row.opensAt),
+  },
+];
+
 /** Every open test of a series they reach that they hold no sitting of, a void one included. */
-const missed: StudentBuilder = async (sources, { studentId }) => {
-  const who = await whoIs(sources, studentId);
-  const reached = (await sources.access.seriesReachedBy(studentId)) ?? [];
+const missed: StudentBuilder = async ({ prisma, access }, { studentId }) => {
+  const who = await whoIs({ prisma }, studentId);
+  const reached = (await access.seriesReachedBy(studentId)) ?? [];
   const [open, sat] = await Promise.all([
-    testRowsOf(sources, {
-      testSeriesId: { in: reached.map((series) => series.id) },
-      status: TEST_STATUS.ACTIVE,
-      OR: [{ opensAt: null }, { opensAt: { lte: new Date() } }],
+    prisma.test.findMany({
+      where: {
+        testSeriesId: { in: reached.map((series) => series.id) },
+        status: TEST_STATUS.ACTIVE,
+        OR: [{ opensAt: null }, { opensAt: { lte: new Date() } }],
+      },
+      orderBy: [{ opensAt: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
+      select: { id: true, title: true, opensAt: true, testSeries: { select: { name: true } } },
     }),
-    sources.prisma.attempt.findMany({ where: { studentId }, select: { testId: true } }),
+    prisma.attempt.groupBy({ by: ['testId'], where: { studentId } }),
   ]);
   const held = new Set(sat.map((sitting) => sitting.testId));
   const rows = open.filter((test) => !held.has(test.id));
@@ -396,7 +428,7 @@ const missed: StudentBuilder = async (sources, { studentId }) => {
       { label: 'Sat', value: open.length - rows.length },
       { label: 'Missed', value: rows.length },
     ],
-    sheets: [{ name: 'Tests missed', columns: [TEST_NAME, TEST_SERIES, TEST_OPENED], rows }],
+    sheets: [{ name: 'Tests missed', columns: MISSED_COLUMNS, rows }],
   };
 };
 

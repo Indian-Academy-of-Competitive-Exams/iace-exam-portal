@@ -20,7 +20,7 @@ import {
   type ExportColumn,
 } from '../common/exporting';
 import { STUDENT_CARD_SELECT, type StudentCard } from '../students';
-import { aboutPeriod, periodBefore, periodOf, type Period } from './period';
+import { aboutPeriod, elapsed, periodBefore, periodOf, type Period } from './period';
 import { type ReportBuilder, type ReportSources } from './report';
 import { groupBy, highestOf, meanOf, percentOf } from './report-figures';
 import {
@@ -77,7 +77,10 @@ async function rankedIn(
       student: { select: MEMBER_SELECT },
     },
   });
-  const standings = await leaderboard.standingsOfTests([...new Set(rows.map((row) => row.testId))]);
+  const standings = await leaderboard.standingsOfTests(
+    [...new Set(rows.map((row) => row.testId))],
+    period.within,
+  );
   return rows.flatMap((row) => {
     const standing = standings.get(row.id);
     if (!standing) return [];
@@ -164,7 +167,9 @@ const performanceBy =
     const satIn = new Map<string, Sitting[]>();
     for (const sitting of sittings) {
       for (const key of dimension.keysOf(sitting.student)) {
-        satIn.set(key, [...(satIn.get(key) ?? []), sitting]);
+        const group = satIn.get(key);
+        if (group) group.push(sitting);
+        else satIn.set(key, [sitting]);
       }
     }
     const rows = [...new Set([...enrolledIn.keys(), ...satIn.keys()])]
@@ -352,7 +357,7 @@ const weakTopics: PeriodBuilder = async ({ prisma }, query) => {
   const [subjects, topics] = await Promise.all([
     prisma.subject.findMany({ select: { id: true, name: true } }),
     prisma.topic.findMany({
-      where: { id: { in: items.flatMap((item) => item.question.topicId ?? []) } },
+      where: { id: { in: [...new Set(items.flatMap((item) => item.question.topicId ?? []))] } },
       select: { id: true, name: true },
     }),
   ]);
@@ -403,10 +408,13 @@ const RETAKE_COLUMNS: ExportColumn<Retaker>[] = [
 
 const retakes: PeriodBuilder = async ({ prisma }, query) => {
   const period = periodOf(query);
-  const sat = await prisma.attempt.findMany({
-    where: { isGraded: false, status: ATTEMPT_STATUS.EVALUATED, submittedAt: period.within },
-    select: { studentId: true, testId: true },
-  });
+  const where = {
+    isGraded: false,
+    status: ATTEMPT_STATUS.EVALUATED,
+    submittedAt: period.within,
+  };
+  assertExportable(await prisma.attempt.count({ where }));
+  const sat = await prisma.attempt.findMany({ where, select: { studentId: true, testId: true } });
   const byStudent = groupBy(sat, (sitting) => sitting.studentId);
   const cards = await cardsOf(prisma, [...byStudent.keys()]);
   const rows = cards
@@ -503,11 +511,13 @@ const ABSENTEE_COLUMNS: ExportColumn<Absentee>[] = [
 const absentees: PeriodBuilder = async ({ prisma, access }, query) => {
   const period = periodOf(query);
   const tests = await prisma.test.findMany({
-    where: { status: TEST_STATUS.ACTIVE, opensAt: period.within },
+    where: { status: TEST_STATUS.ACTIVE, opensAt: elapsed(period) },
     select: { id: true, testSeriesId: true },
   });
+  const onThem = { testId: { in: tests.map((test) => test.id) } };
+  assertExportable(await prisma.attempt.count({ where: onThem }));
   const sat = await prisma.attempt.findMany({
-    where: { testId: { in: tests.map((test) => test.id) } },
+    where: onThem,
     select: { testId: true, studentId: true },
   });
   const held = new Set(sat.map((sitting) => `${sitting.testId}/${sitting.studentId}`));

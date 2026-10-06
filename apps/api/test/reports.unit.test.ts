@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { REPORT_KEYS, REPORT_MAX_ROWS } from '@iace/contracts';
 import { EXPORT_DATE_FORMATS, exportInstant, type ExportSheet } from '../src/common/exporting';
+import { daysOf, periodBefore, periodOf } from '../src/reports/period';
 import { aboutSheet, toDocument, type Report } from '../src/reports/report';
 
 interface Row {
@@ -68,5 +69,20 @@ describe('aboutSheet', () => {
     assert.deepEqual(labels, ['Report', 'Test', 'Ranked sittings', 'As of']);
     assert.equal(sheet.columns[1]?.value(sheet.rows[0]), 'Result sheet');
     assert.match(String(sheet.columns[1]?.value(sheet.rows[3])), /^2 Jun 2026, 1:30\s?am$/);
+  });
+});
+
+describe('a period', () => {
+  it('counts its days out, so the last days of year 9999 end where they should', () => {
+    assert.deepEqual(daysOf(periodOf({ from: '9999-12-30', to: '9999-12-31' })), [
+      '9999-12-30',
+      '9999-12-31',
+    ]);
+  });
+
+  it('is preceded by one of the same length, ending the day before it starts', () => {
+    const before = periodBefore(periodOf({ from: '2026-06-08', to: '2026-06-14' }));
+
+    assert.deepEqual([before.from, before.to], ['2026-06-01', '2026-06-07']);
   });
 });

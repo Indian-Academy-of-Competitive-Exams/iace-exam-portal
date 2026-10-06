@@ -23,6 +23,7 @@ import {
   EXPORT_DATE_FORMATS,
   assertExportable,
   exportInstant,
+  readInBatches,
   type ExportColumn,
 } from '../common/exporting';
 import { type PrismaService } from '../prisma/prisma.service';
@@ -133,7 +134,11 @@ function headcount<Row extends Pick<Enrolled, 'studentType'>>(
 ): Headcount[] {
   const held = new Map<string, Row[]>();
   for (const student of students) {
-    for (const key of keysOf(student)) held.set(key, [...(held.get(key) ?? []), student]);
+    for (const key of keysOf(student)) {
+      const group = held.get(key);
+      if (group) group.push(student);
+      else held.set(key, [student]);
+    }
   }
   return [...held]
     .map(([key, group]) => ({ key, students: group }))
@@ -255,38 +260,60 @@ const STOOD_COLUMNS: ExportColumn<Stood>[] = [
   { header: 'By', width: 24, value: (row) => row.by },
 ];
 
-const STANDING_ACTIONS = [AUDIT_ACTION.DEACTIVATE, AUDIT_ACTION.BLOCK, AUDIT_ACTION.DELETE];
+const STANDINGS = {
+  DELETED: { label: 'Deleted', action: AUDIT_ACTION.DELETE },
+  SUSPENDED: { label: 'Sign-in suspended', action: AUDIT_ACTION.DEACTIVATE },
+  BLOCKED: { label: 'Tests blocked', action: AUDIT_ACTION.BLOCK },
+} as const;
 
-/** Since and By come off the audit trail, which is archived past its window: an old change reads blank. */
-const studentStatus: OpenBuilder = async ({ prisma }) => {
+/** The one standing a row is listed for, and so the one action whose date and actor it shows. */
+function standingFor(student: { deletedAt: Date | null; isActive: boolean }) {
+  if (student.deletedAt !== null) return STANDINGS.DELETED;
+  return student.isActive ? STANDINGS.BLOCKED : STANDINGS.SUSPENDED;
+}
+
+/** Since and By come off the audit trail under the log's own rule: an admin reads only what they did themselves. */
+const studentStatus: OpenBuilder = async ({ prisma }, _query, viewer) => {
+  const where = {
+    anonymizedAt: null,
+    OR: [{ deletedAt: { not: null } }, { isActive: false }, { isTestBlocked: true }],
+  };
+  assertExportable(await prisma.student.count({ where }));
   const students = await prisma.student.findMany({
-    where: {
-      anonymizedAt: null,
-      OR: [{ deletedAt: { not: null } }, { isActive: false }, { isTestBlocked: true }],
-    },
+    where,
     orderBy: [{ fullName: 'asc' }, { id: 'asc' }],
-    select: { ...STUDENT_CARD_SELECT, isActive: true, isTestBlocked: true, deletedAt: true },
+    select: { ...STUDENT_CARD_SELECT, isActive: true, deletedAt: true },
   });
-  const trail = await prisma.rowActionLog.findMany({
-    where: {
-      feature: AUDIT_FEATURE.STUDENT,
-      entityId: { in: students.map((student) => student.id) },
-      action: { in: STANDING_ACTIONS },
-    },
-    orderBy: { createdAt: 'desc' },
-    select: { entityId: true, createdAt: true, actorId: true },
-  });
+  const trail = await readInBatches(
+    students.map((student) => student.id),
+    (batch) =>
+      prisma.rowActionLog.findMany({
+        where: {
+          feature: AUDIT_FEATURE.STUDENT,
+          entityId: { in: batch },
+          action: { in: Object.values(STANDINGS).map((standing) => standing.action) },
+          ...(viewer.isSuperAdmin ? {} : { actorId: viewer.id }),
+        },
+        select: { entityId: true, action: true, createdAt: true, actorId: true },
+      }),
+  );
+  // Newest first, so the first row met for a student and an action is the latest one.
+  trail.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   const latest = new Map<string, (typeof trail)[number]>();
-  for (const row of trail) if (!latest.has(row.entityId)) latest.set(row.entityId, row);
+  for (const row of trail) {
+    const key = `${row.entityId}/${row.action}`;
+    if (!latest.has(key)) latest.set(key, row);
+  }
   const names = await adminNames(
     prisma,
     trail.map((row) => row.actorId),
   );
-  const rows = students.map(({ isActive, isTestBlocked, deletedAt, ...student }): Stood => {
-    const change = latest.get(student.id);
+  const rows = students.map(({ isActive, deletedAt, ...student }): Stood => {
+    const standing = standingFor({ isActive, deletedAt });
+    const change = latest.get(`${student.id}/${standing.action}`);
     return {
       student,
-      status: deletedAt === null ? standingOf({ isActive, isTestBlocked }) : 'Deleted',
+      status: standing.label,
       at: change?.createdAt ?? deletedAt,
       by: change?.actorId ? (names.get(change.actorId) ?? null) : null,
     };
@@ -314,6 +341,7 @@ const GRANT_COLUMNS: ExportColumn<Granted>[] = [
 
 const manualGrants: PeriodBuilder = async ({ prisma }, query) => {
   const period = periodOf(query);
+  assertExportable(await prisma.studentGrant.count({ where: { createdAt: period.within } }));
   const grants = await prisma.studentGrant.findMany({
     where: { createdAt: period.within },
     orderBy: { createdAt: 'desc' },
@@ -371,9 +399,10 @@ const eventCandidates: EventBuilder = async ({ prisma }, { eventId }) => {
       prisma,
       event.candidates.map((candidate) => candidate.studentId),
     ),
-    prisma.attempt.findMany({
-      where: { testId: { in: testIds } },
-      select: { studentId: true, testId: true },
+    // One row a candidate and test, counted in the database: an event's tests are sat by others too.
+    prisma.attempt.groupBy({
+      by: ['studentId', 'testId'],
+      where: { testId: { in: testIds }, student: { eventCandidacies: { some: { eventId } } } },
     }),
   ]);
   const registered = new Map(
@@ -384,8 +413,7 @@ const eventCandidates: EventBuilder = async ({ prisma }, { eventId }) => {
     .flatMap((student): Candidate[] => {
       const registeredAt = registered.get(student.id);
       if (!registeredAt) return [];
-      const tests = new Set((satBy.get(student.id) ?? []).map((sitting) => sitting.testId));
-      return [{ student, registeredAt, testsSat: tests.size }];
+      return [{ student, registeredAt, testsSat: satBy.get(student.id)?.length ?? 0 }];
     })
     .sort((a, b) => (a.student.fullName ?? '').localeCompare(b.student.fullName ?? ''));
   return {

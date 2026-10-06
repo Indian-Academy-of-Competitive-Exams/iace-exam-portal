@@ -1,5 +1,5 @@
-/** What one student did with each question across every marked sitting: the grain a topic report sums. */
-import { ATTEMPT_STATUS } from '@iace/contracts';
+/** What one student did with each question across their newest marked sittings: the grain a topic report sums. */
+import { ATTEMPT_STATUS, REPORT_SITTINGS_MAX } from '@iace/contracts';
 import { type PrismaService } from '../prisma/prisma.service';
 import { answeredRows } from './answer-sheet';
 import { type PaperSheetService } from './paper-sheet.service';
@@ -19,6 +19,8 @@ export async function questionTalliesOf(
 ): Promise<Map<string, QuestionTally>> {
   const sittings = await prisma.attempt.findMany({
     where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
+    orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+    take: REPORT_SITTINGS_MAX,
     select: {
       testId: true,
       startedAt: true,

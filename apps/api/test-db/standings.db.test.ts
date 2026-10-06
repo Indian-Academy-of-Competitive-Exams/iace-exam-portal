@@ -289,6 +289,22 @@ describe('standingsOfTests', () => {
       );
     }
   });
+
+  it('returns only the sittings handed in within a period, still ranked among every sitting', async () => {
+    const testId = await paper();
+    const june = new Date('2026-06-09T06:00:00.000Z');
+    await sitter(testId, 90, { submittedAt: new Date('2026-05-01T06:00:00.000Z') });
+    const inPeriod = await sitter(testId, 40, { submittedAt: june });
+
+    const within = await leaderboard.standingsOfTests([testId], {
+      gte: new Date('2026-06-01T00:00:00.000Z'),
+      lte: new Date('2026-06-30T00:00:00.000Z'),
+    });
+
+    assert.deepEqual([...within.keys()], [inPeriod.attemptId]);
+    assert.equal(within.get(inPeriod.attemptId)?.rank, 2);
+    assert.equal(within.get(inPeriod.attemptId)?.cohortSize, 2);
+  });
 });
 
 describe('cohortsOf', () => {

@@ -182,21 +182,37 @@ export interface CohortSittingRow extends StandingRow {
   student_id: string;
 }
 
+/** When a sitting has to have been handed in to be returned; the ranking is still over every sitting. */
+export interface HandedIn {
+  gte: Date;
+  lte: Date;
+}
+
 /** `testResultsSql` over several tests at once: one window pass a test, never a count per sitting. */
-export function cohortStandingsSql(testIds: readonly string[]): Prisma.Sql {
+export function cohortStandingsSql(testIds: readonly string[], within?: HandedIn): Prisma.Sql {
+  // Narrowed AFTER the ranking: a sitting's place is among its whole cohort, whenever the rest sat.
+  const narrowed = within
+    ? Prisma.sql`WHERE r."submittedAt" BETWEEN ${within.gte} AND ${within.lte}`
+    : Prisma.empty;
   return Prisma.sql`
-    SELECT a."id" AS attempt_id,
-           a."testId" AS test_id,
-           a."studentId" AS student_id,
-           (ROW_NUMBER() OVER (PARTITION BY a."testId" ORDER BY ${RANK_ORDER}))::int AS rank,
-           sitting_percentile(
-             RANK() OVER (PARTITION BY a."testId" ORDER BY a."score" ASC) - 1,
-             COUNT(*) OVER (PARTITION BY a."testId", a."score"),
-             COUNT(*) OVER (PARTITION BY a."testId")
-           )::float8 AS percentile,
-           (COUNT(*) OVER (PARTITION BY a."testId"))::int AS cohort_size
-    FROM "Attempt" a
-    WHERE a."testId" = ANY(${[...testIds]}::uuid[]) AND ${IN_COHORT}
+    WITH ranked AS (
+      SELECT a."id" AS attempt_id,
+             a."testId" AS test_id,
+             a."studentId" AS student_id,
+             a."submittedAt",
+             (ROW_NUMBER() OVER (PARTITION BY a."testId" ORDER BY ${RANK_ORDER}))::int AS rank,
+             sitting_percentile(
+               RANK() OVER (PARTITION BY a."testId" ORDER BY a."score" ASC) - 1,
+               COUNT(*) OVER (PARTITION BY a."testId", a."score"),
+               COUNT(*) OVER (PARTITION BY a."testId")
+             )::float8 AS percentile,
+             (COUNT(*) OVER (PARTITION BY a."testId"))::int AS cohort_size
+      FROM "Attempt" a
+      WHERE a."testId" = ANY(${[...testIds]}::uuid[]) AND ${IN_COHORT}
+    )
+    SELECT r.attempt_id, r.test_id, r.student_id, r.rank, r.percentile, r.cohort_size
+    FROM ranked r
+    ${narrowed}
   `;
 }
 

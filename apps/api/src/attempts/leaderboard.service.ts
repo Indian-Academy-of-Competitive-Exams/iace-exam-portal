@@ -8,6 +8,7 @@ import {
   standingsSql,
   type CohortFiguresRow,
   type CohortSittingRow,
+  type HandedIn,
   type StandingRow,
 } from './ranking-sql';
 
@@ -64,10 +65,15 @@ export class LeaderboardService {
     return sittingsOf(rows);
   }
 
-  /** Every ranked sitting on these tests, keyed by sitting: a period's report reads cohorts whole. */
-  async standingsOfTests(testIds: readonly string[]): Promise<ReadonlyMap<string, CohortSitting>> {
+  /** The ranked sittings on these tests, keyed by sitting; `within` returns only those handed in then, still ranked among all. */
+  async standingsOfTests(
+    testIds: readonly string[],
+    within?: HandedIn,
+  ): Promise<ReadonlyMap<string, CohortSitting>> {
     if (testIds.length === 0) return new Map();
-    const rows = await this.prisma.$queryRaw<CohortSittingRow[]>(cohortStandingsSql(testIds));
+    const rows = await this.prisma.$queryRaw<CohortSittingRow[]>(
+      cohortStandingsSql(testIds, within),
+    );
     return new Map(
       rows.map((row) => [
         row.attempt_id,

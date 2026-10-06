@@ -15,7 +15,7 @@ import { COHORT_WHERE, IN_COHORT } from '../attempts';
 import { EXPORT_DATE_FORMATS, type ExportColumn } from '../common/exporting';
 import { toDateColumn } from '../common/time/institute-day';
 import { type StudentCard } from '../students';
-import { aboutPeriod, daysOf, periodBefore, periodOf } from './period';
+import { aboutPeriod, daysOf, elapsed, periodBefore, periodOf } from './period';
 import { type ReportBuilder } from './report';
 import { groupBy, meanOf } from './report-figures';
 import { STUDENT_COLUMNS, cardsOf } from './report-people';
@@ -56,7 +56,7 @@ const activity: PeriodBuilder = async (sources, query) => {
   const inPeriod = { ...COHORT_WHERE, submittedAt: period.within };
   const [opened, sat, students, before] = await Promise.all([
     prisma.test.findMany({
-      where: { status: TEST_STATUS.ACTIVE, opensAt: period.within },
+      where: { status: TEST_STATUS.ACTIVE, opensAt: elapsed(period) },
       select: { id: true },
     }),
     prisma.attempt.groupBy({ by: ['testId'], where: inPeriod, _count: true }),

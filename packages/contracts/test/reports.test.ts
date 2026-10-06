@@ -4,6 +4,7 @@ import {
   REPORT_KEYS,
   REPORT_PERIODS,
   reportFieldsMissing,
+  reportPeriodDays,
   reportPeriodOf,
   reportQuerySchema,
 } from '../src/reports';
@@ -55,7 +56,22 @@ describe('reportQuerySchema', () => {
     assert.equal(parsed.success, false);
   });
 
+  it('refuses a period longer than a year, so no report can be asked to walk centuries', () => {
+    const year = reportQuerySchema.safeParse({ from: '2028-01-01', to: '2028-12-31' });
+    const longer = reportQuerySchema.safeParse({ from: '2026-01-01', to: '9999-12-31' });
+
+    assert.equal(year.success, true);
+    assert.equal(longer.success, false);
+  });
+
   it('reads top off the query string as a number', () => {
     assert.equal(reportQuerySchema.parse({ top: '25' }).top, 25);
+  });
+});
+
+describe('reportPeriodDays', () => {
+  it('counts both ends, across a month and a leap day', () => {
+    assert.equal(reportPeriodDays({ from: '2026-06-08', to: '2026-06-08' }), 1);
+    assert.equal(reportPeriodDays({ from: '2028-02-27', to: '2028-03-01' }), 4);
   });
 });

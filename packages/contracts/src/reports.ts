@@ -304,6 +304,9 @@ export const REPORT_LETTERHEAD = 'IACE';
 export const REPORT_TOP_DEFAULT = 10;
 export const REPORT_TOP_MAX = 500;
 
+/** The most sittings one student's report reads: each is ranked against its whole cohort, on a route a student can call. */
+export const REPORT_SITTINGS_MAX = 200;
+
 /** How long without a sitting makes a student inactive when nobody says. */
 export const REPORT_INACTIVE_DAYS_DEFAULT = 14;
 
@@ -311,6 +314,19 @@ export const REPORT_INACTIVE_DAYS_DEFAULT = 14;
 export const REPORT_MAX_ROWS = 5_000;
 
 const DAYS_MAX = 365;
+
+/** The longest period one report reads: a leap year, so no query can be asked to walk centuries. */
+const PERIOD_DAYS_MAX = 366;
+
+const DAY_MS = 86_400_000;
+
+/** A civil date built at UTC midnight, as a picker builds one: no instant, so no zone to get wrong. */
+const atUtc = (day: string): Date => new Date(`${day}T00:00:00Z`);
+
+/** How many days a period covers, both ends counted. Arithmetic, never a walk from one end to the other. */
+export function reportPeriodDays({ from, to }: { from: string; to: string }): number {
+  return Math.round((atUtc(to).getTime() - atUtc(from).getTime()) / DAY_MS) + 1;
+}
 
 export const reportQuerySchema = z
   .object({
@@ -328,7 +344,12 @@ export const reportQuerySchema = z
   .refine(({ from, to }) => from === undefined || to === undefined || from <= to, {
     path: ['to'],
     message: 'A period cannot end before it starts',
-  });
+  })
+  .refine(
+    ({ from, to }) =>
+      from === undefined || to === undefined || reportPeriodDays({ from, to }) <= PERIOD_DAYS_MAX,
+    { path: ['to'], message: 'A period is at most a year long' },
+  );
 export type ReportQuery = z.infer<typeof reportQuerySchema>;
 export type ReportQueryInput = z.input<typeof reportQuerySchema>;
 
@@ -364,11 +385,8 @@ export interface ReportPeriodRange {
   to: string;
 }
 
-const DAY_MS = 86_400_000;
 const WEEK_DAYS = 7;
 
-/** A civil date built at UTC midnight, as a picker builds one: no instant, so no zone to get wrong. */
-const atUtc = (day: string): Date => new Date(`${day}T00:00:00Z`);
 const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 /** The civil dates a named period covers; a week runs Monday to Sunday. */

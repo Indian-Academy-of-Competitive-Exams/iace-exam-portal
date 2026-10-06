@@ -6,7 +6,9 @@ import {
   REPORT_KEYS,
   TEST_SERIES_KIND,
   TEST_STATUS,
+  todayISO,
 } from '@iace/contracts';
+import { shiftInstituteDay } from '../src/common/time/institute-day';
 import {
   makeCatalog,
   makeSitting,
@@ -104,6 +106,23 @@ describe('the weekly test activity', () => {
     assert.equal(row?.['Ranked to date'], 2);
     assert.equal(row?.['Mean score'], 60);
     assert.equal(row?.Topper, 'Ana');
+  });
+});
+
+describe('a test that has not opened yet', () => {
+  it('is not counted as opened, however far into the period its day is', async () => {
+    const catalog = await freeCatalog();
+    const today = todayISO();
+    await liveTest(catalog, 'Opens tomorrow', new Date(Date.now() + 86_400_000));
+    await student('Ana');
+
+    const document = await read(REPORT_KEYS.TEST_ACTIVITY_WEEKLY, {
+      from: today,
+      to: shiftInstituteDay(today, 3),
+    });
+
+    assert.equal(figureOf(document, 'Tests opened'), 0);
+    assert.deepEqual(tableOf(document, 'Tests'), []);
   });
 });
 

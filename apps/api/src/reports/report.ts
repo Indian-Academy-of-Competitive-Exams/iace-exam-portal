@@ -3,6 +3,7 @@
  * export sheet, so the document a screen prints and the workbook a download holds are written off
  * one column list and cannot disagree.
  */
+import { Injectable } from '@nestjs/common';
 import {
   REPORTS,
   REPORT_MAX_ROWS,
@@ -17,12 +18,12 @@ import {
 import { type AccessResolverService } from '../access';
 import { type AuditService } from '../audit';
 import {
-  type AttemptReportService,
-  type LeaderboardService,
-  type PaperSheetService,
-  type PerformanceAnalyticsService,
-  type StudentOverviewService,
-  type TestAnalyticsService,
+  AttemptReportService,
+  LeaderboardService,
+  PaperSheetService,
+  PerformanceAnalyticsService,
+  StudentOverviewService,
+  TestAnalyticsService,
 } from '../attempts';
 import {
   EXPORT_DATE_FORMATS,
@@ -42,16 +43,23 @@ export interface Report {
   closing?: string[];
 }
 
+/** What `attempts` lends a report: each of these owns the figure a builder would otherwise recount. */
+@Injectable()
+export class SittingFigures {
+  constructor(
+    readonly analytics: TestAnalyticsService,
+    readonly leaderboard: LeaderboardService,
+    readonly performance: PerformanceAnalyticsService,
+    readonly overview: StudentOverviewService,
+    readonly attemptReport: AttemptReportService,
+    readonly papers: PaperSheetService,
+  ) {}
+}
+
 /** What a builder reads through: the database, and each owner's own account of a figure it defines. */
-export interface ReportSources {
+export interface ReportSources extends SittingFigures {
   prisma: PrismaService;
-  analytics: TestAnalyticsService;
   access: AccessResolverService;
-  leaderboard: LeaderboardService;
-  performance: PerformanceAnalyticsService;
-  overview: StudentOverviewService;
-  attemptReport: AttemptReportService;
-  papers: PaperSheetService;
   audit: AuditService;
 }
 

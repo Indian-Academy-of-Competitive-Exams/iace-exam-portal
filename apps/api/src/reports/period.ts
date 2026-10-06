@@ -1,5 +1,5 @@
 /** A report's period: two civil dates at the institute, and the instants that bound them. */
-import { instituteDayLabel, type ReportFact } from '@iace/contracts';
+import { instituteDayLabel, reportPeriodDays, type ReportFact } from '@iace/contracts';
 import {
   endOfInstituteDay,
   shiftInstituteDay,
@@ -17,20 +17,24 @@ export function periodOf({ from, to }: { from: string; to: string }): Period {
   return { from, to, within: { gte: startOfInstituteDay(from), lte: endOfInstituteDay(to) } };
 }
 
-/** Every institute day of the period, in order. */
+/** Every institute day of the period, in order: counted out, never compared as text, which year 10000 breaks. */
 export function daysOf(period: Period): string[] {
-  const days: string[] = [];
-  for (let day = period.from; day <= period.to; day = shiftInstituteDay(day, 1)) days.push(day);
-  return days;
+  return Array.from({ length: reportPeriodDays(period) }, (_, at) =>
+    shiftInstituteDay(period.from, at),
+  );
 }
 
 /** The same number of days, ending the day before this one starts: what "the period before" means. */
 export function periodBefore(period: Period): Period {
-  const length = daysOf(period).length;
   return periodOf({
-    from: shiftInstituteDay(period.from, -length),
+    from: shiftInstituteDay(period.from, -reportPeriodDays(period)),
     to: shiftInstituteDay(period.from, -1),
   });
+}
+
+/** The period as far as it has got: a test that opens on Friday has not opened on Monday. */
+export function elapsed(period: Period, now = new Date()): Period['within'] {
+  return { gte: period.within.gte, lte: now < period.within.lte ? now : period.within.lte };
 }
 
 const dayLabel = (day: string): string => instituteDayLabel(startOfInstituteDay(day));

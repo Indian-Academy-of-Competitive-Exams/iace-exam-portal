@@ -348,10 +348,8 @@ const KEY_COLUMNS: ExportColumn<Keyed>[] = [
 /** An option is named by its place in the paper's own pinned order, which is the order it is printed in. */
 function answerOf(term: PaperTerm): string | null {
   if (term.type === QUESTION_TYPE.TEXT_FIELD) {
-    const accepted = Object.values(term.answerKey?.answers ?? {}).filter(
-      (answer): answer is string => typeof answer === 'string',
-    );
-    return accepted[0] ?? null;
+    const accepted = Object.values(term.answerKey?.answers ?? {});
+    return accepted.find((answer) => typeof answer === 'string') ?? null;
   }
   const places = term.correctOptionIds
     .map((id) => term.optionIds.indexOf(id) + 1)

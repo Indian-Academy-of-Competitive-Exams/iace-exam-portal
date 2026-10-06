@@ -26,6 +26,9 @@ const escaped = (text: string): string => text.replace(/[&<>"']/g, (char) => ESC
 
 const shown = (value: ReportCell): string => (value === null ? '' : escaped(String(value)));
 
+/** A figure with nothing under it: a blank beside a label reads as a misprint. */
+const NOT_KNOWN = '—';
+
 /** A table wider than this is turned on its side rather than squeezed. */
 const PORTRAIT_COLUMNS = 7;
 
@@ -39,10 +42,10 @@ const STYLES = `
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 1pt 12pt; margin: 0; }
   dt { font-weight: 600; }
   dd { margin: 0; }
-  .figures { grid-template-columns: repeat(4, max-content 1fr); margin-bottom: 4pt; }
+  .figures { grid-template-columns: repeat(2, max-content minmax(4em, 1fr)); margin-bottom: 4pt; }
   .as-of, .cut { margin: 6pt 0 0; font-size: 8.5pt; font-style: italic; }
   .letter { margin: 0 0 8pt; white-space: pre-wrap; }
-  .closing { margin-top: 18pt; }
+  .closing { margin-top: 18pt; break-inside: avoid; }
   table { width: 100%; border-collapse: collapse; font-size: 9pt; }
   thead { display: table-header-group; }
   tr { break-inside: avoid; }
@@ -52,17 +55,20 @@ const STYLES = `
   td.n { white-space: nowrap; }
 `;
 
-const facts = (rows: readonly ReportFact[], className = ''): string =>
-  rows.length === 0
-    ? ''
-    : `<dl class="${className}">${rows
-        .map((fact) => `<dt>${escaped(fact.label)}</dt><dd>${shown(fact.value)}</dd>`)
-        .join('')}</dl>`;
+const fact = (row: ReportFact): string =>
+  `<dt>${escaped(row.label)}</dt><dd>${shown(row.value) || NOT_KNOWN}</dd>`;
 
-const paragraphs = (lines: readonly string[], className: string): string =>
-  lines.length === 0
-    ? ''
-    : `<div class="${className}">${lines.map((line) => `<p class="letter">${escaped(line)}</p>`).join('')}</div>`;
+function facts(rows: readonly ReportFact[], className = ''): string {
+  if (rows.length === 0) return '';
+  return `<dl class="${className}">${rows.map(fact).join('')}</dl>`;
+}
+
+const paragraph = (line: string): string => `<p class="letter">${escaped(line)}</p>`;
+
+function paragraphs(lines: readonly string[], className: string): string {
+  if (lines.length === 0) return '';
+  return `<div class="${className}">${lines.map(paragraph).join('')}</div>`;
+}
 
 const cellOf = (value: ReportCell): string =>
   typeof value === 'number' ? `<td class="n">${value}</td>` : `<td>${shown(value)}</td>`;
