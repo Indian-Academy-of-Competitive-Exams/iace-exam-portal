@@ -13,6 +13,7 @@ export const REPORT_GROUPS = {
   TESTS: 'tests',
   STUDENTS: 'students',
   PERFORMANCE: 'performance',
+  ENROLMENT: 'enrolment',
 } as const;
 export type ReportGroup = (typeof REPORT_GROUPS)[keyof typeof REPORT_GROUPS];
 
@@ -71,6 +72,14 @@ export const REPORT_KEYS = {
   ABSENTEES: 'absentees',
   INACTIVE_STUDENTS: 'inactive-students',
   RETAKES: 'retakes',
+  STUDENT_ROSTER: 'student-roster',
+  NEW_ENROLMENTS: 'new-enrolments',
+  STRENGTH: 'strength',
+  PROFILE_COMPLETENESS: 'profile-completeness',
+  STUDENT_STATUS: 'student-status',
+  MANUAL_GRANTS: 'manual-grants',
+  EVENT_CANDIDATES: 'event-candidates',
+  MOBILE_CHANGES: 'mobile-changes',
 } as const;
 export const reportKeySchema = z.enum(REPORT_KEYS);
 export type ReportKey = z.infer<typeof reportKeySchema>;
@@ -93,6 +102,12 @@ const A_MONTH_OF_SITTINGS = {
   group: REPORT_GROUPS.PERFORMANCE,
   needs: [REPORT_PARAMS.PERIOD],
   period: REPORT_PERIODS.LAST_MONTH,
+} as const;
+const THE_ROLL = { group: REPORT_GROUPS.ENROLMENT, needs: [] } as const;
+const THE_ROLL_OVER_A_MONTH = {
+  group: REPORT_GROUPS.ENROLMENT,
+  needs: [REPORT_PARAMS.PERIOD],
+  period: REPORT_PERIODS.THIS_MONTH,
 } as const;
 const ONE_STUDENT = { group: REPORT_GROUPS.STUDENTS, needs: [REPORT_PARAMS.STUDENT] } as const;
 const A_STUDENTS_PERIOD = {
@@ -189,6 +204,26 @@ export const REPORTS = {
     title: 'Inactive students',
   },
   [REPORT_KEYS.RETAKES]: { ...A_MONTH_OF_SITTINGS, title: 'Retakes' },
+  [REPORT_KEYS.STUDENT_ROSTER]: {
+    ...THE_ROLL,
+    title: 'Student roster',
+    takes: [REPORT_PARAMS.BRANCH],
+  },
+  [REPORT_KEYS.NEW_ENROLMENTS]: { ...THE_ROLL_OVER_A_MONTH, title: 'New enrolments' },
+  [REPORT_KEYS.STRENGTH]: { ...THE_ROLL, title: 'Strength' },
+  [REPORT_KEYS.PROFILE_COMPLETENESS]: {
+    ...THE_ROLL,
+    title: 'Unfinished profiles',
+    takes: [REPORT_PARAMS.BRANCH],
+  },
+  [REPORT_KEYS.STUDENT_STATUS]: { ...THE_ROLL, title: 'Suspended, blocked and deleted students' },
+  [REPORT_KEYS.MANUAL_GRANTS]: { ...THE_ROLL_OVER_A_MONTH, title: 'Access granted by hand' },
+  [REPORT_KEYS.EVENT_CANDIDATES]: {
+    group: REPORT_GROUPS.ENROLMENT,
+    needs: [REPORT_PARAMS.EVENT],
+    title: 'Event candidates',
+  },
+  [REPORT_KEYS.MOBILE_CHANGES]: { ...THE_ROLL_OVER_A_MONTH, title: 'Mobile number changes' },
 } as const satisfies Record<ReportKey, ReportSpec>;
 
 /** What heads every printed page. */

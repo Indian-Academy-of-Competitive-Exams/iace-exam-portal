@@ -5,14 +5,11 @@
  */
 import { type Prisma } from '@prisma/client';
 import {
-  AppException,
   ATTEMPT_STATUS,
-  ErrorCodes,
   REPORT_INACTIVE_DAYS_DEFAULT,
   REPORT_KEYS,
   REPORT_TOP_DEFAULT,
   TEST_STATUS,
-  type ReportFact,
   type ReportQueryOf,
 } from '@iace/contracts';
 import { COHORT_WHERE } from '../attempts';
@@ -22,21 +19,24 @@ import {
   exportInstant,
   type ExportColumn,
 } from '../common/exporting';
-import { type PrismaService } from '../prisma/prisma.service';
 import { STUDENT_CARD_SELECT, type StudentCard } from '../students';
 import { aboutPeriod, periodBefore, periodOf, type Period } from './period';
 import { type ReportBuilder, type ReportSources } from './report';
 import { groupBy, highestOf, meanOf, percentOf } from './report-figures';
-import { NO_BRANCH, STUDENT_COLUMNS, cardsOf, studentColumns } from './report-people';
+import {
+  ENROLLED,
+  NO_BRANCH,
+  STUDENT_COLUMNS,
+  aboutBranch,
+  cardsOf,
+  studentColumns,
+} from './report-people';
 import { subjectSheet } from './report-subjects';
 
 type PeriodBuilder = ReportBuilder<ReportQueryOf<typeof REPORT_KEYS.PERFORMANCE_BY_BRANCH>>;
 type OpenBuilder = ReportBuilder<ReportQueryOf<typeof REPORT_KEYS.INACTIVE_STUDENTS>>;
 
 const DAY_MS = 86_400_000;
-
-/** Who can still be expected in a hall: not erased, not suspended. */
-const ENROLLED = { deletedAt: null, isActive: true } as const satisfies Prisma.StudentWhereInput;
 
 const MEMBER_SELECT = {
   ...STUDENT_CARD_SELECT,
@@ -93,16 +93,6 @@ async function rankedIn(
       },
     ];
   });
-}
-
-async function aboutBranch(prisma: PrismaService, branchId?: string): Promise<ReportFact[]> {
-  if (branchId === undefined) return [];
-  const branch = await prisma.branch.findUnique({
-    where: { id: branchId },
-    select: { name: true },
-  });
-  if (branch === null) throw new AppException(ErrorCodes.NOT_FOUND, 'That branch does not exist');
-  return [{ label: 'Branch', value: branch.name }];
 }
 
 const accuracyOf = (sittings: readonly Sitting[]): number | null => {

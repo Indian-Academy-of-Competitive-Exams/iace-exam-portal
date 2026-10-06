@@ -1,4 +1,6 @@
 /** The people a report names: a student's columns, and the admin behind an id that carries no relation. */
+import { type Prisma } from '@prisma/client';
+import { AppException, ErrorCodes, type ReportFact } from '@iace/contracts';
 import { readInBatches, type ExportColumn } from '../common/exporting';
 import { type PrismaService } from '../prisma/prisma.service';
 import { studentCardsOf, type StudentCard } from '../students';
@@ -38,4 +40,21 @@ export async function adminNames(
     select: { id: true, fullName: true, email: true },
   });
   return new Map(admins.map((admin) => [admin.id, admin.fullName ?? admin.email]));
+}
+
+/** Who can still be expected in a hall: not erased, not suspended. */
+export const ENROLLED = {
+  deletedAt: null,
+  isActive: true,
+} as const satisfies Prisma.StudentWhereInput;
+
+/** The fact a report narrowed to one branch opens with; nothing when it was not narrowed. */
+export async function aboutBranch(prisma: PrismaService, branchId?: string): Promise<ReportFact[]> {
+  if (branchId === undefined) return [];
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { name: true },
+  });
+  if (branch === null) throw new AppException(ErrorCodes.NOT_FOUND, 'That branch does not exist');
+  return [{ label: 'Branch', value: branch.name }];
 }
