@@ -32,6 +32,7 @@ const detail = {
   ...summary,
   programs: [],
   events: [],
+  formerMobiles: [],
   currentBranchId: null,
   updatedAt: '2026-01-05T09:30:00.000Z',
   profile: null,
@@ -163,6 +164,9 @@ describe('studentDetailSchema — programs, events and branch are required keys'
 
     const { currentBranchId: _currentBranchId, ...withoutBranch } = detail;
     assert.equal(studentDetailSchema.safeParse(withoutBranch).success, false);
+
+    const { formerMobiles: _formerMobiles, ...withoutFormer } = detail;
+    assert.equal(studentDetailSchema.safeParse(withoutFormer).success, false);
   });
 });
 

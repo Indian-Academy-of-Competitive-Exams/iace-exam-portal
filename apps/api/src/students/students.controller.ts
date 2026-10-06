@@ -24,6 +24,7 @@ import {
   STUDENT_EXPORT_VIEWS,
   ActorTypes,
   can,
+  changeStudentMobileSchema,
   createStudentSchema,
   setStudentActiveSchema,
   setStudentTestBlockedSchema,
@@ -31,6 +32,7 @@ import {
   studentListQuerySchema,
   studentSittingsQuerySchema,
   updateStudentSchema,
+  type ChangeStudentMobileBody,
   type CreateStudentBody,
   type ErasureReceipt,
   type Paginated,
@@ -163,6 +165,18 @@ export class StudentsController {
     @Body(new ZodBody(setStudentActiveSchema)) body: SetStudentActiveBody,
   ): Promise<StudentDetail> {
     return this.students.setActive(id, body.isActive);
+  }
+
+  /** An admin's alone to change: it is who the student signs in as, and they are signed out by it. */
+  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id/mobile')
+  changeMobile(
+    @Param('id') id: string,
+    @Body(new ZodBody(changeStudentMobileSchema)) body: ChangeStudentMobileBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<StudentDetail> {
+    return this.students.changeMobile(id, body.mobile, user.id);
   }
 
   /** An erasure request, actioned. Irreversible, and every sitting they sat is left standing. */

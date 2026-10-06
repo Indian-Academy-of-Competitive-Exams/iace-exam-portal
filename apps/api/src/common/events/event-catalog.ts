@@ -5,6 +5,8 @@ export const DOMAIN_EVENTS = {
   STUDENT_PIN_RESET: 'student.pin_reset',
   /** A student was switched off, not merely re-granted or blocked. WIRED — auth revokes their sessions so the switch-off holds now, not at token expiry. */
   STUDENT_DEACTIVATED: 'student.deactivated',
+  /** An admin moved the number a student signs in with. WIRED — auth revokes their sessions: the device holding the old number may not be theirs. */
+  STUDENT_MOBILE_CHANGED: 'student.mobile_changed',
   /** A series or a test in it moved. WIRED — access bumps the counter every process's held series is built under. */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
   /** What the catalog shows of a stage moved: its name, its exam's code or course, or a blueprint on it. WIRED — as above. */
@@ -38,6 +40,10 @@ export interface StudentDeactivatedEvent {
   studentId: string;
 }
 
+export interface StudentMobileChangedEvent {
+  studentId: string;
+}
+
 export interface AccessCatalogChangedEvent {
   testSeriesId: string;
 }
@@ -57,6 +63,7 @@ export interface AdminDeactivatedEvent {
 export interface DomainEventPayloads {
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
   [DOMAIN_EVENTS.STUDENT_DEACTIVATED]: StudentDeactivatedEvent;
+  [DOMAIN_EVENTS.STUDENT_MOBILE_CHANGED]: StudentMobileChangedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
   [DOMAIN_EVENTS.EXAM_STAGE_CHANGED]: ExamStageChangedEvent;
   [DOMAIN_EVENTS.STUDENT_SIGNED_UP]: StudentSignedUpEvent;

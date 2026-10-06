@@ -59,6 +59,14 @@ practice, certificates.
   once a session is already missing, so a request that succeeds pays nothing.
 - **Active devices:** both Account screens list the account's sessions and sign another one out
   (`/me/sessions`). "Last active" moves on refresh, never per request.
+- **The number is an admin's to change, never the student's.** It is who they sign in as, so a
+  student moving it would make a paid enrolment something to hand on. The change ends every session
+  they hold, because the device carrying the old number may no longer be theirs, and clears the PIN
+  for the same reason: one set by whoever held the old SIM must open nothing, so the first sign-in on
+  the new number is by OTP. The old number is kept in `StudentMobileHistory` and the roster search finds them by it,
+  typed in full. It is never a way to sign in: operators recycle numbers, so the next owner of an
+  old one is a stranger who gets an account of their own, and the live-unique index stays on
+  `Student.mobile` alone. An erasure deletes the history with the rest of the person.
 
 **The mobile client** holds four decisions the code cannot state on its own:
 

@@ -119,6 +119,19 @@ describe('erasure is anonymisation', () => {
     assert.equal(row.anonymizedAt, null);
   });
 
+  /** The failure this prevents: an erased student still found by a number they once signed in with. */
+  it('forgets the numbers they used to sign in with', async () => {
+    const service = build();
+    const student = await makeStudent(prisma, { mobile: '9876543210' });
+    await prisma.studentMobileHistory.create({
+      data: { studentId: student.id, mobile: '9123456780' },
+    });
+
+    await service.anonymize(student.id);
+
+    assert.equal(await prisma.studentMobileHistory.count({ where: { studentId: student.id } }), 0);
+  });
+
   /** Erasing twice would rewrite the date the promise was kept on. */
   it('refuses a student who has already been erased', async () => {
     const service = build();

@@ -27,7 +27,7 @@ import {
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 import { pageArgs, paged } from '../common/pagination';
-import { isRecordNotFound } from '../common/prisma-errors';
+import { isRecordNotFound, isUniqueViolation } from '../common/prisma-errors';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { StartingPinService } from '../auth';
@@ -40,10 +40,11 @@ import { NotificationsService } from '../notifications';
 
 /** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
-import { studentOrderBy, studentWhere } from './student-query';
+import { formerHoldersOf, studentOrderBy, studentWhere } from './student-query';
 import { type ProfileDocumentColumn } from './student-flags';
 import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
 import { everyTermMatches } from '../common/search-terms';
+import { maskedMobile } from '../common/redact';
 import { HOLDS_OWN_ACCESS } from './own-access';
 
 /** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
@@ -66,6 +67,8 @@ export const AUDITED_STUDENT_FIELDS = [
 /** The single column each toggle route moves — the same `fieldDiff` definition of "changed". */
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
 const AUDITED_TEST_BLOCKED_FIELDS = ['isTestBlocked'] as const;
+const MOBILE_FIELD = 'mobile';
+const CHANGED_MEANWHILE = 'That student changed while this was being saved. Open them again.';
 
 /** Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports` excepted (see its own note; a bulk roster is one statement per file rather than per row). */
 @Injectable()
@@ -96,7 +99,7 @@ export class StudentsService {
   // ==========================================================================
 
   async list(query: StudentListQuery): Promise<Paginated<StudentSummary>> {
-    const where = studentWhere(query);
+    const where = studentWhere(query, await formerHoldersOf(this.prisma, query.q));
     // One round trip for the rows and one for the count.
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.student.findMany({
@@ -166,6 +169,10 @@ export class StudentsService {
       include: {
         profile: true,
         eventCandidacies: { include: { event: { select: { id: true, name: true } } } },
+        mobileHistory: {
+          orderBy: { createdAt: 'desc' },
+          select: { mobile: true, createdAt: true },
+        },
       },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
@@ -174,6 +181,10 @@ export class StudentsService {
     return {
       ...this.toSummary(student, own > 0),
       events: student.eventCandidacies.map((candidacy) => candidacy.event),
+      formerMobiles: student.mobileHistory.map((row) => ({
+        mobile: row.mobile,
+        replacedAt: row.createdAt.toISOString(),
+      })),
       currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
       profile: student.profile ? await this.toProfileView(student.profile) : null,
@@ -244,16 +255,7 @@ export class StudentsService {
   /** Creates a student before their first login. */
   async create(input: CreateStudentBody): Promise<StudentDetail> {
     const existing = await this.findLiveByMobile(input.mobile);
-    if (existing) {
-      throw new AppException(
-        ErrorCodes.CONFLICT,
-        'A student with that mobile number already exists',
-        {
-          fieldErrors: { mobile: ['Already registered'] },
-          details: { studentId: existing.id },
-        },
-      );
-    }
+    if (existing) throw mobileTaken(existing.id);
 
     if (input.enrolledExams?.length) {
       await this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
@@ -438,6 +440,51 @@ export class StudentsService {
     return this.detail(id);
   }
 
+  /** Who they sign in as. The old number is kept to find them by; every session ends and the PIN goes with it. */
+  async changeMobile(id: string, mobile: string, changedById: string): Promise<StudentDetail> {
+    // Live only: an erased student's tombstone is not a number to move.
+    const student = await this.prisma.student.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, mobile: true },
+    });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    if (student.mobile === mobile) {
+      throw new AppException(ErrorCodes.CONFLICT, 'That is already their mobile number', {
+        fieldErrors: { [MOBILE_FIELD]: ['Already their number'] },
+      });
+    }
+    const holder = await this.findLiveByMobile(mobile);
+    if (holder) throw mobileTaken(holder.id);
+
+    try {
+      // Together or not at all: a number that moved without its old one kept cannot be found by it.
+      await this.prisma.$transaction(async (tx) => {
+        // Guarded by what was read, so an erasure or a second change that landed first moves nothing here.
+        const moved = await tx.student.updateMany({
+          where: { id, deletedAt: null, mobile: student.mobile },
+          // A PIN set by whoever held the old SIM must open nothing: the new number signs in by OTP first.
+          data: { mobile, pinHash: null },
+        });
+        if (moved.count === 0) throw new AppException(ErrorCodes.CONFLICT, CHANGED_MEANWHILE);
+        await tx.studentMobileHistory.create({
+          data: { studentId: id, mobile: student.mobile, changedById },
+        });
+      }, TX_LIMITS.SHORT);
+    } catch (error) {
+      // Two changes raced for one number; the live-unique index chose, and the loser reads the same refusal.
+      if (isUniqueViolation(error)) throw mobileTaken();
+      throw error;
+    }
+
+    // Masked: the audit log is not emptied by an erasure, so it never holds a whole number.
+    this.auditContext.setChanged({
+      [MOBILE_FIELD]: { from: maskedMobile(student.mobile), to: maskedMobile(mobile) },
+    });
+    // The device that held the old number may not be theirs any more, so nothing stays signed in.
+    this.events.emit(DOMAIN_EVENTS.STUDENT_MOBILE_CHANGED, { studentId: id });
+    return this.detail(id);
+  }
+
   /** Sign-in is untouched: they keep their history and their session, and cannot start a test. */
   async setTestBlocked(id: string, isTestBlocked: boolean): Promise<StudentDetail> {
     const student = await this.prisma.student.findFirst({
@@ -515,6 +562,14 @@ export class StudentsService {
       createdAt: row.createdAt.toISOString(),
     };
   }
+}
+
+/** One refusal for a number a live student already signs in with, whichever write met it. */
+function mobileTaken(studentId?: string): AppException {
+  return new AppException(ErrorCodes.CONFLICT, 'A student with that mobile number already exists', {
+    fieldErrors: { [MOBILE_FIELD]: ['Already registered'] },
+    ...(studentId ? { details: { studentId } } : {}),
+  });
 }
 
 /** Every column `AUDITED_STUDENT_FIELDS` names, and nothing else. */

@@ -1,10 +1,88 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type ErasureReceipt, type StudentDetail } from '@iace/contracts';
-import { Button, ConfirmDialog, SectionHeading, plural } from '@iace/ui';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import {
+  INSTITUTE_TIME_ZONE,
+  changeStudentMobileSchema,
+  type ChangeStudentMobileInput,
+  type ErasureReceipt,
+  type StudentDetail,
+} from '@iace/contracts';
+import {
+  Alert,
+  Button,
+  ConfirmDialog,
+  FormDialog,
+  FormField,
+  Input,
+  SectionHeading,
+  StatRow,
+  plural,
+} from '@iace/ui';
+import { applyFieldErrors } from '@iace/app-kit';
 import { api } from '../../lib/api';
 import { QUERY_KEYS, studentQueryKey } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
+
+const MOBILE_FIELDS = ['mobile'] as const;
+
+const REPLACED_ON = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: INSTITUTE_TIME_ZONE,
+});
+
+/** The dialog is the confirm: it names what the change costs above the one field it takes. */
+function ChangeMobileDialog({
+  detail,
+  open,
+  onOpenChange,
+  onChanged,
+}: Readonly<{
+  detail: StudentDetail;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChanged: (updated: StudentDetail) => void;
+}>) {
+  const form = useForm<ChangeStudentMobileInput>({
+    resolver: zodResolver(changeStudentMobileSchema),
+    defaultValues: { mobile: '' },
+  });
+  const change = useMutation({
+    meta: { success: 'Mobile number changed.', fields: MOBILE_FIELDS },
+    mutationFn: (values: ChangeStudentMobileInput) =>
+      api.admin.students.changeMobile(detail.id, values),
+    onError: (error) => applyFieldErrors(error, form.setError, MOBILE_FIELDS),
+    onSuccess: (updated) => {
+      // Closed by the parent, which skips the dialog's own reset: the next open must not show this number.
+      form.reset();
+      onOpenChange(false);
+      onChanged(updated);
+    },
+  });
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Change mobile number"
+      submitLabel="Change number"
+      loading={change.isPending}
+      form={form}
+      onSubmit={(values) => change.mutate(values)}
+    >
+      <Alert variant="warning">
+        They are signed out on every device. On the new number they sign in by OTP and choose a new
+        PIN.
+      </Alert>
+      <FormField form={form} name="mobile" label="New mobile number">
+        {(control) => <Input {...control} inputMode="numeric" autoComplete="off" autoFocus />}
+      </FormField>
+    </FormDialog>
+  );
+}
 
 /** Everything done TO a student rather than recorded about them, each behind its own confirm. */
 export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
@@ -12,6 +90,7 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
   const [blockConfirm, setBlockConfirm] = useState(false);
   const [signInConfirm, setSignInConfirm] = useState(false);
   const [eraseConfirm, setEraseConfirm] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const isSuperAdmin = useAuth().identity?.isSuperAdmin ?? false;
   const { id, isActive, isTestBlocked } = detail;
   const name = detail.fullName ?? detail.mobile;
@@ -78,6 +157,28 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
         }
       />
 
+      <SectionHeading
+        title="Mobile number"
+        meta={detail.mobile}
+        action={
+          <Button type="button" size="sm" variant="outline" onClick={() => setMobileOpen(true)}>
+            Change number
+          </Button>
+        }
+      />
+      {detail.formerMobiles.length > 0 ? (
+        <div className="flex max-w-sm flex-col gap-2">
+          <SectionHeading level={3} title="Previous numbers" />
+          {detail.formerMobiles.map((former) => (
+            <StatRow
+              key={former.replacedAt}
+              label={former.mobile}
+              value={`Until ${REPLACED_ON.format(new Date(former.replacedAt))}`}
+            />
+          ))}
+        </div>
+      ) : null}
+
       {isSuperAdmin ? (
         <SectionHeading
           title="Sign-in"
@@ -112,6 +213,13 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
           }
         />
       ) : null}
+
+      <ChangeMobileDialog
+        detail={detail}
+        open={mobileOpen}
+        onOpenChange={setMobileOpen}
+        onChanged={applyUpdate}
+      />
 
       {/* Both directions ask, so a control that changes whether somebody can sit
           an exam never acts on a single click. */}

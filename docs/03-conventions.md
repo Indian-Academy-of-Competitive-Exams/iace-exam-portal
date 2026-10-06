@@ -142,7 +142,7 @@ erodes.
 | Module        | Owns (Prisma models)                                                                                              |
 | ------------- | ----------------------------------------------------------------------------------------------------------------- |
 | admins        | `Admin`, `AdminFeaturePermission`                                                                                 |
-| students      | `Student`, `StudentProfile`                                                                                       |
+| students      | `Student`, `StudentProfile`, `StudentMobileHistory`                                                               |
 | branches      | `Branch`                                                                                                          |
 | access        | `Program`, `TestSeries`, `StudentGrant`                                                                           |
 | events        | `Event`, `EventCandidate`                                                                                         |
@@ -202,6 +202,7 @@ does not run.
 | `student.signed_up`      | auth, on the signup that created the row                                                      | notifications (the welcome)                         | wired |
 | `student.pin_reset`      | auth, both reset paths                                                                        | notifications (the PIN-changed notice)              | wired |
 | `student.deactivated`    | students (deactivation, erasure)                                                              | auth (revokes their sessions)                       | wired |
+| `student.mobile_changed` | students (an admin moving the sign-in number)                                                 | auth (revokes their sessions)                       | wired |
 | `admin.deactivated`      | admins (deactivation)                                                                         | auth (revokes their sessions)                       | wired |
 | `access.catalog_changed` | access (series write), tests (every offering write, a rename or re-skin)                      | access (every API process rebuilds its held series) | wired |
 | `exam_stage.changed`     | configs (a stage rename, an exam's code or course, an edit to a blueprint a test is built on) | access (as above)                                   | wired |

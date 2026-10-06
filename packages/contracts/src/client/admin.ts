@@ -165,6 +165,7 @@ import {
   studentDetailSchema,
   studentSummarySchema,
   type CreateStudentInput,
+  type ChangeStudentMobileInput,
   type SetStudentTestBlockedBody,
   type StudentDetail,
   type StudentExportQueryInput,
@@ -333,6 +334,9 @@ export function adminClient(core: ApiCore) {
 
       setTestBlocked: (id: string, input: SetStudentTestBlockedBody): Promise<StudentDetail> =>
         write('PATCH', ADMIN_STUDENT_ROUTES.setTestBlocked(id), studentDetailSchema, input),
+
+      changeMobile: (id: string, input: ChangeStudentMobileInput): Promise<StudentDetail> =>
+        write('PATCH', ADMIN_STUDENT_ROUTES.changeMobile(id), studentDetailSchema, input),
 
       /** Their evaluated sittings, paged. The share picker's own list is capped; a report's is not. */
       sittings: (id: string, query: StudentSittingsQueryInput): Promise<Paginated<ReportSitting>> =>

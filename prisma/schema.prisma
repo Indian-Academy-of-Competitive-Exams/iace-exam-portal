@@ -798,7 +798,7 @@ model Student {
   updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
   profile           StudentProfile?
-  currentBranch     Branch?              @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
+  currentBranch     Branch?                @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
   attempts          Attempt[]
   grants            StudentGrant[]
   notifications     Notification[]
@@ -808,6 +808,7 @@ model Student {
   pushSubscriptions PushSubscription[]
   pushDevices       PushDevice[]
   savedQuestions    SavedQuestion[]
+  mobileHistory     StudentMobileHistory[]
 
   @@index([mobile])
   @@index([externalRef])
@@ -822,6 +823,24 @@ model Student {
   // Composite, matching studentOrderBy's tie-break so the sort is an index scan.
   @@index([fullName, id], map: "Student_fullName_id_idx")
   @@index([createdAt, id], map: "Student_createdAt_id_idx")
+}
+
+// A number a student used to sign in with, kept so the roster can still find them by it.
+// Never a way to sign in: operators recycle numbers, and the next owner is a stranger.
+// Append-only, so createdAt is when the number stopped being theirs. Hard-deleted at erasure,
+// because the number is the person. changedById carries no foreign key: the record outlives
+// whoever made the change.
+model StudentMobileHistory {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  studentId   String   @db.Uuid
+  mobile      String
+  changedById String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([mobile])
 }
 
 // Aadhaar/PAN images are never stored here — only the verification status.
