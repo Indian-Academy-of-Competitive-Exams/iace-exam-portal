@@ -86,6 +86,11 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
   const asked = reportQuerySchema.safeParse(query);
   const missing = asked.success ? reportFieldsMissing(reportKey, asked.data) : [];
   const ready = asked.success && missing.length === 0;
+  // The first thing still to be chosen, which is what an empty page has to name.
+  const lacking =
+    spec.needs.find((param) =>
+      REPORT_PARAM_FIELDS[param].some((field) => (missing as readonly string[]).includes(field)),
+    ) ?? spec.needs[0];
 
   const report = useQuery({
     queryKey: reportQueryKey(reportKey, query),
@@ -95,8 +100,8 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
 
   const filters = reportFilters(spec, {
     about: report.data?.about ?? [],
-    period: { from: query.from, to: query.to },
-    setPeriod: (period) => url.set({ ...period }),
+    fields,
+    set: (changes) => url.set(changes),
   });
   // What a report is asked by is not narrowed any-or-all, so the bar is handed no match toggle.
   const { values, setFilter, clearFilters } = useFilterSpec(filters);
@@ -139,23 +144,22 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
       }
       filters={{ spec: filters, state: { values: shown, setFilter, clearFilters } }}
     >
-      <Body spec={spec} ready={ready} report={report} />
+      <Body lacking={lacking} ready={ready} report={report} />
     </PageFrame>
   );
 }
 
 function Body({
-  spec,
+  lacking,
   ready,
   report,
 }: Readonly<{
-  spec: ReportSpec;
+  lacking: ReportParam | undefined;
   ready: boolean;
   report: { data?: ReportDocument; isError: boolean; refetch: () => void };
 }>) {
   if (!ready) {
-    const [first] = spec.needs;
-    const wanted = first ? REPORT_PARAM_LABELS[first].toLowerCase() : 'report';
+    const wanted = lacking ? REPORT_PARAM_LABELS[lacking].toLowerCase() : 'report';
     return <EmptyState title={`No ${wanted} chosen`} />;
   }
   if (report.isError) {
@@ -176,7 +180,7 @@ function Body({
     );
   }
 
-  const { about, figures, tables } = report.data;
+  const { about, preface, figures, tables, closing } = report.data;
   return (
     <div className="flex flex-col gap-8">
       <div className="flex max-w-xl flex-col gap-1.5">
@@ -184,6 +188,7 @@ function Body({
           <StatRow key={fact.label} label={fact.label} value={fact.value ?? DASH} />
         ))}
       </div>
+      <Letter lines={preface} />
       {figures.length === 0 ? null : (
         <MetricGroup>
           {figures.map((figure) => (
@@ -198,6 +203,21 @@ function Body({
       )}
       {tables.map((table) => (
         <TablePreview key={table.title} table={table} />
+      ))}
+      <Letter lines={closing} />
+    </div>
+  );
+}
+
+/** A letter's own words: the record's content, as it will be printed, not the screen describing itself. */
+function Letter({ lines }: Readonly<{ lines: readonly string[] }>) {
+  if (lines.length === 0) return null;
+  return (
+    <div className="flex max-w-3xl flex-col gap-2 text-sm text-foreground">
+      {lines.map((line) => (
+        <p key={line} className="whitespace-pre-wrap">
+          {line}
+        </p>
       ))}
     </div>
   );

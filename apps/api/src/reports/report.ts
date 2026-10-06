@@ -15,7 +15,14 @@ import {
   type ReportTable,
 } from '@iace/contracts';
 import { type AccessResolverService } from '../access';
-import { type LeaderboardService, type TestAnalyticsService } from '../attempts';
+import {
+  type AttemptReportService,
+  type LeaderboardService,
+  type PaperSheetService,
+  type PerformanceAnalyticsService,
+  type StudentOverviewService,
+  type TestAnalyticsService,
+} from '../attempts';
 import {
   EXPORT_DATE_FORMATS,
   exportInstant,
@@ -29,6 +36,9 @@ export interface Report {
   about: ReportFact[];
   figures: ReportFact[];
   sheets: ExportSheet[];
+  /** Paragraphs before the figures and after the tables. A page prints them; a workbook has no use for them. */
+  preface?: string[];
+  closing?: string[];
 }
 
 /** What a builder reads through: the database, and each owner's own account of a figure it defines. */
@@ -37,6 +47,10 @@ export interface ReportSources {
   analytics: TestAnalyticsService;
   access: AccessResolverService;
   leaderboard: LeaderboardService;
+  performance: PerformanceAnalyticsService;
+  overview: StudentOverviewService;
+  attemptReport: AttemptReportService;
+  papers: PaperSheetService;
 }
 
 /** A builder names the query it reads; the registry holds it to what its catalogue row requires. */
@@ -84,8 +98,10 @@ export function toDocument(key: ReportKey, report: Report, asOf = new Date()): R
     title: REPORTS[key].title,
     asOf: asOf.toISOString(),
     about: report.about,
+    preface: report.preface ?? [],
     figures: report.figures,
     tables: report.sheets.map(tableOf),
+    closing: report.closing ?? [],
   };
 }
 

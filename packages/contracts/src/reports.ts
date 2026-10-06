@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { searchQuery } from './common';
+import { paginationQuerySchema } from './envelope';
 import { dateOnlySchema, todayISO } from './students';
 
 // ============================================================================
@@ -9,6 +11,7 @@ import { dateOnlySchema, todayISO } from './students';
 
 export const REPORT_GROUPS = {
   TESTS: 'tests',
+  STUDENTS: 'students',
 } as const;
 export type ReportGroup = (typeof REPORT_GROUPS)[keyof typeof REPORT_GROUPS];
 
@@ -50,6 +53,13 @@ export const REPORT_KEYS = {
   SERIES_PROGRESS: 'series-progress',
   TEST_SCHEDULE: 'test-schedule',
   PARTICIPATION_TREND: 'participation-trend',
+  STUDENT_SCORE_CARD: 'student-score-card',
+  STUDENT_WEEKLY: 'student-weekly',
+  STUDENT_MONTHLY: 'student-monthly',
+  STUDENT_CUMULATIVE: 'student-cumulative',
+  STUDENT_PARENT_LETTER: 'student-parent-letter',
+  STUDENT_TOPICS: 'student-topics',
+  STUDENT_MISSED: 'student-missed',
 } as const;
 export const reportKeySchema = z.enum(REPORT_KEYS);
 export type ReportKey = z.infer<typeof reportKeySchema>;
@@ -68,6 +78,11 @@ export interface ReportSpec {
 
 const ONE_TEST = { group: REPORT_GROUPS.TESTS, needs: [REPORT_PARAMS.TEST] } as const;
 const A_PERIOD = { needs: [REPORT_PARAMS.PERIOD] } as const;
+const ONE_STUDENT = { group: REPORT_GROUPS.STUDENTS, needs: [REPORT_PARAMS.STUDENT] } as const;
+const A_STUDENTS_PERIOD = {
+  group: REPORT_GROUPS.STUDENTS,
+  needs: [REPORT_PARAMS.STUDENT, REPORT_PARAMS.PERIOD],
+} as const;
 
 export const REPORTS = {
   [REPORT_KEYS.TEST_RESULTS]: { ...ONE_TEST, title: 'Result sheet' },
@@ -108,6 +123,29 @@ export const REPORTS = {
     title: 'Participation trend',
     period: REPORT_PERIODS.THIS_MONTH,
   },
+  [REPORT_KEYS.STUDENT_SCORE_CARD]: {
+    group: REPORT_GROUPS.STUDENTS,
+    needs: [REPORT_PARAMS.STUDENT, REPORT_PARAMS.ATTEMPT],
+    title: 'Score card',
+  },
+  [REPORT_KEYS.STUDENT_WEEKLY]: {
+    ...A_STUDENTS_PERIOD,
+    title: 'Weekly student report',
+    period: REPORT_PERIODS.LAST_WEEK,
+  },
+  [REPORT_KEYS.STUDENT_MONTHLY]: {
+    ...A_STUDENTS_PERIOD,
+    title: 'Monthly student report',
+    period: REPORT_PERIODS.LAST_MONTH,
+  },
+  [REPORT_KEYS.STUDENT_CUMULATIVE]: { ...ONE_STUDENT, title: 'Cumulative student report' },
+  [REPORT_KEYS.STUDENT_PARENT_LETTER]: {
+    ...A_STUDENTS_PERIOD,
+    title: 'Progress letter to parents',
+    period: REPORT_PERIODS.LAST_MONTH,
+  },
+  [REPORT_KEYS.STUDENT_TOPICS]: { ...ONE_STUDENT, title: 'Topic-wise accuracy' },
+  [REPORT_KEYS.STUDENT_MISSED]: { ...ONE_STUDENT, title: 'Tests missed' },
 } as const satisfies Record<ReportKey, ReportSpec>;
 
 /** What heads every printed page. */
@@ -227,12 +265,44 @@ export const reportDocumentSchema = z.object({
   asOf: z.string(),
   /** What it covers: the test, the period, the branch. */
   about: z.array(reportFactSchema),
+  /** Paragraphs set before the figures and after the tables: what makes a report a letter. */
+  preface: z.array(z.string()).default([]),
   figures: z.array(reportFactSchema),
   tables: z.array(reportTableSchema),
+  closing: z.array(z.string()).default([]),
 });
 export type ReportDocument = z.infer<typeof reportDocumentSchema>;
+
+/** The params chosen from a list too long to hand over whole; the rest are dates and numbers. */
+export const REPORT_CHOICE_PARAMS = [
+  REPORT_PARAMS.TEST,
+  REPORT_PARAMS.STUDENT,
+  REPORT_PARAMS.ATTEMPT,
+  REPORT_PARAMS.SERIES,
+  REPORT_PARAMS.EVENT,
+  REPORT_PARAMS.BRANCH,
+] as const;
+export const reportChoiceParamSchema = z.enum(REPORT_CHOICE_PARAMS);
+export type ReportChoiceParam = z.infer<typeof reportChoiceParamSchema>;
+
+/** One row of a report's picker. Its own route, so asking for a report needs no grant but REPORTS. */
+export const reportChoiceSchema = z.object({
+  value: z.string(),
+  label: z.string(),
+  hint: z.string().nullable(),
+});
+export type ReportChoice = z.infer<typeof reportChoiceSchema>;
+
+export const reportChoicesQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  /** Whose sittings: the one choice that hangs off another. */
+  studentId: z.uuid().optional(),
+});
+export type ReportChoicesQuery = z.infer<typeof reportChoicesQuerySchema>;
+export type ReportChoicesQueryInput = z.input<typeof reportChoicesQuerySchema>;
 
 export const ADMIN_REPORT_ROUTES = {
   read: (key: ReportKey) => `/admin/reports/${key}`,
   export: (key: ReportKey) => `/admin/reports/${key}/export`,
+  choices: (param: ReportChoiceParam) => `/admin/reports/choices/${param}`,
 } as const;

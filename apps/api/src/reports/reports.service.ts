@@ -5,13 +5,24 @@ import {
   REPORTS,
   reportFieldsMissing,
   type AdminAuthority,
+  type Paginated,
+  type ReportChoice,
+  type ReportChoiceParam,
+  type ReportChoicesQuery,
   type ReportDocument,
   type ReportKey,
   type ReportQuery,
   type ReportSpec,
 } from '@iace/contracts';
 import { AccessResolverService } from '../access';
-import { LeaderboardService, TestAnalyticsService } from '../attempts';
+import {
+  AttemptReportService,
+  LeaderboardService,
+  PaperSheetService,
+  PerformanceAnalyticsService,
+  StudentOverviewService,
+  TestAnalyticsService,
+} from '../attempts';
 import { writeWorkbook } from '../common/exporting';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -24,9 +35,11 @@ import {
   type ReportSources,
 } from './report';
 import { PERIOD_REPORTS } from './period-reports';
+import { reportChoices } from './report-choices';
+import { STUDENT_REPORTS } from './student-reports';
 import { TEST_REPORTS } from './test-reports';
 
-const BUILDERS: ReportBuilders = { ...TEST_REPORTS, ...PERIOD_REPORTS };
+const BUILDERS: ReportBuilders = { ...TEST_REPORTS, ...PERIOD_REPORTS, ...STUDENT_REPORTS };
 
 /** The read model behind every report. It writes nothing, and owns no table (docs/03 §4). */
 @Injectable()
@@ -38,8 +51,25 @@ export class ReportsService {
     analytics: TestAnalyticsService,
     access: AccessResolverService,
     leaderboard: LeaderboardService,
+    performance: PerformanceAnalyticsService,
+    overview: StudentOverviewService,
+    attemptReport: AttemptReportService,
+    papers: PaperSheetService,
   ) {
-    this.sources = { prisma, analytics, access, leaderboard };
+    this.sources = {
+      prisma,
+      analytics,
+      access,
+      leaderboard,
+      performance,
+      overview,
+      attemptReport,
+      papers,
+    };
+  }
+
+  choices(param: ReportChoiceParam, query: ReportChoicesQuery): Promise<Paginated<ReportChoice>> {
+    return reportChoices(this.sources.prisma, param, query);
   }
 
   async document(

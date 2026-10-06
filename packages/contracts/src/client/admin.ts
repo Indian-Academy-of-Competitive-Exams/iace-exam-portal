@@ -38,7 +38,11 @@ import {
 import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from '../dashboard';
 import {
   ADMIN_REPORT_ROUTES,
+  reportChoiceSchema,
   reportDocumentSchema,
+  type ReportChoice,
+  type ReportChoiceParam,
+  type ReportChoicesQueryInput,
   type ReportDocument,
   type ReportKey,
   type ReportQueryInput,
@@ -1015,6 +1019,13 @@ export function adminClient(core: ApiCore) {
 
       export: (key: ReportKey, query: ReportQueryInput): Promise<Blob> =>
         requestBlob(ADMIN_REPORT_ROUTES.export(key), { ...query }),
+
+      /** What a report's picker offers, behind the same key as the report it is asking for. */
+      choices: (
+        param: ReportChoiceParam,
+        query: ReportChoicesQueryInput = {},
+      ): Promise<Paginated<ReportChoice>> =>
+        list(ADMIN_REPORT_ROUTES.choices(param), query, reportChoiceSchema),
     },
 
     audit: {

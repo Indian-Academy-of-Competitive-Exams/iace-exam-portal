@@ -41,6 +41,8 @@ const STYLES = `
   dd { margin: 0; }
   .figures { grid-template-columns: repeat(4, max-content 1fr); margin-bottom: 4pt; }
   .as-of, .cut { margin: 6pt 0 0; font-size: 8.5pt; font-style: italic; }
+  .letter { margin: 0 0 8pt; white-space: pre-wrap; }
+  .closing { margin-top: 18pt; }
   table { width: 100%; border-collapse: collapse; font-size: 9pt; }
   thead { display: table-header-group; }
   tr { break-inside: avoid; }
@@ -56,6 +58,11 @@ const facts = (rows: readonly ReportFact[], className = ''): string =>
     : `<dl class="${className}">${rows
         .map((fact) => `<dt>${escaped(fact.label)}</dt><dd>${shown(fact.value)}</dd>`)
         .join('')}</dl>`;
+
+const paragraphs = (lines: readonly string[], className: string): string =>
+  lines.length === 0
+    ? ''
+    : `<div class="${className}">${lines.map((line) => `<p class="letter">${escaped(line)}</p>`).join('')}</div>`;
 
 const cellOf = (value: ReportCell): string =>
   typeof value === 'number' ? `<td class="n">${value}</td>` : `<td>${shown(value)}</td>`;
@@ -79,5 +86,5 @@ export function reportHtml(document: ReportDocument): string {
   const page = widest > PORTRAIT_COLUMNS ? 'A4 landscape' : 'A4 portrait';
   const title = escaped(document.title);
 
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>@page { size: ${page}; margin: 12mm; }${STYLES}</style></head><body><header><p class="letterhead">${escaped(REPORT_LETTERHEAD)}</p><h1>${title}</h1>${facts(document.about)}<p class="as-of">As of ${escaped(instituteDateTimeLabel(document.asOf))}</p></header>${facts(document.figures, 'figures')}${document.tables.map(tableOf).join('')}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>@page { size: ${page}; margin: 12mm; }${STYLES}</style></head><body><header><p class="letterhead">${escaped(REPORT_LETTERHEAD)}</p><h1>${title}</h1>${facts(document.about)}<p class="as-of">As of ${escaped(instituteDateTimeLabel(document.asOf))}</p></header>${paragraphs(document.preface, 'preface')}${facts(document.figures, 'figures')}${document.tables.map(tableOf).join('')}${paragraphs(document.closing, 'closing')}</body></html>`;
 }

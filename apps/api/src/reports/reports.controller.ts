@@ -6,8 +6,14 @@ import {
   ActorTypes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  reportChoiceParamSchema,
+  reportChoicesQuerySchema,
   reportKeySchema,
   reportQuerySchema,
+  type Paginated,
+  type ReportChoice,
+  type ReportChoiceParam,
+  type ReportChoicesQuery,
   type ReportDocument,
   type ReportKey,
   type ReportQuery,
@@ -32,6 +38,16 @@ export class ReportsController {
     private readonly reports: ReportsService,
     private readonly auditContext: AuditContext,
   ) {}
+
+  /** Declared before `:key`, which would otherwise take "choices" as a report. */
+  @RequiresFeature(FEATURE_KEYS.REPORTS, PERMISSION_LEVELS.READ)
+  @Get('choices/:param')
+  choices(
+    @Param('param', new ZodParam(reportChoiceParamSchema)) param: ReportChoiceParam,
+    @Query(new ZodQuery(reportChoicesQuerySchema)) query: ReportChoicesQuery,
+  ): Promise<Paginated<ReportChoice>> {
+    return this.reports.choices(param, query);
+  }
 
   @RequiresFeature(FEATURE_KEYS.REPORTS, PERMISSION_LEVELS.READ)
   @Get(':key')

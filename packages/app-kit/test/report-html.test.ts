@@ -15,8 +15,10 @@ const documentOf = (tables: ReportTable[]): ReportDocument => ({
   title: 'Result sheet',
   asOf: '2026-06-01T20:00:00.000Z',
   about: [{ label: 'Test', value: 'Mock <1> & "final"' }],
+  preface: [],
   figures: [{ label: 'Ranked sittings', value: 2 }],
   tables,
+  closing: [],
 });
 
 test('reportHtml escapes what a person typed, so a name cannot become markup', () => {
@@ -48,4 +50,16 @@ test('reportHtml dates the page on the institute clock, and leaves a blank cell 
   // 20:00 UTC is 01:30 the next morning in Kolkata.
   assert.match(html, /As of 2 Jun 2026, 1:30\s?am/);
   assert.ok(html.includes('<td>Ana</td><td></td>'));
+});
+
+test('reportHtml sets a letter’s paragraphs before the figures and after the tables', () => {
+  const letter = {
+    ...documentOf([table(['Student'], [['Ana']])]),
+    preface: ['Dear Parent,'],
+    closing: ['Signed <here>'],
+  };
+  const html = reportHtml(letter);
+
+  assert.ok(html.indexOf('Dear Parent,') < html.indexOf('Ranked sittings'));
+  assert.ok(html.indexOf('</table>') < html.indexOf('Signed &lt;here&gt;'));
 });

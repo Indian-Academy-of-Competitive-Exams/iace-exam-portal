@@ -48,6 +48,7 @@ import {
   REPORT_GROUPS,
   REPORT_PARAMS,
   REPORT_PERIODS,
+  type ReportChoiceParam,
   type ReportGroup,
   type ReportKey,
   type ReportParam,
@@ -529,6 +530,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
 /** What each group of reports is called on its tab. */
 export const REPORT_GROUP_LABELS: Readonly<Record<ReportGroup, string>> = {
   [REPORT_GROUPS.TESTS]: 'Tests',
+  [REPORT_GROUPS.STUDENTS]: 'Students',
 };
 
 /** The periods a report's bar offers by name. */
@@ -777,8 +779,9 @@ export const namedTestQueryKey = (examStageId: string | undefined, stem: string)
 export const reportQueryKey = (key: ReportKey, query: ReportQueryInput) =>
   [...QUERY_KEYS.REPORTS, key, query] as const;
 
-/** Every test, live or not: a report is asked for long after the hall has emptied. */
-export const testPickerQueryKey = () => [...QUERY_KEYS.TESTS, QUERY_SCOPES.PICKER] as const;
+/** A sitting's choices hang off a student, so whose they are is part of the key. */
+export const reportChoicesQueryKey = (param: ReportChoiceParam, studentId: string) =>
+  [...QUERY_KEYS.REPORTS, QUERY_SCOPES.PICKER, param, studentId] as const;
 
 export const testAnalyticsQueryKey = (testId: string) =>
   [...QUERY_KEYS.TEST_ANALYTICS, testId] as const;

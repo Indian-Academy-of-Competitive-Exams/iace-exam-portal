@@ -7,12 +7,16 @@ import {
   type ReportQuery,
 } from '@iace/contracts';
 import { AccessResolverService } from '../../src/access/access-resolver.service';
+import { AttemptReportService } from '../../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../../src/attempts/leaderboard.service';
+import { StudentOverviewService } from '../../src/attempts/overview.service';
+import { PaperSheetService } from '../../src/attempts/paper-sheet.service';
+import { PerformanceAnalyticsService } from '../../src/attempts/performance.service';
 import { RollupQueue } from '../../src/attempts/rollup-queue';
 import { TestAnalyticsService } from '../../src/attempts/test-analytics.service';
 import { type PrismaService } from '../../src/prisma/prisma.service';
 import { ReportsService } from '../../src/reports/reports.service';
-import { FakeQueue, FakeRedis } from '../../test/support/fakes';
+import { FakeQueue, FakeRedis, FakeStorage } from '../../test/support/fakes';
 
 export const VIEWER: AdminAuthority = { isActive: true, isSuperAdmin: false, permissions: {} };
 export const SUPER_ADMIN: AdminAuthority = { ...VIEWER, isSuperAdmin: true };
@@ -25,7 +29,18 @@ export function reportsOver(prisma: PrismaService) {
     new RollupQueue(new FakeQueue().asQueue()),
     access,
   );
-  const reports = new ReportsService(prisma, analytics, access, new LeaderboardService(prisma));
+  const leaderboard = new LeaderboardService(prisma);
+  const papers = new PaperSheetService(prisma);
+  const reports = new ReportsService(
+    prisma,
+    analytics,
+    access,
+    leaderboard,
+    new PerformanceAnalyticsService(prisma, leaderboard),
+    new StudentOverviewService(prisma, leaderboard),
+    new AttemptReportService(prisma, leaderboard, new FakeStorage() as never, papers),
+    papers,
+  );
   const read = (
     key: ReportKey,
     query: ReportQuery,
