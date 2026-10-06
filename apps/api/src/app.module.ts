@@ -34,6 +34,7 @@ import { ActorGuard } from './auth/guards/actor.guard';
 import { FeaturePermissionGuard } from './auth/guards/feature-permission.guard';
 import { SuperAdminGuard } from './auth/guards/super-admin.guard';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { HttpDrain } from './common/http-drain';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { RequestObserverMiddleware } from './common/metrics/request-observer.middleware';
 import { RequestBudgetInterceptor } from './common/request-budget';
@@ -71,6 +72,7 @@ import { RequestIdMiddleware } from './common/request-id';
     MetricsModule,
   ],
   providers: [
+    HttpDrain,
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     // First, so the budget bounds the interceptors below it too, not the handler alone.
     { provide: APP_INTERCEPTOR, useClass: RequestBudgetInterceptor },

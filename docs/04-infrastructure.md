@@ -888,7 +888,12 @@ both `image:` and `build:` for exactly that reason.
    containers do not start until it has.
 4. Recreate the API containers. Each is `tini`-led, so SIGTERM closes Nest and the container exits
    (`b2029d4`). **There is no draining on this shape** — `docker compose up -d` recreates with a
-   gap, which is the cost of not having a load balancer.
+   gap, which is the cost of not having a load balancer. What the stopping container does is
+   bounded: from SIGTERM every answer ends its connection, and anything still open after
+   `SHUTDOWN_GRACE_MS` (10s) is cut, so the workers, Prisma and Redis always get to close inside
+   `stop_grace_period`. Without that, one request in flight at SIGTERM held the listener's close for
+   the 65s keep-alive — past the 30s grace, so Docker killed the process before a worker closed —
+   and a client that kept polling held it for good.
 5. Upload the SPAs: hashed assets **first**, with `max-age=31536000, immutable`; then `index.html`,
    `sw.js` and the manifest with `no-cache`. The other order serves a shell pointing at chunks that
    are not there yet. Invalidate those three paths only — `/*` evicts the whole asset cache for
