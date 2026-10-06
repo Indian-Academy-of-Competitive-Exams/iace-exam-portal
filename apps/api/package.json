@@ -27,7 +27,7 @@
     "@nestjs/throttler": "6.5.0",
     "@prisma/client": "6.19.3",
     "argon2": "0.45.1",
-    "bullmq": "6.0.10",
+    "bullmq": "6.3.11",
     "compression": "1.8.2",
     "date-fns": "4.4.0",
     "exceljs": "4.4.0",
