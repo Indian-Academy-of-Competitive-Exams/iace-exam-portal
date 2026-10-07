@@ -43,7 +43,6 @@ export interface ImportContext {
     {
       id: string;
       fullName: string | null;
-      hasPin: boolean;
       currentBranchId: string | null;
       enrolledCourses: ExamCourse[];
       enrolledExams: string[];
@@ -370,8 +369,6 @@ function planRow(
     programs: heldPrograms,
     profile,
     existingStudentId: existing?.id ?? null,
-    // A student who already chose a PIN keeps it. Re-importing last term's roster must not hand every one of those accounts back to the sheet.
-    willReceiveDefaultPin: action !== 'skip' && !existing?.hasPin,
     action,
     errors,
   };

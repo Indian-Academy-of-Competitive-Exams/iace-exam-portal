@@ -58,7 +58,7 @@ pnpm install --frozen-lockfile
 
 Two things pnpm 11 does that can surprise you, both already configured in `pnpm-workspace.yaml`:
 
-- **Build allow‑list** — only listed packages (prisma, esbuild, argon2, …) may run install scripts.
+- **Build allow‑list** — only listed packages (prisma, esbuild, …) may run install scripts.
 - **Minimum release age** — very new package versions are held back as supply‑chain protection; the versions we pinned are explicitly allowed. If you add a brand‑new dependency and install "hangs" on it, add it to `minimumReleaseAgeExclude`.
 
 `pnpm install` also installs the **Husky** git hooks (via the `prepare` script).
@@ -73,7 +73,7 @@ The defaults in `.env.example` are wired to the docker‑compose services, so **
 
 - **Database / Valkey / MinIO** point at `localhost` on the compose ports (5432 / 6379 / 9000). `DATABASE_URL` is what Prisma reads.
 - **`TEST_DATABASE_URL`** is the database `pnpm test:db` migrates and runs every test that touches Postgres against, and the one `pnpm test:coverage` uses for the same tier. Committing needs neither: the pre-commit hook does not run either of them (§8). The script refuses the one `DATABASE_URL` names and any whose name does not end in `_test`. Create it once with `docker exec iace-postgres createdb -U iace iace_test`, then run `pnpm test:db`. That script runs outside turbo, so generate the Prisma client and build `@iace/contracts` first: `pnpm db:generate && pnpm --filter @iace/contracts build`, or any `pnpm build`. The database keeps the tests' rows between runs; if its migrations ever end up in a failed state, recreate it with `docker exec iace-postgres dropdb -U iace iace_test && docker exec iace-postgres createdb -U iace iace_test`.
-- **JWT secrets & `PIN_PEPPER`** ship as `dev_only_…` placeholders (min length 24). Fine for solo local work; generate real ones with `openssl rand -base64 48` for anything shared.
+- **JWT secrets** ship as `dev_only_…` placeholders (min length 24). Fine for solo local work; generate real ones with `openssl rand -base64 48` for anything shared.
 - **OTP delivery is `console`** — in dev, OTP codes are **printed to the API log**, not sent by SMS/email. That's how you log in locally (see §6).
 - **`SMS_PROVIDER_*` / `MAIL_*`** are blank (the real SMS and Gmail credentials — leave empty locally).
 - **`SONAR_*`** blank → the pre‑commit Sonar scan skips itself. Set them only if you run a local SonarQube.
@@ -200,7 +200,7 @@ machine Metro served it from. Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` on
 elsewhere (see `.env.example`), and restart Metro after changing it, because the value is baked in
 at start.
 
-**How login works locally:** a _student_ signs up with a mobile number → gets an OTP (printed to the API log) → sets a 4‑digit PIN → logs in with mobile + PIN thereafter. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Valkey, never Postgres.
+**How login works locally:** a _student_ enters a mobile number → gets an OTP (printed to the API log) → is signed in; the first time is the signup. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Valkey, never Postgres.
 
 ## 7b. Mobile push (optional, Android)
 

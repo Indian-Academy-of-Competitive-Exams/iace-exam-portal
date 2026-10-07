@@ -44,17 +44,6 @@ describe('planCandidateImport', () => {
     assert.equal(plan.rows[1]?.existingStudentId, null);
   });
 
-  /** An existing student keeps the PIN they chose; only a new candidate is handed one. */
-  it('hands a starting PIN to the new candidate alone', () => {
-    const plan = planCandidateImport(
-      readCsvTable(roster('mobile,fullName\n9000000001,Asha\n9876543210,Ravi')),
-      context(),
-    );
-
-    assert.equal(plan.rows[0]?.willReceiveDefaultPin, false);
-    assert.equal(plan.rows[1]?.willReceiveDefaultPin, true);
-  });
-
   /** Unique among LIVE rows only, so a create would succeed and split one person across two accounts. */
   it('fails a number that belonged to a deleted student', () => {
     const plan = planCandidateImport(

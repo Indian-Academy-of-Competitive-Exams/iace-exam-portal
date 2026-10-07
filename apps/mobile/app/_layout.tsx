@@ -79,7 +79,6 @@ function Navigation() {
         />
         <Stack.Screen name="attempts/[attemptId]/report" options={{ ...page, title: 'Report' }} />
         <Stack.Screen name="profile" options={{ ...page, title: 'Your details' }} />
-        <Stack.Screen name="change-pin" options={{ ...page, title: 'Your PIN' }} />
         <Stack.Screen name="notifications" options={{ ...page, title: 'Notifications' }} />
       </Stack.Protected>
       <Stack.Protected guard={!identity}>

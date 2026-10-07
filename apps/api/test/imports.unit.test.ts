@@ -103,13 +103,11 @@ describe('readCsvTable', () => {
 
 const context = (over: Partial<ImportContext> = {}): ImportContext => ({
   existingByMobile: new Map([
-    // Chose their own PIN already — an import must never reset it.
     [
       '9000000001',
       {
         id: 'stu_existing',
         fullName: 'Already Here',
-        hasPin: true,
         currentBranchId: 'br_ameerpet',
         enrolledCourses: [],
         enrolledExams: [],
@@ -117,13 +115,12 @@ const context = (over: Partial<ImportContext> = {}): ImportContext => ({
         profile: null,
       },
     ],
-    // Added by an admin and never signed in: this one still needs a starting PIN.
+    // Added by an admin and never signed in.
     [
       '9000000002',
       {
         id: 'stu_no_pin',
         fullName: null,
-        hasPin: false,
         currentBranchId: 'br_ameerpet',
         enrolledCourses: [],
         enrolledExams: [],
@@ -227,37 +224,6 @@ describe('planStudentImport', () => {
       planStudentImport(readCsvTable(csv), context()),
       planStudentImport(readCsvTable(csv), context()),
     );
-  });
-});
-
-describe('planStudentImport — the starting PIN', () => {
-  it('gives a new student one', () => {
-    const plan = planStudentImport(readCsvTable(roster('mobile\n9876543210')), context());
-
-    assert.equal(plan.rows[0]?.action, 'create');
-    assert.equal(plan.rows[0]?.willReceiveDefaultPin, true);
-  });
-
-  /** The failure this exists to prevent: re-importing last term's roster resets the PIN of every student who had chosen one, handing all of those accounts back to whoever holds the sheet — and nothing about the import looks wrong. */
-  it('never resets a PIN the student chose', () => {
-    const plan = planStudentImport(readCsvTable(roster('mobile\n9000000001')), context());
-
-    assert.equal(plan.rows[0]?.action, 'update');
-    assert.equal(plan.rows[0]?.willReceiveDefaultPin, false);
-  });
-
-  it('gives one to a student who was added by hand and never set a PIN', () => {
-    const plan = planStudentImport(readCsvTable(roster('mobile\n9000000002')), context());
-
-    assert.equal(plan.rows[0]?.action, 'update');
-    assert.equal(plan.rows[0]?.willReceiveDefaultPin, true);
-  });
-
-  it('gives none to a row that will not be written at all', () => {
-    const plan = planStudentImport(readCsvTable(roster('mobile\nnot-a-number')), context());
-
-    assert.equal(plan.rows[0]?.action, 'skip');
-    assert.equal(plan.rows[0]?.willReceiveDefaultPin, false);
   });
 });
 

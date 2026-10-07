@@ -589,8 +589,6 @@ Table Student {
   programs text [not null, note: 'array']
   enrolledExams text [not null, note: 'array']
   currentBranchId uuid
-  pinHash text
-  pinIsDefault boolean [not null, default: true]
   fullName text
   isActive boolean [not null, default: true]
   isTestBlocked boolean [not null, default: false]

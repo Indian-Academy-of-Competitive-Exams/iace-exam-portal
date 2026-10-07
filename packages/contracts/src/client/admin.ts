@@ -178,10 +178,12 @@ import {
 } from '../exams';
 import {
   ADMIN_STUDENT_ROUTES,
+  studentDeskCodeSchema,
   studentDetailSchema,
   studentSummarySchema,
   type CreateStudentInput,
   type ChangeStudentMobileInput,
+  type StudentDeskCode,
   type SetStudentTestBlockedBody,
   type StudentDetail,
   type StudentExportQueryInput,
@@ -353,6 +355,10 @@ export function adminClient(core: ApiCore) {
 
       changeMobile: (id: string, input: ChangeStudentMobileInput): Promise<StudentDetail> =>
         write('PATCH', ADMIN_STUDENT_ROUTES.changeMobile(id), studentDetailSchema, input),
+
+      /** A code to read out to them. Each call makes a new one and retires the last. */
+      issueDeskCode: (id: string): Promise<StudentDeskCode> =>
+        write('POST', ADMIN_STUDENT_ROUTES.deskCode(id), studentDeskCodeSchema),
 
       /** Their evaluated sittings, paged. The share picker's own list is capped; a report's is not. */
       sittings: (id: string, query: StudentSittingsQueryInput): Promise<Paginated<ReportSitting>> =>

@@ -15,9 +15,6 @@ export function anonymizedStudent(at: Date): Prisma.StudentUncheckedUpdateInput 
     mobile: TOMBSTONE_MOBILE,
     fullName: null,
     externalRef: null,
-    // Nothing to sign in with, and no PIN worth keeping the hash of.
-    pinHash: null,
-    pinIsDefault: true,
     isActive: false,
     deletedAt: at,
     anonymizedAt: at,

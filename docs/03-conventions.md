@@ -172,7 +172,7 @@ owns the sitting owns the derivation.
 **Writes that cross the map**, each one a rule-2 exception with a reason:
 
 - `auth` and `imports` both create `Student` — signup and the roster import. Both borrow the
-  students module's rules (the starting PIN, the pre-test-ready check) but issue the write directly.
+  students module's rules (the pre-test-ready check) but issue the write directly.
 - `imports` and `questions` create `ImportLog`; `audit` only reads it back for the log viewer.
 - `attempts` sets a `BaseConfig` locked on the first sitting. The lock is an attempt's effect and
   `configs` has no way to learn that a paper was sat.
@@ -210,7 +210,6 @@ does not run.
 | Event                    | Producer                                                                                      | Consumers                                           | State |
 | ------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----- |
 | `student.signed_up`      | auth, on the signup that created the row                                                      | notifications (the welcome)                         | wired |
-| `student.pin_reset`      | auth, both reset paths                                                                        | notifications (the PIN-changed notice)              | wired |
 | `student.deactivated`    | students (deactivation, erasure)                                                              | auth (revokes their sessions)                       | wired |
 | `student.mobile_changed` | students (an admin moving the sign-in number)                                                 | auth (revokes their sessions)                       | wired |
 | `admin.deactivated`      | admins (deactivation)                                                                         | auth (revokes their sessions)                       | wired |
@@ -228,8 +227,8 @@ and the row a student reads, with nothing to retry it and nothing to say it had 
 now writes the `Notification` row itself, through `NotificationsService.tell`, inside its OWN
 transaction — the fact and the bell row commit together, and the dedupe key makes a replay land
 once. A sweep claims the rows with no `pushedAt` (`SKIP LOCKED`), books the paid channel an
-announcement chose, and pushes them. The welcome and the PIN-changed notice are the two left on the
-bus: auth commits no transaction they could join, so the listener writes them after the fact.
+announcement chose, and pushes them. The welcome is the one left on the bus: auth commits no
+transaction it could join, so the listener writes it after the fact.
 
 This inverts one guarantee deliberately. A notification that cannot be written now FAILS the write
 that caused it, where before it was swallowed. That is the point: rolling the grant back is
@@ -319,11 +318,11 @@ Built and in use. Reach for these rather than adding a second of any of them.
   platform sends outward: a channel (SMS, email, WhatsApp, in-app), a kind, a recipient, and template
   data. Providers implement it — console in development, SMS and email in production — and a router
   picks one per channel, so a caller names the message and never the transport. Each kind maps to a
-  template id in env; a kind with nothing configured simply does not send. OTP, the starting PIN a
-  roster import issues, and result-ready are wired; test-assigned and test-reminder exist as kinds
+  template id in env; a kind with nothing configured simply does not send. OTP and result-ready
+  are wired; test-assigned and test-reminder exist as kinds
   with no producer, because the event and the scheduled job behind them do not exist yet.
-- **The free channels carry everything but the two somebody is waiting on.** A paid message is SMS
-  for an OTP and for the starting PIN a roster import issues, and that is the whole list — every
+- **The free channels carry everything but the one somebody is waiting on.** A paid message is SMS
+  for an OTP, and that is the whole list — every
   other notification and every announcement reaches a student over in-app, web push and FCM, which
   cost nothing per message. This is not a default an admin can drift: `notification-policy.ts` holds no
   per-kind chain at all, so paid delivery is a deliberate per-send override priced against
@@ -337,8 +336,8 @@ Built and in use. Reach for these rather than adding a second of any of them.
   deletes the row. **The absence of a subscription is the refusal**, which is why push records no
   skip and costs no table. A phone works the same way: a `PushDevice` row exists only because the
   student allowed notifications. Both remember the session that registered them, and a push goes
-  only to a target whose session is still live, deleting the rest — so sign-out, a replaced session,
-  a revoke or a PIN reset stops pushes on a shared machine without the client's help. Resuming
+  only to a target whose session is still live, deleting the rest — so sign-out, a replaced session
+  or a revoke stops pushes on a shared machine without the client's help. Resuming
   needs it: both clients re-register what they hold on every sign-in, which claims the target for
   the new session. What a student still controls is their browser, their phone's own settings, and
   their bell.

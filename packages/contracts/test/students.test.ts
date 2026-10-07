@@ -22,7 +22,6 @@ const summary = {
   hasOwnAccess: false,
   isActive: true,
   isTestBlocked: false,
-  hasDefaultPin: false,
   preTestReady: true,
   profileCompleted: false,
   createdAt: '2026-01-05T09:30:00.000Z',

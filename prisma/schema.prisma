@@ -787,8 +787,6 @@ model Student {
   // Exam.code values, app-validated against Exam.
   enrolledExams   String[]     @default([])
   currentBranchId String?      @db.Uuid
-  pinHash         String?
-  pinIsDefault    Boolean      @default(true)
   fullName        String?
   isActive        Boolean      @default(true)
   isTestBlocked   Boolean      @default(false)

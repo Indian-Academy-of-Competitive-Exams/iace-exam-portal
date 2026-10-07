@@ -4,13 +4,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { STUDENT_TYPE, readinessOf } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
-import {
-  FakeEventsService,
-  FakeMessageSender,
-  FakeProgramsService,
-  fakeStartingPins,
-  FakeStorage,
-} from '../test/support/fakes';
+import { FakeEventsService, FakeProgramsService, FakeStorage } from '../test/support/fakes';
 import { makeBranch, makeStudent, resetDatabase, testPrisma } from './support/database';
 
 const prisma = testPrisma();
@@ -21,7 +15,6 @@ after(() => prisma.$disconnect());
 const importer = () =>
   new ImportsService(
     prisma,
-    fakeStartingPins(new FakeMessageSender(), (pin) => Promise.resolve(`hashed:${pin}`)),
     new FakeStorage() as never,
     new AuditService(prisma, new FakeStorage() as never),
     new FakeEventsService().asService(),

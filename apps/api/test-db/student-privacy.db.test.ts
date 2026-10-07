@@ -37,7 +37,6 @@ describe('erasure is anonymisation', () => {
     const row = await prisma.student.findUniqueOrThrow({ where: { id: student.id } });
     assert.equal(row.mobile, TOMBSTONE_MOBILE);
     assert.equal(row.fullName, null);
-    assert.equal(row.pinHash, null);
     assert.equal(row.isActive, false);
     assert.ok(row.anonymizedAt);
     assert.ok(row.deletedAt);

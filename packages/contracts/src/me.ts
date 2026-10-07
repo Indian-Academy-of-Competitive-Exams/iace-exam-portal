@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { newPinSchema, pinSchema } from './common';
 import { studentDetailSchema, updateStudentSchema } from './students';
 
 // ============================================================================
@@ -61,23 +60,9 @@ export const updateMeSchema = updateStudentSchema.pick({
 export type UpdateMeInput = z.input<typeof updateMeSchema>;
 export type UpdateMeBody = z.infer<typeof updateMeSchema>;
 
-/** The current PIN is required despite the session: one left open on a shared machine would otherwise lock the owner out; the response is a fresh session — store it. */
-export const changePinSchema = z
-  .object({
-    currentPin: pinSchema,
-    newPin: newPinSchema,
-  })
-  .refine((value) => value.currentPin !== value.newPin, {
-    message: 'Choose a PIN you have not used before',
-    path: ['newPin'],
-  });
-export type ChangePinInput = z.input<typeof changePinSchema>;
-export type ChangePinBody = z.infer<typeof changePinSchema>;
-
 export const ME_ROUTES = {
   profile: '/me',
   update: '/me',
-  changePin: '/me/pin',
   catalog: '/me/catalog',
   notifications: '/me/notifications',
   readNotification: (id: string) => `/me/notifications/${id}/read`,

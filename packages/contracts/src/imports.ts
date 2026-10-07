@@ -69,8 +69,6 @@ const studentImportRowSchema = z.object({
   profile: studentImportProfileSchema,
   /** Set when the number already belongs to a student — this row updates them. */
   existingStudentId: z.string().nullable(),
-  /** Whether this row hands out a starting PIN. Never for a student who chose their own. */
-  willReceiveDefaultPin: z.boolean(),
   action: studentImportActionSchema,
   errors: z.array(z.string()),
 });
@@ -106,7 +104,6 @@ const candidateImportRowSchema = z.object({
   fullName: z.string().nullable(),
   /** Set when the number already belongs to a LIVE student — this row adds them and edits nothing. */
   existingStudentId: z.string().nullable(),
-  willReceiveDefaultPin: z.boolean(),
   action: candidateImportActionSchema,
   errors: z.array(z.string()),
 });

@@ -126,7 +126,7 @@ export {
 } from './student-queries';
 export { paperFor } from './exam/served-paper';
 export { TOP_QUARTER, trendOf, type Trendline } from './trend';
-export { LOGIN_FIELDS, OTP_INTENTS, type LoginStep, type OtpIntent } from './login-steps';
+export { LOGIN_FIELDS, type LoginStep } from './login-steps';
 export { PODIUM_LABELS } from './leaderboard';
 export {
   VERDICT,
@@ -139,7 +139,17 @@ export {
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
 export { reportHtml } from './report-html';
 export { PRINT_WATERMARK, logoSvg, logoUrl, printPageCss } from './print-page';
-export { progressDownloads, scoreCardDownloads, type ReportDownload } from './report-downloads';
+export {
+  DOWNLOAD_CHOICE_LABELS,
+  DOWNLOAD_KINDS,
+  DOWNLOAD_KIND_LABELS,
+  downloadChoices,
+  downloadKindOf,
+  downloadOf,
+  type DownloadAsk,
+  type DownloadChoice,
+  type DownloadKind,
+} from './report-downloads';
 export {
   ANY_CHOICE,
   asSet,

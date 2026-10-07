@@ -39,7 +39,6 @@ export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
 /** The Account tab's own pushed screens. */
 export const ACCOUNT_ROUTES = {
   PROFILE: '/profile',
-  CHANGE_PIN: '/change-pin',
   NOTIFICATIONS: '/notifications',
 } as const;
 

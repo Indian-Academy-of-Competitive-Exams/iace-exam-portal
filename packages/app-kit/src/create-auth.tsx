@@ -37,7 +37,7 @@ export interface CreateAuthOptions<TIdentity extends AuthIdentity, TExtra extend
   };
   /** App-specific reads over the identity, merged into the context value. */
   extend?: (identity: TIdentity | null) => TExtra;
-  /** Runs on every sign-in and every session swapped in place, such as a PIN change's. */
+  /** Runs on every sign-in. */
   onSignedIn?: () => void;
 }
 

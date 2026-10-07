@@ -643,10 +643,9 @@ have depended on them is the app's own `/metrics` or an EC2 status check.
 depth and oldest wait, job failures, Redis memory and evictions, live sittings not yet in Postgres,
 database connections. Two of them answer questions nothing else can: `scoring_duration_seconds` is
 submit to EVALUATED on a FIRST evaluation, the one SLA a live event is judged on — queue depth says
-how many are waiting, never how long one takes — and `auth_attempts_total{outcome}` separates a
-student who forgot their PIN from somebody enumerating mobile numbers, which a bare 401 count
-cannot. The sign-in MESSAGE stays identical across `bad_pin` and `no_student`; only the label
-differs, or the metric would become the enumeration oracle it exists to detect.
+how many are waiting, never how long one takes — and `auth_attempts_total{outcome}` counts a wrong
+code apart from a sign-in: `bad_code` rising against one mobile is a code that never arrived, and
+against many it is somebody guessing, which a bare 401 count cannot tell apart.
 
 A 5xx log line carries `bug=<10 hex>`, a hash of the error kind and its top four non-`node_modules`
 frames with line and column dropped, so a refactor that shifts a function does not read as a new
@@ -744,7 +743,7 @@ replaces the port-22 rule (§8) rather than an extra privilege for its own sake.
 **What production refuses to boot without**, each refusal naming its own variable rather than
 surfacing as a mystery 500 an hour into a live test: `connection_limit` on `DATABASE_URL`, a
 non-empty `CORS_ORIGINS`, a `METRICS_TOKEN`, `TRUST_PROXY_HOPS` above zero, a Valkey that cannot
-evict, and any of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` or `PIN_PEPPER` still carrying the
+evict, and either of `JWT_ACCESS_SECRET` or `JWT_REFRESH_SECRET` still carrying the
 `dev_only_` prefix `.env.example` publishes. It additionally **warns** when the heap in
 `NODE_OPTIONS` does not match the container's memory limit, naming the role that is wrong.
 

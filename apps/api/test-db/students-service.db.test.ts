@@ -15,7 +15,6 @@ import { AuditContext } from '../src/audit';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
-import { MESSAGE_KINDS } from '../src/common/messaging';
 import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
@@ -25,7 +24,6 @@ import {
   FakeEventBus,
   FakeMessageSender,
   FakeStorage,
-  fakeStartingPins,
 } from '../test/support/fakes';
 import {
   makeCatalog,
@@ -129,7 +127,6 @@ async function serviceWith(over: Bench = {}) {
       new FakeStorage() as unknown as StorageService,
       exams.asService(),
       new BranchesService(prisma, new AuditContext()),
-      fakeStartingPins(sender),
       over.realPrograms ? new ProgramsService(prisma, auditContext) : programs.asService(),
       auditContext,
       events.asService(),
@@ -279,28 +276,6 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     assert.equal(stored.currentBranchId, PHYSICAL.id);
   });
 
-  /** No pinHash meant loginStudent read the null as a wrong PIN, forever; and a PIN nobody was told opens nothing. */
-  it('gives the student a starting PIN not derived from their number, and texts it to them', async () => {
-    const { service, sender } = await serviceWith(noStudentYet);
-
-    const created = await service.create({
-      mobile: '9000000020',
-      studentType: STUDENT_TYPE.OFFLINE,
-    });
-
-    const stored = await onlyStudent();
-    assert.match(stored.pinHash ?? '', /^hash:\d{4}$/);
-    assert.equal(stored.pinIsDefault, true);
-    const pin = (stored.pinHash ?? '').replace('hash:', '');
-    assert.ok(!'9000000020'.startsWith(pin), `${pin} is the first digits of their own number`);
-    assert.equal(sender.lastMessage.kind, MESSAGE_KINDS.PIN);
-    assert.equal(sender.lastMessage.to, '9000000020');
-    assert.equal(`hash:${String(sender.lastMessage.data?.pin)}`, stored.pinHash);
-    // The PIN is the institute's, not theirs, so the roster must still chase them to change it.
-    assert.equal(created.hasDefaultPin, true);
-  });
-
-  /** An online student parked at a centre would silently inherit that centre's schedule and window. */
   it('refuses an online student at a physical centre, and an offline one in the online branch', async () => {
     const { service } = await serviceWith({ ...noStudentYet, branches: [PHYSICAL, ONLINE_BRANCH] });
 
@@ -882,16 +857,10 @@ describe('StudentsService.changeMobile — who they sign in as', () => {
   /** The failure this prevents: a number that moved, leaving nobody able to find the student by the old one. */
   it('moves the number, keeps the old one against who changed it, and asks for every session to end', async () => {
     const { service, events } = await serviceWith({ student: { mobile: OLD } });
-    await prisma.student.update({
-      where: { id: STUDENT },
-      data: { pinHash: 'set-on-the-old-sim' },
-    });
 
     const detail = await service.changeMobile(STUDENT, NEW, ADMIN);
 
     assert.equal(detail.mobile, NEW);
-    // The failure this prevents: a PIN chosen by whoever holds the old SIM still opening the account.
-    assert.equal((await row()).pinHash, null);
     assert.deepEqual(
       detail.formerMobiles.map((former) => former.mobile),
       [OLD],

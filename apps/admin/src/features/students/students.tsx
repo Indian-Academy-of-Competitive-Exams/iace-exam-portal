@@ -57,7 +57,7 @@ import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { useBranchChoice, useBranches } from '../../lib/use-branches';
 import { useExams } from './use-exams';
 import { useAuth } from '../../providers/auth';
-type StatusFilter = 'all' | 'active' | 'inactive' | 'blocked' | 'defaultpin';
+type StatusFilter = 'all' | 'active' | 'inactive' | 'blocked';
 
 /** `false` is a question ("not ready yet"), not "don't care" — absent is "don't care". */
 function asBooleanParam(value: string): 'true' | 'false' | undefined {
@@ -70,14 +70,12 @@ const STATUS_QUERY: Record<
   {
     isActive?: 'true' | 'false';
     isTestBlocked?: 'true';
-    hasDefaultPin?: 'true';
   }
 > = {
   all: {},
   active: { isActive: 'true' },
   inactive: { isActive: 'false' },
   blocked: { isTestBlocked: 'true' },
-  defaultpin: { hasDefaultPin: 'true' },
 };
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
@@ -174,7 +172,6 @@ export function StudentsPage() {
         { value: 'active', label: 'Active' },
         { value: 'inactive', label: 'Sign-in suspended' },
         { value: 'blocked', label: 'Blocked from tests' },
-        { value: 'defaultpin', label: 'Still on the default PIN' },
       ],
     },
     {
@@ -364,11 +361,8 @@ export function StudentsPage() {
   );
 }
 
-/** Three sign-in states, in the order they matter. A list, not a chain of ternaries. */
 function SignInStatus({ student }: Readonly<{ student: StudentSummary }>) {
   if (!student.isActive) return <Badge variant="danger">Sign-in suspended</Badge>;
-  // Its own state on purpose — they CAN sign in, but on a PIN anyone with the roster can guess.
-  if (student.hasDefaultPin) return <Badge variant="warning">Default PIN</Badge>;
   return <Badge variant="success">Active</Badge>;
 }
 

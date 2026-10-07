@@ -1,30 +1,18 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import {
   MOBILE_DIGITS,
-  PIN_LENGTH,
   normaliseMobile,
   otpCodeFormSchema,
-  setPinFormSchema,
   requestStudentOtpSchema,
-  studentLoginSchema,
   type AuthSessionResponse,
   type OtpRequestResponse,
-  type PinSetupTicket,
   type RequestStudentOtpBody,
-  type StudentLoginBody,
 } from '@iace/contracts';
-import {
-  applyFieldErrors,
-  LOGIN_FIELDS,
-  OTP_INTENTS,
-  signedOutMessage,
-  type LoginStep,
-  type OtpIntent,
-} from '@iace/app-kit';
+import { applyFieldErrors, LOGIN_FIELDS, signedOutMessage, type LoginStep } from '@iace/app-kit';
 import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { useAuth } from '../src/providers/auth';
@@ -39,7 +27,7 @@ const sanitizeMobile = (raw: string) =>
 
 export default function LoginScreen() {
   const { signIn, signedOutReason } = useAuth();
-  const [step, setStep] = useState<LoginStep>({ kind: 'signIn' });
+  const [step, setStep] = useState<LoginStep>({ kind: 'mobile' });
   const message = signedOutMessage(signedOutReason);
 
   const onSignedIn = (session: AuthSessionResponse) => signIn(session);
@@ -62,38 +50,18 @@ export default function LoginScreen() {
 
           {message ? <Alert variant="warning">{message}</Alert> : null}
 
-          {step.kind === 'signIn' ? (
-            <SignInStep
-              onSignedIn={onSignedIn}
-              onSignUp={() => setStep({ kind: 'mobile', intent: OTP_INTENTS.SIGNUP })}
-              onForgotPin={() => setStep({ kind: 'mobile', intent: OTP_INTENTS.RESET })}
-            />
-          ) : null}
-
           {step.kind === 'mobile' ? (
             <MobileStep
-              intent={step.intent}
-              onBack={() => setStep({ kind: 'signIn' })}
-              onSent={(mobile, challenge) =>
-                setStep({ kind: 'code', intent: step.intent, mobile, challenge })
-              }
+              onSent={(mobile, challenge) => setStep({ kind: 'code', mobile, challenge })}
             />
-          ) : null}
-
-          {step.kind === 'code' ? (
+          ) : (
             <CodeStep
               mobile={step.mobile}
               challenge={step.challenge}
-              onBack={() => setStep({ kind: 'mobile', intent: step.intent })}
-              onVerified={(ticket) =>
-                setStep({ kind: 'pin', intent: step.intent, mobile: step.mobile, ticket })
-              }
+              onBack={() => setStep({ kind: 'mobile' })}
+              onSignedIn={onSignedIn}
             />
-          ) : null}
-
-          {step.kind === 'pin' ? (
-            <SetPinStep mobile={step.mobile} ticket={step.ticket} onSignedIn={onSignedIn} />
-          ) : null}
+          )}
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -102,79 +70,9 @@ export default function LoginScreen() {
 
 // ---------------------------------------------------------------------------
 
-function SignInStep({
-  onSignedIn,
-  onSignUp,
-  onForgotPin,
-}: Readonly<{
-  onSignedIn: (session: AuthSessionResponse) => void;
-  onSignUp: () => void;
-  onForgotPin: () => void;
-}>) {
-  const form = useForm({
-    resolver: zodResolver(studentLoginSchema),
-    defaultValues: { mobile: '', pin: '' },
-  });
-
-  const login = useMutation({
-    // `fields` keeps the complaint on the input rather than also in a toast.
-    meta: { fields: LOGIN_FIELDS.SIGN_IN },
-    mutationFn: (values: { mobile: string; pin: string }) => api.auth.loginStudent(values),
-    onSuccess: onSignedIn,
-    // Explicit type argument: this app's own react-hook-form copy is a separate install from app-kit's.
-    onError: (error) =>
-      applyFieldErrors<StudentLoginBody>(error, form.setError, LOGIN_FIELDS.SIGN_IN),
-  });
-
-  return (
-    <View className="gap-4">
-      <Text variant="section" className="text-center">
-        Sign in
-      </Text>
-
-      <TextField
-        control={form.control}
-        name="mobile"
-        label="Mobile number"
-        keyboardType="number-pad"
-        autoComplete="tel"
-        maxLength={15}
-        sanitize={sanitizeMobile}
-        autoFocus
-      />
-      <PinField control={form.control} name="pin" label="PIN" length={PIN_LENGTH} masked />
-
-      <Button
-        loading={login.isPending}
-        onPress={form.handleSubmit((values) => login.mutate(values))}
-      >
-        Sign in
-      </Button>
-
-      {/* Two peer actions, weighted the same — neither reads as more important than the other. */}
-      <View className="flex-row items-center justify-between border-t border-border pt-4">
-        <Pressable onPress={onSignUp}>
-          <Text variant="label">Create an account</Text>
-        </Pressable>
-        <Pressable onPress={onForgotPin}>
-          <Text variant="muted">Forgot PIN?</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
 function MobileStep({
-  intent,
-  onBack,
   onSent,
-}: Readonly<{
-  intent: OtpIntent;
-  onBack: () => void;
-  onSent: (mobile: string, response: OtpRequestResponse) => void;
-}>) {
+}: Readonly<{ onSent: (mobile: string, response: OtpRequestResponse) => void }>) {
   const form = useForm({
     resolver: zodResolver(requestStudentOtpSchema),
     defaultValues: { mobile: '' },
@@ -191,7 +89,7 @@ function MobileStep({
   return (
     <View className="gap-4">
       <Text variant="section" className="text-center">
-        {intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
+        Sign in
       </Text>
 
       <TextField
@@ -211,8 +109,6 @@ function MobileStep({
       >
         Send code
       </Button>
-
-      <BackButton onPress={onBack}>Back to sign in</BackButton>
     </View>
   );
 }
@@ -223,12 +119,12 @@ function CodeStep({
   mobile,
   challenge,
   onBack,
-  onVerified,
+  onSignedIn,
 }: Readonly<{
   mobile: string;
   challenge: OtpRequestResponse;
   onBack: () => void;
-  onVerified: (ticket: PinSetupTicket) => void;
+  onSignedIn: (session: AuthSessionResponse) => void;
 }>) {
   const form = useForm({
     resolver: zodResolver(otpCodeFormSchema),
@@ -238,7 +134,7 @@ function CodeStep({
   const verify = useMutation({
     meta: { fields: LOGIN_FIELDS.CODE },
     mutationFn: (values: { code: string }) => api.auth.verifyStudentOtp({ mobile, ...values }),
-    onSuccess: onVerified,
+    onSuccess: onSignedIn,
     // A wrong code comes back as OTP_INVALID with fieldErrors.code, under the input to retype.
     onError: (error) => applyFieldErrors<{ code: string }>(error, form.setError, LOGIN_FIELDS.CODE),
   });
@@ -269,72 +165,10 @@ function CodeStep({
         loading={verify.isPending}
         onPress={form.handleSubmit((values) => verify.mutate(values))}
       >
-        Verify &amp; continue
+        Sign in
       </Button>
 
       <BackButton onPress={onBack}>Use a different number</BackButton>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function SetPinStep({
-  mobile,
-  ticket,
-  onSignedIn,
-}: Readonly<{
-  mobile: string;
-  ticket: PinSetupTicket;
-  onSignedIn: (session: AuthSessionResponse) => void;
-}>) {
-  const form = useForm({
-    resolver: zodResolver(setPinFormSchema),
-    defaultValues: { pin: '', confirmPin: '' },
-  });
-
-  const setPin = useMutation({
-    meta: { fields: LOGIN_FIELDS.SET_PIN },
-    mutationFn: (values: { pin: string }) =>
-      api.auth.setStudentPin({ mobile, setupToken: ticket.setupToken, pin: values.pin }),
-    onSuccess: onSignedIn,
-    onError: (error) =>
-      applyFieldErrors<{ pin: string; confirmPin: string }>(
-        error,
-        form.setError,
-        LOGIN_FIELDS.SET_PIN,
-      ),
-  });
-
-  return (
-    <View className="gap-4">
-      <Text variant="section" className="text-center">
-        {ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}
-      </Text>
-
-      <PinField
-        control={form.control}
-        name="pin"
-        label="New PIN"
-        length={PIN_LENGTH}
-        masked
-        autoFocus
-        /* ui-copy-ok: rule */ hint="Not a run like 1234, and not all one digit"
-      />
-      <PinField
-        control={form.control}
-        name="confirmPin"
-        label="Confirm PIN"
-        length={PIN_LENGTH}
-        masked
-      />
-
-      <Button
-        loading={setPin.isPending}
-        onPress={form.handleSubmit((values) => setPin.mutate(values))}
-      >
-        Save PIN &amp; continue
-      </Button>
     </View>
   );
 }

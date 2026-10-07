@@ -13,12 +13,10 @@ import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { OtpService } from './otp/otp.service';
-import { PinService } from './pin/pin.service';
-import { StartingPinService } from './pin/starting-pin.service';
 import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
-  // Its own infra, declared rather than assumed (docs/03 §4.5). Redis is not optional here: OTP, sessions, device binding and the PIN lockout ladder all live there and nowhere else.
+  // Its own infra, declared rather than assumed (docs/03 §4.5). Redis is not optional here: OTP, sessions and device binding all live there and nowhere else.
   imports: [
     AppConfigModule,
     PrismaModule,
@@ -38,15 +36,12 @@ import { API_ROLES, onRole } from '../config/api-role';
     AdminSessionsListener,
     StudentSessionsListener,
     OtpService,
-    PinService,
-    StartingPinService,
   ],
   exports: [
-    // AuthService for the student's own PIN change: it owns verification, the lockout ladder, session revocation and token issuance, and MeController must not reimplement any of the four.
+    // AuthService for the desk code an admin reads out: the students module asks, and the code stays auth's.
     AuthService,
     TokenService,
     SessionService,
-    StartingPinService,
   ],
 })
 export class AuthModule {}

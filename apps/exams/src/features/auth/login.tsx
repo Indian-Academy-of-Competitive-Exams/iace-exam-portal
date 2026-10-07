@@ -6,15 +6,11 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Info } from 'lucide-react';
 import {
   MOBILE_DIGITS,
-  PIN_LENGTH,
   normaliseMobile,
   otpCodeFormSchema,
-  setPinFormSchema,
   requestStudentOtpSchema,
-  studentLoginSchema,
   type AuthSessionResponse,
   type OtpRequestResponse,
-  type PinSetupTicket,
 } from '@iace/contracts';
 import {
   Alert,
@@ -30,21 +26,14 @@ import {
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { ROUTES } from '../../lib/constants';
-import {
-  applyFieldErrors,
-  LOGIN_FIELDS,
-  OTP_INTENTS,
-  signedOutMessage,
-  type LoginStep,
-  type OtpIntent,
-} from '@iace/app-kit';
+import { applyFieldErrors, LOGIN_FIELDS, signedOutMessage, type LoginStep } from '@iace/app-kit';
 import { useAuth } from '../../providers/auth';
 
 export function LoginPage() {
   const { identity: student, signIn, signedOutReason } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [step, setStep] = useState<LoginStep>({ kind: 'signIn' });
+  const [step, setStep] = useState<LoginStep>({ kind: 'mobile' });
 
   // Where ProtectedRoute turned them away from, so a deep link survives the sign-in.
   const cameFrom = (location.state as { from?: string } | null)?.from ?? ROUTES.HOME;
@@ -74,38 +63,18 @@ export function LoginPage() {
             </div>
           ) : null}
 
-          {step.kind === 'signIn' ? (
-            <SignInStep
-              onSignedIn={onSignedIn}
-              onSignUp={() => setStep({ kind: 'mobile', intent: OTP_INTENTS.SIGNUP })}
-              onForgotPin={() => setStep({ kind: 'mobile', intent: OTP_INTENTS.RESET })}
-            />
-          ) : null}
-
           {step.kind === 'mobile' ? (
             <MobileStep
-              intent={step.intent}
-              onBack={() => setStep({ kind: 'signIn' })}
-              onSent={(mobile, challenge) =>
-                setStep({ kind: 'code', intent: step.intent, mobile, challenge })
-              }
+              onSent={(mobile, challenge) => setStep({ kind: 'code', mobile, challenge })}
             />
-          ) : null}
-
-          {step.kind === 'code' ? (
+          ) : (
             <CodeStep
               mobile={step.mobile}
               challenge={step.challenge}
-              onBack={() => setStep({ kind: 'mobile', intent: step.intent })}
-              onVerified={(ticket) =>
-                setStep({ kind: 'pin', intent: step.intent, mobile: step.mobile, ticket })
-              }
+              onBack={() => setStep({ kind: 'mobile' })}
+              onSignedIn={onSignedIn}
             />
-          ) : null}
-
-          {step.kind === 'pin' ? (
-            <SetPinStep mobile={step.mobile} ticket={step.ticket} onSignedIn={onSignedIn} />
-          ) : null}
+          )}
         </Card>
       </main>
     </div>
@@ -114,82 +83,9 @@ export function LoginPage() {
 
 // ---------------------------------------------------------------------------
 
-function SignInStep({
-  onSignedIn,
-  onSignUp,
-  onForgotPin,
-}: Readonly<{
-  onSignedIn: (session: AuthSessionResponse) => void;
-  onSignUp: () => void;
-  onForgotPin: () => void;
-}>) {
-  const form = useForm({
-    resolver: zodResolver(studentLoginSchema),
-    defaultValues: { mobile: '', pin: '' },
-  });
-
-  const login = useMutation({
-    // `fields` keeps the complaint on the input rather than also in a toast.
-    meta: { fields: LOGIN_FIELDS.SIGN_IN },
-    mutationFn: (values: { mobile: string; pin: string }) => api.auth.loginStudent(values),
-    onSuccess: onSignedIn,
-    onError: (error) => applyFieldErrors(error, form.setError, LOGIN_FIELDS.SIGN_IN),
-  });
-
-  return (
-    <CardStep title="Sign in">
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={form.handleSubmit((values) => login.mutate(values))}
-        noValidate
-      >
-        <MobileField form={form} name="mobile" autoFocus />
-        <PinField
-          name="pin"
-          form={form}
-          label="PIN"
-          length={PIN_LENGTH}
-          masked
-          autoComplete="current-password"
-        />
-
-        <Button type="submit" loading={login.isPending}>
-          Sign in
-        </Button>
-
-        {/* Two peer actions weighted the same: brand red made one outshout the primary button. */}
-        <div className="flex items-center justify-between border-t border-border pt-4 text-sm">
-          <button
-            type="button"
-            onClick={onSignUp}
-            className="rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-          >
-            Create an account
-          </button>
-          <button
-            type="button"
-            onClick={onForgotPin}
-            className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-          >
-            Forgot PIN?
-          </button>
-        </div>
-      </form>
-    </CardStep>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
 function MobileStep({
-  intent,
-  onBack,
   onSent,
-}: Readonly<{
-  intent: OtpIntent;
-  onBack: () => void;
-  onSent: (mobile: string, response: OtpRequestResponse) => void;
-}>) {
+}: Readonly<{ onSent: (mobile: string, response: OtpRequestResponse) => void }>) {
   const form = useForm({
     resolver: zodResolver(requestStudentOtpSchema),
     defaultValues: { mobile: '' },
@@ -203,10 +99,7 @@ function MobileStep({
   });
 
   return (
-    <CardStep
-      title={intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
-      meta={intent === OTP_INTENTS.SIGNUP ? "We'll verify it, then you pick a PIN." : undefined}
-    >
+    <CardStep title="Sign in">
       <form
         className="flex flex-col gap-4"
         onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
@@ -217,8 +110,6 @@ function MobileStep({
         <Button type="submit" loading={requestOtp.isPending}>
           Send code
         </Button>
-
-        <BackButton onClick={onBack}>Back to sign in</BackButton>
       </form>
     </CardStep>
   );
@@ -230,12 +121,12 @@ function CodeStep({
   mobile,
   challenge,
   onBack,
-  onVerified,
+  onSignedIn,
 }: Readonly<{
   mobile: string;
   challenge: OtpRequestResponse;
   onBack: () => void;
-  onVerified: (ticket: PinSetupTicket) => void;
+  onSignedIn: (session: AuthSessionResponse) => void;
 }>) {
   const form = useForm({
     resolver: zodResolver(otpCodeFormSchema),
@@ -245,7 +136,7 @@ function CodeStep({
   const verify = useMutation({
     meta: { fields: LOGIN_FIELDS.CODE },
     mutationFn: (values: { code: string }) => api.auth.verifyStudentOtp({ mobile, ...values }),
-    onSuccess: onVerified,
+    onSuccess: onSignedIn,
     // A wrong code returns OTP_INVALID with fieldErrors.code — it belongs under the input, not a banner.
     onError: (error) => applyFieldErrors(error, form.setError, LOGIN_FIELDS.CODE),
   });
@@ -285,7 +176,7 @@ function CodeStep({
         ) : null}
 
         <Button type="submit" loading={verify.isPending}>
-          Verify &amp; continue
+          Sign in
         </Button>
 
         <BackButton onClick={onBack}>Use a different number</BackButton>
@@ -296,70 +187,10 @@ function CodeStep({
 
 // ---------------------------------------------------------------------------
 
-function SetPinStep({
-  mobile,
-  ticket,
-  onSignedIn,
-}: Readonly<{
-  mobile: string;
-  ticket: PinSetupTicket;
-  onSignedIn: (session: AuthSessionResponse) => void;
-}>) {
-  const form = useForm({
-    resolver: zodResolver(setPinFormSchema),
-    defaultValues: { pin: '', confirmPin: '' },
-  });
-
-  const setPin = useMutation({
-    meta: { fields: LOGIN_FIELDS.SET_PIN },
-    mutationFn: (values: { pin: string }) =>
-      api.auth.setStudentPin({ mobile, setupToken: ticket.setupToken, pin: values.pin }),
-    onSuccess: onSignedIn,
-    onError: (error) => applyFieldErrors(error, form.setError, LOGIN_FIELDS.SET_PIN),
-  });
-
-  return (
-    <CardStep
-      title={ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}
-      meta="This is how you sign in from now on. No more codes."
-    >
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={form.handleSubmit((values) => setPin.mutate(values))}
-        noValidate
-      >
-        <PinField
-          name="pin"
-          form={form}
-          label="New PIN"
-          length={PIN_LENGTH}
-          masked
-          autoFocus
-          autoComplete="new-password"
-          /* ui-copy-ok: rule */ hint="Not a run like 1234, and not all one digit"
-        />
-        <PinField
-          name="confirmPin"
-          form={form}
-          label="Confirm PIN"
-          length={PIN_LENGTH}
-          masked
-          autoComplete="new-password"
-        />
-
-        <Button type="submit" loading={setPin.isPending}>
-          Save PIN &amp; continue
-        </Button>
-      </form>
-    </CardStep>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Shared bits
 // ---------------------------------------------------------------------------
 
-/** The mobile input is identical on both screens that ask for one. */
 function MobileField<TValues extends FieldValues>({
   form,
   name,

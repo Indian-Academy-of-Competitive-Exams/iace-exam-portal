@@ -24,6 +24,9 @@ import { type StoredOtp } from '../auth.types';
 
 const DAY_SEC = 24 * 60 * 60;
 
+/** How long a code the desk reads out is good for. Short: it is said aloud, to somebody standing there. */
+export const DESK_CODE_TTL_SEC = 5 * 60;
+
 /** One day's spend on codes, counted and refused on its own. */
 interface DailyBudget {
   counter: string;
@@ -190,24 +193,41 @@ export class OtpService {
     }
   }
 
+  /** A code read out at the desk when the sent one will not arrive. Kept beside it, so a resend cannot replace it. */
+  async issueDeskCode(mobile: string): Promise<{ code: string; expiresInSec: number }> {
+    const code = this.generateCode();
+    const stored: StoredOtp = { codeHash: this.hash(code), createdAt: new Date().toISOString() };
+    await this.redis.setJson(redisKeys.otpDesk(mobile), stored, DESK_CODE_TTL_SEC);
+    // Its own five guesses: a count left by the sent code must not burn this one on the first slip.
+    await this.redis.del(redisKeys.otpAttempts(ActorTypes.STUDENT, mobile));
+    return { code, expiresInSec: DESK_CODE_TTL_SEC };
+  }
+
   /** Consumes the pending code. Throws on wrong/expired codes and burns the challenge once the attempt cap is hit, so a code cannot be brute-forced inside its TTL. */
   async verify(actor: ActorType, identifier: string, code: string): Promise<void> {
-    const key = redisKeys.otp(actor, identifier);
-    const stored = await this.redis.getJson<StoredOtp>(key);
-    if (!stored)
+    // A student may hold two at once: the one that was sent, and one the desk read out.
+    const keys =
+      actor === ActorTypes.STUDENT
+        ? [redisKeys.otp(actor, identifier), redisKeys.otpDesk(identifier)]
+        : [redisKeys.otp(actor, identifier)];
+    const pending = await Promise.all(keys.map((key) => this.redis.getJson<StoredOtp>(key)));
+    if (pending.every((stored) => stored === null)) {
       throw new AppException(ErrorCodes.OTP_EXPIRED, 'Code has expired. Request a new one');
+    }
 
-    if (!sameHex(this.hash(code), stored.codeHash)) {
-      const attemptsKey = redisKeys.otpAttempts(actor, identifier);
+    const hashed = this.hash(code);
+    const attemptsKey = redisKeys.otpAttempts(actor, identifier);
+    const cooldownKey = redisKeys.otpCooldown(actor, identifier);
+    if (!pending.some((stored) => stored !== null && sameHex(hashed, stored.codeHash))) {
       // INCR is one atomic op in Redis, so N concurrent guesses consume N attempts, never one.
       const attempts = await this.redis.client.incr(attemptsKey);
       if (attempts === 1) {
-        const ttl = await this.redis.ttl(key);
+        const ttl = Math.max(...(await Promise.all(keys.map((key) => this.redis.ttl(key)))));
         await this.redis.client.expire(attemptsKey, ttl > 0 ? ttl : 1);
       }
       const maxAttempts = this.config.get('OTP_MAX_VERIFY_ATTEMPTS');
       if (attempts >= maxAttempts) {
-        await this.redis.del(key, attemptsKey, redisKeys.otpCooldown(actor, identifier));
+        await this.redis.del(...keys, attemptsKey, cooldownKey);
         // The challenge is burnt, not just wrong — a different code, because the client's next step is "request a new one", not "try again".
         throw new AppException(
           ErrorCodes.RATE_LIMITED,
@@ -220,12 +240,8 @@ export class OtpService {
       });
     }
 
-    // Single use: a verified code is gone, and the next resend is immediate.
-    await this.redis.del(
-      key,
-      redisKeys.otpCooldown(actor, identifier),
-      redisKeys.otpAttempts(actor, identifier),
-    );
+    // Single use: a verified code is gone with its twin, and the next resend is immediate.
+    await this.redis.del(...keys, cooldownKey, attemptsKey);
   }
 
   /** Uniform over the full range — `randomInt` is CSPRNG-backed, unlike Math.random. */

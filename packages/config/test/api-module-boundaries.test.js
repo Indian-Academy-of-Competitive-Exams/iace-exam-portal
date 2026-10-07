@@ -20,7 +20,7 @@ ruleTester.run('api-module-boundaries', apiModuleBoundaries, {
     },
     {
       code: "import { redisKeys } from '../../redis/redis.keys';",
-      filename: file('auth/pin/pin.service.ts'),
+      filename: file('auth/otp/otp.service.ts'),
     },
     {
       code: "import { Public } from '../common/security/decorators';",
@@ -29,7 +29,7 @@ ruleTester.run('api-module-boundaries', apiModuleBoundaries, {
 
     // A module's own internals are its own business.
     {
-      code: "import { PinService } from './pin/pin.service';",
+      code: "import { OtpService } from './otp/otp.service';",
       filename: file('auth/auth.service.ts'),
     },
     {
@@ -46,7 +46,7 @@ ruleTester.run('api-module-boundaries', apiModuleBoundaries, {
 
     // The composition root sits directly in src/ and wires everything by definition — it is exempt, not excused.
     {
-      code: "import { PinService } from './auth/pin/pin.service';",
+      code: "import { OtpService } from './auth/otp/otp.service';",
       filename: file('app.module.ts'),
     },
 
@@ -58,17 +58,17 @@ ruleTester.run('api-module-boundaries', apiModuleBoundaries, {
 
     // Neither are files outside a src tree.
     {
-      code: "import { PinService } from '../src/auth/pin/pin.service';",
-      filename: '/repo/apps/api/test/auth-pin.unit.test.ts',
+      code: "import { OtpService } from '../src/auth/otp/otp.service';",
+      filename: '/repo/apps/api/test/auth-otp.unit.test.ts',
     },
   ],
 
   invalid: [
     {
-      code: "import { PinService } from '../auth/pin/pin.service';",
+      code: "import { OtpService } from '../auth/otp/otp.service';",
       filename: file('imports/imports.service.ts'),
       errors: [
-        { messageId: 'deepImport', data: { specifier: '../auth/pin/pin.service', target: 'auth' } },
+        { messageId: 'deepImport', data: { specifier: '../auth/otp/otp.service', target: 'auth' } },
       ],
     },
     {

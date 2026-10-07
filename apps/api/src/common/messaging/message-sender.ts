@@ -18,8 +18,6 @@ export type MessageChannel = (typeof MESSAGE_CHANNELS)[keyof typeof MESSAGE_CHAN
 /** What the message IS. Each one is a DLT template id in env; an unconfigured kind simply does not send. */
 export const MESSAGE_KINDS = {
   OTP: 'otp',
-  /** The PIN a roster import gave a student, which is the only time they are told one. */
-  PIN: 'pin',
   /** Sent when a scoring job finishes. WIRED — through the notification delivery ledger. */
   RESULT_READY: 'result_ready',
   /** Reachable but unproduced: policy escalates it, and nothing asks for one yet. */
@@ -33,7 +31,7 @@ export const MESSAGE_KINDS = {
 export type MessageKind = (typeof MESSAGE_KINDS)[keyof typeof MESSAGE_KINDS];
 
 /** The kinds a sender is WAITING on: nobody gets in without them, so a missing template is fatal. */
-export const REQUIRED_KINDS = new Set<MessageKind>([MESSAGE_KINDS.OTP, MESSAGE_KINDS.PIN]);
+export const REQUIRED_KINDS = new Set<MessageKind>([MESSAGE_KINDS.OTP]);
 
 export interface OutboundMessage {
   channel: MessageChannel;

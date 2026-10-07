@@ -9,29 +9,6 @@ const boolFromEnv = (fallback: boolean) =>
     .optional()
     .transform((v) => (v === undefined || v === '' ? fallback : v === 'true' || v === '1'));
 
-/** A comma-separated ladder of positive second counts, e.g. "900,3600,86400". */
-const secondsLadder = (fallback: number[]) =>
-  z
-    .string()
-    .optional()
-    .transform((v) =>
-      v === undefined || v.trim() === ''
-        ? fallback
-        : v
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .map(Number),
-    )
-    .refine(
-      (steps) => steps.length > 0 && steps.every((n) => Number.isInteger(n) && n > 0),
-      'must be a comma-separated list of positive whole seconds, e.g. 900,3600,86400',
-    )
-    .refine(
-      (steps) => steps.every((n, i) => i === 0 || n >= (steps[i - 1] ?? 0)),
-      'must not decrease — each lockout step should be at least as long as the one before',
-    );
-
 /** One slash, not `\/+$`: the quantified form backtracks quadratically on a run of them. */
 const TRAILING_SLASH = /\/$/;
 
@@ -120,15 +97,6 @@ export const envSchema = z.object({
   OTP_SIGNUP_DAILY_BUDGET_PAISE: z.coerce.number().int().positive().default(50_000),
   OTP_SENDER: z.enum(OTP_SENDERS).default(OTP_SENDERS.CONSOLE),
 
-  // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the attempt counters and the setup ticket live in Redis.
-  PIN_PEPPER: z.string().min(24, 'PIN_PEPPER must be at least 24 characters'),
-  PIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
-  // Escalating lockout. Each time a number is locked out again it climbs one rung; the last rung repeats forever.
-  PIN_LOCKOUT_STEPS_SEC: secondsLadder([900, 3600, 86400]),
-  // How long a number must go without being locked out before the ladder drops back to the first rung.
-  PIN_LOCKOUT_DECAY_SEC: z.coerce.number().int().positive().default(86400),
-  PIN_SETUP_TTL_SEC: z.coerce.number().int().positive().default(600),
-
   // Rate limits per minute, generous because a branch of two hundred shares one address (.env.example).
   RATE_LIMIT_DEFAULT_PER_MIN: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().positive().default(120),
@@ -175,7 +143,6 @@ export const envSchema = z.object({
 
   // One DLT template id per message kind. An empty one turns that message off rather than breaking it.
   SMS_TEMPLATE_OTP: optional,
-  SMS_TEMPLATE_PIN: optional,
   SMS_TEMPLATE_RESULT_READY: optional,
   SMS_TEMPLATE_TEST_ASSIGNED: optional,
   SMS_TEMPLATE_TEST_REMINDER: optional,
@@ -206,7 +173,6 @@ export const envSchema = z.object({
 
   // One approved template name per kind, same rule as the DLT ids above.
   WHATSAPP_TEMPLATE_OTP: optional,
-  WHATSAPP_TEMPLATE_PIN: optional,
   WHATSAPP_TEMPLATE_RESULT_READY: optional,
   WHATSAPP_TEMPLATE_TEST_ASSIGNED: optional,
   WHATSAPP_TEMPLATE_TEST_REMINDER: optional,
@@ -242,11 +208,11 @@ const DEV_ONLY_SECRET = 'dev_only_';
 
 /** The 24-character floor passes these: the published placeholders are 49 characters long. */
 const secretIsReal =
-  (key: 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET' | 'PIN_PEPPER') =>
+  (key: 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET') =>
   (env: z.infer<typeof envSchema>): boolean =>
     env.NODE_ENV !== NODE_ENVS.PRODUCTION || !env[key].startsWith(DEV_ONLY_SECRET);
 
-/** Named once so the three messages cannot drift apart. */
+/** Named once so the two messages cannot drift apart. */
 const stillPublished = (forges: string): string =>
   `is still the dev_only_ placeholder .env.example publishes — anybody with the repo could ${forges}`;
 
@@ -281,10 +247,6 @@ export const envSchemaChecked = envSchema
   .refine(secretIsReal('JWT_REFRESH_SECRET'), {
     path: ['JWT_REFRESH_SECRET'],
     message: stillPublished('mint a session that never expires'),
-  })
-  .refine(secretIsReal('PIN_PEPPER'), {
-    path: ['PIN_PEPPER'],
-    message: stillPublished('test a stolen PIN hash offline'),
   });
 
 export type Env = z.infer<typeof envSchema>;

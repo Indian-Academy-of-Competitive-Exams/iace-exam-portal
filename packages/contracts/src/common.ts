@@ -161,35 +161,6 @@ export const otpCodeSchema = z
   .transform((v) => v.trim())
   .pipe(z.string().regex(/^\d{4,8}$/, 'Enter the code sent to you'));
 
-/** The one place the PIN length is decided. Everything else derives from it. */
-export const PIN_LENGTH = 4;
-
-/** Entering an existing PIN: shape only, or the rules would reject accounts that exist; a PIN is not unique across students — it's checked only against the one a mobile resolves to. */
-export const pinSchema = z
-  .string()
-  .transform((v) => v.trim())
-  .pipe(
-    z
-      .string()
-      .regex(new RegExp(String.raw`^\d{${PIN_LENGTH}}$`), `Enter your ${PIN_LENGTH}-digit PIN`),
-  );
-
-/** Straight runs in either direction — the other half of the obvious guesses. */
-const SEQUENTIAL_PINS = new Set(
-  Array.from({ length: 10 - PIN_LENGTH + 1 }, (_, start) => {
-    const run = Array.from({ length: PIN_LENGTH }, (_, i) => start + i).join('');
-    return [run, [...run].reverse().join('')];
-  }).flat(),
-);
-
-/** Choosing a PIN. The Redis lockout is the real protection; this only refuses the obvious ones. */
-export const newPinSchema = pinSchema
-  .refine(
-    (v) => !new RegExp(String.raw`^(\d)\1{${PIN_LENGTH - 1}}$`).test(v),
-    'Avoid a PIN that is all one digit',
-  )
-  .refine((v) => !SEQUENTIAL_PINS.has(v), 'Avoid a PIN in counting order');
-
 // ============================================================================
 // List-query params. Shared because a filter that parses differently in two
 // modules is a filter that means two things.

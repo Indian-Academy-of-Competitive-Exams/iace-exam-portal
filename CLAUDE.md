@@ -48,9 +48,9 @@ SI/Constable), replacing ThinkExam.
 Vite + React SPAs, PostgreSQL via Prisma, Redis + BullMQ, S3, self-built JWT auth, no WebSockets.
 It is the only copy; nothing here restates it.
 
-One auth rule no table can carry: a student's **4-digit PIN is not unique across students**, and is
-only ever checked against the one student a mobile resolves to. A `@unique` on it would cap the
-platform at 10,000 students.
+One auth rule no table can carry: **a student has no password and no PIN.** They sign in with a
+code sent to their mobile every time, and the first time is the signup. An old mobile number is
+never a way to sign in — operators recycle numbers.
 
 <scaling-rules>
 

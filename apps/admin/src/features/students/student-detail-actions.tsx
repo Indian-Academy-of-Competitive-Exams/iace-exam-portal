@@ -7,6 +7,7 @@ import {
   changeStudentMobileSchema,
   type ChangeStudentMobileInput,
   type ErasureReceipt,
+  type StudentDeskCode,
   type StudentDetail,
 } from '@iace/contracts';
 import {
@@ -74,8 +75,8 @@ function ChangeMobileDialog({
       onSubmit={(values) => change.mutate(values)}
     >
       <Alert variant="warning">
-        They are signed out on every device. On the new number they sign in by OTP and choose a new
-        PIN.
+        They are signed out on every device, and sign in with a code sent to the new number from
+        then on.
       </Alert>
       <FormField form={form} name="mobile" label="New mobile number">
         {(control) => <Input {...control} inputMode="numeric" autoComplete="off" autoFocus />}
@@ -91,6 +92,8 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
   const [signInConfirm, setSignInConfirm] = useState(false);
   const [eraseConfirm, setEraseConfirm] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [codeConfirm, setCodeConfirm] = useState(false);
+  const [deskCode, setDeskCode] = useState<StudentDeskCode | null>(null);
   const isSuperAdmin = useAuth().identity?.isSuperAdmin ?? false;
   const { id, isActive, isTestBlocked } = detail;
   const name = detail.fullName ?? detail.mobile;
@@ -121,6 +124,15 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
     onSuccess: (updated) => {
       setSignInConfirm(false);
       applyUpdate(updated);
+    },
+  });
+
+  const issueCode = useMutation({
+    mutationFn: () => api.admin.students.issueDeskCode(id),
+    onError: () => setCodeConfirm(false),
+    onSuccess: (issued) => {
+      setCodeConfirm(false);
+      setDeskCode(issued);
     },
   });
 
@@ -179,6 +191,31 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
         </div>
       ) : null}
 
+      <SectionHeading
+        title="Sign-in code"
+        action={
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            loading={issueCode.isPending}
+            onClick={() => setCodeConfirm(true)}
+          >
+            {deskCode ? 'Issue another' : 'Issue code'}
+          </Button>
+        }
+      />
+      {deskCode ? (
+        <Alert variant="info">
+          <span>
+            <span className="text-lg font-semibold tabular-nums tracking-wide">
+              {deskCode.code}
+            </span>{' '}
+            · good once, for {plural(Math.round(deskCode.expiresInSec / 60), 'minute')}
+          </span>
+        </Alert>
+      ) : null}
+
       {isSuperAdmin ? (
         <SectionHeading
           title="Sign-in"
@@ -213,6 +250,16 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
           }
         />
       ) : null}
+
+      <ConfirmDialog
+        open={codeConfirm}
+        onOpenChange={setCodeConfirm}
+        loading={issueCode.isPending}
+        title={`Issue a sign-in code for ${name}?`}
+        description="Whoever is told this code can sign in as them for the next 5 minutes, without the one sent to their mobile. Read it only to the student, in person. It replaces any code issued for them before."
+        confirmLabel="Issue code"
+        onConfirm={() => issueCode.mutate()}
+      />
 
       <ChangeMobileDialog
         detail={detail}

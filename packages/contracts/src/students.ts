@@ -125,8 +125,6 @@ export const studentSummarySchema = z.object({
   isActive: z.boolean(),
   /** Signs in and sees their history, but cannot start a test. Not a sign-in state. */
   isTestBlocked: z.boolean(),
-  /** Still on an import's default PIN, which anyone holding the roster can guess. */
-  hasDefaultPin: z.boolean(),
   preTestReady: z.boolean(),
   profileCompleted: z.boolean(),
   createdAt: z.string(),
@@ -231,8 +229,6 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   course: csvQuery(examCourseSchema),
   isActive: optionalBooleanQuery(),
   isTestBlocked: optionalBooleanQuery(),
-  /** Still on the starting PIN an import gave them — a list worth chasing. */
-  hasDefaultPin: optionalBooleanQuery(),
   /** Mother's name, father's name and DOB — what a student needs before a test. */
   preTestReady: optionalBooleanQuery(),
   profileCompleted: optionalBooleanQuery(),
@@ -341,6 +337,13 @@ export const changeStudentMobileSchema = z.object({ mobile: mobileSchema });
 export type ChangeStudentMobileInput = z.input<typeof changeStudentMobileSchema>;
 export type ChangeStudentMobileBody = z.infer<typeof changeStudentMobileSchema>;
 
+/** A sign-in code an admin reads out to a student whose sent one did not arrive. Shown once, never stored in the clear. */
+export const studentDeskCodeSchema = z.object({
+  code: z.string(),
+  expiresInSec: z.number().int(),
+});
+export type StudentDeskCode = z.infer<typeof studentDeskCodeSchema>;
+
 export const setStudentTestBlockedSchema = z.object({ isTestBlocked: z.boolean() });
 export type SetStudentTestBlockedBody = z.infer<typeof setStudentTestBlockedSchema>;
 
@@ -361,6 +364,7 @@ export const ADMIN_STUDENT_ROUTES = {
   setActive: (id: string) => `/admin/students/${id}/active`,
   setTestBlocked: (id: string) => `/admin/students/${id}/test-blocked`,
   changeMobile: (id: string) => `/admin/students/${id}/mobile`,
+  deskCode: (id: string) => `/admin/students/${id}/desk-code`,
   erasure: (id: string) => `/admin/students/${id}/erasure`,
   sittings: (id: string) => `/admin/students/${id}/sittings`,
   export: '/admin/students/export',

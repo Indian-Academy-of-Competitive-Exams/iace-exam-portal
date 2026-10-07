@@ -1,17 +1,12 @@
 /**
- * The two facts auth already announces and nobody was telling the student about. Both are
- * REACTIONS: the account and the PIN are committed before this runs, so a notification that will
- * not write must never cost somebody their sign-in — every handler here swallows its own failure.
+ * The fact auth already announces and nobody was telling the student about. It is a REACTION: the
+ * account is committed before this runs, so a notification that will not write must never cost
+ * somebody their sign-in — the handler swallows its own failure.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
-import {
-  DOMAIN_EVENTS,
-  PIN_RESET_REASONS,
-  type StudentPinResetEvent,
-  type StudentSignedUpEvent,
-} from '../common/events';
+import { DOMAIN_EVENTS, type StudentSignedUpEvent } from '../common/events';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService, type NewNotification } from './notifications.service';
 
@@ -32,21 +27,6 @@ export class NotificationListener {
       title: 'Welcome to IACE',
       body: 'Your tests appear here as they open. Complete your profile before your first one.',
       dedupeKey: `welcome:${event.studentId}`,
-    });
-  }
-
-  /** Told either way: a student cannot spot the change they did not make without seeing both. */
-  @OnEvent(DOMAIN_EVENTS.STUDENT_PIN_RESET)
-  async onPinReset(event: StudentPinResetEvent): Promise<void> {
-    const forgotten = event.reason === PIN_RESET_REASONS.OTP_RESET;
-
-    await this.tell({
-      studentId: event.studentId,
-      type: NOTIFICATION_TYPE.PIN_CHANGED,
-      title: 'Your PIN was changed',
-      body: forgotten
-        ? 'It was reset with a code sent to your mobile. If that was not you, tell your branch office.'
-        : 'You changed it while signed in. If that was not you, tell your branch office.',
     });
   }
 

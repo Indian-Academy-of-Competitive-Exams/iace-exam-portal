@@ -19,7 +19,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     PrismaModule,
     StorageModule,
     AppConfigModule,
-    // For the starting PIN: a student added by hand is issued one the same way a roster is.
+    // For the desk code: the students screen asks for one, and the code itself stays auth's.
     AuthModule,
     BranchesModule,
     forwardRef(() => ConfigsModule),

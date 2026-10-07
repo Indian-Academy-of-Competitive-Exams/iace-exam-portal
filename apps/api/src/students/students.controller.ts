@@ -39,6 +39,7 @@ import {
   type ReportSitting,
   type SetStudentActiveBody,
   type SetStudentTestBlockedBody,
+  type StudentDeskCode,
   type StudentDetail,
   type StudentExportQuery,
   type StudentListQuery,
@@ -59,6 +60,7 @@ import { Audit, AuditContext, TOGGLE_ACTIONS } from '../audit';
 import { chosenFilters, sendWorkbook } from '../common/exporting';
 import { PrismaService } from '../prisma/prisma.service';
 import { type StudentOverviewService } from '../attempts';
+import { AuthService } from '../auth';
 import { StudentsService } from './students.service';
 import { StudentPrivacyService } from './student-privacy.service';
 import { buildStudentExport } from './student-export';
@@ -84,6 +86,7 @@ export class StudentsController {
     )
     private readonly rollups: StudentOverviewService,
     private readonly auditContext: AuditContext,
+    private readonly auth: AuthService,
   ) {}
 
   /** Returns the list shape the response interceptor splits into data + meta. */
@@ -177,6 +180,17 @@ export class StudentsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StudentDetail> {
     return this.students.changeMobile(id, body.mobile, user.id);
+  }
+
+  /** For a student at the desk whose code did not arrive. Whoever is told it signs in as them, so it is audited. */
+  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/desk-code')
+  @HttpCode(HttpStatus.OK)
+  async issueDeskCode(@Param('id') id: string): Promise<StudentDeskCode> {
+    const issued = await this.auth.issueStudentDeskCode(id);
+    this.auditContext.setChanged({ deskCode: { from: null, to: 'issued' } });
+    return issued;
   }
 
   /** An erasure request, actioned. Irreversible, and every sitting they sat is left standing. */

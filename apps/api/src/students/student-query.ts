@@ -57,8 +57,6 @@ export function studentWhere(
   if (query.eventId) add({ eventCandidacies: { some: { eventId: { in: query.eventId } } } });
   if (query.noAccess !== undefined) add(ownAccessFilter(query.noAccess));
 
-  if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
-
   if (query.q?.trim()) {
     always.push(
       everyTermMatches<Prisma.StudentWhereInput>(query.q, (term) => [

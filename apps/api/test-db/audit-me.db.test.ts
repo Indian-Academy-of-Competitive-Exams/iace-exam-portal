@@ -10,7 +10,7 @@ import { type ExamsService } from '../src/configs';
 import { MeService } from '../src/me/me.service';
 import { type StorageService } from '../src/storage/storage.service';
 import { StudentsService } from '../src/students/students.service';
-import { FakeCodeCatalog, FakeEventBus, fakeStartingPins } from '../test/support/fakes';
+import { FakeCodeCatalog, FakeEventBus } from '../test/support/fakes';
 import { jpegBytes } from '../test/support/image-bytes';
 import { makeStudent, resetDatabase, testPrisma } from './support/database';
 
@@ -42,7 +42,6 @@ async function build(over: { fullName?: string; motherName?: string | null } = {
     // Never validated here, but wired all the same: every `me` read resolves the enrolment.
     new FakeCodeCatalog().asService<ExamsService>(),
     { nameOf: () => Promise.resolve(null) } as unknown as BranchesService,
-    fakeStartingPins(),
     new FakeCodeCatalog().asService(),
     auditContext,
     new FakeEventBus().asService(),

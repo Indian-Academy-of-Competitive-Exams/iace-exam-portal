@@ -30,7 +30,6 @@ import { pageArgs, paged } from '../common/pagination';
 import { isRecordNotFound, isUniqueViolation } from '../common/prisma-errors';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { StartingPinService } from '../auth';
 import { BranchesService } from '../branches';
 import { ExamsService } from '../configs';
 import { type ProgramsService } from '../access';
@@ -79,7 +78,6 @@ export class StudentsService {
     @Inject(forwardRef(() => ExamsService))
     private readonly exams: ExamsService,
     private readonly branches: BranchesService,
-    private readonly startingPins: StartingPinService,
     // `require`, not a static import: `access` imports `configs`, which imports this barrel back.
     @Inject(
       forwardRef(
@@ -268,10 +266,6 @@ export class StudentsService {
       input.currentBranchId ?? null,
     );
 
-    // The same starting PIN the importer issues: random, and told to them rather than derived.
-    const [issued] = await this.startingPins.mint([input.mobile]);
-    if (issued === undefined) throw new Error('No starting PIN was minted for the new student');
-
     const student = await this.prisma.student.create({
       data: {
         mobile: input.mobile,
@@ -281,13 +275,9 @@ export class StudentsService {
         enrolledCourses: input.enrolledCourses ?? [],
         programs: input.programs ?? [],
         currentBranchId,
-        pinHash: issued.hash,
-        pinIsDefault: true,
       },
     });
 
-    // After the row, never before it: a PIN texted for a create that threw opens nothing.
-    await this.startingPins.announce([issued]);
     return this.detail(student.id);
   }
 
@@ -440,7 +430,7 @@ export class StudentsService {
     return this.detail(id);
   }
 
-  /** Who they sign in as. The old number is kept to find them by; every session ends and the PIN goes with it. */
+  /** Who they sign in as. The old number is kept to find them by, and every session they held ends. */
   async changeMobile(id: string, mobile: string, changedById: string): Promise<StudentDetail> {
     // Live only: an erased student's tombstone is not a number to move.
     const student = await this.prisma.student.findFirst({
@@ -462,8 +452,7 @@ export class StudentsService {
         // Guarded by what was read, so an erasure or a second change that landed first moves nothing here.
         const moved = await tx.student.updateMany({
           where: { id, deletedAt: null, mobile: student.mobile },
-          // A PIN set by whoever held the old SIM must open nothing: the new number signs in by OTP first.
-          data: { mobile, pinHash: null },
+          data: { mobile },
         });
         if (moved.count === 0) throw new AppException(ErrorCodes.CONFLICT, CHANGED_MEANWHILE);
         await tx.studentMobileHistory.create({
@@ -540,7 +529,6 @@ export class StudentsService {
       programs: string[];
       isActive: boolean;
       isTestBlocked: boolean;
-      pinIsDefault: boolean;
       profile: Partial<Record<ReadinessField, unknown>> | null;
       createdAt: Date;
     },
@@ -557,7 +545,6 @@ export class StudentsService {
       hasOwnAccess,
       isActive: row.isActive,
       isTestBlocked: row.isTestBlocked,
-      hasDefaultPin: row.pinIsDefault,
       ...readinessOf(row.profile),
       createdAt: row.createdAt.toISOString(),
     };

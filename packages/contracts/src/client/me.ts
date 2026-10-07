@@ -1,16 +1,10 @@
 import { noContentSchema, type NoContent, type Paginated } from '../envelope';
 import { type LanguageCode } from '../exams';
-import {
-  authSessionResponseSchema,
-  deviceSessionSchema,
-  type AuthSessionResponse,
-  type DeviceSession,
-} from '../auth';
+import { deviceSessionSchema, type DeviceSession } from '../auth';
 import {
   DOCUMENT_FILE_FIELD,
   ME_ROUTES,
   meSchema,
-  type ChangePinInput,
   type DocumentKind,
   type Me,
   type UpdateMeInput,
@@ -109,10 +103,6 @@ export function meClient(core: ApiCore) {
       form.append(DOCUMENT_FILE_FIELD, file);
       return write('POST', ME_ROUTES.document(kind), meSchema, form);
     },
-
-    /** Returns a FRESH session — the caller must store these tokens. */
-    changePin: (input: ChangePinInput): Promise<AuthSessionResponse> =>
-      write('POST', ME_ROUTES.changePin, authSessionResponseSchema, input),
 
     /** Where this account is signed in, newest activity first; the asking device is marked. */
     sessions: (): Promise<DeviceSession[]> => get(ME_ROUTES.sessions, deviceSessionSchema.array()),

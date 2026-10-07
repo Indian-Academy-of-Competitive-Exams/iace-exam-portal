@@ -9,7 +9,6 @@ import { MESSAGE_KINDS, REQUIRED_KINDS, type MessageKind } from './message-sende
 /** Which env var carries each kind's registered template. Adding a kind is adding a line to both. */
 const TEMPLATE_KEYS = {
   [MESSAGE_KINDS.OTP]: 'WHATSAPP_TEMPLATE_OTP',
-  [MESSAGE_KINDS.PIN]: 'WHATSAPP_TEMPLATE_PIN',
   [MESSAGE_KINDS.RESULT_READY]: 'WHATSAPP_TEMPLATE_RESULT_READY',
   [MESSAGE_KINDS.TEST_ASSIGNED]: 'WHATSAPP_TEMPLATE_TEST_ASSIGNED',
   [MESSAGE_KINDS.TEST_REMINDER]: 'WHATSAPP_TEMPLATE_TEST_REMINDER',
@@ -19,7 +18,6 @@ const TEMPLATE_KEYS = {
 /** Template variables are POSITIONAL, so this order IS the registered template's order. */
 const TEMPLATE_VARIABLES = {
   [MESSAGE_KINDS.OTP]: ['code'],
-  [MESSAGE_KINDS.PIN]: ['pin'],
   [MESSAGE_KINDS.RESULT_READY]: ['testId'],
   [MESSAGE_KINDS.TEST_ASSIGNED]: ['testId'],
   [MESSAGE_KINDS.TEST_REMINDER]: ['testId'],
