@@ -168,7 +168,7 @@ export function StudentsPage() {
       label: 'Filter by status',
       primary: true,
       items: [
-        { value: 'all', label: 'All students' },
+        { value: '', label: 'All students' },
         { value: 'active', label: 'Active' },
         { value: 'inactive', label: 'Sign-in suspended' },
         { value: 'blocked', label: 'Blocked from tests' },
@@ -341,7 +341,7 @@ export function StudentsPage() {
       {/* Rendered inside the frame, not the header: a dialog is portalled, so where it
           sits in the tree costs the pinned header nothing. */}
       <NewStudentDialog
-        open={creating}
+        open={creating && canWrite}
         onClose={() => {
           searchParams.delete('new');
           setSearchParams(searchParams);

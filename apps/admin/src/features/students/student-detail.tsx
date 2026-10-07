@@ -7,7 +7,9 @@ import { FileText, Pencil, Save } from 'lucide-react';
 import {
   EARLIEST_BIRTH_DATE,
   examsInCourses,
+  FEATURE_KEYS,
   GENDERS,
+  PERMISSION_LEVELS,
   STUDENT_TYPE,
   STUDENT_TYPES,
   todayISO,
@@ -188,7 +190,10 @@ function StudentStateNotice({
 
 /** Where a student sits relative to the institute — the fields access resolves through. */
 function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
-  const { exams } = useExams({ activeOnly: true });
+  // Unfiltered — an exam retired since they enrolled is offered only to take it off them.
+  const { exams: everyExam } = useExams();
+  const heldExams = form.formState.defaultValues?.enrolledExams ?? [];
+  const exams = everyExam.filter((exam) => exam.isActive || heldExams.includes(exam.code));
   // Unfiltered — a student's branch may have since been retired, and must still resolve to a name, not the raw id.
   const { branches: allBranches } = useBranches();
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
@@ -239,7 +244,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               items={examsInCourses(exams, enrolledCourses, enrolledExams).map((exam) => ({
                 value: exam.code,
                 label: exam.code,
-                hint: exam.name,
+                hint: exam.isActive ? exam.name : `${exam.name}, retired`,
               }))}
               chips={false}
               placeholder="No exams yet"
@@ -367,22 +372,30 @@ function DetailsTab({
 interface TabProps {
   form: UseFormReturn<FormValues>;
   detail: StudentDetail;
+  canWrite: boolean;
 }
 
 /** One entry per tab, so a tab added to the list without a body is a type error. */
 const TAB_CONTENT: Readonly<Record<StudentTab, (props: TabProps) => React.ReactNode>> = {
   [STUDENT_TABS.DETAILS]: ({ form, detail }) => <DetailsTab form={form} detail={detail} />,
-  [STUDENT_TABS.SERIES]: ({ detail }) => <SeriesTab detail={detail} />,
-  [STUDENT_TABS.EVENTS]: ({ detail }) => <EventsTab detail={detail} />,
+  [STUDENT_TABS.SERIES]: ({ detail, canWrite }) => (
+    <SeriesTab detail={detail} canWrite={canWrite} />
+  ),
+  [STUDENT_TABS.EVENTS]: ({ detail, canWrite }) => (
+    <EventsTab detail={detail} canWrite={canWrite} />
+  ),
   [STUDENT_TABS.PERFORMANCE]: ({ detail }) => (
     <StudentPerformancePanel key={detail.id} studentId={detail.id} />
   ),
-  [STUDENT_TABS.ACTIONS]: ({ detail }) => <ActionsTab detail={detail} />,
+  [STUDENT_TABS.ACTIONS]: ({ detail, canWrite }) => (
+    <ActionsTab detail={detail} canWrite={canWrite} />
+  ),
 };
 
 export function StudentDetailPage() {
   const { id = '' } = useParams();
   const { can, identity } = useAuth();
+  const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -509,7 +522,7 @@ export function StudentDetailPage() {
           value,
           label: STUDENT_TAB_LABELS[value],
           standalone: value !== STUDENT_TABS.DETAILS,
-          content: TAB_CONTENT[value]({ form, detail }),
+          content: TAB_CONTENT[value]({ form, detail, canWrite }),
         })),
       }}
       footer={
@@ -522,8 +535,10 @@ export function StudentDetailPage() {
             <Button
               type="button"
               variant="secondary"
+              disabled={save.isPending}
               onClick={() => {
                 form.reset();
+                save.reset();
                 setIsEditing(false);
               }}
             >
@@ -557,7 +572,7 @@ export function StudentDetailPage() {
             title={detail.fullName ?? detail.mobile}
             meta={`+91 ${detail.mobile}`}
             action={
-              onDetails && !isEditing ? (
+              canWrite && onDetails && !isEditing ? (
                 <Button
                   data-tour={TOUR_TARGETS.STUDENT_EDIT}
                   variant="outline"
@@ -574,7 +589,7 @@ export function StudentDetailPage() {
           <StudentStateNotice
             detail={detail}
             onAddPreTestDetails={
-              isEditing
+              isEditing || !canWrite
                 ? undefined
                 : () => {
                     filters.set({ tab: STUDENT_TABS.DETAILS });

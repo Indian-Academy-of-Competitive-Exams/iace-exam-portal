@@ -17,7 +17,7 @@ import { QUERY_KEYS } from '../../lib/constants';
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function studentEventColumns(
   busy: boolean,
-  onRemove: (event: StudentEvent) => void,
+  onRemove?: (event: StudentEvent) => void,
 ): DataTableColumn<StudentEvent>[] {
   return [
     {
@@ -26,18 +26,22 @@ function studentEventColumns(
       className: 'max-w-[20rem] font-medium',
       cell: (event) => <TruncatedText>{event.name}</TruncatedText>,
     },
-    {
-      key: 'actions',
-      className: 'text-right',
-      cell: (event) => (
-        <RowActions label={`Actions for ${event.name}`}>
-          <DropdownMenuItem destructive disabled={busy} onSelect={() => onRemove(event)}>
-            <UserMinus aria-hidden />
-            Remove from event
-          </DropdownMenuItem>
-        </RowActions>
-      ),
-    },
+    ...(onRemove
+      ? [
+          {
+            key: 'actions',
+            className: 'text-right',
+            cell: (event: StudentEvent) => (
+              <RowActions label={`Actions for ${event.name}`}>
+                <DropdownMenuItem destructive disabled={busy} onSelect={() => onRemove(event)}>
+                  <UserMinus aria-hidden />
+                  Remove from event
+                </DropdownMenuItem>
+              </RowActions>
+            ),
+          },
+        ]
+      : []),
   ];
 }
 
@@ -67,7 +71,10 @@ function Programs({ codes }: Readonly<{ codes: readonly string[] }>) {
 }
 
 /** Where a candidate comes OFF an event: the roster is managed here, on the student it belongs to. */
-export function EventsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
+export function EventsTab({
+  detail,
+  canWrite,
+}: Readonly<{ detail: StudentDetail; canWrite: boolean }>) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState<StudentEvent | null>(null);
 
@@ -84,8 +91,8 @@ export function EventsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
   });
 
   const columns = useMemo(
-    () => studentEventColumns(remove.isPending, setAsking),
-    [remove.isPending],
+    () => studentEventColumns(remove.isPending, canWrite ? setAsking : undefined),
+    [remove.isPending, canWrite],
   );
 
   return (

@@ -9,11 +9,13 @@ import { ProgramsList } from '../catalog/programs';
 import { EventsList } from '../catalog/events';
 
 const TAB_KEY = 'tab';
+/** Both lists keep their filters under these address keys, so one tab's would narrow the other. */
+const SHARED_FILTERS_CLEARED = { q: undefined, activeOnly: undefined } as const;
 
 /** Two ways a series reaches a cohort, read in the same sitting: one nav row, a tab each. */
 export function CohortsPage() {
   const { identity: admin, can } = useAuth();
-  const filters = useFilters<typeof TAB_KEY>();
+  const filters = useFilters<typeof TAB_KEY | keyof typeof SHARED_FILTERS_CLEARED>();
   const [creating, setCreating] = useState(false);
 
   const tab: CohortTab =
@@ -47,7 +49,10 @@ export function CohortsPage() {
         value: tab,
         onValueChange: (next) => {
           setCreating(false);
-          filters.set({ [TAB_KEY]: next === COHORT_TABS.PROGRAMS ? undefined : next });
+          filters.set({
+            ...SHARED_FILTERS_CLEARED,
+            [TAB_KEY]: next === COHORT_TABS.PROGRAMS ? undefined : next,
+          });
         },
         items: [
           {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -86,14 +86,19 @@ function ChangeMobileDialog({
 }
 
 /** Everything done TO a student rather than recorded about them, each behind its own confirm. */
-export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
+export function ActionsTab({
+  detail,
+  canWrite,
+}: Readonly<{ detail: StudentDetail; canWrite: boolean }>) {
   const queryClient = useQueryClient();
   const [blockConfirm, setBlockConfirm] = useState(false);
   const [signInConfirm, setSignInConfirm] = useState(false);
   const [eraseConfirm, setEraseConfirm] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [codeConfirm, setCodeConfirm] = useState(false);
-  const [deskCode, setDeskCode] = useState<StudentDeskCode | null>(null);
+  const [issued, setIssued] = useState<(StudentDeskCode & { mobile: string }) | null>(null);
+  // The server keys a code by the number it was issued for, so one for a number since changed is dead.
+  const deskCode = issued?.mobile === detail.mobile ? issued : null;
   const isSuperAdmin = useAuth().identity?.isSuperAdmin ?? false;
   const { id, isActive, isTestBlocked } = detail;
   const name = detail.fullName ?? detail.mobile;
@@ -130,11 +135,20 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
   const issueCode = useMutation({
     mutationFn: () => api.admin.students.issueDeskCode(id),
     onError: () => setCodeConfirm(false),
-    onSuccess: (issued) => {
+    onSuccess: async (code) => {
       setCodeConfirm(false);
-      setDeskCode(issued);
+      // Re-read first: the code is for the number the server holds, which a page left open may not show.
+      await queryClient.invalidateQueries({ queryKey: studentQueryKey(id), exact: true });
+      const current = queryClient.getQueryData<StudentDetail>(studentQueryKey(id));
+      setIssued({ ...code, mobile: current?.mobile ?? detail.mobile });
     },
   });
+
+  useEffect(() => {
+    if (!issued) return;
+    const expiry = setTimeout(() => setIssued(null), issued.expiresInSec * 1000);
+    return () => clearTimeout(expiry);
+  }, [issued]);
 
   const erase = useMutation({
     meta: {
@@ -154,28 +168,32 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
 
   return (
     <>
-      <SectionHeading
-        title="Tests"
-        action={
-          <Button
-            type="button"
-            size="sm"
-            variant={isTestBlocked ? 'secondary' : 'destructive'}
-            loading={setTestBlocked.isPending}
-            onClick={() => setBlockConfirm(true)}
-          >
-            {isTestBlocked ? 'Allow tests' : 'Block from tests'}
-          </Button>
-        }
-      />
+      {canWrite ? (
+        <SectionHeading
+          title="Tests"
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant={isTestBlocked ? 'secondary' : 'destructive'}
+              loading={setTestBlocked.isPending}
+              onClick={() => setBlockConfirm(true)}
+            >
+              {isTestBlocked ? 'Allow tests' : 'Block from tests'}
+            </Button>
+          }
+        />
+      ) : null}
 
       <SectionHeading
         title="Mobile number"
         meta={detail.mobile}
         action={
-          <Button type="button" size="sm" variant="outline" onClick={() => setMobileOpen(true)}>
-            Change number
-          </Button>
+          canWrite ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => setMobileOpen(true)}>
+              Change number
+            </Button>
+          ) : undefined
         }
       />
       {detail.formerMobiles.length > 0 ? (
@@ -191,20 +209,22 @@ export function ActionsTab({ detail }: Readonly<{ detail: StudentDetail }>) {
         </div>
       ) : null}
 
-      <SectionHeading
-        title="Sign-in code"
-        action={
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            loading={issueCode.isPending}
-            onClick={() => setCodeConfirm(true)}
-          >
-            {deskCode ? 'Issue another' : 'Issue code'}
-          </Button>
-        }
-      />
+      {canWrite ? (
+        <SectionHeading
+          title="Sign-in code"
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              loading={issueCode.isPending}
+              onClick={() => setCodeConfirm(true)}
+            >
+              {deskCode ? 'Issue another' : 'Issue code'}
+            </Button>
+          }
+        />
+      ) : null}
       {deskCode ? (
         <Alert variant="info">
           <span>

@@ -25,7 +25,7 @@ import { QUERY_KEYS, SERIES_SOURCE_LABELS, studentSeriesQueryKey } from '../../l
 
 function seriesColumns(
   busy: boolean,
-  onRevoke: (row: StudentSeriesAccess) => void,
+  onRevoke?: (row: StudentSeriesAccess) => void,
 ): DataTableColumn<StudentSeriesAccess>[] {
   return [
     {
@@ -52,19 +52,23 @@ function seriesColumns(
         </TruncatedText>
       ),
     },
-    {
-      key: 'actions',
-      // Left out rather than disabled: there is no grant on an exam or program match to revoke.
-      cell: (row) =>
-        row.sources.includes(STUDENT_SERIES_SOURCE.GRANT) ? (
-          <RowActions label={`Actions for ${row.name}`}>
-            <DropdownMenuItem destructive disabled={busy} onSelect={() => onRevoke(row)}>
-              <Trash2 aria-hidden />
-              Revoke grant
-            </DropdownMenuItem>
-          </RowActions>
-        ) : null,
-    },
+    ...(onRevoke
+      ? [
+          {
+            key: 'actions',
+            // Left out rather than disabled: there is no grant on an exam or program match to revoke.
+            cell: (row: StudentSeriesAccess) =>
+              row.sources.includes(STUDENT_SERIES_SOURCE.GRANT) ? (
+                <RowActions label={`Actions for ${row.name}`}>
+                  <DropdownMenuItem destructive disabled={busy} onSelect={() => onRevoke(row)}>
+                    <Trash2 aria-hidden />
+                    Revoke grant
+                  </DropdownMenuItem>
+                </RowActions>
+              ) : null,
+          },
+        ]
+      : []),
   ];
 }
 
@@ -82,7 +86,7 @@ function SeriesList({
   isError: boolean;
   onRetry: () => void;
   busy: boolean;
-  onRevoke: (row: StudentSeriesAccess) => void;
+  onRevoke?: (row: StudentSeriesAccess) => void;
 }>) {
   const columns = useMemo(() => seriesColumns(busy, onRevoke), [busy, onRevoke]);
 
@@ -107,7 +111,10 @@ function grantConsequence(chosen: ChosenSeries): string {
 }
 
 /** Every series this student reaches, and the one direct grant an admin can add or take away. */
-export function SeriesTab({ detail }: Readonly<{ detail: StudentDetail }>) {
+export function SeriesTab({
+  detail,
+  canWrite,
+}: Readonly<{ detail: StudentDetail; canWrite: boolean }>) {
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState<ChosenSeries>(NO_SERIES);
   const [granting, setGranting] = useState(false);
@@ -120,9 +127,10 @@ export function SeriesTab({ detail }: Readonly<{ detail: StudentDetail }>) {
     queryFn: () => api.admin.studentSeries.list(studentId),
   });
 
-  // The picker asks the server what they do NOT reach, so a grant changes its answer too.
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: studentSeriesQueryKey(studentId) });
+    // The root of this student's series, and of the list whose Access column counts a grant.
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
+    // The picker asks the server what they do NOT reach, so a grant changes its answer too.
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
   };
 
@@ -148,45 +156,48 @@ export function SeriesTab({ detail }: Readonly<{ detail: StudentDetail }>) {
     onError: () => setRevoking(null),
   });
 
-  const keepsItAnyway =
-    revoking?.sources.some((source) => source !== STUDENT_SERIES_SOURCE.GRANT) ?? false;
+  const otherRoutes = (revoking?.sources ?? [])
+    .filter((source) => source !== STUDENT_SERIES_SOURCE.GRANT)
+    .map((source) => SERIES_SOURCE_LABELS[source]);
 
   return (
     <FormSection title="Series">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <Field
-            htmlFor="grantSeries"
-            label="Series to grant"
-            // ui-copy-ok: rule — why Grant is dead, which a disabled button cannot say
-            hint={detail.isTestBlocked ? 'Lift the test block before granting.' : undefined}
-            className="min-w-56 flex-1"
-          >
-            {({ id, 'aria-describedby': describedBy }) => (
-              <TestSeriesPicker
-                id={id}
-                aria-describedby={describedBy}
-                value={chosen.id}
-                selectedLabel={chosen.name || undefined}
-                notReachedBy={studentId}
-                clearable
-                placeholder="Choose a series"
-                onChange={setChosen}
-              />
-            )}
-          </Field>
+        {canWrite ? (
+          <div className="flex flex-wrap items-end gap-3">
+            <Field
+              htmlFor="grantSeries"
+              label="Series to grant"
+              // ui-copy-ok: rule — why Grant is dead, which a disabled button cannot say
+              hint={detail.isTestBlocked ? 'Lift the test block before granting.' : undefined}
+              className="min-w-56 flex-1"
+            >
+              {({ id, 'aria-describedby': describedBy }) => (
+                <TestSeriesPicker
+                  id={id}
+                  aria-describedby={describedBy}
+                  value={chosen.id}
+                  selectedLabel={chosen.name || undefined}
+                  notReachedBy={studentId}
+                  clearable
+                  placeholder="Choose a series"
+                  onChange={setChosen}
+                />
+              )}
+            </Field>
 
-          <Button
-            type="button"
-            variant="outline"
-            disabled={chosen.id === '' || detail.isTestBlocked}
-            loading={grant.isPending}
-            onClick={() => setGranting(true)}
-          >
-            <Plus aria-hidden />
-            Grant
-          </Button>
-        </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={chosen.id === '' || detail.isTestBlocked}
+              loading={grant.isPending}
+              onClick={() => setGranting(true)}
+            >
+              <Plus aria-hidden />
+              Grant
+            </Button>
+          </div>
+        ) : null}
 
         <SeriesList
           series={series.data ?? []}
@@ -194,7 +205,7 @@ export function SeriesTab({ detail }: Readonly<{ detail: StudentDetail }>) {
           isError={series.isError}
           onRetry={series.refetch}
           busy={revoke.isPending}
-          onRevoke={setRevoking}
+          onRevoke={canWrite ? setRevoking : undefined}
         />
       </div>
 
@@ -217,8 +228,8 @@ export function SeriesTab({ detail }: Readonly<{ detail: StudentDetail }>) {
         loading={revoke.isPending}
         title={`Revoke ${revoking?.name} from ${name}?`}
         description={
-          keepsItAnyway
-            ? `An enrolment or a program also reaches ${revoking?.name}, so they keep it and nothing they can sit changes. Only the direct grant is removed.`
+          otherRoutes.length > 0
+            ? `${revoking?.name} still reaches them another way (${otherRoutes.join('; ')}), so they keep it and nothing they can sit changes. Only the direct grant is removed.`
             : `They lose this route to its tests straight away. Attempts already made and their results are kept.`
         }
         confirmLabel="Revoke grant"
