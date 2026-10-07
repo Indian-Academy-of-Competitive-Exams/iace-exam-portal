@@ -12,7 +12,7 @@ import {
   type LanguageCode,
   type PrintablePaper,
 } from '@iace/contracts';
-import { htmlOf } from '@iace/app-kit';
+import { htmlOf, logoUrl } from '@iace/app-kit';
 import { PageCrumbs, printElement, useFilterSpec, useFilters } from '@iace/app-kit/browser';
 import {
   EMPTY_STATE_KINDS,
@@ -33,6 +33,8 @@ import { durationLabel } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 
 const UNTITLED = 'Untitled test';
+/** A drawing, not `Brandmark`: a printer drops the plate a background would paint. */
+const SHEET_LOGO = logoUrl(28);
 const WITH_KEY = 'true';
 
 /** What the paper is printed in, and for a super admin whether its key goes with it. */
@@ -182,9 +184,7 @@ function Sheet({ paper, ref }: Readonly<{ paper: PrintablePaper; ref: React.Ref<
   return (
     <article ref={ref} className="flex flex-col gap-6 text-sm text-foreground">
       <header className="flex flex-col gap-1 border-b border-border pb-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {REPORT_LETTERHEAD}
-        </p>
+        <img src={SHEET_LOGO} alt={REPORT_LETTERHEAD} className="mb-2 h-7 w-auto self-start" />
         <h1 className="text-2xl font-bold tracking-tight">{paper.title ?? UNTITLED}</h1>
         <p className="text-muted-foreground">{paper.series}</p>
         <dl className="mt-2 flex flex-wrap gap-x-8 gap-y-1">

@@ -4,7 +4,6 @@
  * the column headings and breaks between rows. No tokens here: paper is ink on white.
  */
 import {
-  REPORT_LETTERHEAD,
   holdsFigures,
   instituteDateTimeLabel,
   type ReportCell,
@@ -12,7 +11,7 @@ import {
   type ReportFact,
   type ReportTable,
 } from '@iace/contracts';
-import { PRINT_WATERMARK, printPageCss } from './print-page';
+import { PRINT_WATERMARK, logoSvg, printPageCss } from './print-page';
 
 const ESCAPES: Readonly<Record<string, string>> = {
   '&': '&amp;',
@@ -37,8 +36,8 @@ const STYLES = `
   * { box-sizing: border-box; }
   body { margin: 0; font: 10pt/1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
   header { margin-bottom: 12pt; border-bottom: 1.5pt solid; padding-bottom: 8pt; }
-  .letterhead { margin: 0; font-size: 9pt; letter-spacing: 0.08em; text-transform: uppercase; }
-  h1 { margin: 2pt 0 6pt; font-size: 16pt; }
+  header > svg { display: block; width: auto; height: 20pt; }
+  h1 { margin: 6pt 0; font-size: 16pt; }
   h2 { margin: 14pt 0 4pt; font-size: 11pt; break-after: avoid; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 1pt 12pt; margin: 0; }
   dt { font-weight: 600; }
@@ -93,5 +92,5 @@ export function reportHtml(document: ReportDocument): string {
   const page = widest > PORTRAIT_COLUMNS ? 'A4 landscape' : 'A4 portrait';
   const title = escaped(document.title);
 
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>${printPageCss(page)}${STYLES}</style></head><body>${PRINT_WATERMARK}<header><p class="letterhead">${escaped(REPORT_LETTERHEAD)}</p><h1>${title}</h1>${facts(document.about)}<p class="as-of">As of ${escaped(instituteDateTimeLabel(document.asOf))}</p></header>${paragraphs(document.preface, 'preface')}${facts(document.figures, 'figures')}${document.tables.map(tableOf).join('')}${paragraphs(document.closing, 'closing')}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>${printPageCss(page)}${STYLES}</style></head><body>${PRINT_WATERMARK}<header>${logoSvg()}<h1>${title}</h1>${facts(document.about)}<p class="as-of">As of ${escaped(instituteDateTimeLabel(document.asOf))}</p></header>${paragraphs(document.preface, 'preface')}${facts(document.figures, 'figures')}${document.tables.map(tableOf).join('')}${paragraphs(document.closing, 'closing')}</body></html>`;
 }
