@@ -72,6 +72,8 @@ export function FormCombobox<TValues extends FieldValues>({
           clearable={clearable}
           value={value ?? ''}
           onChange={(next) => {
+            // Never registered, so nothing re-validates it: an error would outlive the choice it refused.
+            form.clearErrors(name);
             form.setValue(name, next as PathValue<TValues, Path<TValues>>, { shouldDirty: true });
             onChange?.(next);
           }}

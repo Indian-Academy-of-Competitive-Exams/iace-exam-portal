@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
 import { useEffect } from 'react';
 import { useForm, type UseFormReturn } from 'react-hook-form';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FormCombobox } from '../src/components/ui/form-field';
 import { TooltipProvider } from '../src/components/ui/tooltip';
 
@@ -67,5 +67,22 @@ describe('FormCombobox', () => {
     render(<Harness error="Choose a mode" />);
 
     await waitFor(() => assert.ok(screen.getByText('Choose a mode')));
+  });
+
+  /** The failure this prevents: a refusal nothing re-validates, so every later submit was refused before it was sent. */
+  it('drops a server refusal once another choice is made, so the next submit goes through', async () => {
+    const onValid = mock.fn();
+    let form: UseFormReturn<Values> | undefined;
+    render(<Harness expose={(held) => (form = held)} />);
+
+    act(() => form?.setError('mode', { type: 'server', message: 'Not offered here' }));
+    assert.ok(screen.getByText('Not offered here'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mode' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Offline/ }));
+
+    assert.equal(screen.queryAllByText('Not offered here').length, 0);
+    await act(() => form?.handleSubmit(onValid)());
+    assert.equal(onValid.mock.callCount(), 1);
   });
 });
