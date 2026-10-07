@@ -21,7 +21,7 @@ export interface FormDialogProps<TValues extends FieldValues> {
   description?: React.ReactNode;
   /** Names the action, the way `ConfirmDialog` does — "Add student", never "Submit". */
   submitLabel: string;
-  /** Mid-request: the submit button spins and both buttons go inert. */
+  /** Mid-request: the submit button spins, Cancel goes inert, and neither Esc nor the ✕ dismisses it. */
   loading?: boolean;
   children: React.ReactNode;
 }
@@ -39,9 +39,16 @@ export function FormDialog<TValues extends FieldValues>({
   children,
 }: Readonly<FormDialogProps<TValues>>) {
   const change = (next: boolean) => {
-    if (!next) form.reset();
+    if (loading && !next) return;
     onOpenChange(next);
   };
+
+  // Follows `open` itself: a parent that closes it on success never passes through `change`.
+  const wasOpen = React.useRef(open);
+  React.useEffect(() => {
+    if (wasOpen.current && !open) form.reset();
+    wasOpen.current = open;
+  }, [open, form]);
 
   return (
     <Dialog open={open} onOpenChange={change}>

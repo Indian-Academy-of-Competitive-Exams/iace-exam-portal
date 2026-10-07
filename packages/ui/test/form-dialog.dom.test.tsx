@@ -76,7 +76,7 @@ describe('FormDialog', () => {
   /** A shut dialog stays mounted, so without a reset a half-typed name reopens with it. */
   it('clears what was typed when it closes, so it reopens empty', async () => {
     const onOpenChange = mock.fn();
-    render(<Harness onOpenChange={onOpenChange} />);
+    const { rerender } = render(<Harness onOpenChange={onOpenChange} />);
 
     fireEvent.change(screen.getByLabelText('Branch name'), {
       target: { value: 'TYPED THEN ABANDONED' },
@@ -86,7 +86,47 @@ describe('FormDialog', () => {
 
     await waitFor(() => assert.equal(onOpenChange.mock.callCount(), 1));
     assert.equal(onOpenChange.mock.calls[0]?.arguments[0], false);
+
+    rerender(<Harness open={false} />);
+    rerender(<Harness />);
     assert.equal((screen.getByLabelText('Branch name') as HTMLInputElement).value, '');
+  });
+
+  /** The failure this prevents: a create closes its dialog on success, and the next one opened on the name just saved. */
+  it('reopens empty after its parent closed it, as a create does on success', () => {
+    const { rerender } = render(<Harness />);
+    fireEvent.change(screen.getByLabelText('Branch name'), { target: { value: 'AMEERPET' } });
+
+    rerender(<Harness open={false} />);
+    rerender(<Harness />);
+
+    assert.equal((screen.getByLabelText('Branch name') as HTMLInputElement).value, '');
+  });
+
+  /** The failure this prevents: Esc mid-request closed the dialog, and a refused save had nothing left to retry from. */
+  it('is not dismissed by Escape or the ✕ while the request is in flight', () => {
+    const onOpenChange = mock.fn();
+    render(<Harness loading onOpenChange={onOpenChange} />);
+    fireEvent.change(screen.getByLabelText('Branch name'), { target: { value: 'AMEERPET' } });
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close New branch' }));
+
+    assert.equal(onOpenChange.mock.callCount(), 0);
+    assert.equal((screen.getByLabelText('Branch name') as HTMLInputElement).value, 'AMEERPET');
+  });
+
+  it('is dismissed by Escape and the ✕ when nothing is in flight', () => {
+    const onOpenChange = mock.fn();
+    render(<Harness onOpenChange={onOpenChange} />);
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close New branch' }));
+
+    assert.deepEqual(
+      onOpenChange.mock.calls.map((call) => call.arguments[0]),
+      [false, false],
+    );
   });
 
   it('does not submit when Cancel is what was pressed', async () => {
