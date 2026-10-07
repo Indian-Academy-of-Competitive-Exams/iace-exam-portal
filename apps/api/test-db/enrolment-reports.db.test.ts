@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
+import { type Prisma } from '@prisma/client';
 import {
   AppException,
   AUDIT_ACTION,
@@ -8,6 +9,7 @@ import {
   STUDENT_TYPE,
   TEST_SERIES_KIND,
 } from '@iace/contracts';
+import { SUPPORT_ACTIONS, supportDiff } from '../src/attempts/attempt-resolution';
 import {
   makeAdmin,
   makeBranch,
@@ -193,6 +195,33 @@ describe('the suspended, blocked and deleted students', () => {
     const [row] = tableOf(await read(REPORT_KEYS.STUDENT_STATUS, {}, SUPER_ADMIN), 'Students');
 
     assert.deepEqual([row?.Status, row?.By], ['Tests blocked', 'Blocker']);
+  });
+
+  /** The failure this prevents: a sitting voided since, filed under the same action, read as the suspension. */
+  it('reads a suspension off the suspension, not off a sitting voided for them since', async () => {
+    const suspender = await makeAdmin(prisma, { fullName: 'Suspender' });
+    const support = await makeAdmin(prisma, { fullName: 'Support Desk' });
+    const suspended = await student('Suspended', { isActive: false });
+    const voided = supportDiff(SUPPORT_ACTIONS.VOID, 'Sat the wrong paper', uid(), null);
+    await rowActions(prisma, [
+      {
+        entityId: suspended,
+        action: AUDIT_ACTION.DEACTIVATE,
+        actorId: suspender.id,
+        changed: { isActive: { from: true, to: false } },
+      },
+      {
+        entityId: suspended,
+        action: AUDIT_ACTION.DEACTIVATE,
+        actorId: support.id,
+        changed: voided as Prisma.InputJsonValue,
+        createdAt: new Date(Date.now() + 60_000),
+      },
+    ]);
+
+    const [row] = tableOf(await read(REPORT_KEYS.STUDENT_STATUS, {}, SUPER_ADMIN), 'Students');
+
+    assert.deepEqual([row?.Status, row?.By], ['Sign-in suspended', 'Suspender']);
   });
 });
 

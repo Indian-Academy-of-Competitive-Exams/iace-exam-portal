@@ -18,3 +18,5 @@ export { AttemptReportService } from './attempt-report.service';
 export { sectionScoresIn } from './score-paper';
 export { PaperSheetService, type PaperTerm } from './paper-sheet.service';
 export { questionTalliesOf, type QuestionTally } from './question-tallies';
+/** A voided sitting's audit row, told apart from the suspension it is filed beside. */
+export { isSupportDiff } from './attempt-resolution';

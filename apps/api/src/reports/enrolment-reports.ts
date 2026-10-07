@@ -26,6 +26,7 @@ import {
   readInBatches,
   type ExportColumn,
 } from '../common/exporting';
+import { isSupportDiff } from '../attempts';
 import { type PrismaService } from '../prisma/prisma.service';
 import { STUDENT_CARD_SELECT, studentWhere, type StudentCard } from '../students';
 import { aboutPeriod, periodOf } from './period';
@@ -284,7 +285,7 @@ const studentStatus: OpenBuilder = async ({ prisma }, _query, viewer) => {
     orderBy: [{ fullName: 'asc' }, { id: 'asc' }],
     select: { ...STUDENT_CARD_SELECT, isActive: true, deletedAt: true },
   });
-  const trail = await readInBatches(
+  const logged = await readInBatches(
     students.map((student) => student.id),
     (batch) =>
       prisma.rowActionLog.findMany({
@@ -294,9 +295,11 @@ const studentStatus: OpenBuilder = async ({ prisma }, _query, viewer) => {
           action: { in: Object.values(STANDINGS).map((standing) => standing.action) },
           ...(viewer.isSuperAdmin ? {} : { actorId: viewer.id }),
         },
-        select: { entityId: true, action: true, createdAt: true, actorId: true },
+        select: { entityId: true, action: true, createdAt: true, actorId: true, changed: true },
       }),
   );
+  // A voided sitting is logged as a DEACTIVATE of its student, and is not how the student stands.
+  const trail = logged.filter((row) => !isSupportDiff(row.changed));
   // Newest first, so the first row met for a student and an action is the latest one.
   trail.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   const latest = new Map<string, (typeof trail)[number]>();

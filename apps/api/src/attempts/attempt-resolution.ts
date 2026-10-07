@@ -37,6 +37,8 @@ export function extendedEndsAt(endsAt: Date, minutes: number, now: Date): Date {
   return new Date(from + minutes * SECONDS_PER_MINUTE * MS_PER_SECOND);
 }
 
+const SUPPORT_ACTION_FIELD = 'supportAction';
+
 /** The audit row's `changed`, with what was done and why beside whatever fields moved. */
 export function supportDiff(
   action: SupportAction,
@@ -46,8 +48,12 @@ export function supportDiff(
 ): FieldDiff {
   return {
     ...moved,
-    supportAction: { from: null, to: action },
+    [SUPPORT_ACTION_FIELD]: { from: null, to: action },
     attemptId: { from: null, to: attemptId },
     reason: { from: null, to: reason },
   };
 }
+
+/** A support action is filed under its student, so a reader of the student's own standing tells them apart here. */
+export const isSupportDiff = (changed: unknown): boolean =>
+  typeof changed === 'object' && changed !== null && SUPPORT_ACTION_FIELD in changed;
