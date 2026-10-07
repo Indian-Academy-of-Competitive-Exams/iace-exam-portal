@@ -866,7 +866,7 @@ role.
 
 **The subject is the immutable form, with the ids in it.** This repository issues
 `repo:<org>@<org id>/<repo>@<repo id>:environment:staging`, not `repo:<org>/<repo>:…`, and the
-trust policy matches with `StringEquals` — so the plain form every tutorial shows is refused with
+trust policy matches on the exact string — so the plain form every tutorial shows is refused with
 "Not authorized to perform sts:AssumeRoleWithWebIdentity", which reads like a permissions problem
 and is a spelling one. The prefix to copy is `sub_claim_prefix` from
 `gh api repos/<org>/<repo>/actions/oidc/customization/sub`.
