@@ -4,7 +4,9 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
+  OTP_CHANNELS,
   type ActorType,
+  type OtpChannel,
   type OtpRequestResponse,
 } from '@iace/contracts';
 import { sameHex } from '../../common/same-hex';
@@ -26,6 +28,17 @@ const DAY_SEC = 24 * 60 * 60;
 
 /** How long a code the desk reads out is good for. Short: it is said aloud, to somebody standing there. */
 export const DESK_CODE_TTL_SEC = 5 * 60;
+
+/** What a student's request may say beyond the number: whether it holds an account, and the channel wanted. */
+interface StudentAsk {
+  holdsAccount?: boolean;
+  channel?: OtpChannel;
+}
+
+const MESSAGE_CHANNEL_OF: Record<OtpChannel, MessageChannel> = {
+  [OTP_CHANNELS.SMS]: MESSAGE_CHANNELS.SMS,
+  [OTP_CHANNELS.WHATSAPP]: MESSAGE_CHANNELS.WHATSAPP,
+};
 
 /** One day's spend on codes, counted and refused on its own. */
 interface DailyBudget {
@@ -63,7 +76,7 @@ export class OtpService {
     actor: ActorType,
     identifier: string,
     ip = 'unknown',
-    holdsAccount = true,
+    { holdsAccount = true, channel }: StudentAsk = {},
   ): Promise<OtpRequestResponse> {
     const cooldownKey = redisKeys.otpCooldown(actor, identifier);
     const remaining = await this.redis.ttl(cooldownKey);
@@ -97,13 +110,15 @@ export class OtpService {
     }
 
     // The cooldown stays: the day's counters are spent, and it paces a retry through an outage.
-    await this.deliver(actor, identifier, code, ttlSec).catch((error: unknown) => {
-      this.logger.error(`An OTP for ${actor} could not be sent`, error);
-      throw new AppException(
-        ErrorCodes.SERVICE_UNAVAILABLE,
-        'The code could not be sent. Try again in a moment',
-      );
-    });
+    const sentOn = await this.deliver(actor, identifier, code, ttlSec, channel).catch(
+      (error: unknown) => {
+        this.logger.error(`An OTP for ${actor} could not be sent`, error);
+        throw new AppException(
+          ErrorCodes.SERVICE_UNAVAILABLE,
+          'The code could not be sent. Try again in a moment',
+        );
+      },
+    );
     if (actor === ActorTypes.STUDENT) this.metrics.countOtpSend('sent');
 
     return {
@@ -111,6 +126,7 @@ export class OtpService {
       expiresInSec: ttlSec,
       resendAfterSec: cooldownSec,
       codeLength: code.length,
+      ...whereItWent(sentOn, this.config),
       // Convenience for local development only — never with a real sender, and never outside development.
       ...(this.config.get('OTP_SENDER') === OTP_SENDERS.CONSOLE && this.config.isDevelopment
         ? { devCode: code }
@@ -165,13 +181,14 @@ export class OtpService {
     }
   }
 
-  /** WhatsApp first where it is on, SMS the moment it does not — a student is waiting. */
+  /** On the one channel chosen, and never two. A WhatsApp send that fails goes by SMS at once — a student is waiting. */
   private async deliver(
     actor: ActorType,
     identifier: string,
     code: string,
     ttlSec: number,
-  ): Promise<void> {
+    asked?: OtpChannel,
+  ): Promise<OtpChannel | undefined> {
     const message = {
       kind: MESSAGE_KINDS.OTP,
       to: identifier,
@@ -181,15 +198,23 @@ export class OtpService {
       body: `${code} is your IACE verification code. It expires in ${ttlSec} seconds.`,
       data: { code, ttlSec },
     };
+    // Admins are reached on their email address, students on their mobile: the split the two identity tables have.
+    if (actor !== ActorTypes.STUDENT) {
+      await this.sender.send({ ...message, channel: MESSAGE_CHANNELS.EMAIL });
+      return undefined;
+    }
 
-    const channel = channelFor(actor, this.config);
+    const offered = studentChannels(this.config);
+    const chosen = asked !== undefined && offered.includes(asked) ? asked : offered[0];
     try {
-      await this.sender.send({ ...message, channel });
+      await this.sender.send({ ...message, channel: MESSAGE_CHANNEL_OF[chosen] });
+      return chosen;
     } catch (error) {
-      if (channel !== MESSAGE_CHANNELS.WHATSAPP) throw error;
+      if (chosen !== OTP_CHANNELS.WHATSAPP) throw error;
 
       this.logger.warn(`WhatsApp OTP failed for ${actor}, falling back to SMS`);
-      await this.sender.send({ ...message, channel: MESSAGE_CHANNELS.SMS });
+      await this.sender.send({ ...message, channel: MESSAGE_CHANNEL_OF[OTP_CHANNELS.SMS] });
+      return OTP_CHANNELS.SMS;
     }
   }
 
@@ -256,11 +281,26 @@ export class OtpService {
   }
 }
 
-/** Students are reached on the mobile number they signed up with, admins on their email address — the same split the two identity tables have. */
-function channelFor(actor: ActorType, config: AppConfigService): MessageChannel {
-  if (actor !== ActorTypes.STUDENT) return MESSAGE_CHANNELS.EMAIL;
+/** The channels a student's code can go out on here, first choice first. */
+function studentChannels(config: AppConfigService): [OtpChannel, ...OtpChannel[]] {
+  switch (config.get('OTP_SENDER')) {
+    // Billed on delivery, so it goes first; SMS is what a student asks for when it does not arrive.
+    case OTP_SENDERS.WHATSAPP:
+      return [OTP_CHANNELS.WHATSAPP, OTP_CHANNELS.SMS];
+    // Nothing is sent, so both are offered: the choice can be walked through with no provider.
+    case OTP_SENDERS.CONSOLE:
+      return [OTP_CHANNELS.SMS, OTP_CHANNELS.WHATSAPP];
+    default:
+      return [OTP_CHANNELS.SMS];
+  }
+}
 
-  return config.get('OTP_SENDER') === OTP_SENDERS.WHATSAPP
-    ? MESSAGE_CHANNELS.WHATSAPP
-    : MESSAGE_CHANNELS.SMS;
+/** What the answer says of a student's code: where it went, and what they may ask for instead. */
+function whereItWent(
+  sentOn: OtpChannel | undefined,
+  config: AppConfigService,
+): Pick<OtpRequestResponse, 'channel' | 'otherChannel'> {
+  if (sentOn === undefined) return {};
+  const otherChannel = studentChannels(config).find((channel) => channel !== sentOn);
+  return { channel: sentOn, ...(otherChannel ? { otherChannel } : {}) };
 }

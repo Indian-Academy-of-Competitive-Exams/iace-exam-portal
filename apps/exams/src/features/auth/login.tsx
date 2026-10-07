@@ -26,7 +26,14 @@ import {
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { ROUTES } from '../../lib/constants';
-import { applyFieldErrors, LOGIN_FIELDS, signedOutMessage, type LoginStep } from '@iace/app-kit';
+import {
+  applyFieldErrors,
+  LOGIN_FIELDS,
+  sentSays,
+  signedOutMessage,
+  useResendCode,
+  type LoginStep,
+} from '@iace/app-kit';
 import { useAuth } from '../../providers/auth';
 
 export function LoginPage() {
@@ -72,6 +79,7 @@ export function LoginPage() {
               mobile={step.mobile}
               challenge={step.challenge}
               onBack={() => setStep({ kind: 'mobile' })}
+              onResent={(challenge) => setStep({ kind: 'code', mobile: step.mobile, challenge })}
               onSignedIn={onSignedIn}
             />
           )}
@@ -121,11 +129,13 @@ function CodeStep({
   mobile,
   challenge,
   onBack,
+  onResent,
   onSignedIn,
 }: Readonly<{
   mobile: string;
   challenge: OtpRequestResponse;
   onBack: () => void;
+  onResent: (challenge: OtpRequestResponse) => void;
   onSignedIn: (session: AuthSessionResponse) => void;
 }>) {
   const form = useForm({
@@ -141,15 +151,14 @@ function CodeStep({
     onError: (error) => applyFieldErrors(error, form.setError, LOGIN_FIELDS.CODE),
   });
 
+  const again = useResendCode(api, mobile, challenge, (fresh) => {
+    // The code typed so far belongs to the one this replaces.
+    form.reset();
+    onResent(fresh);
+  });
+
   return (
-    <CardStep
-      title="Enter the code"
-      meta={
-        <>
-          Sent to <span className="font-medium text-foreground tabular-nums">+91 {mobile}</span>
-        </>
-      }
-    >
+    <CardStep title="Enter the code" meta={sentSays(challenge, mobile)}>
       <form
         className="flex flex-col gap-4"
         onSubmit={form.handleSubmit((values) => verify.mutate(values))}
@@ -177,6 +186,17 @@ function CodeStep({
 
         <Button type="submit" loading={verify.isPending}>
           Sign in
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={!again.canResend}
+          loading={again.isPending}
+          onClick={again.resend}
+        >
+          {again.label}
         </Button>
 
         <BackButton onClick={onBack}>Use a different number</BackButton>

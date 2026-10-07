@@ -11,6 +11,7 @@ import {
   type AuthSessionResponse,
   type AuthTokens,
   type DeviceSession,
+  type OtpChannel,
   type OtpRequestResponse,
   type StudentIdentity,
 } from '@iace/contracts';
@@ -53,12 +54,19 @@ export class AuthService {
   // ==========================================================================
 
   /** One answer whoever asks; only which day's budget pays differs, by whether the number holds an account. */
-  async requestStudentOtp(mobile: string, ip = 'unknown'): Promise<OtpRequestResponse> {
+  async requestStudentOtp(
+    mobile: string,
+    ip = 'unknown',
+    channel?: OtpChannel,
+  ): Promise<OtpRequestResponse> {
     const holder = await this.prisma.student.findFirst({
       where: { mobile, deletedAt: null },
       select: { id: true },
     });
-    return this.otp.request(ActorTypes.STUDENT, mobile, ip, holder !== null);
+    return this.otp.request(ActorTypes.STUDENT, mobile, ip, {
+      holdsAccount: holder !== null,
+      channel,
+    });
   }
 
   /** Signs in whoever proved the number, and makes their account if the number had none: signup and sign-in are one path. */

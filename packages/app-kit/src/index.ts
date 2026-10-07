@@ -126,7 +126,7 @@ export {
 } from './student-queries';
 export { paperFor } from './exam/served-paper';
 export { TOP_QUARTER, trendOf, type Trendline } from './trend';
-export { LOGIN_FIELDS, type LoginStep } from './login-steps';
+export { LOGIN_FIELDS, resendSays, sentSays, useResendCode, type LoginStep } from './login-steps';
 export { PODIUM_LABELS } from './leaderboard';
 export {
   VERDICT,

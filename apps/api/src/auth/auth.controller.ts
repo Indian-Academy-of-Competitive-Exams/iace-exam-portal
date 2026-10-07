@@ -37,7 +37,7 @@ export class AuthController {
     @Body(new ZodBody(requestStudentOtpSchema)) body: RequestStudentOtpBody,
     @Req() request: Request,
   ): Promise<OtpRequestResponse> {
-    return this.auth.requestStudentOtp(body.mobile, request.ip ?? 'unknown');
+    return this.auth.requestStudentOtp(body.mobile, request.ip ?? 'unknown', body.channel);
   }
 
   /** Step 2 — signs them in, as a new account if the number had none. */

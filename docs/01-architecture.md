@@ -97,7 +97,9 @@ practice, certificates.
   is the signup — one path, with no PIN. Admins use email + OTP. What keeps a code rare is the
   session rule below: a device asks once and stays signed in. A student whose code does not arrive
   is read one at the desk: an admin issues it from the student's page, it is good once for five
-  minutes, and it is never sent.
+  minutes, and it is never sent. Where WhatsApp is set up the code goes there first, because it is
+  billed on delivery, and a student asking again gets it by SMS — one channel a send, never both,
+  and never sooner than the resend interval the server enforces.
 - **Sectional structure with sectional timing.** Marks, negative marking, timing and
   merit/qualifying are per section — one paper may mix them.
 - **Question bank** with Excel/CSV bulk import plus a manual editor.

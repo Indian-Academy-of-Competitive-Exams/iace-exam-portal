@@ -12,7 +12,14 @@ import {
   type OtpRequestResponse,
   type RequestStudentOtpBody,
 } from '@iace/contracts';
-import { applyFieldErrors, LOGIN_FIELDS, signedOutMessage, type LoginStep } from '@iace/app-kit';
+import {
+  applyFieldErrors,
+  LOGIN_FIELDS,
+  sentSays,
+  signedOutMessage,
+  useResendCode,
+  type LoginStep,
+} from '@iace/app-kit';
 import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { useAuth } from '../src/providers/auth';
@@ -59,6 +66,7 @@ export default function LoginScreen() {
               mobile={step.mobile}
               challenge={step.challenge}
               onBack={() => setStep({ kind: 'mobile' })}
+              onResent={(challenge) => setStep({ kind: 'code', mobile: step.mobile, challenge })}
               onSignedIn={onSignedIn}
             />
           )}
@@ -119,11 +127,13 @@ function CodeStep({
   mobile,
   challenge,
   onBack,
+  onResent,
   onSignedIn,
 }: Readonly<{
   mobile: string;
   challenge: OtpRequestResponse;
   onBack: () => void;
+  onResent: (challenge: OtpRequestResponse) => void;
   onSignedIn: (session: AuthSessionResponse) => void;
 }>) {
   const form = useForm({
@@ -139,13 +149,19 @@ function CodeStep({
     onError: (error) => applyFieldErrors<{ code: string }>(error, form.setError, LOGIN_FIELDS.CODE),
   });
 
+  const again = useResendCode(api, mobile, challenge, (fresh) => {
+    // The code typed so far belongs to the one this replaces.
+    form.reset();
+    onResent(fresh);
+  });
+
   return (
     <View className="gap-4">
       <Text variant="section" className="text-center">
         Enter the code
       </Text>
       <Text variant="muted" className="text-center">
-        Sent to +91 {mobile}
+        {sentSays(challenge, mobile)}
       </Text>
 
       <PinField
@@ -166,6 +182,16 @@ function CodeStep({
         onPress={form.handleSubmit((values) => verify.mutate(values))}
       >
         Sign in
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={!again.canResend}
+        loading={again.isPending}
+        onPress={again.resend}
+      >
+        {again.label}
       </Button>
 
       <BackButton onPress={onBack}>Use a different number</BackButton>

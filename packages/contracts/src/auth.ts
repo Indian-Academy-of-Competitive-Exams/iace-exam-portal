@@ -7,9 +7,16 @@ import { ActorTypes, actorTypeSchema, emailSchema, mobileSchema, otpCodeSchema }
 // email. A student's first is their signup — there is no second path.
 // ============================================================================
 
+/** How a student's code reaches them. One at a time: asking again may take the other, never both. */
+export const OTP_CHANNELS = { SMS: 'SMS', WHATSAPP: 'WHATSAPP' } as const;
+export const otpChannelSchema = z.enum(OTP_CHANNELS);
+export type OtpChannel = z.infer<typeof otpChannelSchema>;
+
 /** Signup and sign-in ask alike: the response is identical whether or not the number is registered, so it can't be used to find who has an account. */
 export const requestStudentOtpSchema = z.object({
   mobile: mobileSchema,
+  /** Which one to use this time. Absent, or one that is not set up, is the server's first choice. */
+  channel: otpChannelSchema.optional(),
 });
 export type RequestStudentOtpInput = z.input<typeof requestStudentOtpSchema>;
 export type RequestStudentOtpBody = z.infer<typeof requestStudentOtpSchema>;
@@ -28,6 +35,10 @@ export const otpRequestResponseSchema = z.object({
   resendAfterSec: z.number().int(),
   /** How many digits the code has. The server decides, and the screen draws one box per digit. */
   codeLength: z.number().int().min(4).max(8),
+  /** Where a student's code went. Absent for an admin, whose code is always emailed. */
+  channel: otpChannelSchema.optional(),
+  /** The one a student may ask for instead. Absent where only one is set up. */
+  otherChannel: otpChannelSchema.optional(),
   /** Dev-only echo of the code — present only when the console sender is active. */
   devCode: z.string().optional(),
 });
