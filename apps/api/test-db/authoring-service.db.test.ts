@@ -39,7 +39,7 @@ after(() => prisma.$disconnect());
 
 type Seeded = Omit<Parameters<typeof makeBankQuestion>[1], 'subjectId'>;
 
-async function build(seeded: Seeded[] = []) {
+async function build(seeded: Seeded[] = [], auditContext = new AuditContext()) {
   await makeQuestionBank(prisma, { [MINE]: 'Mine', [THEIRS]: 'Theirs' });
   for (const question of seeded) {
     await makeBankQuestion(prisma, {
@@ -48,7 +48,7 @@ async function build(seeded: Seeded[] = []) {
       ...question,
     });
   }
-  const questions = new QuestionsService(prisma, new AuditContext(), new FakeStorage() as never);
+  const questions = new QuestionsService(prisma, auditContext, new FakeStorage() as never);
   return new AuthoringService(prisma, questions);
 }
 
@@ -111,6 +111,19 @@ describe('AuthoringService.create', () => {
     const row = await prisma.question.findUniqueOrThrow({ where: { id: question.id } });
     assert.equal(row.createdById, MINE);
     assert.equal(await prisma.questionVersion.count(), 1);
+  });
+
+  /** The failure this prevents: a save answering `{ question }`, where the audit finds no id to file under. */
+  it('names the new question as the entity its audit row is filed against', async () => {
+    const auditContext = new AuditContext();
+    const authoring = await build([], auditContext);
+
+    const { question, store } = await auditContext.run(async () => ({
+      ...(await authoring.create(draft(), MINE)),
+      store: auditContext.current(),
+    }));
+
+    assert.equal(store?.entityId, question.id);
   });
 
   /** The bug this closes: the screen wrote the row and mentioned the duplicate afterwards. */

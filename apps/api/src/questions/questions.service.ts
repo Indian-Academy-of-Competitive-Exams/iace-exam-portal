@@ -286,6 +286,8 @@ export class QuestionsService {
       });
     }, TX_LIMITS.SHORT);
 
+    // Named here because a caller may wrap the answer, and the audit reads only a top-level id.
+    this.auditContext.setEntityId(row.id);
     return this.served(toDetail(row));
   }
 
