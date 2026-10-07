@@ -647,8 +647,9 @@ audit trail shows an admin their own rows, as its screen does. A student reads f
 of them their own — the score card, the weekly and monthly report, every test, and topic-wise
 accuracy — and whatever the request names, the student is whoever holds the token.
 
-Every printed page — a report or a question paper — carries the institute's logo: at its head,
-faintly behind its content, and in a footer of its own beside the page of how many. It is a
+Every printed page — a report or a question paper — carries the institute's logo at its head and in a
+footer of its own beside the page of how many, and the logo's letters, level and faint, behind its
+content — the letters alone, because a plate that size lays a tinted slab under every figure. It is a
 drawing rather than a styled word, because a printer drops a background colour unless somebody
 ticks "Background graphics", and paper has no brand face to set the letters in. The footer is not
 decoration. A page that declares its own margin boxes is one the browser adds no date, title or

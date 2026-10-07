@@ -67,7 +67,7 @@ test('reportHtml sets a letter’s paragraphs before the figures and after the t
 test('reportHtml marks every page and footers it itself, which is what keeps the browser’s header off', () => {
   const html = reportHtml(documentOf([table(['Student'], [['Ana']])]));
 
-  assert.match(html, /<div class="print-watermark" aria-hidden="true"><svg [^>]*aria-label="IACE"/);
+  assert.match(html, /<div class="print-watermark" aria-hidden="true"><svg /);
   assert.match(html, /<header><svg [^>]*aria-label="IACE"/);
   assert.match(html, /@bottom-left \{ content: url\("data:image\/svg\+xml,%3Csvg/);
   assert.ok(html.includes('@bottom-right { content: "Page " counter(page) " of " counter(pages)'));

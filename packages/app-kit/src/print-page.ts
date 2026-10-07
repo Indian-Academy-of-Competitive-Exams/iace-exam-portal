@@ -44,8 +44,11 @@ export const printPageCss = (size: string): string => `
     position: fixed; inset: 0; z-index: -1; display: flex; align-items: center;
     justify-content: center; pointer-events: none; user-select: none;
   }
-  .print-watermark svg { width: 62%; height: auto; opacity: 0.08; transform: rotate(-30deg); }
+  .print-watermark svg { width: 48%; height: auto; opacity: 0.08; }
 `;
 
+/** The letters without their plate, cropped to them: a plate that size lays a tinted slab under every figure. */
+const WATERMARK_LETTERS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="17 9 55.5 18"><path fill="${LOGO_PLATE}" d="${LOGO_LETTERS}"/></svg>`;
+
 /** Fixed, so the printer repeats it on every page. */
-export const PRINT_WATERMARK = `<div class="print-watermark" aria-hidden="true">${logoSvg()}</div>`;
+export const PRINT_WATERMARK = `<div class="print-watermark" aria-hidden="true">${WATERMARK_LETTERS}</div>`;
