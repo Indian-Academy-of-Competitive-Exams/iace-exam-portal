@@ -63,7 +63,7 @@ export function ComparePanel() {
       {placed ? (
         <Against cohort={card.data.cohort} maxMarks={card.data.maxMarks} />
       ) : (
-        <AttemptCompare sittings={sittings} cohort={card.data.cohort} />
+        <AttemptCompare attemptId={attemptId} sittings={sittings} cohort={card.data.cohort} />
       )}
 
       <Standing placed={placed} />

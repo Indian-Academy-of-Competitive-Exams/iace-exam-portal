@@ -125,25 +125,27 @@ export function ProfilePage() {
         ) : undefined
       }
       header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-          size="display"
-          title="Profile"
-          action={
-            ready && !isEditing ? (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                <Pencil aria-hidden />
-                Edit details
-              </Button>
-            ) : undefined
-          }
-        />
+        <>
+          <PageHeader
+            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+            size="display"
+            title="Profile"
+            action={
+              ready && !isEditing ? (
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Pencil aria-hidden />
+                  Edit details
+                </Button>
+              ) : undefined
+            }
+          />
+          {/* Up here because the panel's read-only fieldset would disable its button. */}
+          {me.data ? (
+            <PreTestPrompt preTestReady={me.data.preTestReady} onAdd={() => setIsEditing(true)} />
+          ) : null}
+        </>
       }
     >
-      {me.data ? (
-        <PreTestPrompt preTestReady={me.data.preTestReady} onAdd={() => setIsEditing(true)} />
-      ) : null}
-
       {me.isPending && <SkeletonParagraph lines={8} />}
       {me.isError && (
         <EmptyState

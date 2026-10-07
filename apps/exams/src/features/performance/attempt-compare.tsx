@@ -32,23 +32,28 @@ function marksAgainst(score: number, maxMarks: number): CompositionSegment[] {
 
 /** A paper nobody is ranked on yet stands against your best, the average and the topper. */
 export function AttemptCompare({
+  attemptId,
   sittings,
   cohort,
-}: Readonly<{ sittings: readonly PerformancePoint[]; cohort: CohortCurve | null }>) {
-  const latest = sittings.at(-1);
+}: Readonly<{
+  attemptId: string;
+  sittings: readonly PerformancePoint[];
+  cohort: CohortCurve | null;
+}>) {
+  const current = sittings.find((sitting) => sitting.attemptId === attemptId) ?? sittings.at(-1);
   const best = bestSitting(sittings);
-  if (!latest || !best) return null;
+  if (!current || !best) return null;
 
   const items: ComparisonItem[] = [
     {
-      key: 'latest',
+      key: 'current',
       label: 'This attempt',
-      meta: sat(latest.submittedAt),
-      value: latest.score,
-      max: latest.maxMarks,
-      display: String(latest.score),
-      segments: marksAgainst(latest.score, latest.maxMarks),
-      caption: percentLabel(latest.percentage),
+      meta: sat(current.submittedAt),
+      value: current.score,
+      max: current.maxMarks,
+      display: String(current.score),
+      segments: marksAgainst(current.score, current.maxMarks),
+      caption: percentLabel(current.percentage),
       tone: 'current',
     },
     {
@@ -69,9 +74,9 @@ export function AttemptCompare({
       key: 'average',
       label: 'Average',
       value: cohort.averageScore,
-      max: latest.maxMarks,
+      max: current.maxMarks,
       display: String(cohort.averageScore),
-      segments: marksAgainst(cohort.averageScore, latest.maxMarks),
+      segments: marksAgainst(cohort.averageScore, current.maxMarks),
       caption: plural(cohort.cohortSize, 'sitting'),
     });
   }
@@ -81,9 +86,9 @@ export function AttemptCompare({
       key: 'topper',
       label: 'Paper topper',
       value: cohort.topperScore,
-      max: latest.maxMarks,
+      max: current.maxMarks,
       display: String(cohort.topperScore),
-      segments: marksAgainst(cohort.topperScore, latest.maxMarks),
+      segments: marksAgainst(cohort.topperScore, current.maxMarks),
       caption: plural(cohort.cohortSize, 'sitting'),
       tone: 'good',
     });

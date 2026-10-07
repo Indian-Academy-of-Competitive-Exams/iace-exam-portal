@@ -4,7 +4,13 @@ import { type ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { AppException, ErrorCodes } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  instituteDayLabel,
+  type PerformancePoint,
+  type ScoreCard,
+} from '@iace/contracts';
 import { MARKING_TRIES } from '@iace/app-kit';
 import './support/offline';
 import { api } from '../src/lib/api';
@@ -73,6 +79,43 @@ describe('a report tab whose marks are not in yet', () => {
 
     assert.ok(await screen.findByText('No marks yet'));
     assert.equal(screen.queryByText('This comparison did not load'), null);
+  });
+});
+
+const TEST_ID = 'test_1';
+
+const retake = (attemptNo: number, score: number): PerformancePoint => ({
+  attemptId: `att_${attemptNo}`,
+  attemptNo,
+  isGraded: false,
+  testId: TEST_ID,
+  testTitle: 'Mock 1',
+  submittedAt: `2026-09-0${attemptNo}T06:00:00.000Z`,
+  score,
+  maxMarks: 100,
+  percentage: score,
+  accuracy: score,
+  rank: null,
+  percentile: null,
+});
+
+/** Oldest first, as the API sends them: the open report is the first, and neither the best nor the newest. */
+const SITTINGS = [retake(1, 40), retake(2, 80), retake(3, 60)] as const;
+
+describe('the comparison of a paper nobody is ranked on yet', () => {
+  /** The failure this prevents: an older report whose card carries the newest sitting's marks. */
+  it('reads "This attempt" from the sitting whose report is open', async () => {
+    const unranked = { attemptId: ATTEMPT_ID, testId: TEST_ID, maxMarks: 100, cohort: null };
+    mock.method(api.me, 'scoreCard', () => Promise.resolve(unranked as ScoreCard));
+    mock.method(api.me, 'performance', () =>
+      Promise.resolve({ testsSat: 1, points: [...SITTINGS] }),
+    );
+
+    mount(<ComparePanel />);
+
+    const card = (await screen.findByText('This attempt')).closest('li');
+    assert.match(card?.textContent ?? '', /40\/100/);
+    assert.ok(card?.textContent?.includes(instituteDayLabel(SITTINGS[0].submittedAt) ?? ''));
   });
 });
 

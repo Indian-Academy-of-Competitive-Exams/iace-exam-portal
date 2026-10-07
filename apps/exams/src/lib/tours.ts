@@ -111,7 +111,7 @@ export const LEADERBOARD_TOUR: readonly TourStep[] = [
   {
     target: TOUR_ANCHORS.FILTERS,
     title: 'Which board you are on',
-    body: 'One test, a series or all time — and the board redraws for whichever you pick.',
+    body: 'One board per test you have sat — pick a test and the board redraws for it.',
   },
   {
     target: TOUR_TARGETS.LEADERBOARD_PODIUM,

@@ -1,7 +1,18 @@
-import { useFieldArray, type Control, type FieldValues, type Path } from 'react-hook-form';
+import { type CSSProperties } from 'react';
+import {
+  get,
+  useFieldArray,
+  useFormState,
+  type Control,
+  type FieldError,
+  type FieldValues,
+  type Path,
+} from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import { PROFILE_LIST_MAX } from '@iace/contracts';
-import { Button, EmptyState, FormSection, Input, Label } from '@iace/ui';
+import { Button, EmptyState, FormSection, Input, Label, cn } from '@iace/ui';
+
+const COLUMN_LABEL = 'text-xs font-normal text-muted-foreground';
 
 /** Rows for schooling or exams sat elsewhere; only the first field is required. A GRID, not flex, or one long name pushes a row's columns out of line. */
 export function HistoryEditor<T extends FieldValues>({
@@ -24,6 +35,7 @@ export function HistoryEditor<T extends FieldValues>({
   emptyRow: Record<string, string>;
 }>) {
   const { fields, append, remove } = useFieldArray({ control, name: name as never });
+  const { errors } = useFormState({ control, name });
 
   // The delete button gets a fixed column of its own, so it lands under itself on every row.
   const track = (span: number) => `minmax(0, ${span}fr)`;
@@ -37,27 +49,49 @@ export function HistoryEditor<T extends FieldValues>({
         {fields.map((field, index) => (
           <div
             key={field.id}
-            // items-end so controls share one baseline however their labels wrapped.
-            className="grid items-end gap-2"
-            style={{ gridTemplateColumns: template }}
+            // The columns apply from `lg` up; below it a row has one, so its boxes stack.
+            className="grid items-start gap-3 lg:grid-cols-[var(--history-columns)] lg:gap-x-2 lg:gap-y-1.5"
+            style={{ '--history-columns': template } as CSSProperties}
           >
+            {/* Headed on the first row only: repeating "Year" down a column says nothing new. */}
+            {index === 0 ? (
+              <>
+                {columns.map((column) => (
+                  <Label
+                    key={column.key}
+                    htmlFor={`${name}.0.${column.key}`}
+                    className={cn(COLUMN_LABEL, 'hidden self-end lg:block')}
+                  >
+                    {column.label}
+                  </Label>
+                ))}
+                {/* Takes the delete column, so the boxes start a line of their own. */}
+                <span className="hidden lg:block" />
+              </>
+            ) : null}
+
             {columns.map((column) => {
               const id = `${name}.${index}.${column.key}`;
+              const message = (get(errors, id) as FieldError | undefined)?.message;
               return (
                 <div key={column.key} className="flex min-w-0 flex-col gap-1.5">
-                  {/* Labelled on the first row only: repeating "Year" down a
-                      column says nothing the header did not already. */}
-                  {index === 0 ? (
-                    <Label htmlFor={id} className="text-xs font-normal text-muted-foreground">
-                      {column.label}
-                    </Label>
-                  ) : null}
+                  {/* A stacked row has no heading above it, so every box says what it is. */}
+                  <Label htmlFor={id} className={cn(COLUMN_LABEL, 'lg:hidden')}>
+                    {column.label}
+                  </Label>
                   <Input
                     id={id}
                     type={column.type ?? 'text'}
                     aria-label={column.label}
+                    aria-describedby={message ? `${id}-message` : undefined}
+                    invalid={Boolean(message)}
                     {...control.register(id as Path<T>)}
                   />
+                  {message ? (
+                    <p id={`${id}-message`} role="alert" className="text-xs text-destructive">
+                      {message}
+                    </p>
+                  ) : null}
                 </div>
               );
             })}
