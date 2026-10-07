@@ -5,8 +5,8 @@
 # is after the backup window and before anyone sits anything. The `production` environment
 # carries a required reviewer, so even the cron waits for a click.
 #
-# DORMANT until production infrastructure exists (docs/04 §19). Until then every run fails at
-# "find the box", which is the correct and visible way for it to not work.
+# DISABLED in the repository's Actions settings since 7 October 2026: there is no production
+# box, so the cron only failed every night. `gh workflow enable Production` is the day it exists.
 name: Production
 
 on:

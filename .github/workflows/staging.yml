@@ -26,16 +26,21 @@ jobs:
   what-changed:
     name: What changed
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       api: ${{ steps.f.outputs.api }}
       spa: ${{ steps.f.outputs.spa }}
     steps:
-      # Whole history, because the range below reaches back to whatever was last pushed and a
-      # shallow clone cannot see it.
+      # Whole history, because the range below reaches back to the last green run and a shallow
+      # clone cannot see it.
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
       - id: f
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           both() { echo "api=true" >> "$GITHUB_OUTPUT"; echo "spa=true" >> "$GITHUB_OUTPUT"; }
@@ -43,21 +48,23 @@ jobs:
           # Anything that is not a push carries no range to inspect, so assume everything.
           if [ "${{ github.event_name }}" != "push" ]; then both; exit 0; fi
 
-          BEFORE='${{ github.event.before }}'
-          # A new branch leaves BEFORE as forty zeroes, and a force-push can leave a sha this
+          # Since the last GREEN run, not since the last push. A run that failed, or that a newer
+          # push superseded while it queued behind a build, deployed nothing — and the push's own
+          # range would then skip its API change and publish a newer bundle over the older API.
+          BEFORE=$(gh run list --workflow staging.yml --branch staging --status success --limit 1 \
+            --json headSha --jq '.[0].headSha // empty' || true)
+          # No green run yet, an API that did not answer, or a force-push that left a sha this
           # clone no longer has. Deploy both rather than guess from a range that does not exist.
-          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
-            || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then both; exit 0; fi
+          if [ -z "$BEFORE" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then both; exit 0; fi
 
-          # THE WHOLE PUSH, not its last commit. `git diff HEAD^ HEAD` was wrong and silently so:
-          # push three commits where only the first touches apps/api and the API deploy is
-          # skipped while the run still goes green. Two dots rather than three, so a force-push
-          # whose old head is not an ancestor still compares the two trees.
+          # Two dots rather than three, so a force-push whose old head is not an ancestor still
+          # compares the two trees.
           FILES=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
           echo "$FILES"
 
           api=false; spa=false
-          grep -qE '^(apps/api|packages|prisma|pnpm-lock\.yaml)/?' <<<"$FILES" && api=true
+          # The deploy files the box reads count as the API half: they only reach it on a deploy.
+          grep -qE '^(apps/api/|packages/|prisma/|pnpm-lock\.yaml$|package\.json$|deploy/(compose\.yml|Caddyfile|prune-disk\.sh|alloy/))' <<<"$FILES" && api=true
           grep -qE '^(apps/exams|apps/admin|packages|deploy/publish-spas\.sh)/?' <<<"$FILES" && spa=true
           echo "api=$api" >> "$GITHUB_OUTPUT"
           echo "spa=$spa" >> "$GITHUB_OUTPUT"
@@ -75,25 +82,40 @@ jobs:
             if [ "$api" = false ] && [ "$spa" = false ]; then echo ""; echo "**Nothing to deploy.**"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Inside this run, never beside it. As a separate workflow the build raced the deploy, so the
+  # box pulled the PREVIOUS push's image and the new bundle went out over it. A dispatch names an
+  # image that already exists and builds nothing, which is what keeps a rollback a tag.
+  build:
+    name: Build
+    needs: what-changed
+    if: github.event_name == 'push' && needs.what-changed.outputs.api == 'true'
+    uses: ./.github/workflows/build-api.yml
+    permissions:
+      id-token: write
+      contents: read
+
+  # The sha this run just built, not the moving tag: `staging` is whatever built last, and only
+  # the sha is this commit.
   api:
     name: API
-    needs: what-changed
-    if: needs.what-changed.outputs.api == 'true'
+    needs: [what-changed, build]
+    if: ${{ always() && needs.what-changed.outputs.api == 'true' && needs.build.result != 'failure' && needs.build.result != 'cancelled' }}
     uses: ./.github/workflows/_deploy-api.yml
     with:
       environment: staging
-      image_tag: ${{ inputs.image_tag || 'staging' }}
+      image_tag: ${{ inputs.image_tag || github.sha }}
       reason: push to staging
     permissions:
       id-token: write
       contents: read
 
-  # always() so a SPA-only push still publishes, but the API job's result is still respected:
-  # a failed API deploy must never be followed by a newer bundle (docs/04 §14).
+  # always() so a SPA-only push still publishes, but both API jobs are still respected: a failed
+  # build skips the deploy rather than failing it, and neither may be followed by a newer bundle
+  # (docs/04 §14).
   spas:
     name: SPAs
-    needs: [what-changed, api]
-    if: ${{ always() && needs.what-changed.outputs.spa == 'true' && needs.api.result != 'failure' && needs.api.result != 'cancelled' }}
+    needs: [what-changed, build, api]
+    if: ${{ always() && needs.what-changed.outputs.spa == 'true' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     uses: ./.github/workflows/_publish-spas.yml
     with:
       environment: staging

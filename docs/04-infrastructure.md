@@ -839,28 +839,39 @@ worst-case invoice.
 
 ## 14. How a release goes out
 
-**Three workflows, built 2 October 2026, and the split between them is the ordering rule below
-expressed as infrastructure rather than as a habit.**
+**One workflow per environment and the halves they share, so the ordering rule below is
+infrastructure rather than a habit.**
 
-| Workflow              | Trigger                                                                | What it does                                                                                                        |
-| --------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `build-api.yml`       | a merge touching `apps/api`, `packages`, `prisma`                      | Builds both targets natively on `ubuntu-24.04-arm` and pushes to ECR as `<sha>` and `staging`. **Does not deploy.** |
-| `deploy-api.yml`      | `cron` 20:30 UTC (02:00 IST), or Run workflow                          | SSM into Box A: `docker compose pull && up -d`. The dispatch form takes an image tag and a required reason          |
-| `deploy-frontend.yml` | a merge touching only client paths, or after a successful `deploy-api` | Builds both SPAs and publishes them                                                                                 |
+| Workflow            | Trigger                                                                             | What it does                                                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `staging.yml`       | a push to `staging`, or Run workflow with an image tag                              | Finds which halves changed since the last green run, then build → API → SPAs as one chain                                |
+| `production.yml`    | `cron` 20:30 UTC (02:00 IST), or Run workflow with a tag and a reason               | API → SPAs against production. **Disabled in the Actions settings until production exists**                              |
+| `build-api.yml`     | called by `staging.yml`; a push to `main` touching `apps/api`, `packages`, `prisma` | Builds both targets natively on `ubuntu-24.04-arm` and pushes `<sha>` plus the branch's moving tag. **Does not deploy.** |
+| `_deploy-api.yml`   | called                                                                              | SSM into Box A: fast-forward the checkout, then `docker compose pull && up -d`                                           |
+| `_publish-spas.yml` | called                                                                              | Builds both SPAs and publishes them                                                                                      |
 
-**The front end auto-deploys; the API waits for the night.** A SPA release is a file copy — no
-migration, no restart, nothing to drain. An API release runs migrations and recreates containers
-with a gap (§4), so it is a small outage at a moment nobody chose, and 02:00 IST is after the
-backup window and before anyone sits anything. `workflow_dispatch` is the override, and it demands
-a written reason so the run page says why.
+**Staging goes out on every push; production waits for the night.** A SPA release is a file copy —
+no migration, no restart, nothing to drain. An API release runs migrations and recreates containers
+with a gap (§4), so in production it is a small outage at a moment somebody chose, and 02:00 IST is
+after the backup window and before anyone sits anything. `workflow_dispatch` is the override, and
+it demands a written reason so the run page says why.
 
-**`packages/contracts` is deliberately missing from the front end's trigger.** It is the wire
-format both sides share, so a change there is an API release, and the SPAs follow it through the
-`workflow_run` trigger — which is how the ordering rule below is enforced rather than remembered.
+**Staging builds inside the run that deploys, and deploys the sha it built.** As a workflow of its
+own the build raced the deploy, so the box pulled the PREVIOUS push's image and the new bundle went
+out over it — the one order the rule below forbids. For the same reason "what changed" is measured
+from the last GREEN run and not from the push: a run that failed, or that a newer push cancelled
+while it queued behind a build, deployed nothing, and its API change still has to go out before the
+next bundle does.
+
+**The box's checkout is part of the release.** `compose.yml`, the Caddyfile and Alloy's config are
+read from `/opt/examprep`, so the deploy fast-forwards it to the commit first, and restarts Caddy
+and Alloy when their mounted files moved — `up -d` recreates a container whose compose entry
+changed and never one whose mounted file did. `--ff-only`, so a box somebody edited by hand stops
+the release instead of losing the edit.
 
 **No AWS key exists in GitHub.** Each run exchanges its OIDC token for a session on
 `examprep-github-actions`, and the trust policy names exactly two subjects — this repository's
-`main` branch and its `staging` environment. That scoping is not optional on a **public**
+`staging` and `production` environments. That scoping is not optional on a **public**
 repository: a trust condition of `repo:…:*` would let a workflow on any fork's branch assume the
 role.
 
