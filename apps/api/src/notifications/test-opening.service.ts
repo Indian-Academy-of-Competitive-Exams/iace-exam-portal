@@ -77,6 +77,7 @@ export class TestOpeningService {
           // The natural key of the fact: this test opening, once, however often the sweep runs.
           dedupeKey: `test-open:${test.id}`,
           testId: test.id,
+          testSeriesId: test.testSeriesId,
         })),
       );
     }

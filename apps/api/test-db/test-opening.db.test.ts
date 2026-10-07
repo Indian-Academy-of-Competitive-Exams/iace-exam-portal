@@ -55,9 +55,10 @@ describe('Telling a cohort a test has opened', () => {
     assert.deepEqual(await told(), cohort);
   });
 
-  it('carries the test on the notification, so the bell can open it', async () => {
+  it('carries the test and its series on the notification, so the bell can open either', async () => {
     const { service } = await build(1);
     const test = await openingTest({ title: 'Mock 4' });
+    const { testSeriesId } = await prisma.test.findUniqueOrThrow({ where: { id: test.id } });
 
     await service.sweep(NOW);
 
@@ -65,6 +66,7 @@ describe('Telling a cohort a test has opened', () => {
     assert.ok(row);
     assert.equal(row.type, NOTIFICATION_TYPE.TEST_ASSIGNED);
     assert.equal(row.testId, test.id);
+    assert.equal(row.testSeriesId, testSeriesId);
     assert.equal(row.title, 'Mock 4');
     assert.equal(row.dedupeKey, `test-open:${test.id}`);
   });
