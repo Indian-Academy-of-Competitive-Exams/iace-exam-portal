@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Calculator } from 'lucide-react';
 import { isStateShown, type ExamClock } from '@iace/contracts';
 import { TIMER_KIND, useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
+import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Badge, Button, cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
@@ -18,9 +19,18 @@ import { ScrollPane } from './scroll-pane';
 import { RailwaySubmitSummary } from './submit-summary';
 import './railway.css';
 
+/** The original has no screen this narrow; railway.css folds the palette over the paper at the same width. */
+const PHONE_QUERY = '(max-width: 767px)';
+
 export function RailwayLayout({ view, onOpenCalculator }: Readonly<ExamSlotProps>) {
   const [openPanel, setOpenPanel] = useState<'PAPER' | 'INSTRUCTIONS' | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(true);
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [paletteOpen, setPaletteOpen] = useState(!phone);
+  // Over the paper the palette hides the question it just opened, so opening one puts it away.
+  const openQuestion = (questionId: string) => {
+    view.openQuestion(questionId);
+    if (phone) setPaletteOpen(false);
+  };
   // The original answers Submit by taking the question area over and folding the palette away.
   const asking = view.submit.asking;
 
@@ -56,7 +66,7 @@ export function RailwayLayout({ view, onOpenCalculator }: Readonly<ExamSlotProps
         ) : null}
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1" data-palette-open={paletteOpen || undefined}>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="fixedquehdr shrink-0">
             <span className="rw-testname">
@@ -162,7 +172,7 @@ export function RailwayLayout({ view, onOpenCalculator }: Readonly<ExamSlotProps
             candidate={view.watermark}
             states={statesOf(view)}
             canOpen={view.canOpen}
-            onOpen={view.openQuestion}
+            onOpen={openQuestion}
           />
 
           {/* Pinned, so it holds its place however far the grid above it scrolls. */}

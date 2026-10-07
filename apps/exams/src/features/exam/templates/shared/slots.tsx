@@ -3,7 +3,7 @@
  * handed — never by a fork, so neither can drift into behaving differently.
  * Nothing here holds state: every value and every callback comes off the view.
  */
-import { Calculator, Eraser, FileText, Flag, Info, Maximize, Send } from 'lucide-react';
+import { Calculator, Eraser, FileText, Flag, Info, LayoutGrid, Maximize, Send } from 'lucide-react';
 import { TEST_UI, type ExamTemplateConfig, type PaletteCounts } from '@iace/contracts';
 import {
   Alert,
@@ -43,6 +43,9 @@ const SWITCH: Readonly<Record<'TABS' | 'BUTTONS', string>> = {
   ),
 };
 
+/** Four worded controls and a clock do not fit a phone's header, so there each keeps only its glyph. */
+const PHONE_ICON_ONLY = 'max-sm:sr-only';
+
 export function Header({
   view,
   config,
@@ -53,32 +56,32 @@ export function Header({
   return (
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-exam-border px-exam py-3">
       <h1 className="min-w-0 truncate text-sm font-semibold text-exam-ink">{view.title}</h1>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-3">
         {view.hasUnsaved ? <Badge variant="warning">Not saved yet</Badge> : null}
         {view.isSaving ? <Spinner size="sm" label="Saving" /> : null}
         {onOpenPaper ? (
           <Button type="button" variant="ghost" size="sm" onClick={onOpenPaper}>
             <FileText aria-hidden />
-            Question paper
+            <span className={PHONE_ICON_ONLY}>Question paper</span>
           </Button>
         ) : null}
         {onOpenRules ? (
           <Button type="button" variant="ghost" size="sm" onClick={onOpenRules}>
             <Info aria-hidden />
-            Instructions
+            <span className={PHONE_ICON_ONLY}>Instructions</span>
           </Button>
         ) : null}
         {onOpenCalculator ? (
           <Button type="button" variant="ghost" size="sm" onClick={onOpenCalculator}>
             <Calculator aria-hidden />
-            Calculator
+            <span className={PHONE_ICON_ONLY}>Calculator</span>
           </Button>
         ) : null}
         {/* The way IN: without it a candidate is only ever nagged for leaving a screen never offered. */}
         {view.fullscreen.isSupported && !view.fullscreen.isFullscreen ? (
           <Button type="button" variant="outline" size="sm" onClick={view.fullscreen.enter}>
             <Maximize aria-hidden />
-            Full screen
+            <span className={PHONE_ICON_ONLY}>Full screen</span>
           </Button>
         ) : null}
         {config.timerPosition === 'HEADER' ? <Timer view={view} config={config} /> : null}
@@ -109,10 +112,14 @@ function sectionTally(counts: PaletteCounts): string {
     .join(' · ');
 }
 
-export function SectionBar({ view, config }: Readonly<ExamSlotProps>) {
+export function SectionBar({
+  view,
+  config,
+  onOpenPalette,
+}: Readonly<ExamSlotProps & { onOpenPalette?: () => void }>) {
   return (
     <div className="flex shrink-0 items-center justify-between gap-3 border-b border-exam-border px-exam">
-      <TabsList className="border-exam-border">
+      <TabsList className="min-w-0 border-exam-border">
         {view.sections.map((section) => {
           const tally = sectionTally(view.sectionCounts(section.id));
           const trigger = (
@@ -138,6 +145,12 @@ export function SectionBar({ view, config }: Readonly<ExamSlotProps>) {
 
       <div className="flex items-center gap-3">
         {config.timerPosition === 'SECTION_BAR' ? <Timer view={view} config={config} /> : null}
+        {onOpenPalette ? (
+          <Button type="button" variant="outline" size="sm" onClick={onOpenPalette}>
+            <LayoutGrid aria-hidden />
+            Palette
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -173,7 +186,10 @@ export function Options({ view }: Readonly<ExamSlotProps>) {
   );
 }
 
-export function Palette({ view }: Readonly<ExamSlotProps>) {
+export function Palette({
+  view,
+  onOpen = view.openQuestion,
+}: Readonly<ExamSlotProps & { onOpen?: (questionId: string) => void }>) {
   return (
     <QuestionPalette
       questionIds={view.questions.map((row) => row.questionId)}
@@ -182,7 +198,7 @@ export function Palette({ view }: Readonly<ExamSlotProps>) {
       counts={view.sectionCounts(view.sectionId)}
       forwardOnly={view.forwardOnly}
       canOpen={view.canOpen}
-      onOpen={view.openQuestion}
+      onOpen={onOpen}
     />
   );
 }

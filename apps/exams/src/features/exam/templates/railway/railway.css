@@ -630,3 +630,67 @@
   width: 18px;
   height: 18px;
 }
+
+/* ---------- a phone ----------
+   The original has no screen this narrow, so nothing here is ported: the palette folds over
+   the paper instead of taking a column from it, and the chrome gives up its desktop gutters.
+   The width is PHONE_QUERY in layout.tsx. */
+
+@media (max-width: 767px) {
+  [data-exam-template='ssc_railways'] .rw-palette {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    max-width: calc(100% - 24px);
+    background: #fff;
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Wide enough for a thumb, where the original's is sized for a pointer. */
+  [data-exam-template='ssc_railways'] .rw-palette-toggle {
+    width: 24px;
+    height: 56px;
+    line-height: 56px;
+    font-size: 16px;
+  }
+
+  [data-exam-template='ssc_railways'] [data-palette-open] .rw-palette-toggle {
+    right: min(304px, 100vw - 24px);
+  }
+
+  [data-exam-template='ssc_railways'] .rw-utilitybar {
+    gap: 14px;
+    padding: 0 8px;
+  }
+
+  [data-exam-template='ssc_railways'] .rw-utilitybar button {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  [data-exam-template='ssc_railways'] .rw-sectionbar {
+    overflow-x: auto;
+  }
+
+  [data-exam-template='ssc_railways'] .subjcttab {
+    flex-shrink: 0;
+  }
+
+  [data-exam-template='ssc_railways'] .rw-buttons {
+    height: auto;
+    min-height: 59px;
+    padding: 6px 8px;
+  }
+
+  [data-exam-template='ssc_railways'] .rw-summary {
+    overflow-x: auto;
+    padding: 20px 8px;
+  }
+
+  [data-exam-template='ssc_railways'] .rw-summary th,
+  [data-exam-template='ssc_railways'] .rw-summary td {
+    padding: 4px 6px;
+  }
+}

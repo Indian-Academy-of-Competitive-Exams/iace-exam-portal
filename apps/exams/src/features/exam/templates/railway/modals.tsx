@@ -10,7 +10,7 @@ function Panel({
   children,
 }: Readonly<{ title: string; onClose: () => void; children: React.ReactNode }>) {
   return (
-    <div className="rw-panel absolute inset-x-8 bottom-16 top-16 flex flex-col shadow-lg">
+    <div className="rw-panel absolute inset-x-2 bottom-16 top-16 flex flex-col shadow-lg sm:inset-x-8">
       <div className="rw-modal-head flex items-center justify-between">
         <span>{title}</span>
         <button type="button" className="rw-modal-close" onClick={onClose}>
