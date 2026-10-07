@@ -115,12 +115,14 @@ export function readContact(row: CsvRow, seenInFile: Map<string, number>) {
   const mobile = parsed.success ? parsed.data : null;
   const duplicateOf = mobile === null ? undefined : seenInFile.get(mobile);
   if (mobile !== null && duplicateOf === undefined) seenInFile.set(mobile, row.line);
+  const name = readName(row);
 
   return {
     mobile,
     duplicateOf,
-    fullName: columnValue(row, 'fullName').trim() || null,
+    fullName: name.fullName,
     errors: [
+      name.error,
       parsed.success ? undefined : unreadableMobile(raw, parsed.error?.issues[0]?.message),
       duplicateOf === undefined ? undefined : `The same number is already on line ${duplicateOf}`,
     ].filter((error): error is string => error !== undefined),
@@ -189,7 +191,11 @@ function readName(row: CsvRow): { fullName: string | null; error?: string } {
 
 /** A cell holding several codes, split however it was written and canonicalised. */
 function readList(row: CsvRow, key: StudentImportColumnKey): string[] {
-  const raw = columnValue(row, key).trim();
+  return listIn(columnValue(row, key));
+}
+
+function listIn(cell: string): string[] {
+  const raw = cell.trim();
   if (raw === '') return [];
   const seen = new Set<string>();
   for (const part of raw.split(IMPORT_LIST_SEPARATORS)) {
@@ -249,9 +255,19 @@ function readBranch(
   return { branchName: name, currentBranchId: branch.id };
 }
 
+/** A course named in several words, however a sheet joined them: "AP/TS POLICE" carries a list separator. */
+const WORDED_COURSES = EXAM_COURSES.filter((course) => course.includes('_')).map((course) => ({
+  course,
+  written: new RegExp(String.raw`\b${course.replaceAll('_', String.raw`[\s/_]+`)}\b`, 'gi'),
+}));
+
 /** The courses this row names, and the ones that are not courses at all. */
 function readCourses(row: CsvRow): { courses: ExamCourse[]; error?: string } {
-  const values = readList(row, 'enrolledCourses').map((value) => value.replaceAll(' ', '_'));
+  const cell = WORDED_COURSES.reduce(
+    (text, { course, written }) => text.replaceAll(written, course),
+    columnValue(row, 'enrolledCourses'),
+  );
+  const values = listIn(cell).map((value) => value.replaceAll(' ', '_'));
   const known = new Set<string>(EXAM_COURSES);
   const unknown = unknownOf(values, known);
   if (unknown.length > 0) {
@@ -322,7 +338,6 @@ function planRow(
   context: ImportContext,
   seenInFile: Map<string, number>,
 ): StudentImportRow {
-  const name = readName(row);
   const contact = readContact(row, seenInFile);
   const type = readStudentType(row);
   const branch = readBranch(row, context, type.studentType);
@@ -334,8 +349,7 @@ function planRow(
   const unknownExams = unknownOf(enrolledExams, context.examCodes);
   const unknownPrograms = unknownOf(programs, context.programCodes);
 
-  const { fullName } = name;
-  const { mobile } = contact;
+  const { mobile, fullName } = contact;
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
   // An import only adds, so the row is planned, judged and shown as what it will leave the student holding.
@@ -344,7 +358,6 @@ function planRow(
   const heldPrograms = union(existing?.programs ?? [], programs);
 
   const errors = [
-    name.error,
     ...contact.errors,
     type.error,
     branch.error,

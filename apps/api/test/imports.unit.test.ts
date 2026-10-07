@@ -331,6 +331,24 @@ describe('the columns an admin actually writes', () => {
     assert.equal(blank.rows[0]?.action, 'update');
   });
 
+  /** The failure this prevents: the course the sample file names, split on its own slash and refused. */
+  it('reads AP/TS POLICE as the one course it is, alone or beside another', () => {
+    const coursesOf = (cell: string) =>
+      planStudentImport(
+        readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', `"${cell}"`, '', '')),
+        context(),
+      ).rows[0];
+
+    assert.deepEqual(coursesOf('AP/TS POLICE')?.errors, []);
+    assert.deepEqual(coursesOf('AP/TS POLICE')?.enrolledCourses, ['AP_TS_POLICE']);
+    assert.deepEqual(coursesOf('SSC, ap/ts police')?.enrolledCourses, ['SSC', 'AP_TS_POLICE']);
+    assert.deepEqual(coursesOf('SSC/RRB')?.enrolledCourses, ['SSC', 'RRB']);
+    assert.match(
+      coursesOf('AP/TS RAILWAY')?.errors.join(' ') ?? '',
+      /Not an exam course: AP, TS_RAILWAY/,
+    );
+  });
+
   it('refuses an exam code and a program code the catalog does not hold', () => {
     const plan = planStudentImport(
       readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', '', 'SSC CGI', 'MADE UP')),

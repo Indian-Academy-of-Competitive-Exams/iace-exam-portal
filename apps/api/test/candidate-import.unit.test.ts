@@ -76,6 +76,20 @@ describe('planCandidateImport', () => {
     assert.deepEqual(plan.summary, { total: 2, willCreate: 1, willAdd: 0, invalid: 1 });
   });
 
+  /** The failure this prevents: a name the roster import refuses, written to a new student unread. */
+  it('skips a name the roster import would refuse, and takes a good one as before', () => {
+    const plan = planCandidateImport(
+      readCsvTable(roster('mobile,fullName\n9876543210,Ravi 2\n9876543211,Ravi Teja')),
+      context(),
+    );
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.equal(plan.rows[0]?.fullName, null);
+    assert.match(plan.rows[0]?.errors[0] ?? '', /letters only/);
+    assert.equal(plan.rows[1]?.action, 'create');
+    assert.equal(plan.rows[1]?.fullName, 'Ravi Teja');
+  });
+
   it('blames the file, not a row, when there is no mobile column', () => {
     const plan = planCandidateImport(readCsvTable(roster('name\nAsha')), context());
 

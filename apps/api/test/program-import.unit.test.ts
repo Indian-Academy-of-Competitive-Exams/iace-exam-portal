@@ -82,6 +82,16 @@ describe('planProgramImport', () => {
     assert.match(plan.rows[1]?.errors[0] ?? '', /already on line 2/);
   });
 
+  it('skips a name the roster import would refuse, as every roster reader does', () => {
+    const plan = planProgramImport(
+      readCsvTable(roster('mobile,fullName\n9000000001,Asha 2')),
+      context(),
+    );
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.match(plan.rows[0]?.errors[0] ?? '', /letters only/);
+  });
+
   it('refuses a file with no mobile column, and reads no rows from it', () => {
     const plan = planProgramImport(readCsvTable(roster('fullName\nAsha')), context());
 
