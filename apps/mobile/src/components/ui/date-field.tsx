@@ -5,9 +5,9 @@ import { Controller, type Control, type FieldValues, type Path } from 'react-hoo
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
-import { civilDate } from '@iace/contracts';
 import { Text } from './text';
 import { cn } from '../../lib/cn';
+import { dayOf, valueOfDay } from '../../lib/picker-day';
 
 export interface DateFieldProps<TValues extends FieldValues> {
   control: Control<TValues>;
@@ -42,7 +42,7 @@ export function DateField<TValues extends FieldValues>({
         const chosen = (_event: DateTimePickerChangeEvent, picked: Date) => {
           // Android's dialog dismisses itself; iOS's spinner stays until the field is tapped again.
           if (Platform.OS !== 'ios') setOpen(false);
-          field.onChange(civilDate(picked));
+          field.onChange(valueOfDay(picked));
         };
 
         return (
@@ -89,11 +89,4 @@ export function DateField<TValues extends FieldValues>({
       }}
     />
   );
-}
-
-/** Built from the parts, never parsed: `new Date('1998-02-03')` is UTC midnight, a day early west of it. */
-function dayOf(value: string): Date {
-  const [year, month, day] = value.split('-').map(Number);
-  if (!year || !month || !day) return new Date();
-  return new Date(year, month - 1, day);
 }

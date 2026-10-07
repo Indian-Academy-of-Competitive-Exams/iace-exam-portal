@@ -30,8 +30,11 @@ export function LeaderboardPanel() {
     enabled: paper !== '',
   });
 
+  // With no paper the board is not asked for, so a pull re-reads the sittings that would name one.
+  const pulled = paper === '' ? trend : board;
+
   return (
-    <RefreshScroll refreshing={board.isRefetching} onRefresh={() => void board.refetch()}>
+    <RefreshScroll refreshing={pulled.isRefetching} onRefresh={() => void pulled.refetch()}>
       {sat.length > 0 ? (
         <ChipRow
           scroll

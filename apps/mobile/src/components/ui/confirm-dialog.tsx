@@ -15,7 +15,7 @@ export interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-/** Asks before an action that cannot be taken back. Android's back button is Cancel. */
+/** Asks before an action that cannot be taken back. Android's back button is Cancel; neither answers while it is in flight. */
 export function ConfirmDialog({
   open,
   title,
@@ -26,13 +26,18 @@ export function ConfirmDialog({
   onCancel,
 }: Readonly<ConfirmDialogProps>) {
   return (
-    <Modal transparent visible={open} animationType="fade" onRequestClose={onCancel}>
+    <Modal
+      transparent
+      visible={open}
+      animationType="fade"
+      onRequestClose={loading ? undefined : onCancel}
+    >
       <View className="flex-1 items-center justify-center bg-[var(--overlay-bg)] p-6">
         <Card accessibilityRole="alert" className="w-full max-w-md gap-4 p-5">
           <Text variant="section">{title}</Text>
           <Text variant="body">{description}</Text>
           <View className="flex-row justify-end gap-2">
-            <Button variant="ghost" onPress={onCancel}>
+            <Button variant="ghost" disabled={loading} onPress={onCancel}>
               Cancel
             </Button>
             <Button loading={loading} onPress={onConfirm}>

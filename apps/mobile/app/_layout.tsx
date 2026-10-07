@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createAppQueryClient } from '@iace/app-kit';
 import * as SplashScreen from 'expo-splash-screen';
+import { alertOnce } from '../src/lib/alert-once';
 import { hydrate } from '../src/lib/api';
 import { AuthProvider, useAuth } from '../src/providers/auth';
 import { useTokenColor } from '../src/lib/use-token-color';
@@ -14,9 +15,14 @@ import '../global.css';
 
 void SplashScreen.preventAutoHideAsync();
 
+// Reported by the button and by the dismissal: Android sends one or the other, never both.
+const raiseAlert = alertOnce((message, onDismiss) =>
+  Alert.alert(message, undefined, [{ text: 'OK', onPress: onDismiss }], { onDismiss }),
+);
+
 // A failure no field on screen shows is said out loud, as the web's toast does; success stays quiet.
 const queryClient = createAppQueryClient({
-  notify: { error: (message) => Alert.alert(message), success: () => undefined },
+  notify: { error: raiseAlert, success: () => undefined },
 });
 
 export default function RootLayout() {

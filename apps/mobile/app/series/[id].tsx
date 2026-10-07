@@ -35,11 +35,11 @@ const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 32
 type Phase = 'LOADING' | 'ERROR' | 'REFUSED' | 'READY';
 
 function phaseOf(
-  catalog: { isLoading: boolean; isError: boolean },
+  catalog: { isLoading: boolean; isLoadingError: boolean },
   series: StudentCatalogSeries | undefined,
 ): Phase {
   if (catalog.isLoading) return 'LOADING';
-  if (catalog.isError) return 'ERROR';
+  if (catalog.isLoadingError) return 'ERROR';
   return series ? 'READY' : 'REFUSED';
 }
 
@@ -111,7 +111,7 @@ function SeriesHeader({
 }: Readonly<{
   series: StudentCatalogSeries;
   progress: SeriesProgress;
-  trend: { isLoading: boolean; isError: boolean; refetch: () => void };
+  trend: { isLoading: boolean; isLoadingError: boolean; refetch: () => void };
   sat: readonly PerformancePoint[];
 }>) {
   return (
@@ -150,12 +150,12 @@ function Standing({
   progress,
   sat,
 }: Readonly<{
-  trend: { isLoading: boolean; isError: boolean; refetch: () => void };
+  trend: { isLoading: boolean; isLoadingError: boolean; refetch: () => void };
   progress: SeriesProgress;
   sat: readonly PerformancePoint[];
 }>) {
   if (trend.isLoading) return <Skeleton className="h-24 rounded-xl" />;
-  if (trend.isError) {
+  if (trend.isLoadingError) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}

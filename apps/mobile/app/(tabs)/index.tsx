@@ -106,14 +106,14 @@ function NextUp({
   waiting,
   now,
 }: Readonly<{
-  catalog: { isLoading: boolean; isError: boolean; refetch: () => void };
+  catalog: { isLoading: boolean; isLoadingError: boolean; refetch: () => void };
   waiting: readonly Sittable[];
   now: Date;
 }>) {
   const router = useRouter();
 
   if (catalog.isLoading) return <Skeleton className="h-40 rounded-xl" />;
-  if (catalog.isError) {
+  if (catalog.isLoadingError) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}

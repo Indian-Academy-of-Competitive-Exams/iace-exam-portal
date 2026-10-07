@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cardPlacement, clampedBox, isRingable } from '../src/lib/tour-placement';
+import { cardPlacement, clampedBox, isRingable, ringableSteps } from '../src/lib/tour-placement';
 
 const SCREEN = { width: 390, height: 800 };
 
@@ -81,4 +81,34 @@ test('a target below the fold or scrolled past is not ringable', () => {
 
 test('a target half on screen is still ringable', () => {
   assert.equal(isRingable({ x: 20, y: 780, width: 240, height: 60 }, SCREEN), true);
+});
+
+const ON_SCREEN = { x: 20, y: 100, width: 240, height: 40 };
+
+/** The defect this pins: the run held the middle stop, so the card read "of 3" and Back landed on a stop that skipped forward. */
+test('a run holds only the stops it can ring, so Back from the last is the first', () => {
+  const steps = [{ target: 'band' }, { target: 'sections' }, { target: 'paper' }];
+  const boxes = new Map([
+    ['band', ON_SCREEN],
+    ['sections', { ...ON_SCREEN, y: 900 }],
+    ['paper', { ...ON_SCREEN, y: 400 }],
+  ]);
+
+  assert.deepEqual(ringableSteps(steps, boxes, SCREEN), [steps[0], steps[2]]);
+});
+
+test('a stop whose area is empty is not counted', () => {
+  const steps = [{ target: 'filters' }, { target: 'summary' }];
+  const boxes = new Map([
+    ['filters', ON_SCREEN],
+    ['summary', { ...ON_SCREEN, height: 0 }],
+  ]);
+
+  assert.deepEqual(ringableSteps(steps, boxes, SCREEN), [steps[0]]);
+});
+
+test('a stop whose target was never measured is not counted', () => {
+  const steps = [{ target: 'shelf' }, { target: 'filters' }];
+
+  assert.deepEqual(ringableSteps(steps, new Map([['filters', ON_SCREEN]]), SCREEN), [steps[1]]);
 });

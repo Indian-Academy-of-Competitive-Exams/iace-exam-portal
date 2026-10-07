@@ -40,3 +40,15 @@ export function isRingable(box: Box, screen: Screen): boolean {
   if (box.width === 0 || box.height === 0) return false;
   return box.y + box.height > 0 && box.y < screen.height;
 }
+
+/** The stops a run can show, so its count, Next and Back all describe one list. */
+export function ringableSteps<Step extends { readonly target: string }>(
+  steps: readonly Step[],
+  boxes: ReadonlyMap<string, Box>,
+  screen: Screen,
+): Step[] {
+  return steps.filter((step) => {
+    const box = boxes.get(step.target);
+    return box !== undefined && isRingable(box, screen);
+  });
+}

@@ -69,6 +69,8 @@ export default function ProfileScreen() {
     mutationFn: (values: UpdateMeInput) => api.me.update(values),
     onSuccess: (updated) => {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
+      // Re-read as well: an upload answering after this would otherwise put back the record it left with.
+      void queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       // The identity carries preTestReady, and these are the fields that decide it.
       void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
       reset(valuesOf(updated));
@@ -179,6 +181,7 @@ export default function ProfileScreen() {
               <Button
                 variant="outline"
                 className="flex-1"
+                disabled={save.isPending}
                 onPress={() => {
                   reset(valuesOf(me.data));
                   setIsEditing(false);
@@ -259,7 +262,10 @@ const detailsOf = (me: Me): DetailRow[] => [
   { label: 'Date of birth', value: me.profile?.dob },
   { label: 'Email', value: me.profile?.email },
   { label: 'Address', value: me.profile?.address },
-  { label: 'Gender', value: me.profile?.gender },
+  {
+    label: 'Gender',
+    value: GENDER_OPTIONS.find((one) => one.value === me.profile?.gender)?.label,
+  },
 ];
 
 const EDUCATION_COLUMNS: readonly HistoryColumn[] = [

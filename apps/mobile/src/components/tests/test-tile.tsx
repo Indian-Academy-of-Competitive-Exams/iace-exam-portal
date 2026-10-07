@@ -109,9 +109,10 @@ function pillOf(label: string, result?: TestResult): string {
 }
 
 const paperLine = (test: StudentCatalogTest) =>
-  [plural(test.totalQuestions, 'question'), `${Math.round(test.durationSec / 60)} minutes`].join(
-    ' · ',
-  );
+  [
+    plural(test.totalQuestions, 'question'),
+    plural(Math.round(test.durationSec / 60), 'minute'),
+  ].join(' · ');
 
 /** A test opens and never shuts, so there are only two things to say about when. */
 function whenLine(test: StudentCatalogTest, now: Date): string {

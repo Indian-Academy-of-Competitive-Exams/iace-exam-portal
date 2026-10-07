@@ -85,7 +85,7 @@ function useSatQuestion(saved: SavedQuestion) {
     question: solutions.data?.questions[0],
     languages: solutions.data?.languages ?? ['EN'],
     isLoading: solutions.isLoading,
-    isError: solutions.isError,
+    isError: solutions.isLoadingError,
     retry: () => void solutions.refetch(),
   };
 }

@@ -30,10 +30,16 @@ import { sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
-function phaseOf(brief: { isLoading: boolean; isError: boolean; error: unknown }): Phase {
+/** A refusal replaces the screen whatever is held; any other failure only when nothing is. */
+function phaseOf(brief: {
+  isLoading: boolean;
+  isError: boolean;
+  isLoadingError: boolean;
+  error: unknown;
+}): Phase {
   if (brief.isLoading) return 'LOADING';
-  if (brief.isError) return isBriefRefused(brief.error) ? 'REFUSED' : 'ERROR';
-  return 'READY';
+  if (brief.isError && isBriefRefused(brief.error)) return 'REFUSED';
+  return brief.isLoadingError ? 'ERROR' : 'READY';
 }
 
 export default function TestInstructionsScreen() {

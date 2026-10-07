@@ -30,7 +30,7 @@ export function SystemCheck() {
     <View className="gap-3">
       <Text className="text-sm font-semibold tracking-tight text-foreground">System check</Text>
 
-      {reachable.isLoading ? (
+      {reachable.isFetching ? (
         <View className="flex-row items-center gap-2">
           <ActivityIndicator />
           <Text variant="muted">Checking your connection</Text>
@@ -43,9 +43,13 @@ export function SystemCheck() {
         </View>
       )}
 
-      {!reachable.isLoading && failed ? (
+      {!reachable.isFetching && failed ? (
         <Alert variant="warning">
           Fix this before you begin. The clock does not stop while you sort out your connection.
+          {'\n'}
+          <Text className="font-medium" onPress={() => void reachable.refetch()}>
+            Check again
+          </Text>
         </Alert>
       ) : null}
     </View>

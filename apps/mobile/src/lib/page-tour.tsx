@@ -19,7 +19,7 @@ import { Button } from '../components/ui/button';
 import { STORAGE_KEYS } from './constants';
 import { sittingStorage } from './sitting-store';
 import { useTokenColor } from './use-token-color';
-import { cardPlacement, clampedBox, isRingable, type Box } from './tour-placement';
+import { cardPlacement, clampedBox, isRingable, ringableSteps, type Box } from './tour-placement';
 
 interface Registration {
   readonly id: string;
@@ -39,7 +39,7 @@ interface TourContextValue {
   registered: RefObject<Registration | null>;
   register: (registration: Registration | null) => void;
   targets: RefObject<Map<string, Measurable>>;
-  start: (registration: Registration) => boolean;
+  start: (registration: Registration) => Promise<boolean>;
   hasSeen: (id: string) => boolean;
   mark: (id: string) => void;
 }
@@ -53,6 +53,11 @@ function useTourContext(): TourContextValue {
 }
 
 const seen = seenTours(sittingStorage, STORAGE_KEYS.TOURS);
+
+const measured = (view: Measurable) =>
+  new Promise<Box>((resolve) => {
+    view.measureInWindow((x, y, width, height) => resolve({ x, y, width, height }));
+  });
 
 /** Registers a view as a tour target; an undefined key attaches nothing, so a list can anchor its first row alone. */
 export function useTourTarget(key?: string): { ref?: (view: Measurable | null) => void } {
@@ -81,16 +86,25 @@ export function TourProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [owner, setOwner] = useState<string | null>(null);
   const [box, setBox] = useState<{ target: string; box: Box } | null>(null);
   const { step, index, count, open, next, back, close } = useTourRun();
+  const screen = useWindowDimensions();
 
   const start = useCallback(
-    (opening: Registration) => {
-      const live = opening.steps.current.filter((one) => targets.current.has(one.target));
-      if (live.length === 0) return false;
+    async (opening: Registration) => {
+      const boxes = new Map<string, Box>();
+      await Promise.all(
+        opening.steps.current.map(async ({ target }) => {
+          const view = targets.current.get(target);
+          if (view !== undefined) boxes.set(target, await measured(view));
+        }),
+      );
+      const live = ringableSteps(opening.steps.current, boxes, screen);
+      // The screen may have been left while its targets were being measured.
+      if (live.length === 0 || registered.current?.id !== opening.id) return false;
       setOwner(opening.id);
       open(live);
       return true;
     },
-    [open],
+    [open, screen],
   );
 
   const register = useCallback((held: Registration | null) => {
@@ -103,7 +117,6 @@ export function TourProvider({ children }: Readonly<{ children: ReactNode }>) {
     if (owner !== null && owner !== registeredId) close();
   }, [owner, registeredId, close]);
 
-  const screen = useWindowDimensions();
   const target = step?.target ?? null;
 
   useEffect(() => {
@@ -168,8 +181,10 @@ export function usePageTour({
   steps,
   ready,
 }: Readonly<{ id: string; steps: readonly TourStep[]; ready: boolean }>): void {
-  const { register, start, hasSeen, mark } = useTourContext();
+  const { registeredId, register, start, hasSeen, mark } = useTourContext();
   const attempted = useRef(false);
+  // Tabs stay mounted: a screen behind another would spend its tour unseen and close the one showing.
+  const isInFront = registeredId === id;
   const latest = useRef(steps);
 
   // Synced in an effect, never during render, and read through the ref so an inline steps array cannot re-register.
@@ -186,11 +201,13 @@ export function usePageTour({
   );
 
   useEffect(() => {
-    if (attempted.current || !ready || hasSeen(id)) return;
+    if (attempted.current || !ready || !isInFront || hasSeen(id)) return;
     attempted.current = true;
     // Marked only when it OPENED: a screen whose targets had not mounted yet gets another chance.
-    if (start({ id, steps: latest })) mark(id);
-  }, [ready, id, start, hasSeen, mark]);
+    void start({ id, steps: latest }).then((opened) => {
+      if (opened) mark(id);
+    });
+  }, [ready, isInFront, id, start, hasSeen, mark]);
 }
 
 /** Absent on a screen that registered no tour, so a screen without the hook shows no dead control. */
@@ -206,7 +223,7 @@ export function TourTrigger() {
       hitSlop={12}
       onPress={() => {
         const held = registered.current;
-        if (held !== null) start(held);
+        if (held !== null) void start(held);
       }}
     >
       <CircleQuestionMark color={ink} size={20} />

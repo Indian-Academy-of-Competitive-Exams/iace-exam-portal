@@ -40,10 +40,22 @@ import { sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
-function phaseOf(brief: { isLoading: boolean; isError: boolean; error: unknown }): Phase {
+interface CatalogState {
+  isLoading: boolean;
+  isLoadingError: boolean;
+  refetch: () => void;
+}
+
+/** A refusal replaces the screen whatever is held; any other failure only when nothing is. */
+function phaseOf(brief: {
+  isLoading: boolean;
+  isError: boolean;
+  isLoadingError: boolean;
+  error: unknown;
+}): Phase {
   if (brief.isLoading) return 'LOADING';
-  if (brief.isError) return isBriefRefused(brief.error) ? 'REFUSED' : 'ERROR';
-  return 'READY';
+  if (brief.isError && isBriefRefused(brief.error)) return 'REFUSED';
+  return brief.isLoadingError ? 'ERROR' : 'READY';
 }
 
 export default function TestAboutScreen() {
@@ -70,6 +82,7 @@ export default function TestAboutScreen() {
           testId={testId}
           seriesName={series?.name}
           listed={listed}
+          catalog={catalog}
           now={now}
         />
       </ScrollView>
@@ -84,6 +97,7 @@ function AboutContent({
   testId,
   seriesName,
   listed,
+  catalog,
   now,
 }: Readonly<{
   phase: Phase;
@@ -92,6 +106,7 @@ function AboutContent({
   testId: string;
   seriesName: string | undefined;
   listed: StudentCatalogTest | undefined;
+  catalog: CatalogState;
   now: Date;
 }>) {
   const band = useTourTarget(TOUR_TARGETS.ABOUT_BAND);
@@ -146,7 +161,7 @@ function AboutContent({
       <SectionsCard brief={brief} />
       <PaperCard brief={brief} />
 
-      <Exits testId={testId} listed={listed} now={now} />
+      <Exits testId={testId} listed={listed} catalog={catalog} now={now} />
     </Fragment>
   );
 }
@@ -207,11 +222,29 @@ function InfoRow({ label, value }: Readonly<{ label: string; value: string }>) {
   );
 }
 
+/** Whether a paper may be started is the tests list's to say, so no answer is given until it has one. */
 function Exits({
   testId,
   listed,
+  catalog,
   now,
-}: Readonly<{ testId: string; listed: StudentCatalogTest | undefined; now: Date }>) {
+}: Readonly<{
+  testId: string;
+  listed: StudentCatalogTest | undefined;
+  catalog: CatalogState;
+  now: Date;
+}>) {
+  if (catalog.isLoading) return <Button loading>Checking your tests</Button>;
+  if (catalog.isLoadingError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your tests did not load"
+        onRetry={catalog.refetch}
+      />
+    );
+  }
+
   const action = listed ? testAction(listed) : null;
 
   if (!action) {
