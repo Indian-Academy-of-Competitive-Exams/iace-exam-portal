@@ -647,6 +647,11 @@ audit trail shows an admin their own rows, as its screen does. A student reads f
 of them their own — the score card, the weekly and monthly report, every test, and topic-wise
 accuracy — and whatever the request names, the student is whoever holds the token.
 
+Every printed page — a report or a question paper — carries the institute's name faintly behind
+its content and a footer of its own: the name, and the page of how many. The footer is not
+decoration. A page that declares its own margin boxes is one the browser adds no date, title or
+address line to, so nobody has to untick "Headers and footers" before a page goes to a parent.
+
 A table on a page carries at most `REPORT_MAX_ROWS`; the spreadsheet carries every row. A period
 wide enough to hold more sittings than one spreadsheet does is refused, not read into memory.
 

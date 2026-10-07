@@ -212,3 +212,34 @@ describe('TableFrame — tabs', () => {
     assert.ok(container.querySelector('[data-page-frame]'));
   });
 });
+
+describe('TableFrame — the filter bar', () => {
+  const state = {
+    values: { branch: '' },
+    setFilter: () => undefined,
+    clearFilters: () => undefined,
+  };
+  const spec = [
+    {
+      key: 'branch',
+      kind: 'choice',
+      label: 'Branch',
+      primary: true,
+      items: [{ value: '', label: 'Any branch' }],
+    },
+  ] as const;
+
+  /** A table that is not a list has no ListView to draw its bar, so the frame holds it above the card. */
+  it('pins what the table is asked by under the header, outside the card that scrolls', () => {
+    render(
+      <TooltipProvider>
+        <TableFrame header={<h1>Merit list</h1>} filters={{ spec, state }}>
+          <p>The rows</p>
+        </TableFrame>
+      </TooltipProvider>,
+    );
+
+    const control = screen.getByRole('button', { name: 'Branch' });
+    assert.equal(screen.getByText('The rows').parentElement?.contains(control), false);
+  });
+});

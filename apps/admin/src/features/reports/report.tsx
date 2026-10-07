@@ -28,7 +28,9 @@ import { reportHtml } from '@iace/app-kit';
 import { PageCrumbs, printHtml, useFilterSpec, useFilters } from '@iace/app-kit/browser';
 import {
   EMPTY_STATE_KINDS,
+  FILLS,
   Alert,
+  Badge,
   Button,
   DataTable,
   EmptyState,
@@ -36,13 +38,14 @@ import {
   MetricGroup,
   PageFrame,
   PageHeader,
-  SectionHeading,
   Skeleton,
   SkeletonParagraph,
   StatRow,
+  TableFrame,
   TruncatedText,
-  plural,
+  cn,
   type DataTableColumn,
+  type TableFrameTab,
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { ExportButton } from '../../components/export-button';
@@ -116,85 +119,135 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
     );
   }
 
-  return (
-    <PageFrame
-      header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: spec.title }]} />}
-          title={spec.title}
-          meta={report.data ? `As of ${instituteDateTimeLabel(report.data.asOf)}` : undefined}
-          action={
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<Printer aria-hidden />}
-                disabled={!report.data}
-                onClick={() => report.data && printHtml(reportHtml(report.data))}
-              >
-                Print
-              </Button>
-              <ExportButton
-                kind={reportKey}
-                disabled={!ready}
-                download={() => api.admin.reports.export(reportKey, query)}
-              />
-            </div>
-          }
-        />
-      }
-      filters={{ spec: filters, state: { values: shown, setFilter, clearFilters } }}
-    >
-      <Body lacking={lacking} ready={ready} report={report} />
-    </PageFrame>
+  const document = report.data;
+  const frame = {
+    header: (
+      <PageHeader
+        breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: spec.title }]} />}
+        title={spec.title}
+        meta={document ? `As of ${instituteDateTimeLabel(document.asOf)}` : undefined}
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Printer aria-hidden />}
+              disabled={!document}
+              onClick={() => document && printHtml(reportHtml(document))}
+            >
+              Print
+            </Button>
+            <ExportButton
+              kind={reportKey}
+              disabled={!ready}
+              download={() => api.admin.reports.export(reportKey, query)}
+            />
+          </div>
+        }
+      />
+    ),
+    filters: { spec: filters, state: { values: shown, setFilter, clearFilters } },
+  };
+
+  if (!ready || report.isError || !document) {
+    return (
+      <TableFrame {...frame}>
+        <Absent lacking={lacking} ready={ready} failed={report.isError} retry={report.refetch} />
+      </TableFrame>
+    );
+  }
+
+  const panes = panesOf(document);
+  const open = panes.find((pane) => pane.value === url.get(OPEN_PANE)) ?? panes[0];
+  const summary = <Summary about={document.about} figures={document.figures} />;
+
+  // Several tables of one report are views of one record, so they are its tabs; one needs no strip.
+  return panes.length > 1 && open ? (
+    <TableFrame
+      {...frame}
+      toolbar={summary}
+      tabs={{
+        value: open.value,
+        onValueChange: (pane) => url.set({ [OPEN_PANE]: pane }),
+        items: panes,
+      }}
+    />
+  ) : (
+    <TableFrame {...frame} toolbar={summary}>
+      {panes[0]?.content ?? <Centred>{<EmptyState title="No rows" />}</Centred>}
+    </TableFrame>
   );
 }
 
-function Body({
+/** Which of a report's tables is open. In the URL, so a link lands on the table it was sent about. */
+const OPEN_PANE = 'table';
+const LETTER_PANE = 'letter';
+
+function panesOf({ preface, closing, tables }: ReportDocument): TableFrameTab[] {
+  const letter: TableFrameTab[] =
+    preface.length + closing.length > 0
+      ? [
+          {
+            value: LETTER_PANE,
+            label: 'Letter',
+            content: <Letter preface={preface} closing={closing} />,
+          },
+        ]
+      : [];
+  return [
+    ...letter,
+    ...tables.map((table) => ({
+      value: table.title,
+      label: (
+        <span className="flex items-center gap-2">
+          {table.title}
+          <Badge variant="neutral">{count(table.total)}</Badge>
+        </span>
+      ),
+      content: <TablePane table={table} />,
+    })),
+  ];
+}
+
+function Centred({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <div className="flex min-h-0 flex-1 items-center justify-center">{children}</div>;
+}
+
+/** What the card holds before there is a report in it: nothing chosen, nothing loaded, or nothing yet. */
+function Absent({
   lacking,
   ready,
-  report,
+  failed,
+  retry,
 }: Readonly<{
   lacking: ReportParam | undefined;
   ready: boolean;
-  report: { data?: ReportDocument; isError: boolean; refetch: () => void };
+  failed: boolean;
+  retry: () => void;
 }>) {
   if (!ready) {
     const wanted = lacking ? REPORT_PARAM_LABELS[lacking].toLowerCase() : 'report';
-    return <EmptyState title={`No ${wanted} chosen`} />;
-  }
-  if (report.isError) {
     return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.FAILURE}
-        title="Could not load this report"
-        onRetry={report.refetch}
-      />
+      <Centred>
+        <EmptyState title={`No ${wanted} chosen`} />
+      </Centred>
     );
   }
-  if (!report.data) {
+  if (failed) {
     return (
-      <div className="flex flex-col gap-5">
-        <Skeleton variant="title" />
-        <SkeletonParagraph lines={8} />
-      </div>
+      <Centred>
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Could not load this report"
+          onRetry={retry}
+        />
+      </Centred>
     );
   }
-
-  const { about, preface, figures, tables, closing } = report.data;
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex max-w-xl flex-col gap-1.5">
-        {about.map((fact) => (
-          <StatRow key={fact.label} label={fact.label} value={fact.value ?? DASH} />
-        ))}
-      </div>
-      <Letter lines={preface} />
-      <Figures figures={figures} />
-      {tables.map((table) => (
-        <TablePreview key={table.title} table={table} />
-      ))}
-      <Letter lines={closing} />
+    <div className="flex flex-col gap-5">
+      <Skeleton variant="title" />
+      <SkeletonParagraph lines={8} />
     </div>
   );
 }
@@ -202,11 +255,38 @@ function Body({
 /** A headline holds four figures; past that a report's figures are a table, and are set as one. */
 const HEADLINE_FIGURES = 4;
 
+/** What the report covers beside what it comes to, ruled off from the rows it was summed from. */
+function Summary({
+  about,
+  figures,
+}: Readonly<{ about: readonly ReportFact[]; figures: readonly ReportFact[] }>) {
+  if (about.length + figures.length === 0) return null;
+  return (
+    <div
+      className={cn(
+        '-mx-4 gap-x-10 gap-y-4 border-b border-border px-4 pb-4',
+        'lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]',
+        // On a phone the bar above already names what it covers, and the rows need the height.
+        figures.length === 0 ? 'hidden' : 'grid',
+      )}
+    >
+      <div className="hidden flex-col gap-1.5 lg:flex">
+        {about.map((fact) => (
+          <StatRow key={fact.label} label={fact.label} value={fact.value ?? DASH} />
+        ))}
+      </div>
+      <div className="lg:border-l lg:border-border lg:pl-10">
+        <Figures figures={figures} />
+      </div>
+    </div>
+  );
+}
+
 function Figures({ figures }: Readonly<{ figures: readonly ReportFact[] }>) {
   if (figures.length === 0) return null;
   if (figures.length > HEADLINE_FIGURES) {
     return (
-      <div className="grid max-w-3xl gap-x-10 gap-y-1.5 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 lg:gap-x-10">
         {figures.map((figure) => (
           <StatRow key={figure.label} label={figure.label} value={figure.value ?? DASH} />
         ))}
@@ -223,15 +303,19 @@ function Figures({ figures }: Readonly<{ figures: readonly ReportFact[] }>) {
 }
 
 /** A letter's own words: the record's content, as it will be printed, not the screen describing itself. */
-function Letter({ lines }: Readonly<{ lines: readonly string[] }>) {
-  if (lines.length === 0) return null;
+function Letter({
+  preface,
+  closing,
+}: Readonly<{ preface: readonly string[]; closing: readonly string[] }>) {
   return (
-    <div className="flex max-w-3xl flex-col gap-2 text-sm text-foreground">
-      {lines.map((line) => (
-        <p key={line} className="whitespace-pre-wrap">
-          {line}
-        </p>
-      ))}
+    <div className="relative min-h-0 flex-1 overflow-y-auto pt-4">
+      <div className="flex max-w-3xl flex-col gap-3 text-sm text-foreground">
+        {[...preface, ...closing].map((line) => (
+          <p key={line} className="whitespace-pre-wrap">
+            {line}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }
@@ -243,7 +327,8 @@ interface PreviewRow {
   cells: readonly ReportCell[];
 }
 
-function TablePreview({ table }: Readonly<{ table: ReportTable }>) {
+/** One table of the report: the rows are the only thing in the frame that scrolls. */
+function TablePane({ table }: Readonly<{ table: ReportTable }>) {
   const rows = useMemo(
     () => table.rows.slice(0, PREVIEW_ROWS).map((cells, at) => ({ id: String(at), cells })),
     [table.rows],
@@ -261,10 +346,11 @@ function TablePreview({ table }: Readonly<{ table: ReportTable }>) {
   );
 
   return (
-    <section className="flex flex-col gap-3">
-      <SectionHeading title={table.title} meta={plural(table.total, 'row')} />
+    <div className={cn(FILLS, 'gap-3')}>
       {table.total > rows.length ? (
-        <Alert variant="info">{hiddenRows(table, rows.length)}</Alert>
+        <div className="shrink-0 pt-3">
+          <Alert variant="info">{hiddenRows(table, rows.length)}</Alert>
+        </div>
       ) : null}
       <DataTable
         columns={columns}
@@ -273,7 +359,7 @@ function TablePreview({ table }: Readonly<{ table: ReportTable }>) {
         isLoading={false}
         empty="No rows"
       />
-    </section>
+    </div>
   );
 }
 

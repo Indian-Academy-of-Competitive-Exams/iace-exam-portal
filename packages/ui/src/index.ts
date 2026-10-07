@@ -88,7 +88,13 @@ export {
   type DataTableColumn,
   type DataTableSelection,
 } from './components/ui/data-table';
-export { TableFrame, PageFrame, PanelFrame, PAGE_CONTENT_CLASS } from './components/ui/table-frame';
+export {
+  TableFrame,
+  PageFrame,
+  PanelFrame,
+  PAGE_CONTENT_CLASS,
+  type TableFrameTab,
+} from './components/ui/table-frame';
 export { ImportView, type ImportViewProps } from './components/ui/import-view';
 export {
   ListView,

@@ -265,6 +265,8 @@ export interface TableFrameTabs {
 export interface TableFrameProps {
   /** Pinned above the card — usually a `PageHeader`. */
   header?: React.ReactNode;
+  /** What a table that is NOT a list is asked by, pinned under the header; a list's bar is its `ListView`'s. */
+  filters?: FrameFilters;
   /** Pinned inside the card, above the table — a context banner a `ListView` does not own. */
   toolbar?: React.ReactNode;
   /** Sub-features close enough to be one idea. The strip sits inside the card, above the tab. */
@@ -273,10 +275,16 @@ export interface TableFrameProps {
 }
 
 /** A list screen: header and filters held still, the table body the only scroller. */
-export function TableFrame({ header, toolbar, tabs, children }: Readonly<TableFrameProps>) {
+export function TableFrame({
+  header,
+  filters,
+  toolbar,
+  tabs,
+  children,
+}: Readonly<TableFrameProps>) {
   const frame = (
     <div data-page-frame className={cn(FILLS, FRAME_COLUMN)}>
-      {header ? <div className={HEADER_BLOCK}>{header}</div> : null}
+      <FrameTop header={header} filters={filters} beside={false} stacksFilters />
       <Card className={cn(FILLS, 'gap-4 p-4')}>
         {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
         {tabs ? <FrameTabs tabs={tabs} scroller={FILLS} bleed /> : children}

@@ -63,3 +63,10 @@ test('reportHtml sets a letter’s paragraphs before the figures and after the t
   assert.ok(html.indexOf('Dear Parent,') < html.indexOf('Ranked sittings'));
   assert.ok(html.indexOf('</table>') < html.indexOf('Signed &lt;here&gt;'));
 });
+
+test('reportHtml marks every page and footers it itself, which is what keeps the browser’s header off', () => {
+  const html = reportHtml(documentOf([table(['Student'], [['Ana']])]));
+
+  assert.ok(html.includes('<div class="print-watermark" aria-hidden="true">IACE</div>'));
+  assert.ok(html.includes('@bottom-right { content: "Page " counter(page) " of " counter(pages)'));
+});

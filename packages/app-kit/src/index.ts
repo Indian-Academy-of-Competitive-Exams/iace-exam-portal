@@ -138,6 +138,7 @@ export {
 } from './review';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
 export { reportHtml } from './report-html';
+export { PRINT_WATERMARK, printPageCss } from './print-page';
 export { progressDownloads, scoreCardDownloads, type ReportDownload } from './report-downloads';
 export {
   ANY_CHOICE,
