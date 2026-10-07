@@ -29,6 +29,7 @@ import {
   REPORT_GROUP_LABELS,
   REPORT_PARAM_LABELS,
   REPORT_PERIOD_LABELS,
+  REPORT_SUMMARIES,
   ROUTES,
 } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
@@ -76,7 +77,7 @@ export function ReportsPage() {
   // A report only a super admin may open is left out for everyone else, not shown and refused.
   const offered = CATALOGUE.filter((row) => !row.superAdminOnly || identity?.isSuperAdmin)
     .filter((row) => filters.values.group === '' || row.group === filters.values.group)
-    .filter((row) => row.title.toLowerCase().includes(sought));
+    .filter((row) => `${row.title} ${REPORT_SUMMARIES[row.key]}`.toLowerCase().includes(sought));
   const shelves = GROUPS.map((group) => ({
     group,
     rows: offered.filter((row) => row.group === group),
@@ -137,7 +138,7 @@ function Asks({ params }: Readonly<{ params: readonly ReportParam[] }>) {
   );
 }
 
-/** One report among its siblings: what it must be given, what may narrow it, and the period it opens on. */
+/** One report among its siblings: what it holds, what it must be given, and what may narrow it. */
 function ReportCard({ row }: Readonly<{ row: CatalogueRow }>) {
   const opensOn = row.needs.includes(REPORT_PARAMS.PERIOD) ? row.period : undefined;
 
@@ -151,6 +152,7 @@ function ReportCard({ row }: Readonly<{ row: CatalogueRow }>) {
           <span className="text-md font-semibold tracking-tight text-foreground">{row.title}</span>
           <ChevronRight aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         </div>
+        <p className="text-sm text-muted-foreground">{REPORT_SUMMARIES[row.key]}</p>
         <div className="mt-auto flex flex-col gap-1.5">
           <StatRow label="Needs" value={<Asks params={row.needs} />} />
           <StatRow label="Optional" value={<Asks params={row.takes ?? []} />} />
