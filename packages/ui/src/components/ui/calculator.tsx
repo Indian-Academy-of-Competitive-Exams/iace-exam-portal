@@ -75,6 +75,25 @@ export function Calculator({ onClose, className }: Readonly<CalculatorProps>) {
     });
   };
 
+  // The frame can shrink under a panel that was dragged to its edge, so the clamp follows the frame too.
+  React.useEffect(() => {
+    const frame = panel.current?.offsetParent;
+    if (!frame) return;
+    const observer = new ResizeObserver(() => {
+      const box = panel.current?.getBoundingClientRect();
+      const bounds = frame.getBoundingClientRect();
+      if (!box) return;
+      setAt((held) => {
+        if (!held) return held;
+        const x = within(held.x, bounds.width - box.width);
+        const y = within(held.y, bounds.height - box.height);
+        return x === held.x && y === held.y ? held : { x, y };
+      });
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <fieldset
       ref={panel}
