@@ -1,26 +1,36 @@
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import {
   FEATURE_KEYS,
   REPORTS,
   REPORT_GROUPS,
+  REPORT_PARAMS,
   type ReportGroup,
   type ReportKey,
+  type ReportParam,
   type ReportSpec,
 } from '@iace/contracts';
-import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
 import {
   EMPTY_STATE_KINDS,
+  Badge,
   BadgeList,
-  DataTable,
+  Card,
   EmptyState,
   PageFrame,
   PageHeader,
-  TableFrame,
-  TruncatedText,
-  linkVariants,
-  type DataTableColumn,
+  SectionHeading,
+  StatRow,
+  plural,
+  type ListFilter,
 } from '@iace/ui';
-import { NAV_ITEMS, REPORT_GROUP_LABELS, REPORT_PARAM_LABELS, ROUTES } from '../../lib/constants';
+import {
+  NAV_ITEMS,
+  REPORT_GROUP_LABELS,
+  REPORT_PARAM_LABELS,
+  REPORT_PERIOD_LABELS,
+  ROUTES,
+} from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 
 interface CatalogueRow extends ReportSpec {
@@ -34,36 +44,27 @@ const CATALOGUE: readonly CatalogueRow[] = (Object.keys(REPORTS) as ReportKey[])
 
 const GROUPS: readonly ReportGroup[] = Object.values(REPORT_GROUPS);
 
-const COLUMNS: DataTableColumn<CatalogueRow>[] = [
+const FILTERS = [
+  { key: 'q', kind: 'search', label: 'Search', placeholder: 'Search reports', primary: true },
   {
-    key: 'title',
-    header: 'Report',
-    className: 'max-w-[24rem]',
-    cell: (row) => (
-      <Link to={ROUTES.REPORT(row.key)} className={linkVariants()}>
-        <TruncatedText>{row.title}</TruncatedText>
-      </Link>
-    ),
+    key: 'group',
+    kind: 'choice',
+    label: 'Group',
+    primary: true,
+    items: [
+      { value: '', label: 'Any group' },
+      ...GROUPS.map((group) => ({ value: group, label: REPORT_GROUP_LABELS[group] })),
+    ],
   },
-  {
-    key: 'needs',
-    header: 'Asked for by',
-    cell: (row) => (
-      <BadgeList
-        items={row.needs.map((param) => REPORT_PARAM_LABELS[param])}
-        label={(needed) => needed}
-        max={3}
-      />
-    ),
-  },
-];
+] as const satisfies readonly ListFilter[];
+
+const NOTHING = <span className="text-muted-foreground">Nothing</span>;
 
 export function ReportsPage() {
   const { can, identity } = useAuth();
-  const filters = useFilters<'group'>();
-  const open = GROUPS.find((group) => group === filters.get('group')) ?? GROUPS[0];
+  const filters = useFilterSpec(FILTERS);
 
-  if (!can(FEATURE_KEYS.REPORTS) || open === undefined) {
+  if (!can(FEATURE_KEYS.REPORTS)) {
     return (
       <PageFrame>
         <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="Reports are not open to you" />
@@ -71,29 +72,96 @@ export function ReportsPage() {
     );
   }
 
+  const sought = filters.values.q.trim().toLowerCase();
   // A report only a super admin may open is left out for everyone else, not shown and refused.
-  const offered = CATALOGUE.filter((row) => !row.superAdminOnly || identity?.isSuperAdmin);
+  const offered = CATALOGUE.filter((row) => !row.superAdminOnly || identity?.isSuperAdmin)
+    .filter((row) => filters.values.group === '' || row.group === filters.values.group)
+    .filter((row) => row.title.toLowerCase().includes(sought));
+  const shelves = GROUPS.map((group) => ({
+    group,
+    rows: offered.filter((row) => row.group === group),
+  })).filter(({ rows }) => rows.length > 0);
 
   return (
-    <TableFrame
-      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Reports" />}
-      tabs={{
-        value: open,
-        onValueChange: (group) => filters.set({ group }),
-        items: GROUPS.map((group) => ({
-          value: group,
-          label: REPORT_GROUP_LABELS[group],
-          content: (
-            <DataTable
-              columns={COLUMNS}
-              rows={offered.filter((row) => row.group === group)}
-              rowKey={(row) => row.key}
-              isLoading={false}
-              empty="No reports"
-            />
-          ),
-        })),
+    <PageFrame
+      header={
+        <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+          title="Reports"
+          meta={plural(offered.length, 'report')}
+        />
+      }
+      // A search and one choice: nothing for an any-or-all toggle to combine.
+      filters={{
+        spec: FILTERS,
+        state: {
+          values: filters.values,
+          setFilter: filters.setFilter,
+          clearFilters: filters.clearFilters,
+        },
       }}
+      filtersBesideTitle
+    >
+      {shelves.length === 0 ? (
+        <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="No report matches" />
+      ) : (
+        <div className="flex flex-col gap-8">
+          {shelves.map(({ group, rows }) => (
+            <section key={group} className="flex flex-col gap-3">
+              <SectionHeading
+                title={REPORT_GROUP_LABELS[group]}
+                meta={plural(rows.length, 'report')}
+              />
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {rows.map((row) => (
+                  <ReportCard key={row.key} row={row} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+    </PageFrame>
+  );
+}
+
+function Asks({ params }: Readonly<{ params: readonly ReportParam[] }>) {
+  return (
+    <BadgeList
+      items={params.map((param) => REPORT_PARAM_LABELS[param])}
+      label={(asked) => asked}
+      max={3}
+      empty={NOTHING}
+      className="justify-end"
     />
+  );
+}
+
+/** One report among its siblings: what it must be given, what may narrow it, and the period it opens on. */
+function ReportCard({ row }: Readonly<{ row: CatalogueRow }>) {
+  const opensOn = row.needs.includes(REPORT_PARAMS.PERIOD) ? row.period : undefined;
+
+  return (
+    <Link
+      to={ROUTES.REPORT(row.key)}
+      className="group rounded-xl focus-visible:shadow-focus focus-visible:outline-none"
+    >
+      <Card className="flex h-full flex-col gap-3 p-4 transition-[box-shadow,border-color] group-hover:border-ring group-hover:shadow-md">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-md font-semibold tracking-tight text-foreground">{row.title}</span>
+          <ChevronRight aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        </div>
+        <div className="mt-auto flex flex-col gap-1.5">
+          <StatRow label="Needs" value={<Asks params={row.needs} />} />
+          <StatRow label="Optional" value={<Asks params={row.takes ?? []} />} />
+          {opensOn ? <StatRow label="Opens on" value={REPORT_PERIOD_LABELS[opensOn]} /> : null}
+        </div>
+        {row.superAdminOnly ? (
+          <Badge variant="warning" className="self-start">
+            Super admin only
+          </Badge>
+        ) : null}
+      </Card>
+    </Link>
   );
 }

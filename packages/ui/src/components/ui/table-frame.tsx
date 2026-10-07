@@ -156,7 +156,8 @@ function FrameTop({
 }>) {
   if (beside) {
     return (
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
+      // The row gap is for a phone, where the controls wrap under the title and their labels notch upward.
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="flex min-w-0 flex-auto flex-col gap-4">{header}</div>
         <FrameFilterRow filters={filters} beside />
       </div>
