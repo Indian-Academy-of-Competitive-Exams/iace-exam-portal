@@ -107,6 +107,19 @@ describe('Combobox', () => {
     assert.ok(await screen.findByText('Nothing matches that'));
   });
 
+  /** The failure this prevents: a list that did not load read as a search with no match. */
+  it('says the list did not load, with a retry, rather than that nothing matches', async () => {
+    const onRetry = mock.fn();
+    show(box({ items: [], isError: true, onRetry }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    assert.equal(onRetry.mock.callCount(), 1);
+    assert.ok(screen.getByText('Could not load this list.'));
+    assert.equal(screen.queryAllByText('Nothing matches that').length, 0);
+  });
+
   it('does not open when disabled', () => {
     show(box({ disabled: true }));
 

@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { nearTheEnd } from '../../lib/scroll';
+import { EmptyState, EMPTY_STATE_KINDS } from './empty-state';
 import { useDebouncedSearch } from './search-input';
 import { Spinner } from './spinner';
 import { Skeleton } from './skeleton';
@@ -48,6 +49,9 @@ export interface ComboboxListProps {
   onLoadMore?: () => void;
   isLoading?: boolean;
   isLoadingMore?: boolean;
+  /** The list did not load: said in place of `emptyLabel`, with `onRetry` as the way out. */
+  isError?: boolean;
+  onRetry?: () => void;
 
   emptyLabel?: string;
   disabled?: boolean;
@@ -86,6 +90,8 @@ export function ComboboxShell({
   onLoadMore,
   isLoading = false,
   isLoadingMore = false,
+  isError = false,
+  onRetry,
   emptyLabel = 'Nothing matches that',
   disabled = false,
   id,
@@ -121,6 +127,8 @@ export function ComboboxShell({
       </button>
     </PopoverTrigger>
   );
+
+  const absent = !isLoading && items.length === 0;
 
   // What the trigger cut, or what a caller says it is standing in for.
   const revealed = triggerTooltip ?? (labelTruncated ? triggerLabel : null);
@@ -181,7 +189,16 @@ export function ComboboxShell({
           {/* Rows in the shape of the rows that are coming, so the list does
                 not collapse to one line and then jump when they land. */}
           {isLoading ? <OptionSkeleton /> : null}
-          {!isLoading && items.length === 0 ? <Status>{emptyLabel}</Status> : null}
+          {absent && isError ? (
+            <EmptyState
+              size="sm"
+              kind={EMPTY_STATE_KINDS.FAILURE}
+              title="Could not load this list."
+              onRetry={onRetry}
+              className="px-2 py-3"
+            />
+          ) : null}
+          {absent && !isError ? <Status>{emptyLabel}</Status> : null}
 
           {/* Only while there is another page, so a finished list says so by
                 showing nothing rather than a spinner that never resolves. */}
