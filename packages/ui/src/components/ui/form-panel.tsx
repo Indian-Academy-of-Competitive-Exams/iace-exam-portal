@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn, FILLS } from '../../lib/utils';
+import { cn, FILLS, TOUR_ANCHORS } from '../../lib/utils';
 import { Card } from './card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 
@@ -65,7 +65,7 @@ export function FormPanel({
     <>
       {/* The rule runs the card's full width, so the strip reads as the card's own edge. */}
       <div className="shrink-0 border-b border-border px-6 pt-4">
-        <TabsList className="border-b-0">
+        <TabsList data-tour={TOUR_ANCHORS.TABS} className="border-b-0">
           {tabs.items.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}>
               {tab.label}
