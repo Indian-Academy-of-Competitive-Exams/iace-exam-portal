@@ -1,7 +1,7 @@
 /**
  * k6 against a running API. The five load tiers are five scenarios in one file.
  * Paths and payloads mirror packages/contracts; keep them in step with it.
- * Raise RATE_LIMIT_AUTH_PER_MIN on the target first — auth is 120/min per IP.
+ * Raise the target's per-IP auth and OTP limits first — a generator is one address.
  * k6 run -e BASE=https://api.staging -e TIER=sitting scripts/load/exam-event.js
  */
 import http from 'k6/http';
@@ -43,7 +43,7 @@ const savesApplied = new Rate('autosave_applied');
 
 // ---- Accounts --------------------------------------------------------------
 
-/** A CSV of `mobile,pin` beats generated numbers; generated ones assume a seeded block. */
+/** A CSV with a `mobile` column beats generated numbers; a generated one signs itself up on first use. */
 const ACCOUNTS = new SharedArray('accounts', () => {
   if (__ENV.ACCOUNTS) {
     return open(__ENV.ACCOUNTS)
@@ -51,18 +51,15 @@ const ACCOUNTS = new SharedArray('accounts', () => {
       .split('\n')
       .slice(1)
       .filter((line) => line.trim())
-      .map((line) => {
-        const cells = line.split(',');
-        return { mobile: cells[0].trim(), pin: cells[1].trim() };
-      });
+      .map((line) => ({ mobile: line.split(',')[0].trim() }));
   }
   const base = Number(__ENV.MOBILE_BASE || '9000000000');
-  const pin = __ENV.PIN || '1234';
   const count = Number(__ENV.ACCOUNT_COUNT || CANDIDATES);
-  return Array.from({ length: count }, (_, i) => ({ mobile: String(base + i), pin }));
+  return Array.from({ length: count }, (_, i) => ({ mobile: String(base + i) }));
 });
 
-const myAccount = () => ACCOUNTS[(exec.vu.idInTest - 1) % ACCOUNTS.length];
+// Counted per scenario: VU ids are shared across tiers, so two tiers at once would hand one student to two VUs.
+const myAccount = () => ACCOUNTS[exec.scenario.iterationInTest % ACCOUNTS.length];
 
 // ---- One call ---------------------------------------------------------------
 
@@ -105,8 +102,15 @@ function client(token, tier) {
   };
 }
 
+/** Needs the target's `devCode`, which only OTP_SENDER=console in development returns. */
 function login(account, tier, op) {
-  const session = client(null, tier).read('POST', '/auth/student/login', op, account);
+  const anonymous = client(null, tier);
+  const asked = anonymous.read('POST', '/auth/student/otp/request', 'otp_request', account);
+  if (!asked || !asked.devCode) return null;
+  const session = anonymous.read('POST', '/auth/student/otp/verify', op, {
+    mobile: account.mobile,
+    code: asked.devCode,
+  });
   return session ? session.tokens : null;
 }
 
@@ -307,6 +311,7 @@ export const options = {
     'http_req_duration{op:test_paper}': ['p(95)<3000'],
     'http_req_duration{op:brief}': ['p(95)<800'],
     'http_req_duration{op:catalog}': ['p(95)<500'],
+    'http_req_duration{op:otp_request}': ['p(95)<1000'],
     'http_req_duration{op:student_login}': ['p(95)<1000'],
     'http_req_duration{op:refresh}': ['p(95)<500'],
     'http_req_duration{op:scorecard}': ['p(95)<1000'],
@@ -330,7 +335,8 @@ export function setup() {
   if (!selected()[TIERS.SITTING]) return { testId: __ENV.TEST_ID || null, questions: [] };
 
   const tokens = login(ACCOUNTS[0], TIERS.SETUP, 'warmup_login');
-  if (!tokens) exec.test.abort('The first account could not sign in; check ACCOUNTS and the PIN.');
+  if (!tokens)
+    exec.test.abort('The first account could not sign in; the target must return devCode.');
   const api = client(tokens.accessToken, TIERS.SETUP);
 
   let testId = __ENV.TEST_ID;
