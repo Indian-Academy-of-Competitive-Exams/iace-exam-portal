@@ -5,8 +5,10 @@ import { useFieldArray, useForm, useWatch, type Path, type UseFormReturn } from 
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   AppException,
+  ErrorCodes,
   EXAM_TEMPLATE,
   EXAM_TEMPLATES,
+  FEATURE_KEYS,
   LANGUAGE_CODE,
   LANGUAGE_CODES,
   LANGUAGE_MODE,
@@ -15,6 +17,7 @@ import {
   MERIT_TYPES,
   NAVIGATION_POLICIES,
   NAVIGATION_POLICY,
+  PERMISSION_LEVELS,
   TEST_UI,
   TEST_UIS,
   TIMER_TEMPLATE,
@@ -79,6 +82,7 @@ import { minutesFieldOf, secondsFromMinutes } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 import { ExamStagePicker } from '../../components/exam-picker';
 import { SubjectPicker } from '../../components/taxonomy-picker';
+import { sectionsAfterSessionRemoved, sectionsInSession } from './base-config-sessions';
 
 // One stage blueprint; totalQuestions/totalMarks are never typed — the server sums them, and configTotalsOf mirrors that while editing.
 
@@ -308,6 +312,9 @@ export function BaseConfigFormPage() {
   const { id } = useParams();
   const existing = id !== undefined;
   const configId = id ?? '';
+  // Set while it is being edited: a newer version arriving mid-edit must not rebuild the form under the typing.
+  const [held, setHeld] = useState<BaseConfigDetail | null>(null);
+  const editing = held !== null && held.id === id;
 
   const config = useQuery({
     queryKey: baseConfigQueryKey(id),
@@ -330,7 +337,7 @@ export function BaseConfigFormPage() {
     );
   }
 
-  if (existing && (config.error || !config.data)) {
+  if (existing && !editing && (config.error || !config.data)) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}
@@ -340,8 +347,17 @@ export function BaseConfigFormPage() {
     );
   }
 
+  const detail = editing ? held : (config.data ?? null);
+
   // Remounted only when the saved version moves, so a refetch of the same one keeps a half-typed edit.
-  return <ConfigEditor key={config.data?.updatedAt} detail={config.data ?? null} />;
+  return (
+    <ConfigEditor
+      key={detail?.updatedAt}
+      detail={detail}
+      isEditing={editing || !existing}
+      onEditingChange={(next) => setHeld(next ? detail : null)}
+    />
+  );
 }
 
 // ============================================================================
@@ -411,18 +427,28 @@ function EditorBanners({
   );
 }
 
-function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>) {
+function ConfigEditor({
+  detail,
+  isEditing,
+  onEditingChange,
+}: Readonly<{
+  detail: BaseConfigDetail | null;
+  isEditing: boolean;
+  onEditingChange: (editing: boolean) => void;
+}>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { identity } = useAuth();
+  const { identity, can } = useAuth();
+  const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const existing = detail !== null;
   // A locked config can never be edited, so it is the one that never leaves read-only.
   const locked = detail?.locked ?? false;
   const editingBy = detail?.editingBy ?? null;
   const elsewhere = editingBy && editingBy.adminId !== identity?.id ? editingBy : null;
-  const [isEditing, setIsEditing] = useState(!existing);
   const [asking, setAsking] = useState(false);
   const [promoting, setPromoting] = useState<ConfigFormValues | null>(null);
+  const [losingDefault, setLosingDefault] = useState<string | null>(null);
+  const [displaced, setDisplaced] = useState<string | null>(null);
 
   const clone = useMutation({
     meta: { success: 'Configuration cloned.' },
@@ -465,17 +491,14 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       // Closed, or the banner and fields holding the error stay behind its overlay.
       setPromoting(null);
       applyServerErrors(error, form, form.getValues('sections').length);
+      // A save refused as out of date leaves that copy cached, to be opened and refused again.
+      if (AppException.is(error) && error.code === ErrorCodes.CONFLICT) {
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BASE_CONFIGS });
+      }
     },
   });
 
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
-  const stageDefault = useQuery({
-    queryKey: defaultBaseConfigQueryKey(examStageId),
-    queryFn: () => api.admin.baseConfigs.list({ examStageId, defaultOnly: 'true', pageSize: 1 }),
-    enabled: Boolean(examStageId),
-  });
-  // Only a config other than this one can lose the badge; re-saving the default takes nothing.
-  const losingDefault = stageDefault.data?.items.find((row) => row.id !== detail?.id) ?? null;
   const examTemplate = useWatch({ control: form.control, name: 'examTemplate' });
   const defaultTestUi = useWatch({ control: form.control, name: 'defaultTestUi' });
   // A bubble sheet is the default template's affordance; no other skin draws one.
@@ -487,7 +510,26 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   const cancel = () => {
     if (!existing) return navigate(ROUTES.BASE_CONFIGS);
     form.reset();
-    setIsEditing(false);
+    setDisplaced(null);
+    onEditingChange(false);
+  };
+
+  /** A section names its session by position, so the sections follow the removal and the ones it held are named. */
+  const removeSession = (index: number) => {
+    const sessions = form.getValues('modules');
+    const before = form.getValues('sections');
+    const moved = sectionsInSession(before, index).length;
+    const first = sessions.find((_, at) => at !== index);
+
+    modules.remove(index);
+    sectionsAfterSessionRemoved(before, index).forEach((section, at) =>
+      form.setValue(`sections.${at}.moduleOrder`, section.moduleOrder, { shouldDirty: true }),
+    );
+    setDisplaced(
+      first && moved > 0
+        ? `${sessions[index]?.name || `Session ${index + 1}`} held ${plural(moved, 'section')}, now in ${first.name || 'the first session'}.`
+        : null,
+    );
   };
 
   const issues = sectionIssuesOf(save.error);
@@ -497,9 +539,30 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   ]);
 
   /** Taking the stage's default off another configuration is confirmed before anything is saved. */
-  const submit = form.handleSubmit((values) => {
-    if (values.isDefault && losingDefault) return setPromoting(values);
-    save.mutate(values);
+  const submit = form.handleSubmit(async (values) => {
+    if (!values.isDefault || !values.examStageId) return save.mutate(values);
+
+    // Read as the save is made: one from when the form opened may not have answered, or may predate another admin's change.
+    const current = await queryClient
+      .fetchQuery({
+        queryKey: defaultBaseConfigQueryKey(values.examStageId),
+        queryFn: () =>
+          api.admin.baseConfigs.list({
+            examStageId: values.examStageId,
+            defaultOnly: 'true',
+            pageSize: 1,
+          }),
+        staleTime: 0,
+      })
+      .catch(() => null);
+    // The failed read is already announced, and saving unasked is what this exists to stop.
+    if (current === null) return;
+
+    // Only a config other than this one can lose the badge; re-saving the default takes nothing.
+    const losing = current.items.find((row) => row.id !== detail?.id);
+    if (!losing) return save.mutate(values);
+    setLosingDefault(losing.name);
+    setPromoting(values);
   });
 
   return (
@@ -512,7 +575,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             <Button type="button" variant="outline" onClick={cancel}>
               Cancel
             </Button>
-            <Button type="submit" loading={save.isPending}>
+            <Button type="submit" loading={save.isPending || form.formState.isSubmitting}>
               {existing ? 'Save configuration' : 'Create configuration'}
             </Button>
           </>
@@ -525,12 +588,14 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             title={configTitle(detail, isEditing)}
             meta={stageMetaOf(detail)}
             action={
-              <HeaderAction
-                isEditing={isEditing}
-                locked={locked}
-                onClone={() => setAsking(true)}
-                onEdit={() => setIsEditing(true)}
-              />
+              canWrite ? (
+                <HeaderAction
+                  isEditing={isEditing}
+                  locked={locked}
+                  onClone={() => setAsking(true)}
+                  onEdit={() => onEditingChange(true)}
+                />
+              ) : undefined
             }
           />
 
@@ -692,12 +757,14 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
                   type="button"
                   variant="ghost"
                   aria-label={`Remove session ${index + 1}`}
-                  onClick={() => modules.remove(index)}
+                  onClick={() => removeSession(index)}
                 >
                   <Trash2 aria-hidden />
                 </Button>
               </div>
             ))}
+
+            {displaced ? <Alert variant="warning">{displaced}</Alert> : null}
 
             <div className="flex gap-2">
               <Button
@@ -772,7 +839,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         loading={save.isPending}
         title="The stage's default pattern"
         // ui-copy-ok: consequence — a confirm names what it is about to take away
-        description={`${losingDefault?.name ?? 'The current default'} is the stage's default now and stops being it. Tests already built keep the configuration they were created from; only new ones start from this.`}
+        description={`${losingDefault ?? 'The current default'} is the stage's default now and stops being it. Tests already built keep the configuration they were created from; only new ones start from this.`}
         confirmLabel="Make it the default"
         onConfirm={() => promoting && save.mutate(promoting)}
       />
