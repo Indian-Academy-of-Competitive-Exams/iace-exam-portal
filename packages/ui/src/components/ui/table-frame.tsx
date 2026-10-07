@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Button } from './button';
 import { Card } from './card';
 import { FormSection } from './form-panel';
 import { FilterColumn, FilterRow, type FilterState, type ListFilter } from './list-view';
@@ -299,6 +301,8 @@ export interface SplitFrameProps {
   tabs?: TableFrameTabs;
   /** Hands the body's scrolling to its children — a table that scrolls, not the card around it. */
   fills?: boolean;
+  /** Lets the reader fold the side card away, for a body that wants the width once it is asked. */
+  collapsible?: boolean;
   /** Tour stops, for a screen the tour walks. */
   anchors?: { body?: string; side?: string };
   children?: React.ReactNode;
@@ -314,14 +318,23 @@ export function SplitFrame({
   side,
   tabs,
   fills = false,
+  collapsible = false,
   anchors,
   children,
 }: Readonly<SplitFrameProps>) {
   const asked = filters && (filters.spec.length > 0 || filters.leading);
+  const [folded, setFolded] = React.useState(false);
+  const Fold = folded ? PanelRightOpen : PanelRightClose;
 
   const frame = (
     <PageFrame className="lg:overflow-hidden" header={header}>
-      <div className="grid gap-5 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[minmax(0,1fr)]">
+      <div
+        className={cn(
+          // A bare track is as wide as its widest table, which on a phone is wider than the page.
+          'grid grid-cols-[minmax(0,1fr)] gap-5 lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
+          folded ? 'lg:grid-cols-[minmax(0,1fr)_auto]' : 'lg:grid-cols-[minmax(0,1fr)_360px]',
+        )}
+      >
         <Card
           data-tour={anchors?.body}
           className={cn(SPLIT_PANE, 'order-2 gap-4 lg:order-1', !fills && 'lg:overflow-y-auto')}
@@ -331,18 +344,38 @@ export function SplitFrame({
         {/* First on a phone: what the body is asked by is chosen before there is a body to read. */}
         <Card
           data-tour={anchors?.side}
-          className={cn(SPLIT_PANE, 'order-1 gap-6 lg:order-2 lg:overflow-y-auto')}
+          className={cn(
+            SPLIT_PANE,
+            'order-1 lg:order-2',
+            folded ? 'items-end p-2' : 'gap-6 lg:overflow-y-auto',
+          )}
         >
-          {asked ? (
-            <FormSection title="Filters">
-              <FilterColumn
-                state={filters.state}
-                filters={filters.spec}
-                leading={filters.leading}
-              />
-            </FormSection>
+          {collapsible ? (
+            <Button
+              variant="ghost"
+              size="iconSm"
+              className={cn(!folded && 'absolute right-2 top-2')}
+              aria-expanded={!folded}
+              aria-label={folded ? 'Show the side panel' : 'Hide the side panel'}
+              onClick={() => setFolded((was) => !was)}
+            >
+              <Fold aria-hidden />
+            </Button>
           ) : null}
-          {side}
+          {folded ? null : (
+            <>
+              {asked ? (
+                <FormSection title="Filters">
+                  <FilterColumn
+                    state={filters.state}
+                    filters={filters.spec}
+                    leading={filters.leading}
+                  />
+                </FormSection>
+              ) : null}
+              {side}
+            </>
+          )}
         </Card>
       </div>
     </PageFrame>

@@ -15,6 +15,8 @@ export interface DataTableColumn<TRow> {
   header?: React.ReactNode;
   /** Right-aligned tabular figures, for counts and amounts. */
   numeric?: boolean;
+  /** Held at the left edge of a table wider than its frame. One column a table. */
+  pinned?: boolean;
   cell: (row: TRow) => React.ReactNode;
   className?: string;
 }
@@ -165,7 +167,12 @@ function Row<TRow>({
           </TableCell>
         )}
         {columns.map((column) => (
-          <TableCell key={column.key} numeric={column.numeric} className={column.className}>
+          <TableCell
+            key={column.key}
+            numeric={column.numeric}
+            pinned={column.pinned}
+            className={column.className}
+          >
             {column.cell(row)}
           </TableCell>
         ))}
@@ -252,7 +259,7 @@ export function DataTable<TRow>({
             ) : null}
             {expand ? <TableHead className="w-10" /> : null}
             {columns.map((column) => (
-              <TableHead key={column.key} numeric={column.numeric}>
+              <TableHead key={column.key} numeric={column.numeric} pinned={column.pinned}>
                 {column.header}
               </TableHead>
             ))}

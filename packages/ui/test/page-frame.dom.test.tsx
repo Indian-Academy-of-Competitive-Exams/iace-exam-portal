@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { PageFrame, PanelFrame, SplitFrame, TableFrame } from '../src/components/ui/table-frame';
 import { TooltipProvider } from '../src/components/ui/tooltip';
 
@@ -236,6 +236,22 @@ describe('SplitFrame', () => {
     const side = screen.getByText('Figures').parentElement;
     assert.ok(side?.contains(screen.getByLabelText('Branch')));
     assert.equal(screen.getByText('The rows').parentElement?.contains(side ?? null), false);
+  });
+
+  /** Folded away, the panel still has to leave the one control that brings it back. */
+  it('folds its side card away and brings it back', () => {
+    render(
+      <SplitFrame collapsible side={<p>Figures</p>}>
+        <p>The rows</p>
+      </SplitFrame>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the side panel' }));
+    assert.equal(screen.queryByText('Figures'), null);
+    assert.ok(screen.getByText('The rows'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show the side panel' }));
+    assert.ok(screen.getByText('Figures'));
   });
 
   /** The failure this prevents: a card that scrolls around a table that scrolls. */

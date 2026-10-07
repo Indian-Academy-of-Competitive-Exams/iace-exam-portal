@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
@@ -8,13 +7,11 @@ import {
   REPORT_PARAMS,
   REPORT_PARAM_FIELDS,
   REPORT_PERIODS,
-  holdsFigures,
   instituteDateTimeLabel,
   reportFieldsMissing,
   reportKeySchema,
   reportPeriodOf,
   reportQuerySchema,
-  type ReportCell,
   type ReportDocument,
   type ReportFact,
   type ReportKey,
@@ -25,14 +22,18 @@ import {
   type ReportTable,
 } from '@iace/contracts';
 import { reportHtml } from '@iace/app-kit';
-import { PageCrumbs, printHtml, useFilterSpec, useFilters } from '@iace/app-kit/browser';
+import {
+  PageCrumbs,
+  ReportTableView,
+  printHtml,
+  useFilterSpec,
+  useFilters,
+} from '@iace/app-kit/browser';
 import {
   EMPTY_STATE_KINDS,
   FILLS,
-  Alert,
   Badge,
   Button,
-  DataTable,
   EmptyState,
   FormSection,
   PageFrame,
@@ -41,9 +42,7 @@ import {
   SkeletonParagraph,
   SplitFrame,
   StatRow,
-  TruncatedText,
   cn,
-  type DataTableColumn,
   type TableFrameTab,
 } from '@iace/ui';
 import { api } from '../../lib/api';
@@ -53,13 +52,11 @@ import { NAV_ITEMS, REPORT_PARAM_LABELS, reportQueryKey } from '../../lib/consta
 import { useAuth } from '../../providers/auth';
 import { reportFilters } from './report-filters';
 
-/** A screen previews a report; the printer and the spreadsheet carry it whole. */
-const PREVIEW_ROWS = 200;
-
 export function ReportPage() {
   const { key = '' } = useParams();
   const parsed = reportKeySchema.safeParse(key);
-  return parsed.success ? <Report reportKey={parsed.data} /> : <NotFoundPage />;
+  // Keyed, so a panel folded away on one report is back for the next, which has its own to ask.
+  return parsed.success ? <Report key={parsed.data} reportKey={parsed.data} /> : <NotFoundPage />;
 }
 
 const paramsOf = (spec: ReportSpec): readonly ReportParam[] => [
@@ -126,6 +123,7 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
   return (
     <SplitFrame
       fills
+      collapsible
       header={
         <PageHeader
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: spec.title }]} />}
@@ -304,56 +302,18 @@ function Letter({
 
 const DASH = '—';
 
-interface PreviewRow {
-  id: string;
-  cells: readonly ReportCell[];
-}
-
 /** One table of the report: the rows are the only thing in the frame that scrolls. */
 function TablePane({ table }: Readonly<{ table: ReportTable }>) {
-  const rows = useMemo(
-    () => table.rows.slice(0, PREVIEW_ROWS).map((cells, at) => ({ id: String(at), cells })),
-    [table.rows],
-  );
-  const columns = useMemo(
-    () =>
-      table.columns.map((header, at): DataTableColumn<PreviewRow> => ({
-        key: String(at),
-        header,
-        numeric: holdsFigures(table, at),
-        className: 'max-w-[18rem]',
-        cell: (row) => cellOf(row.cells[at] ?? null),
-      })),
-    [table],
-  );
-
+  // Print is cut at the wire's own ceiling; only the spreadsheet is never cut.
+  const carriesAll =
+    table.total > table.rows.length
+      ? `Print carries ${count(table.rows.length)}, and Export every one.`
+      : 'Print and Export carry every one.';
   return (
     <div className={cn(FILLS, 'gap-3')}>
-      {table.total > rows.length ? (
-        <div className="shrink-0 pt-3">
-          <Alert variant="info">{hiddenRows(table, rows.length)}</Alert>
-        </div>
-      ) : null}
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(row) => row.id}
-        isLoading={false}
-        empty="No rows"
-      />
+      <ReportTableView table={table} carriesAll={carriesAll} />
     </div>
   );
 }
 
-function cellOf(value: ReportCell) {
-  return typeof value === 'number' ? value : <TruncatedText>{value}</TruncatedText>;
-}
-
 const count = (rows: number) => rows.toLocaleString('en-IN');
-
-function hiddenRows(table: ReportTable, shown: number): string {
-  const first = `The first ${count(shown)} of ${count(table.total)} rows.`;
-  return table.total > table.rows.length
-    ? `${first} Print carries ${count(table.rows.length)}, and Export every one.`
-    : `${first} Print and Export carry every one.`;
-}

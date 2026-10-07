@@ -26,8 +26,18 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
     // Inside a frame the frame owns the height, so even a paging table fills instead of capping.
     const unframed = scroll ? CAPPED_VIEWPORT : 'overflow-x-auto';
     const viewport = fills ? 'min-h-0 flex-1 overflow-auto' : unframed;
+    // A pinned column rules itself off only once something has slid under it.
+    const [slid, setSlid] = React.useState(false);
+    const onScroll = (event: React.UIEvent<HTMLDivElement>) => {
+      setSlid(event.currentTarget.scrollLeft > 0);
+      scroll?.onScroll?.(event);
+    };
     return (
-      <div onScroll={scroll?.onScroll} className={cn('relative w-full', viewport)}>
+      <div
+        onScroll={onScroll}
+        data-slid={slid || undefined}
+        className={cn('group/table relative w-full', viewport)}
+      >
         <table
           ref={ref}
           className={cn('w-full border-separate border-spacing-0 text-sm', className)}
@@ -72,7 +82,12 @@ const HOVER_BAND = [
 export interface TableCellProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   /** Right-aligned tabular figures, for counts and amounts. */
   numeric?: boolean;
+  /** Held at the left edge once it reaches it, while the rest slide under. One column a table. */
+  pinned?: boolean;
 }
+
+/** Opaque, or the columns sliding under it read through; ruled off only while they do. */
+const PINNED = 'left-0 border-r border-r-transparent group-data-[slid]/table:border-r-border';
 
 /** Inset from the cell, so air opens under it and the rule stays on the cell where nothing bends it. */
 const FLOATING_HEAD = [
@@ -84,7 +99,7 @@ const FLOATING_HEAD = [
 
 /** A surface is not decoration: without one the rows scroll through the heading. */
 const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
-  ({ className, numeric, ...props }, ref) => {
+  ({ className, numeric, pinned, ...props }, ref) => {
     const onCard = useOnCard();
 
     return (
@@ -96,6 +111,8 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
           RULE,
           'px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-muted-foreground',
           numeric && 'text-right tabular-nums',
+          // Above the pinned cells of the rows, which pass under it as the body scrolls.
+          pinned && cn(PINNED, 'z-[2]'),
           className,
         )}
         {...props}
@@ -106,19 +123,24 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
 TableHead.displayName = 'TableHead';
 
 const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
-  ({ className, numeric, ...props }, ref) => (
-    <td
-      ref={ref}
-      className={cn(
-        'px-3 py-2.5 align-middle text-foreground',
-        RULE,
-        HOVER_BAND,
-        numeric && 'text-right tabular-nums',
-        className,
-      )}
-      {...props}
-    />
-  ),
+  ({ className, numeric, pinned, ...props }, ref) => {
+    const onCard = useOnCard();
+
+    return (
+      <td
+        ref={ref}
+        className={cn(
+          'px-3 py-2.5 align-middle text-foreground',
+          RULE,
+          HOVER_BAND,
+          numeric && 'text-right tabular-nums',
+          pinned && cn(PINNED, 'sticky z-[1]', onCard ? 'bg-card' : 'bg-background'),
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
 );
 TableCell.displayName = 'TableCell';
 
