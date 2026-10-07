@@ -3,9 +3,11 @@ import { afterEach, describe, it } from 'node:test';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Editor } from '@tiptap/react';
 import { ScaffoldEditor, type ScaffoldRegion } from '../src/components/ui/scaffold-editor';
+import { Toaster, toast } from '../src/components/ui/toast';
 import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
+afterEach(() => toast.clear());
 
 const REGIONS: ScaffoldRegion[] = [
   { key: 'stem', label: 'Question:', html: '<p>What is 20% of 150?</p>' },
@@ -15,20 +17,30 @@ const REGIONS: ScaffoldRegion[] = [
   { key: 'answer', label: 'Answer:', html: '' },
 ];
 
-function mount(props: Partial<React.ComponentProps<typeof ScaffoldEditor>> = {}) {
+type BoxProps = Partial<React.ComponentProps<typeof ScaffoldEditor>>;
+
+function mount(props: BoxProps = {}) {
   const changes: ScaffoldRegion[][] = [];
-  render(
+  const draw = (next: BoxProps) => (
     <TooltipProvider>
+      <Toaster />
       <ScaffoldEditor
         aria-label="Question"
         regions={REGIONS}
         docKey="one"
         onChange={(regions) => changes.push(regions)}
         {...props}
+        {...next}
       />
-    </TooltipProvider>,
+    </TooltipProvider>
   );
-  return { changes, box: screen.getByRole('textbox', { name: 'Question' }) };
+  const view = render(draw({}));
+  return {
+    changes,
+    box: screen.getByRole('textbox', { name: 'Question' }),
+    /** Another question or another language, the way the page hands one over. */
+    load: (docKey: string, regions: ScaffoldRegion[]) => view.rerender(draw({ docKey, regions })),
+  };
 }
 
 const labels = () =>
@@ -64,14 +76,34 @@ function blocksOf(key: string): string[] {
   return [...(body?.children ?? [])].map((node) => (node.matches('p') ? 'line' : 'figure'));
 }
 
+const CHART = new File(['x'], 'chart.png', { type: 'image/png' });
+
 /** The toolbar's own way in, so the figure arrives the way a typist adds one. */
-async function addFigure(): Promise<void> {
+function chooseFigure(): void {
   const input = document.querySelector('input[type="file"]');
   assert.ok(input);
-  fireEvent.change(input, {
-    target: { files: [new File(['x'], 'chart.png', { type: 'image/png' })] },
-  });
+  fireEvent.change(input, { target: { files: [CHART] } });
+}
+
+async function addFigure(): Promise<void> {
+  chooseFigure();
   await screen.findByRole('button', { name: 'Remove image' });
+}
+
+/** jsdom lays nothing out, so the point a drop lands on is told to it: the first line of a slot. */
+function dropOn(box: HTMLElement, key: string, file: File): boolean {
+  const line = document.querySelector(`[data-region="${key}"] p`);
+  Object.defineProperty(document, 'elementFromPoint', { value: () => line, configurable: true });
+  try {
+    return fireEvent.drop(box, {
+      dataTransfer: {
+        items: [{ kind: 'file', type: file.type, getAsFile: () => file }],
+        getData: () => '',
+      },
+    });
+  } finally {
+    Reflect.deleteProperty(document, 'elementFromPoint');
+  }
 }
 
 /** What Ctrl+A leaves behind, without depending on the browser's own select-all. */
@@ -385,5 +417,400 @@ describe('the keyboard', () => {
     fireEvent.keyDown(box, { key: '\u00ac', code: 'KeyL', altKey: true });
 
     assert.equal(cycled, 1);
+  });
+});
+
+/** The text of every node under `selector` in one slot, in the order it is drawn. */
+const textsOf = (key: string, selector: string) =>
+  [...document.querySelectorAll(`[data-region="${key}"] ${selector}`)].map(
+    (node) => node.textContent,
+  );
+
+describe('Enter where a block has an Enter of its own', () => {
+  /** The failure this prevents: the toolbar offered a list nobody could add a second item to. */
+  it('starts the next bullet, and only leaves the slot once the list is left', () => {
+    const { box } = mount();
+    act(() => down(box, 3));
+    act(() => {
+      fireEvent.click(screen.getByLabelText('Bullet list'));
+      editorOf(box).commands.insertContent('first');
+      fireEvent.keyDown(box, { key: 'Enter' });
+      editorOf(box).commands.insertContent('second');
+    });
+
+    assert.deepEqual(textsOf('option:2', 'li'), ['first', 'second']);
+    assert.equal(caret(box).slot, 3);
+
+    // An empty bullet's Enter ends the list, and the one after that is a plain line's again.
+    act(() => down(box, 2));
+    assert.deepEqual(textsOf('option:2', 'li'), ['first', 'second']);
+    assert.equal(caret(box).slot, 3);
+
+    act(() => down(box, 1));
+    assert.equal(caret(box).slot, 4);
+  });
+
+  it('adds a line inside a table cell', () => {
+    const { box } = mount({
+      regions: [
+        {
+          key: 'stem',
+          label: 'Question:',
+          html: '<table><tbody><tr><td><p>1</p></td><td><p>2</p></td></tr></tbody></table>',
+        },
+        { key: 'option:0', label: '(A)', html: '<p>25</p>' },
+        { key: 'answer', label: 'Answer:', html: '' },
+      ],
+    });
+    act(() => {
+      editorOf(box).commands.insertContent('x');
+      fireEvent.keyDown(box, { key: 'Enter' });
+    });
+
+    assert.deepEqual(textsOf('stem', 'td:first-child p'), ['x', '1']);
+    assert.equal(caret(box).slot, 0);
+  });
+
+  it('still moves on from a plain line', () => {
+    const { box } = mount();
+    act(() => down(box, 1));
+
+    assert.equal(caret(box).slot, 1);
+    assert.deepEqual(textsOf('stem', 'p'), ['What is 20% of 150?']);
+  });
+});
+
+/** ProseMirror calls this prop on every typed character; jsdom raises no input event of its own. */
+function type(box: HTMLElement, text: string): void {
+  const { view } = editorOf(box);
+  for (const char of text) {
+    const { from, to } = view.state.selection;
+    const plain = () => view.state.tr.insertText(char, from, to);
+    const handled = view.someProp('handleTextInput', (handler) =>
+      handler(view, from, to, char, plain),
+    );
+    if (!handled) view.dispatch(plain());
+  }
+}
+
+/** The bank keeps none of these, so a mark the box drew would be gone after the save. */
+describe('formatting the bank does not store', () => {
+  const typedInOptionC = (text: string) => {
+    const { box, changes } = mount();
+    act(() => {
+      down(box, 3);
+      type(box, text);
+    });
+    return changes.at(-1)?.[3]?.html;
+  };
+
+  /** The failure this prevents: "> 5" became a quote, and the option was saved as "5". */
+  it('leaves a leading "> " as the sign it is', () => {
+    assert.equal(typedInOptionC('> 5'), '<p>&gt; 5</p>');
+  });
+
+  it('leaves tildes, back-ticks and a web address as they were typed', () => {
+    assert.equal(
+      typedInOptionC('~~wrong~~ `x` iace.co.in now'),
+      '<p>~~wrong~~ `x` iace.co.in now</p>',
+    );
+  });
+
+  it('leaves a line of back-ticks, a hash and dashes as text', () => {
+    assert.equal(typedInOptionC('``` '), '<p>``` </p>');
+    cleanup();
+    assert.equal(typedInOptionC('# 1'), '<p># 1</p>');
+    cleanup();
+    assert.equal(typedInOptionC('--- '), '<p>--- </p>');
+  });
+
+  /** A tag the box no longer draws must cost its markup and never its words, as it does at the save. */
+  it('keeps the words of markup it does not draw', () => {
+    mount({
+      regions: [
+        { key: 'stem', label: 'Question:', html: '<blockquote><p>&gt; 5</p></blockquote>' },
+        {
+          key: 'option:0',
+          label: '(A)',
+          html: '<p><s>wrong</s> <code>x</code> <a href="https://iace.invalid">here</a></p>',
+        },
+        { key: 'answer', label: 'Answer:', html: '<h2>B</h2>' },
+      ],
+    });
+
+    assert.deepEqual(bodies(), ['> 5', 'wrong x here', 'B']);
+  });
+});
+
+describe('a selection that runs from one slot into another', () => {
+  const WORDS: ScaffoldRegion[] = [
+    { key: 'stem', label: 'Question:', html: '<p>What is 20% of 150?</p>' },
+    { key: 'option:0', label: '(A)', html: '<p>twenty five</p>' },
+    { key: 'option:1', label: '(B)', html: '<p>thirty</p>' },
+    { key: 'answer', label: 'Answer:', html: '<p>B</p>' },
+  ];
+
+  /** Where a word starts in the document, so a selection is made the way a drag would make it. */
+  function before(box: HTMLElement, word: string): number {
+    let found = -1;
+    editorOf(box).state.doc.descendants((node, pos) => {
+      const at = node.text?.indexOf(word) ?? -1;
+      if (at >= 0 && found < 0) found = pos + at;
+    });
+    assert.ok(found >= 0, `"${word}" is in the box`);
+    return found;
+  }
+
+  function selected(from: string, to: string) {
+    const { box } = mount({ regions: WORDS });
+    act(() => {
+      editorOf(box).commands.setTextSelection({ from: before(box, from), to: before(box, to) });
+    });
+    return box;
+  }
+
+  /** The failure this prevents: Backspace took every word of both slots, selected or not. */
+  it('loses to Backspace only the words it covers', () => {
+    const box = selected('20%', 'five');
+    act(() => {
+      fireEvent.keyDown(box, { key: 'Backspace' });
+    });
+
+    assert.deepEqual(bodies(), ['What is', 'five', 'thirty', 'B']);
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'answer']);
+    assert.deepEqual(caret(box), { slot: 0, inText: true });
+  });
+
+  it('empties a slot it covers whole, and keeps the rest of the last one', () => {
+    const box = selected('20%', 'rty');
+    act(() => {
+      fireEvent.keyDown(box, { key: 'Delete' });
+    });
+
+    assert.deepEqual(bodies(), ['What is', '', 'rty', 'B']);
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'answer']);
+  });
+
+  /** The failure this prevents: Cut copied the words and left every one of them in the box. */
+  it('is cut: the words leave the box and are on the clipboard', () => {
+    const box = selected('20%', 'five');
+    const clipboard = new Map<string, string>();
+    act(() => {
+      fireEvent.cut(box, {
+        clipboardData: {
+          clearData: () => clipboard.clear(),
+          setData: (type: string, value: string) => clipboard.set(type, value),
+        },
+      });
+    });
+
+    assert.deepEqual(bodies(), ['What is', 'five', 'thirty', 'B']);
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'answer']);
+    assert.match(clipboard.get('text/plain') ?? '', /20% of 150\?\s+twenty $/);
+  });
+
+  it('gives nothing up to a cut while the box is switched off', () => {
+    const { box } = mount({ regions: WORDS, disabled: true });
+    act(() => {
+      editorOf(box).commands.setTextSelection({
+        from: before(box, '20%'),
+        to: before(box, 'five'),
+      });
+      fireEvent.cut(box, { clipboardData: { clearData: () => {}, setData: () => {} } });
+    });
+
+    assert.deepEqual(bodies(), ['What is 20% of 150?', 'twenty five', 'thirty', 'B']);
+  });
+
+  it('leaves a cut inside one slot to the editor', () => {
+    const box = selected('20%', 'of');
+    const clipboard = new Map<string, string>();
+    act(() => {
+      fireEvent.cut(box, {
+        clipboardData: {
+          clearData: () => clipboard.clear(),
+          setData: (type: string, value: string) => clipboard.set(type, value),
+        },
+      });
+    });
+
+    assert.deepEqual(bodies(), ['What is of 150?', 'twenty five', 'thirty', 'B']);
+    assert.equal(clipboard.get('text/plain'), '20% ');
+  });
+});
+
+const BLANK = REGIONS.map((region) => ({ ...region, html: '' }));
+
+describe('loading another language or the next question', () => {
+  function loaded() {
+    const { box, changes, load } = mount();
+    act(() => type(box, 'English '));
+    load('one:hi', BLANK);
+    changes.length = 0;
+    return { box, changes };
+  }
+
+  /** The failure this prevents: Undo brought the English text into the Hindi slots, to be saved as Hindi. */
+  it('is not a step Undo takes back', () => {
+    const { box, changes } = loaded();
+    act(() => {
+      editorOf(box).commands.undo();
+      editorOf(box).commands.undo();
+    });
+
+    assert.equal(bodies().join(''), '');
+    assert.deepEqual(changes, []);
+  });
+
+  it('leaves Undo to take back what was typed since', () => {
+    const { box } = loaded();
+    act(() => type(box, 'namaste'));
+    assert.equal(bodies()[0], 'namaste');
+
+    act(() => {
+      editorOf(box).commands.undo();
+    });
+
+    assert.equal(bodies().join(''), '');
+  });
+});
+
+describe('a picture that is still uploading', () => {
+  /** An upload the test finishes when it chooses to, the way a large picture arrives late. */
+  function slowUpload() {
+    let arrive = () => {};
+    const upload = () =>
+      new Promise<{ key: string; url: string }>((resolve) => {
+        arrive = () => resolve({ key: 'k', url: 'https://iace.invalid/chart.png' });
+      });
+    return { upload, arrive: () => act(async () => arrive()) };
+  }
+
+  /** The failure this prevents: it landed wherever the caret had got to by the time it arrived. */
+  it('lands where it was chosen, and leaves the caret with the typist who moved on', async () => {
+    const slow = slowUpload();
+    const { box } = mount({ onUploadImage: slow.upload });
+    act(() => down(box, 2));
+    chooseFigure();
+    act(() => {
+      down(box, 1);
+      type(box, 'typed meanwhile');
+    });
+    await slow.arrive();
+    await screen.findByRole('button', { name: 'Remove image' });
+
+    assert.deepEqual(blocksOf('option:1'), ['figure', 'line']);
+    assert.deepEqual(blocksOf('option:2'), ['line']);
+    assert.equal(bodies()[3], 'typed meanwhile');
+    assert.deepEqual(caret(box), { slot: 3, inText: true });
+  });
+
+  it('lands where it was dropped, which is not where the caret is', async () => {
+    const { box } = mount({ onUploadImage: upload });
+    act(() => down(box, 2));
+    const left = dropOn(box, 'answer', CHART);
+    await screen.findByRole('button', { name: 'Remove image' });
+
+    assert.equal(left, false, 'the box claims the drop');
+    assert.deepEqual(blocksOf('answer'), ['figure', 'line']);
+    assert.deepEqual(blocksOf('option:1'), ['line']);
+  });
+
+  /** The failure this prevents: it arrived in the other language, or in the next question's blank box. */
+  it('is not added to a question loaded since, and says so', async () => {
+    const slow = slowUpload();
+    const { box, load } = mount({ onUploadImage: slow.upload });
+    chooseFigure();
+    load('two', BLANK);
+    await slow.arrive();
+
+    assert.ok(await screen.findByText(/was not added/));
+    assert.equal(box.querySelectorAll('img').length, 0);
+  });
+
+  /** Only a load takes its place away: an edit beside it must never cost the typist the picture. */
+  it('still lands in its slot when the words around it are deleted meanwhile', async () => {
+    const slow = slowUpload();
+    const { box } = mount({ onUploadImage: slow.upload });
+    act(() => {
+      editorOf(box).commands.setTextSelection(5);
+    });
+    chooseFigure();
+    act(() => {
+      editorOf(box).commands.selectAll();
+      fireEvent.keyDown(box, { key: 'Backspace' });
+    });
+    await slow.arrive();
+    await screen.findByRole('button', { name: 'Remove image' });
+
+    assert.equal(document.querySelectorAll('[data-region="stem"] img').length, 1);
+    assert.equal(box.querySelectorAll('img').length, 1);
+  });
+
+  /** The failure this prevents: the first to arrive took the blank line, and the rest had nowhere to go. */
+  it('is joined by the others pasted with it onto one blank line', async () => {
+    const { box } = mount({ onUploadImage: upload });
+    act(() => down(box, 3));
+    const pasted = ['one.png', 'two.png', 'three.png'].map((name) => {
+      const file = new File(['x'], name, { type: 'image/png' });
+      return { kind: 'file', type: file.type, getAsFile: () => file };
+    });
+    await act(async () => {
+      fireEvent.paste(box, { clipboardData: { items: pasted, getData: () => '' } });
+    });
+    await screen.findAllByRole('button', { name: 'Remove image' });
+
+    assert.deepEqual(blocksOf('option:2'), ['figure', 'figure', 'figure', 'line']);
+    assert.deepEqual(caret(box), { slot: 3, inText: true });
+  });
+});
+
+describe('a file the box cannot take', () => {
+  /** The failure this prevents: unclaimed, the browser opened the file in place of the page. */
+  it('is refused out loud when it is dropped, rather than left to the browser', async () => {
+    const { box, changes } = mount({ onUploadImage: upload });
+    const paper = new File(['x'], 'paper.pdf', { type: 'application/pdf' });
+    const left = dropOn(box, 'option:2', paper);
+
+    assert.equal(left, false, 'the box claims the drop');
+    assert.ok(await screen.findByText(/not accepted/));
+    assert.deepEqual(changes, []);
+  });
+});
+
+describe('a slot that holds a value', () => {
+  const VALUED: ScaffoldRegion[] = [
+    { key: 'stem', label: 'Question:', html: '<p>Which curve is it?</p>' },
+    { key: 'answer', label: 'Answer', html: '', roman: true },
+    { key: 'solution', label: 'Explanation', html: '' },
+  ];
+
+  /** The failure this prevents: the picture was read back as the answer "[image]", and saved. */
+  it('takes no picture, and says it takes text only', async () => {
+    const { box, changes } = mount({ onUploadImage: upload, regions: VALUED });
+    act(() => down(box, 1));
+    chooseFigure();
+
+    assert.ok(await screen.findByText(/Answer takes text only/));
+    assert.equal(box.querySelectorAll('img').length, 0);
+    assert.deepEqual(changes, []);
+  });
+
+  it('leaves a slot of prose beside it to take one', async () => {
+    const { box } = mount({ onUploadImage: upload, regions: VALUED });
+    act(() => down(box, 2));
+    await addFigure();
+
+    assert.deepEqual(blocksOf('solution'), ['figure', 'line']);
+  });
+
+  it('still takes typing once it has refused a picture', async () => {
+    const { box, changes } = mount({ onUploadImage: upload, regions: VALUED });
+    act(() => down(box, 1));
+    chooseFigure();
+    await screen.findByText(/Answer takes text only/);
+    act(() => type(box, 'B'));
+
+    assert.equal(changes.at(-1)?.[1]?.html, '<p>B</p>');
   });
 });

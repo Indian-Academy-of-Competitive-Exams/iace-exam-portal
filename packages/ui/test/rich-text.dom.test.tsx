@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import * as React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { Editor } from '@tiptap/react';
 import { RichText } from '../src/components/ui/rich-text';
 import { FormPanel } from '../src/components/ui/form-panel';
 import { TooltipProvider } from '../src/components/ui/tooltip';
@@ -96,6 +97,46 @@ describe('RichText', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Insert' }));
 
       assert.match(html, /data-latex="x\^2"/);
+    });
+
+    /** The failure this prevents: a display equation could only be deleted and typed again. */
+    it('reopens on a display equation, and rewrites it in place', async () => {
+      let html = '';
+      show(
+        <RichText
+          value='<div data-type="block-math" data-latex="x^2"></div><p>after</p>'
+          onChange={(next) => (html = next)}
+        />,
+      );
+
+      const equation = document.querySelector('.ProseMirror [data-type="block-math"]');
+      assert.ok(equation);
+      fireEvent.click(equation);
+      const field = (await screen.findByLabelText('LaTeX')) as HTMLInputElement;
+      assert.equal(field.value, 'x^2');
+
+      fireEvent.change(field, { target: { value: 'y^3' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+
+      assert.match(html, /^<div data-latex="y\^3" data-type="block-math"><\/div><p>after<\/p>$/);
+    });
+
+    it('still rewrites one that sits in a line', async () => {
+      let html = '';
+      show(
+        <RichText
+          value='<p>is <span data-type="inline-math" data-latex="x^2"></span></p>'
+          onChange={(next) => (html = next)}
+        />,
+      );
+
+      const equation = document.querySelector('.ProseMirror [data-type="inline-math"]');
+      assert.ok(equation);
+      fireEvent.click(equation);
+      fireEvent.change(await screen.findByLabelText('LaTeX'), { target: { value: 'y^3' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+
+      assert.match(html, /^<p>is <span data-latex="y\^3" data-type="inline-math"><\/span><\/p>$/);
     });
   });
 });
@@ -224,13 +265,19 @@ describe('an image the field will not take', () => {
   const file = (size: number, type = 'image/png') =>
     new File([new Uint8Array(size)], 'a.png', { type });
   const stubView = {} as never;
+  /** A real box: an upload marks its place in the document before a byte is sent. */
+  const boxView = () => {
+    show(<RichText value="" onChange={noop} onUploadImage={never} />);
+    const box = document.querySelector('.ProseMirror') as HTMLElement & { editor: Editor };
+    return box.editor.view;
+  };
 
   afterEach(() => toast.clear());
 
   /** It reached the server, the server refused it, and nothing told anybody. */
   it('says so when the upload is refused, rather than failing silently', async () => {
     render(<Toaster />);
-    insertUploaded(stubView, file(10), () =>
+    insertUploaded(boxView(), file(10), () =>
       Promise.reject(new Error('That image is larger than 2MB.')),
     );
 
@@ -240,7 +287,7 @@ describe('an image the field will not take', () => {
   /** A blank toast is dropped, so a refusal with no words of its own must still say something. */
   it('says so even when the refusal carries no message', async () => {
     render(<Toaster />);
-    insertUploaded(stubView, file(10), () => Promise.reject(new Error('')));
+    insertUploaded(boxView(), file(10), () => Promise.reject(new Error('')));
 
     assert.ok(await screen.findByText(/could not be uploaded/));
   });
@@ -263,7 +310,7 @@ describe('an image the field will not take', () => {
   it('lets an acceptable file through to the uploader', () => {
     let asked = false;
     insertUploaded(
-      stubView,
+      boxView(),
       file(10),
       () => {
         asked = true;

@@ -7,6 +7,7 @@ import {
   type Extensions,
   type JSONContent,
 } from '@tiptap/react';
+import type { Node as ProseNode } from '@tiptap/pm/model';
 import type { EditorProps } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
@@ -18,7 +19,13 @@ import { TableTools } from './rich-text-table';
 import { useFormDisabled } from './form-panel';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
 import { TextSizeMark } from './rich-text-size';
-import { QuestionImage, takeImages, type ImageLimits, type UploadImage } from './rich-text-image';
+import {
+  QuestionImage,
+  refuseFiles,
+  takeImages,
+  type ImageLimits,
+  type UploadImage,
+} from './rich-text-image';
 
 export interface RichTextProps {
   value: string;
@@ -65,6 +72,17 @@ const OFF = 'cursor-not-allowed border-disabled-border bg-disabled text-disabled
 /** ProseMirror owns the inner element, so its own classes go on through `editorProps`. */
 const CONTENT = 'rich-content outline-none [&_.ProseMirror]:outline-none [&_p]:m-0';
 
+/** What the bank does not keep, switched off in the kit so no box draws formatting a save would drop. */
+export const NOT_STORED = {
+  blockquote: false,
+  code: false,
+  codeBlock: false,
+  heading: false,
+  horizontalRule: false,
+  link: false,
+  strike: false,
+} as const;
+
 interface QuestionEditorOptions {
   editable: boolean;
   /** The kit and the box's own nodes; the marks, images and maths every box shares follow them. Stable, or every render runs `setOptions`. */
@@ -99,22 +117,23 @@ export function useQuestionEditor({
   const [started] = React.useState(content);
   const takesImages = Boolean(onUploadImage);
 
-  const all = React.useMemo(
-    () => [
+  const all = React.useMemo(() => {
+    const math = {
+      // A half-typed formula shows in red rather than taking the editor down with it.
+      katexOptions: { throwOnError: false },
+      onClick: (node: ProseNode, pos: number) =>
+        setMath({ latex: String(node.attrs.latex ?? ''), pos }),
+    };
+    return [
       ...extensions,
       Superscript,
       Subscript,
       TextSizeMark,
       ...(takesImages ? [QuestionImage] : []),
-      // A half-typed formula shows in red rather than taking the editor down with it.
-      BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
-      InlineMathAtDollar.configure({
-        katexOptions: { throwOnError: false },
-        onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
-      }),
-    ],
-    [extensions, takesImages],
-  );
+      BlockMathAtDollars.configure(math),
+      InlineMathAtDollar.configure(math),
+    ];
+  }, [extensions, takesImages]);
 
   const props = React.useMemo<EditorProps>(
     () => ({
@@ -127,13 +146,14 @@ export function useQuestionEditor({
           takes.current.onUploadImage,
           takes.current.imageLimits,
         ),
-      handleDrop: (view, event) =>
-        takeImages(
-          view,
-          (event as DragEvent).dataTransfer,
-          takes.current.onUploadImage,
-          takes.current.imageLimits,
-        ),
+      handleDrop: (view, event) => {
+        const { dataTransfer, clientX, clientY } = event as DragEvent;
+        const { onUploadImage: upload, imageLimits: limits } = takes.current;
+        const at = view.posAtCoords({ left: clientX, top: clientY })?.pos;
+        return (
+          takeImages(view, dataTransfer, upload, limits, at) || refuseFiles(dataTransfer, limits)
+        );
+      },
     }),
     [editorProps],
   );
@@ -180,9 +200,10 @@ export function RichText({
 
   const extensions = React.useMemo(
     () => [
-      StarterKit.configure(
-        singleLine ? { heading: false, bulletList: false, orderedList: false } : {},
-      ),
+      StarterKit.configure({
+        ...NOT_STORED,
+        ...(singleLine ? { bulletList: false, orderedList: false } : {}),
+      }),
       ...(singleLine ? [] : [TableKit.configure({ table: { resizable: true } }), TableTools]),
     ],
     [singleLine],

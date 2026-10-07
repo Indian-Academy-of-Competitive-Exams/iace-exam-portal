@@ -242,7 +242,14 @@ export function RichTextToolbar({
     const { latex, pos } = math;
 
     if (pos === null) editor.chain().focus().insertInlineMath({ latex }).run();
-    else editor.chain().setNodeSelection(pos).updateInlineMath({ latex }).focus().run();
+    else {
+      const at = editor.chain().setNodeSelection(pos);
+      const display = editor.state.doc.nodeAt(pos)?.isBlock;
+      const updated = display
+        ? at.updateBlockMath({ latex, pos })
+        : at.updateInlineMath({ latex, pos });
+      updated.focus().run();
+    }
 
     onMathChange(null);
   };

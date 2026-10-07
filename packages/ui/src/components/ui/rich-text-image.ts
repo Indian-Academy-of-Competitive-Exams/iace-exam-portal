@@ -1,13 +1,51 @@
 import { ResizableNodeView } from '@tiptap/core';
 import { Image } from '@tiptap/extension-image';
 import { type Node as ProseNode } from '@tiptap/pm/model';
-import { Selection } from '@tiptap/pm/state';
+import { Plugin, PluginKey, Selection, type Transaction } from '@tiptap/pm/state';
 import { type EditorView } from '@tiptap/pm/view';
 import { REMOVE_LABELS, removeControl } from './rich-text-remove';
 import { toast } from './toast';
 
 /** What the app does with the bytes. `packages/ui` carries no api client, so this is passed in. */
 export type UploadImage = (file: File) => Promise<{ key: string; url: string }>;
+
+type Places = ReadonlyMap<symbol, number>;
+type PlaceChange = { hold: symbol; at: number } | { release: symbol };
+
+/** Where each picture still uploading will land: marked as it starts, and moved by every edit made while it does. */
+const PLACES = new PluginKey<Places>('figurePlaces');
+
+/** A step that swaps the document end to end is another question or language arriving, which no edit inside one is. */
+function replacesDocument(tr: Transaction): boolean {
+  return tr.steps.some((step, index) => {
+    const size = tr.docs[index]?.content.size;
+    let whole = false;
+    step.getMap().forEach((from, to) => {
+      if (from === 0 && to === size) whole = true;
+    });
+    return whole;
+  });
+}
+
+const figurePlaces = new Plugin<Places>({
+  key: PLACES,
+  state: {
+    init: () => new Map(),
+    apply(tr, places) {
+      const change = tr.getMeta(PLACES) as PlaceChange | undefined;
+      if (!change && !tr.docChanged) return places;
+
+      const next = new Map<symbol, number>();
+      // Nothing bound for the document that left may land in the one that replaced it.
+      if (!replacesDocument(tr)) {
+        for (const [upload, pos] of places) next.set(upload, tr.mapping.map(pos));
+      }
+      if (change && 'hold' in change) next.set(change.hold, change.at);
+      else if (change) next.delete(change.release);
+      return next;
+    },
+  },
+});
 
 /** `data-key` is durable and `src` is per-session: the server strips src, so no image can rot. */
 export const QuestionImage = Image.extend({
@@ -17,6 +55,10 @@ export const QuestionImage = Image.extend({
       'data-key': { default: null },
       width: { default: null },
     };
+  },
+
+  addProseMirrorPlugins() {
+    return [figurePlaces];
   },
 
   /** A figure carries its own way out and its own corner to drag, the way a document does. */
@@ -73,7 +115,7 @@ export const QuestionImage = Image.extend({
   },
 });
 
-const FIGURE_NODE = 'image';
+export const FIGURE_NODE = 'image';
 
 /** Below this a figure is a dot nobody can grab, let alone read. */
 const IMAGE_MIN_PX = 40;
@@ -117,12 +159,16 @@ function refusalFor(file: File, limits: ImageLimits): string | null {
   return null;
 }
 
-/** Uploads first, then inserts, against the view: paste and drop hold only that, not the editor. */
+const NOT_ACCEPTED = 'That file type is not accepted here.';
+const PLACE_GONE = 'That image was not added: the question changed while it was uploading';
+
+/** Uploads first, then inserts where it was put, against the view: paste and drop hold only that, not the editor. */
 export function insertUploaded(
   view: EditorView,
   file: File,
   upload: UploadImage,
   limits: ImageLimits = {},
+  at?: number,
 ): void {
   const refusal = refusalFor(file, limits);
   if (refusal) {
@@ -130,24 +176,41 @@ export function insertUploaded(
     return;
   }
 
+  const place = Symbol(file.name);
+  const mark = (change: PlaceChange) => view.dispatch(view.state.tr.setMeta(PLACES, change));
+  mark({ hold: place, at: at ?? view.state.selection.from });
+  const waiting = view.state.selection;
+
   // A rejection here was silently swallowed: the server refused the file and nothing said so.
   void upload(file)
     .then(({ key, url }) => {
-      const type = view.state.schema.nodes.image;
+      if (view.isDestroyed) return;
+      const type = view.state.schema.nodes[FIGURE_NODE];
       if (!type) throw new Error('This field does not take images');
-      view.focus();
-      insertFigure(view, type.create({ src: url, 'data-key': key }));
+      const pos = PLACES.getState(view.state)?.get(place);
+      if (pos === undefined) throw new Error(PLACE_GONE);
+      // The caret follows only a typist who waited: one typing elsewhere keeps it.
+      const follow = view.state.selection.eq(waiting);
+      insertFigure(view, type.create({ src: url, 'data-key': key }), pos, follow);
     })
     .catch((error: unknown) =>
       toast.error((error instanceof Error && error.message) || 'That image could not be uploaded'),
-    );
+    )
+    .finally(() => {
+      if (!view.isDestroyed) mark({ release: place });
+    });
 }
 
 /** A figure is a block, so the caret goes to the line beneath it, and that line is made where there is none. */
-function insertFigure(view: EditorView, figure: ProseNode): void {
-  const tr = view.state.tr.replaceSelectionWith(figure);
+function insertFigure(view: EditorView, figure: ProseNode, at: number, follow: boolean): void {
+  const $at = view.state.doc.resolve(at);
+  const blank = $at.parent.isTextblock && $at.parent.content.size === 0;
+  const fits = blank && $at.node(-1).canReplaceWith($at.index(-1), $at.index(-1), figure.type);
+  // Above a blank line rather than in place of it, so the line is still there for a second picture bound for it.
+  const from = fits ? $at.before() : at;
+  const tr = view.state.tr.replaceRangeWith(from, from, figure);
   // Where the insertion ended, read off its step the way ProseMirror places its own caret.
-  let end = tr.selection.from;
+  let end = from;
   tr.mapping.maps.at(-1)?.forEach((_from, _to, _start, inserted) => {
     end = inserted;
   });
@@ -158,7 +221,11 @@ function insertFigure(view: EditorView, figure: ProseNode): void {
     if (line) tr.insert(end, line);
   }
 
-  view.dispatch(tr.setSelection(Selection.near(tr.doc.resolve(end), 1)).scrollIntoView());
+  if (follow) {
+    view.focus();
+    tr.setSelection(Selection.near(tr.doc.resolve(end), 1)).scrollIntoView();
+  }
+  view.dispatch(tr);
 }
 
 /** True when it swallowed the event, which is what stops ProseMirror inlining the bytes itself. */
@@ -167,11 +234,22 @@ export function takeImages(
   data: DataTransfer | null,
   upload: UploadImage | undefined,
   limits: ImageLimits | undefined,
+  at?: number,
 ): boolean {
   if (!upload) return false;
   const files = imageFilesIn(data);
   if (files.length === 0) return false;
 
-  for (const file of files) insertUploaded(view, file, upload, limits);
+  for (const file of files) insertUploaded(view, file, upload, limits, at);
+  return true;
+}
+
+/** A dropped file nobody took is refused out loud: left alone, the browser opens it in place of the page. */
+export function refuseFiles(data: DataTransfer | null, limits: ImageLimits = {}): boolean {
+  const dropped = [...(data?.items ?? [])].find((item) => item.kind === 'file');
+  if (!dropped) return false;
+
+  const file = dropped.getAsFile();
+  toast.error((file && refusalFor(file, limits)) ?? NOT_ACCEPTED);
   return true;
 }

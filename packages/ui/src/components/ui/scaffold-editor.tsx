@@ -10,12 +10,13 @@ import { TableTools } from './rich-text-table';
 import { Transliterate, writeIn, type IndicScript } from './rich-text-transliterate';
 import { RichTextToolbar } from './rich-text-toolbar';
 import type { ImageLimits, UploadImage } from './rich-text-image';
-import { useQuestionEditor } from './rich-text';
+import { NOT_STORED, useQuestionEditor } from './rich-text';
 import {
   REGION_KIND,
   REGION_NODE,
   ScaffoldDocument,
   ScaffoldRegionNode,
+  TRANSACTION_META,
   seatLoadedScaffold,
   whileLoadingScaffold,
   writtenIn,
@@ -69,7 +70,7 @@ const CONTENT =
 
 /** Built once: a fresh array of configured extensions fails `useEditor`'s compare, and every render then rebuilds the view's props. */
 const EXTENSIONS = [
-  StarterKit.configure({ document: false, heading: false, horizontalRule: false }),
+  StarterKit.configure({ ...NOT_STORED, document: false }),
   ScaffoldDocument,
   ScaffoldRegionNode,
   TableKit.configure({ table: { resizable: true } }),
@@ -172,6 +173,7 @@ export function ScaffoldEditor({
     () => ({
       handleKeyDown: (view: EditorView, event: KeyboardEvent) =>
         handleKey(view, event, run.current),
+      handleDOMEvents: { cut: cutAcrossSlots },
       attributes: {
         class: CONTENT,
         role: 'textbox',
@@ -207,7 +209,14 @@ export function ScaffoldEditor({
   React.useEffect(() => {
     if (!editor || loaded.current === docKey) return;
     loaded.current = docKey;
-    whileLoadingScaffold(() => editor.commands.setContent(docFrom(regions), { emitUpdate: false }));
+    // Out of the history, or Undo would bring the last question or language back into this one.
+    whileLoadingScaffold(() =>
+      editor
+        .chain()
+        .setMeta(TRANSACTION_META.ADD_TO_HISTORY, false)
+        .setContent(docFrom(regions), { emitUpdate: false })
+        .run(),
+    );
     // Back at the first slot, which after a save is the stem of the next question.
     if (!disabled) editor.commands.focus('start');
   }, [editor, docKey, regions, disabled]);
@@ -259,7 +268,9 @@ function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext):
 
   const index = regionIndexAt(view);
 
-  if (event.key === 'Enter' && !event.shiftKey) return moveToRegion(view, index + 1, false);
+  if (event.key === 'Enter' && !event.shiftKey) {
+    return !ownsEnter(view) && moveToRegion(view, index + 1, false);
+  }
 
   if (event.key === 'ArrowDown' && atEdge(view, 'end')) {
     return moveToRegion(view, index + 1, false);
@@ -272,27 +283,47 @@ function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext):
   return false;
 }
 
-/** A selection past one slot empties what it covers; deleting it would take the scaffold. */
+/** A slot is depth 1 and a line in it 2, so a caret any deeper is in a list item or a table cell, whose Enter is its own. */
+function ownsEnter(view: EditorView): boolean {
+  return view.state.selection.$from.depth > 2;
+}
+
+/** A selection past one slot loses what it covers in each, slot by slot; deleting it whole would join the slots. */
 function clearAcrossSlots(view: EditorView): boolean {
-  const { selection, doc, schema, tr } = view.state;
+  const { selection, doc, tr } = view.state;
   if (selection.empty) return false;
 
   const first = doc.resolve(selection.from).index(0);
   const last = doc.resolve(Math.min(selection.to, doc.content.size - 1)).index(0);
   if (first >= last) return false;
 
-  // The schema this editor is built on always defines a paragraph; without one there is no doc.
-  const paragraph = schema.nodes.paragraph;
-  if (paragraph === undefined) return false;
-
-  // Backwards, so each replacement leaves the positions of the ones before it alone.
+  let from = selection.from;
+  // Backwards, so each deletion leaves the positions of the ones before it alone.
   for (let index = last; index >= first; index -= 1) {
-    const start = startOf(doc, index);
-    tr.replaceWith(start + 1, start + doc.child(index).nodeSize - 1, paragraph.create());
+    const start = startOf(doc, index) + 1;
+    from = Math.max(start, selection.from);
+    const to = Math.min(start + doc.child(index).content.size, selection.to);
+    if (from < to) tr.delete(from, to);
   }
 
-  view.dispatch(tr);
-  return moveToRegion(view, first, false);
+  view.dispatch(tr.setSelection(Selection.near(tr.doc.resolve(from))));
+  view.focus();
+  return true;
+}
+
+/** ProseMirror's own cut deletes across the slots, which the scaffold refuses, leaving a cut that only copied. */
+function cutAcrossSlots(view: EditorView, event: ClipboardEvent): boolean {
+  const data = event.clipboardData;
+  const cut = view.state.selection.content();
+  // A box that is switched off still hears the event, and has nothing to give up.
+  if (!data || !view.editable || !clearAcrossSlots(view)) return false;
+
+  const { dom, text } = view.serializeForClipboard(cut);
+  event.preventDefault();
+  data.clearData();
+  data.setData('text/html', dom.innerHTML);
+  data.setData('text/plain', text);
+  return true;
 }
 
 function atEdge(view: EditorView, edge: 'start' | 'end'): boolean {
