@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AppException, ErrorCodes, type SatSitting } from '@iace/contracts';
-import { everySitting, isBriefRefused, resultsByTest } from '../src/catalog';
+import { everySitting, isBriefRefused, minutes, resultsByTest } from '../src/catalog';
 
 test('a brief the server will not show this student is a refusal', () => {
   assert.equal(isBriefRefused(new AppException(ErrorCodes.NOT_FOUND)), true, 'an unreachable test');
@@ -52,4 +52,12 @@ test('every sitting reaches a tile, and only the charted ones carry a standing',
   });
   assert.equal(results.get('paper-b')?.percentile, 91);
   assert.deepEqual(everySitting(undefined), []);
+});
+
+test('minutes reads a time in whole seconds under a minute and whole minutes from there', () => {
+  assert.equal(minutes(43.6667), '44s');
+  assert.equal(minutes(59.6), '1m');
+  assert.equal(minutes(45), '45s');
+  assert.equal(minutes(125), '2m');
+  assert.equal(minutes(null), '—');
 });

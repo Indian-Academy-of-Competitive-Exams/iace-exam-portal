@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { nextPageParam } from '../src/use-infinite-pages';
+import { loadedItems, nextPageParam } from '../src/use-infinite-pages';
 
 const page = (over: Partial<{ page: number; pageSize: number; total: number; items: number }>) => {
   const { page: p = 1, pageSize = 100, total = 250, items = pageSize } = over;
@@ -40,5 +40,38 @@ describe('nextPageParam', () => {
   /** Counted from what loaded, not the echoed page number, or a broken server loops. */
   it('counts loaded pages rather than trusting the echoed page number', () => {
     assert.equal(nextPageParam(page({ page: 1, total: 250 }), 2), 3);
+  });
+});
+
+const rows = (...ids: string[]) => ({
+  page: 1,
+  pageSize: 2,
+  total: 4,
+  items: ids.map((id) => ({ id })),
+});
+
+/** Pages are cut by position, so a row arriving between two loads pushes one onto the next page. */
+describe('loadedItems', () => {
+  it('lists a row once when it slid onto the next page', () => {
+    assert.deepEqual(loadedItems([rows('n3', 'n2'), rows('n2', 'n1')]), [
+      { id: 'n3' },
+      { id: 'n2' },
+      { id: 'n1' },
+    ]);
+  });
+
+  it('keeps every row of pages that do not overlap, in the order they came', () => {
+    assert.deepEqual(loadedItems([rows('n4', 'n3'), rows('n2', 'n1')]), [
+      { id: 'n4' },
+      { id: 'n3' },
+      { id: 'n2' },
+      { id: 'n1' },
+    ]);
+  });
+
+  it('leaves rows that carry no id as they came', () => {
+    const page = { page: 1, pageSize: 2, total: 2, items: ['a', 'a'] };
+
+    assert.deepEqual(loadedItems([page]), ['a', 'a']);
   });
 });

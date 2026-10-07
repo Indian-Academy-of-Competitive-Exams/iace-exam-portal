@@ -79,3 +79,10 @@ test('downloadOf names the newest sitting until one is chosen, and asks for noth
   });
   assert.equal(downloadOf(DOWNLOAD_KINDS.TEST, '', [], TODAY), null);
 });
+
+test('downloadOf falls back to the newest sitting once the chosen one is no longer among them', () => {
+  assert.deepEqual(downloadOf(DOWNLOAD_KINDS.TEST, 'voided', SITTINGS, TODAY)?.query, {
+    attemptId: '2',
+  });
+  assert.equal(downloadOf(DOWNLOAD_KINDS.TEST, 'voided', [], TODAY), null);
+});

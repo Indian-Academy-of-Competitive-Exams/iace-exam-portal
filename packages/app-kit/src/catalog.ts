@@ -152,6 +152,7 @@ export function sittingHint(point: PerformancePoint): string {
 /** Seconds read as minutes on a result screen; nobody counts a paper in seconds. */
 export function minutes(seconds: number | null): string {
   if (seconds === null) return '—';
-  const whole = Math.floor(seconds / 60);
-  return whole === 0 ? `${seconds}s` : `${whole}m`;
+  const rounded = Math.round(seconds);
+  const whole = Math.floor(rounded / 60);
+  return whole === 0 ? `${rounded}s` : `${whole}m`;
 }

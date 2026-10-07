@@ -47,7 +47,7 @@ export function useBookmarks(
         : api.me.removeSavedQuestion(savedId);
     },
     // Returned, not dropped: the star stays pending until the read behind it lands, or it shows its old state.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: savedQueryKey() }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: savedQueryKey() }),
   });
 
   return {

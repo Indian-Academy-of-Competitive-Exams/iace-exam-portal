@@ -141,7 +141,9 @@ export function downloadOf(
         query: { ...reportPeriodOf(REPORT_PERIODS.THIS_MONTH, dayOr(chosen, today)) },
       };
     case DOWNLOAD_KINDS.TEST: {
-      const attemptId = chosen || newestFirst(sittings)[0]?.attemptId;
+      const held = newestFirst(sittings);
+      const attemptId = (held.find((sitting) => sitting.attemptId === chosen) ?? held[0])
+        ?.attemptId;
       return attemptId ? { key: REPORT_KEYS.STUDENT_SCORE_CARD, query: { attemptId } } : null;
     }
     case DOWNLOAD_KINDS.EVERY_TEST:

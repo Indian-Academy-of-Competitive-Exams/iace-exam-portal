@@ -13,6 +13,23 @@ export function nextPageParam(lastPage: Paginated<unknown>, loadedPages: number)
   return loadedPages + 1;
 }
 
+const idOf = (item: unknown): unknown =>
+  typeof item === 'object' && item !== null && 'id' in item ? item.id : undefined;
+
+/** Every loaded row, once: pages are cut by position, so a row arriving between two loads repeats the one it pushed down. */
+export function loadedItems<T>(pages: readonly Paginated<T>[]): T[] {
+  const seen = new Set<unknown>();
+  return pages
+    .flatMap((page) => page.items)
+    .filter((item) => {
+      const id = idOf(item);
+      if (id === undefined) return true;
+      const repeated = seen.has(id);
+      seen.add(id);
+      return !repeated;
+    });
+}
+
 /** Pages accumulate as asked for; page size stays whatever the API serves. `queryKey` must include whatever the fetch depends on, so pages reset with it. */
 export function useInfinitePages<T>(options: {
   queryKey: QueryKey;
@@ -47,7 +64,7 @@ export function useInfinitePages<T>(options: {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return {
-    items: query.data?.pages.flatMap((page) => page.items) ?? [],
+    items: loadedItems(query.data?.pages ?? []),
     total: query.data?.pages[0]?.total ?? 0,
     hasMore: hasNextPage,
     loadMore,

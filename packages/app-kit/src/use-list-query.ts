@@ -82,6 +82,11 @@ export function useListQuery<TItem, TFilters extends object>(options: {
 
   const total = query.data?.total ?? 0;
 
+  // Settled, not cached or held over: an emptied page still in the cache says nothing about the page now.
+  const served = query.data !== undefined && !query.isFetching && !query.isPlaceholderData;
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
+  if (served && query.data.items.length === 0 && page > lastPage) setPage(lastPage);
+
   return {
     items: query.data?.items ?? [],
     total,
