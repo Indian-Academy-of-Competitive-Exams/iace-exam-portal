@@ -467,11 +467,14 @@ and needs no mapping at all.
   marks it fixed, and it returns to be checked again. A minor fix the reader makes directly.
 - **Time on a question is kept per person and per seat** (`QuestionWorkTime`): a running total in
   seconds for one question of one test, counted by the authoring page while that question is the
-  one on screen in a visible tab — all of that time, typing or not — and added in batches of at
-  most an hour. A blank card's time goes to the question its save creates. Only whoever holds a
-  seat is counted, and not once the test is offered; an owner looking in is not. Each seat reads
-  its own time; the test's owner and a super admin read both seats', per question and in total.
-  A discarded draft takes its time with it.
+  one on screen in a visible tab and waits on whoever is looking — typing or not — and added in
+  batches of at most an hour. It waits on a typist as a blank card, and again from a send-back
+  until it is marked fixed; on a reader until it is checked or sent back, and again once it is
+  fixed. A saved question's clock stands still however long it is looked at. A blank card's time
+  goes to the question its save creates. Only whoever holds a seat is counted, and not once the
+  test is offered; an owner looking in is not. Each seat reads its own time; the test's owner and
+  a super admin read both seats', per question and in total. A discarded draft takes its time
+  with it.
 - **A section is handed out with the day it is wanted by.** `QuestionAssignment.dueAt` is required
   on a new assignment and kept as that day's last instant at the institute; it gates nothing. A row
   from before the date was required has none, and is judged neither way. Where a row stands is

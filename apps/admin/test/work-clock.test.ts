@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { WorkClock } from '../src/features/authoring/work-clock';
+import { REVIEW_STATES } from '@iace/contracts';
+import { awaitsViewer, WorkClock } from '../src/features/authoring/work-clock';
 
 const ticks = (clock: WorkClock, count: number) => {
   for (let at = 0; at < count; at += 1) clock.tick();
@@ -63,5 +64,31 @@ describe('the clock on a question', () => {
     assert.equal(clock.shown('q9', 0), 90);
     assert.equal(clock.shown('new', 0), 0);
     assert.deepEqual(clock.take(3600, 'new'), [['q9', 90]]);
+  });
+});
+
+describe('whose turn a question is', () => {
+  const typist = { reading: false, fixing: true };
+  const reader = { reading: true, fixing: false };
+
+  /** The failure this prevents: a saved question's clock running on every time its typist scrolls past it. */
+  it('is its typist’s only while it is sent back', () => {
+    assert.equal(awaitsViewer(typist, REVIEW_STATES.UNCHECKED), false);
+    assert.equal(awaitsViewer(typist, REVIEW_STATES.SENT_BACK), true);
+    assert.equal(awaitsViewer(typist, REVIEW_STATES.FIXED), false);
+    assert.equal(awaitsViewer(typist, REVIEW_STATES.CHECKED), false);
+  });
+
+  it('is its reader’s until it is checked or sent back, and again once it is fixed', () => {
+    assert.equal(awaitsViewer(reader, REVIEW_STATES.UNCHECKED), true);
+    assert.equal(awaitsViewer(reader, REVIEW_STATES.CHECKED), false);
+    assert.equal(awaitsViewer(reader, REVIEW_STATES.SENT_BACK), false);
+    assert.equal(awaitsViewer(reader, REVIEW_STATES.FIXED), true);
+  });
+
+  it('is nobody’s for a seat that cannot act yet', () => {
+    const waiting = { reading: false, fixing: false };
+    assert.equal(awaitsViewer(waiting, REVIEW_STATES.UNCHECKED), false);
+    assert.equal(awaitsViewer(waiting, REVIEW_STATES.SENT_BACK), false);
   });
 });

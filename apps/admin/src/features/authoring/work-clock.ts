@@ -1,3 +1,14 @@
+import { REVIEW_STATES, type ReviewState } from '@iace/contracts';
+
+/** Whether a question waits on the viewer: sent back for its typist, not yet passed for its reader. */
+export function awaitsViewer(
+  seat: Readonly<{ reading: boolean; fixing: boolean }>,
+  state: ReviewState,
+): boolean {
+  if (state === REVIEW_STATES.SENT_BACK) return seat.fixing;
+  return seat.reading && state !== REVIEW_STATES.CHECKED;
+}
+
 /** Seconds each question has been on screen this visit: counted for the one in view, and reported in batches. */
 export class WorkClock {
   private readonly counted = new Map<string, number>();

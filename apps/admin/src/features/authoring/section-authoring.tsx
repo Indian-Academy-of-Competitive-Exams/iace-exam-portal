@@ -74,7 +74,7 @@ import { FinalizeAssignmentDialog } from './finalize-assignment-dialog';
 import { useWorkClock } from './use-work-clock';
 import { DueStandingBadge } from '../../components/due-standing-badge';
 import { TimeSpent } from '../../components/time-spent';
-import { type WorkClock } from './work-clock';
+import { awaitsViewer, type WorkClock } from './work-clock';
 
 const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.UNCHECKED]: 'neutral',
@@ -207,7 +207,13 @@ function SectionWorkspace({
   // Time is counted for whoever holds a seat, while the paper can still change.
   const counting = !work.seatReplaced && work.seat !== SECTION_SEATS.OWNER && !work.offered;
   const [inView, setInView] = useState<string | null>(null);
-  const clock = useWorkClock(testId, sectionId, counting ? inView : null);
+  // A saved question's clock stands still: only a blank card, or one waiting on the viewer, counts.
+  const owed =
+    inView === NEW_CARD ||
+    work.questions.some(
+      (question) => question.questionId === inView && awaitsViewer(seat, question.review.state),
+    );
+  const clock = useWorkClock(testId, sectionId, counting && owed ? inView : null);
   const follow = useCallback(
     (key: string) => {
       setInView(key);
