@@ -22,6 +22,7 @@ import {
   civilDate,
   scopedDurationSec,
   scopedQuestionCount,
+  scopedSections,
   type TestCalendar,
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
@@ -69,12 +70,15 @@ const REPORT_SELECT = {
   test: {
     select: {
       title: true,
+      scope: true,
+      scopeRef: true,
       baseConfig: {
         select: {
           shuffleQuestions: true,
           sections: {
             select: {
               id: true,
+              moduleId: true,
               name: true,
               order: true,
               questionCount: true,
@@ -459,8 +463,9 @@ function sectionsOf(
   paper: readonly PerformancePaperRow[],
 ): ScoreCardSection[] {
   if (anchor === null) return [];
+  const { test } = anchor;
   return sectionsWithScores(
-    anchor.test.baseConfig.sections.map((section) => ({
+    scopedSections(test.baseConfig.sections, test.scope, scopeRefOf(test)).map((section) => ({
       ...section,
       marksPerQuestion: Number(section.marksPerQuestion),
     })),

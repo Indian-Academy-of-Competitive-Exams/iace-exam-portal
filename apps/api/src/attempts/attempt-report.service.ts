@@ -19,6 +19,7 @@ import {
   type SolutionReport,
   type SolutionsQuery,
   round2 as round,
+  scopedSections,
   servedQuestions,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -29,7 +30,7 @@ import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { PaperSheetService, type SolutionPaperRow } from './paper-sheet.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { percentageOf } from './attempt-report';
-import { answerKeyIn, optionsIn } from '../common/prisma-json';
+import { answerKeyIn, optionsIn, scopeRefOf } from '../common/prisma-json';
 
 const NOT_YOURS = 'No such sitting';
 
@@ -53,6 +54,8 @@ const SOLUTION_SELECT = {
     select: {
       title: true,
       paperRevision: true,
+      scope: true,
+      scopeRef: true,
       baseConfig: {
         select: {
           shuffleOptions: true,
@@ -60,6 +63,7 @@ const SOLUTION_SELECT = {
           sections: {
             select: {
               id: true,
+              moduleId: true,
               name: true,
               order: true,
               questionCount: true,
@@ -144,14 +148,17 @@ export class AttemptReportService {
       config.shuffleQuestions,
       config.shuffleOptions,
     );
+    const { test } = attempt;
     // Narrowed AFTER the sequencer: its option generator is spent across the whole paper in display order.
-    const sections = config.sections.map((section) => ({
-      id: section.id,
-      name: section.name,
-      order: section.order,
-      questionCount: section.questionCount,
-      durationSec: section.durationSec,
-    }));
+    const sections = scopedSections(config.sections, test.scope, scopeRefOf(test)).map(
+      (section) => ({
+        id: section.id,
+        name: section.name,
+        order: section.order,
+        questionCount: section.questionCount,
+        durationSec: section.durationSec,
+      }),
+    );
     const asked = wantedOf(served, query, sections[0]?.id ?? null);
     const urls = imageUrlsIn(this.storage, asked.questions.flatMap(htmlOfQuestion));
 

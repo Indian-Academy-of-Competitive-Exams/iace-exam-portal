@@ -12,15 +12,18 @@ import {
   COHORT_COMPARISON_FLOOR,
   ErrorCodes,
   QUESTION_TYPE,
+  scopedSections,
+  servedQuestions,
+  type QuestionOption,
   type QuestionReport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService } from './leaderboard.service';
-import { servedSheet, type ServedAnswer } from './answer-sheet';
+import { answeredRows, type ServedAnswer } from './answer-sheet';
 import { elapsedSeconds } from './attempt-report';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { optionCountsIn, pValueOf } from './rollup-fold';
-import { answerKeyIn, optionsIn } from '../common/prisma-json';
+import { answerKeyIn, optionsIn, scopeRefOf } from '../common/prisma-json';
 import { topperOf, type TopperTimes } from './topper';
 import {
   paceIndexOf,
@@ -43,12 +46,22 @@ const REPORT_SELECT = {
   test: {
     select: {
       title: true,
+      scope: true,
+      scopeRef: true,
       baseConfig: {
         select: {
           durationSec: true,
           shuffleQuestions: true,
+          shuffleOptions: true,
           sections: {
-            select: { id: true, name: true, order: true, questionCount: true, durationSec: true },
+            select: {
+              id: true,
+              moduleId: true,
+              name: true,
+              order: true,
+              questionCount: true,
+              durationSec: true,
+            },
             orderBy: { order: 'asc' },
           },
         },
@@ -73,7 +86,7 @@ const REPORT_ROW_SELECT = {
 } as const satisfies Prisma.PaperQuestionSelect;
 
 type ReportPaperRow = Prisma.PaperQuestionGetPayload<{ select: typeof REPORT_ROW_SELECT }> &
-  ServedAnswer;
+  ServedAnswer & { options: readonly QuestionOption[] };
 
 type ReportRow = Prisma.AttemptGetPayload<{ select: typeof REPORT_SELECT }>;
 
@@ -104,13 +117,23 @@ export class QuestionReportService {
       }),
       this.leaderboard.cohortSize(attempt.testId),
     ]);
-    const served = servedSheet(rows, attempt, attempt.test.baseConfig.shuffleQuestions);
+    const config = attempt.test.baseConfig;
+    // The review's own sequencer, so "Option 2" here is the second row a student reads there.
+    const served = servedQuestions(
+      answeredRows(rows, attempt).map((row) => ({
+        ...row,
+        options: optionsIn(row.questionVersion.options),
+      })),
+      attempt.shuffleSeed,
+      config.shuffleQuestions,
+      config.shuffleOptions,
+    );
 
     return this.assemble(attempt, served, {
       cohort,
       paper,
       topper,
-      keyed: keyOf(rows),
+      keyed: keyOf(served),
       sittings,
     });
   }
@@ -147,6 +170,7 @@ export class QuestionReportService {
       ),
     );
     const yourTimeSec = served.reduce((total, row) => total + row.timeSpentSec, 0);
+    const { test } = attempt;
 
     return {
       attemptId: attempt.id,
@@ -154,7 +178,9 @@ export class QuestionReportService {
       testTitle: attempt.test.title,
       cohortSize: held.sittings,
       paceIndex: paceIndexOf(yourTimeSec, held.paper.sumTimeSec, held.paper.evaluatedCount),
-      sections: attempt.test.baseConfig.sections,
+      sections: scopedSections(test.baseConfig.sections, test.scope, scopeRefOf(test)).map(
+        ({ moduleId: _moduleId, ...section }) => section,
+      ),
       questions,
     };
   }
@@ -202,14 +228,12 @@ export class QuestionReportService {
   }
 }
 
-function keyOf(
-  rows: readonly Prisma.PaperQuestionGetPayload<{ select: typeof KEY_ROW_SELECT }>[],
-): Map<string, KeyedQuestion> {
+/** Each option numbered by the seat this sitting was served it in, which is the one a student saw. */
+function keyOf(served: readonly ReportPaperRow[]): Map<string, KeyedQuestion> {
   const keyed = new Map<string, KeyedQuestion>();
-  for (const row of rows) {
-    const options = optionsIn(row.questionVersion.options);
+  for (const row of served) {
     keyed.set(row.questionId, {
-      options,
+      options: row.options.map((option, seat) => ({ ...option, position: seat + 1 })),
       correctAnswer:
         row.question.type === QUESTION_TYPE.TEXT_FIELD
           ? acceptedAnswerIn(row.questionVersion.answerKey)

@@ -4,8 +4,10 @@ import {
   COHORT_COMPARISON_FLOOR,
   DIFFICULTY_LEVEL,
   QUESTION_TYPE,
+  TEST_SCOPE,
   questionReportSchema,
 } from '@iace/contracts';
+import { AttemptReportService } from '../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { QuestionReportService } from '../src/attempts/question-report.service';
@@ -13,7 +15,7 @@ import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
-import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
+import { FakeQueue, FakeStorage, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
   makePaper,
@@ -45,6 +47,12 @@ const processor = new ScoringProcessor(
 
 const leaderboard = new LeaderboardService(prisma);
 const service = new QuestionReportService(prisma, leaderboard);
+const review = new AttemptReportService(
+  prisma,
+  leaderboard,
+  new FakeStorage() as never,
+  new PaperSheetService(prisma),
+);
 
 async function sat(paper: Paper, timeSpent: readonly number[], startedAt?: Date) {
   const student = await makeStudent(prisma);
@@ -115,7 +123,7 @@ async function sittings() {
       },
     ],
   });
-  return { mine, topper, testId: paper.testId };
+  return { mine, topper, testId: paper.testId, baseConfigId: paper.catalog.baseConfigId };
 }
 
 describe('QuestionReportService — the cohort half, which needs no gate', () => {
@@ -202,6 +210,81 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
   });
 });
 
+describe('QuestionReportService — the paper as this sitting was served it', () => {
+  /** The failure this prevents: "Option 2" here naming a different row from the review's second. */
+  it('numbers each option by the seat the review shows it in, on a paper that shuffles them', async () => {
+    const onPaper = await makePaper(prisma, {
+      questions: ['Reasoning', 'Reasoning', 'Reasoning'],
+    });
+    await prisma.baseConfig.update({
+      where: { id: onPaper.catalog.baseConfigId },
+      data: { shuffleOptions: true },
+    });
+    const student = await makeStudent(prisma);
+    const attempt = await sitPaper(prisma, {
+      paper: onPaper,
+      studentId: student.id,
+      chosen: [RIGHT_OPTION, 'o3', null],
+      shuffleSeed: 1,
+    });
+    await processor.score(attempt.id);
+
+    const report = await service.forAttempt(student.id, attempt.id);
+    const reviewed = await review.solutions(student.id, attempt.id, {});
+
+    const seated = report.questions.map((row) => row.optionCounts.map((option) => option.optionId));
+    // A seed that really reorders them, so a reader numbering by the stored position still fails.
+    assert.notDeepEqual(
+      seated,
+      report.questions.map(() => ['o1', 'o2', 'o3', 'o4']),
+    );
+    assert.deepEqual(
+      seated,
+      reviewed.questions.map((row) => row.options.map((option) => option.id)),
+    );
+    assert.deepEqual(
+      report.questions.map((row) => row.optionCounts.map((option) => option.position)),
+      report.questions.map(() => [1, 2, 3, 4]),
+    );
+    assert.deepEqual(
+      report.questions.map((row) => row.correctOptionId),
+      report.questions.map(() => RIGHT_OPTION),
+    );
+  });
+
+  /** The failure this prevents: a sectional report listing sections the paper never served. */
+  it('lists only the section a sectional test covers', async () => {
+    const onPaper = await makePaper(prisma, {
+      sections: ['Reasoning', 'Quant', 'English'],
+      scope: TEST_SCOPE.SECTIONAL,
+      questions: [{ subject: 'English', section: 2 }],
+    });
+    await prisma.test.update({
+      where: { id: onPaper.testId },
+      data: { scopeRef: { sectionId: onPaper.sectionIds[2] } },
+    });
+    const student = await makeStudent(prisma);
+    const attempt = await sitPaper(prisma, {
+      paper: onPaper,
+      studentId: student.id,
+      chosen: [RIGHT_OPTION],
+    });
+    await processor.score(attempt.id);
+
+    const report = await service.forAttempt(student.id, attempt.id);
+
+    assert.deepEqual(report.sections, [
+      {
+        id: onPaper.sectionIds[2],
+        name: 'English',
+        order: 3,
+        questionCount: 10,
+        durationSec: null,
+      },
+    ]);
+  });
+});
+
 describe('QuestionReportService — the floor the comparison waits for', () => {
   /** The failure this prevents: "100% got it right" beside the first sitter's own right answer. */
   it('holds every cohort column back until enough students have sat the paper', async () => {
@@ -246,8 +329,12 @@ describe('QuestionReportService — the sittings it names', () => {
 });
 
 describe('QuestionReportService — the answer key it carries', () => {
-  it('serves the key and the option split off a marked sitting', async () => {
-    const { mine } = await sittings();
+  it('serves the key and the option split as stored, on a paper that shuffles no options', async () => {
+    const { mine, baseConfigId } = await sittings();
+    await prisma.baseConfig.update({
+      where: { id: baseConfigId },
+      data: { shuffleOptions: false },
+    });
 
     const report = await service.forAttempt(mine.studentId, mine.attemptId);
 

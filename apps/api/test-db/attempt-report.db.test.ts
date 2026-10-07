@@ -5,6 +5,8 @@ import {
   ErrorCodes,
   PAPER_QUESTION_STATUS,
   PERFORMANCE_SCOPES,
+  TEST_SCOPE,
+  TIMER_TEMPLATE,
   scoreCardSchema,
   type AppException,
   type PerformanceReport,
@@ -30,6 +32,7 @@ import {
   resetDatabase,
   sitPaper,
   testPrisma,
+  uid,
   type Paper,
   type SitInput,
 } from './support/database';
@@ -435,6 +438,112 @@ describe('the Solution Report', () => {
     );
 
     assert.doesNotMatch(shown, /tracker\.example/);
+  });
+});
+
+describe('the report of a test that covers part of its configuration', () => {
+  const SECTIONS = ['Reasoning', 'Quant', 'English'];
+
+  /** The test narrowed to its third section, sat and marked. */
+  const sectional = async () => {
+    const onPaper = await makePaper(prisma, {
+      sections: SECTIONS,
+      scope: TEST_SCOPE.SECTIONAL,
+      questions: [
+        { subject: 'English', section: 2 },
+        { subject: 'English', section: 2 },
+      ],
+    });
+    await prisma.test.update({
+      where: { id: onPaper.testId },
+      data: { scopeRef: { sectionId: onPaper.sectionIds[2] } },
+    });
+    return { onPaper, ...(await sat(onPaper, [RIGHT_OPTION, null])) };
+  };
+
+  /** A session-locked paper: Reasoning sits in the first session, and the test covers the second. */
+  const modular = async () => {
+    const onPaper = await makePaper(prisma, {
+      sections: SECTIONS,
+      scope: TEST_SCOPE.MODULE,
+      questions: [
+        { subject: 'Quant', section: 1 },
+        { subject: 'English', section: 2 },
+        { subject: 'English', section: 2 },
+      ],
+    });
+    const baseConfigId = onPaper.catalog.baseConfigId;
+    const [first, second] = [uid(), uid()];
+    // One transaction: the section-shape guard is deferred, and judges the config as it commits.
+    await prisma.$transaction([
+      prisma.baseConfig.update({
+        where: { id: baseConfigId },
+        data: { timerTemplate: TIMER_TEMPLATE.SESSION_MODULE_LOCKED },
+      }),
+      prisma.baseConfigModule.createMany({
+        data: [
+          { id: first, baseConfigId, name: 'Session 1', order: 1 },
+          { id: second, baseConfigId, name: 'Session 2', order: 2 },
+        ],
+      }),
+      prisma.baseConfigSection.updateMany({
+        where: { id: onPaper.sectionIds[0] },
+        data: { moduleId: first },
+      }),
+      prisma.baseConfigSection.updateMany({
+        where: { id: { in: onPaper.sectionIds.slice(1) } },
+        data: { moduleId: second },
+      }),
+      prisma.test.update({
+        where: { id: onPaper.testId },
+        data: { scopeRef: { moduleId: second } },
+      }),
+    ]);
+    return { onPaper, ...(await sat(onPaper, [RIGHT_OPTION, null, null])) };
+  };
+
+  /** The failure this prevents: a review opening on a section that served nothing, with no way out. */
+  it('opens a sectional review on the section it covers, and offers no other', async () => {
+    const { onPaper, studentId, attemptId } = await sectional();
+
+    const report = await reports().solutions(studentId, attemptId, {});
+
+    assert.deepEqual(
+      report.sections.map((section) => section.name),
+      ['English'],
+    );
+    assert.equal(report.sectionId, onPaper.sectionIds[2]);
+    assert.equal(report.questions.length, 2);
+  });
+
+  /** The failure this prevents: sections the paper never served read as "0 of 20 marks". */
+  it('lists that one section on a sectional score card', async () => {
+    const { studentId, attemptId } = await sectional();
+
+    const card = await analytics().scoreCard(studentId, attemptId);
+
+    assert.deepEqual(
+      card.sections.map((section) => [section.name, section.score, section.maxMarks]),
+      [['English', 2, 4]],
+    );
+  });
+
+  it('offers a module test the sections of its module alone, opening on the first', async () => {
+    const { onPaper, studentId, attemptId } = await modular();
+
+    const report = await reports().solutions(studentId, attemptId, {});
+    const card = await analytics().scoreCard(studentId, attemptId);
+
+    assert.deepEqual(
+      report.sections.map((section) => section.name),
+      ['Quant', 'English'],
+    );
+    assert.equal(report.sectionId, onPaper.sectionIds[1]);
+    assert.equal(report.questions.length, 1);
+    assert.deepEqual(
+      card.sections.map((section) => section.name),
+      ['Quant', 'English'],
+    );
   });
 });
 
