@@ -4,6 +4,7 @@ import {
   ErrorCodes,
   furthestSeat,
   NAVIGATION_POLICY,
+  PRESENT_GRACE_SEC,
   type AnswerChange,
   type AnswerState,
   type LiveAnswer,
@@ -24,9 +25,6 @@ export const PAUSE_LIMIT_SEC = 48 * 60 * 60;
 
 /** Total away time one sitting can ever bank: farming many small pauses can't out-earn one big one. */
 export const PAUSE_CREDIT_CAP_SEC = PAUSE_LIMIT_SEC;
-
-/** A gap this short is a reload or a quiet minute of reading, not an absence — it is spent, not given back. */
-export const PRESENT_GRACE_SEC = 60;
 
 /** What a FORWARD_ONLY sitting rebuilds its own seat order from, beside the cached paper. */
 export interface ForwardOrder {
@@ -65,6 +63,8 @@ export interface HeldState {
   forwardOnly?: ForwardOrder;
   /** The tab answering: a string holds it, null was stood down, absent is a key put back cold. */
   tab?: string | null;
+  /** The sign-in that tab belongs to: another one takes the sitting only once this one has gone quiet. */
+  session?: string;
 }
 
 /** What the KEY holds: the sheet's own slot per answer, still keyed by question. */
@@ -166,6 +166,22 @@ export function sittingRefusal(held: HeldState, tab: string | undefined): AppExc
   return held.tab === null
     ? new AppException(ErrorCodes.SITTING_SET_ASIDE, SET_ASIDE)
     : new AppException(ErrorCodes.SITTING_TAKEN_OVER, CONTINUED_ELSEWHERE);
+}
+
+/** Refuses a second sign-in while the first is still being heard from, or null once it may take the sitting. */
+export function heldElsewhere(
+  held: HeldState,
+  session: string | undefined,
+  now: Date,
+): AppException | null {
+  if (!held.session || !session || held.session === session) return null;
+  if (awayMs(held, now) >= PRESENT_GRACE_SEC * MS_PER_SECOND) return null;
+  return new AppException(ErrorCodes.SITTING_HELD_ELSEWHERE);
+}
+
+/** Nothing to flush: the idle tick saying the device is still here, which moves no answer and no section. */
+export function isHeartbeat(batch: SaveAttemptStateBody): boolean {
+  return batch.answers.length === 0 && Object.keys(batch.sections ?? {}).length === 0;
 }
 
 /** At or below the held revision is a batch a newer save already carried, not one to replay. */

@@ -100,6 +100,11 @@ const TestBuilderPage = React.lazy(() =>
 const TestPaperPage = React.lazy(() =>
   import('./features/tests/test-paper').then((module) => ({ default: module.TestPaperPage })),
 );
+const TestPaperPrintPage = React.lazy(() =>
+  import('./features/tests/test-paper-print').then((module) => ({
+    default: module.TestPaperPrintPage,
+  })),
+);
 const TestAnalyticsPage = React.lazy(() =>
   import('./features/tests/test-analytics').then((module) => ({
     default: module.TestAnalyticsPage,
@@ -136,6 +141,12 @@ const AnnouncementsPage = React.lazy(() =>
   import('./features/announcements/announcements').then((module) => ({
     default: module.AnnouncementsPage,
   })),
+);
+const ReportsPage = React.lazy(() =>
+  import('./features/reports/reports').then((module) => ({ default: module.ReportsPage })),
+);
+const ReportPage = React.lazy(() =>
+  import('./features/reports/report').then((module) => ({ default: module.ReportPage })),
 );
 const LiveOpsPage = React.lazy(() =>
   import('./features/live-ops/live-ops').then((module) => ({ default: module.LiveOpsPage })),
@@ -236,6 +247,10 @@ export function App() {
           <Route path={ROUTES.TEST_PATTERN} element={whileLoading(<TestBuilderPage />)} />
           <Route path={ROUTES.TEST_PAPER_PATTERN} element={whileLoading(<TestPaperPage />)} />
           <Route
+            path={ROUTES.TEST_PAPER_PRINT_PATTERN}
+            element={whileLoading(<TestPaperPrintPage />)}
+          />
+          <Route
             path={ROUTES.TEST_ANALYTICS_PATTERN}
             element={whileLoading(<TestAnalyticsPage />)}
           />
@@ -244,6 +259,8 @@ export function App() {
           <Route path={ROUTES.ADMINS} element={whileLoading(<AdminsPage />)} />
           <Route path={ROUTES.PERMISSIONS} element={whileLoading(<PermissionsPage />)} />
           <Route path={ROUTES.ANNOUNCEMENTS} element={whileLoading(<AnnouncementsPage />)} />
+          <Route path={ROUTES.REPORTS} element={whileLoading(<ReportsPage />)} />
+          <Route path={ROUTES.REPORT_PATTERN} element={whileLoading(<ReportPage />)} />
           <Route path={ROUTES.AUDIT} element={whileLoading(<AuditActivityPage />)} />
           <Route path={ROUTES.AUDIT_IMPORTS} element={whileLoading(<AuditImportsPage />)} />
         </Route>

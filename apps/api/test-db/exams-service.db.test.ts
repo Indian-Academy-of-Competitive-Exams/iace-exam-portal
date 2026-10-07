@@ -15,7 +15,7 @@ import { DOMAIN_EVENTS } from '../src/common/events';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { ExamsService } from '../src/configs/exams.service';
 import { StudentsService } from '../src/students';
-import { FakeEventBus, fakeStartingPins } from '../test/support/fakes';
+import { FakeEventBus } from '../test/support/fakes';
 import { makeStudent, resetDatabase, testPrisma, uid } from './support/database';
 
 /** One uuid per label, shared across the file so a test can name an id by what it means. */
@@ -66,7 +66,6 @@ async function serviceWith(exams: ExamRow[] = [{}]) {
     null as never,
     null as never,
     null as never,
-    fakeStartingPins(),
     null as never,
     null as never,
     new FakeEventBus().asService(),

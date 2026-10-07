@@ -1,12 +1,14 @@
-# Builds the two API images on every merge and pushes them to ECR. It does NOT deploy — the
-# artifact is ready and waiting, and deploy-api.yml decides when it reaches a box. Separating
-# them is what makes "deploy tonight" and "deploy now" the same button with a different trigger,
-# and what makes a rollback a tag rather than a rebuild.
+# Builds the two API images and pushes them to ECR. It does NOT deploy — _deploy-api.yml decides
+# when an image reaches a box, which is what makes a rollback a tag rather than a rebuild.
+#
+# `staging` CALLS this from staging.yml, so its deploy waits for the image it is about to pull.
+# `main` triggers it on push, and production takes the result later, on purpose.
 name: Build API image
 
 on:
+  workflow_call:
   push:
-    branches: [staging, main]
+    branches: [main]
     paths:
       - 'apps/api/**'
       - 'packages/**'
@@ -20,8 +22,10 @@ permissions:
   id-token: write
   contents: read
 
+# Per branch, because the moving tag is. One group for both would let a queued `main` build cancel
+# the build a staging release is waiting on.
 concurrency:
-  group: build-api
+  group: build-api-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -94,7 +98,6 @@ jobs:
             echo "| \`examprep/api\` | \`${{ github.sha }}\` and \`${{ steps.tag.outputs.moving }}\` |"
             echo "| \`examprep/api-migrate\` | \`${{ github.sha }}\` and \`${{ steps.tag.outputs.moving }}\` |"
             echo ""
-            echo "These reach Box A at 02:00 IST, or immediately via **Deploy API** →"
-            echo "Run workflow. To deploy this build specifically rather than whatever"
-            echo "\`staging\` points at by then, pass \`${{ github.sha }}\` as the image tag."
+            echo "On \`staging\` the same run deploys this sha next. To put this build back"
+            echo "later, run **Staging** or **Production** with \`${{ github.sha }}\` as the image tag."
           } >> "$GITHUB_STEP_SUMMARY"

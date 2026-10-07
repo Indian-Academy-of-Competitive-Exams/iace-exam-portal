@@ -26,6 +26,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit';
+import { AssignmentsService } from '../assignments';
 import { type AuthenticatedUser } from '../common/security';
 import { bandsFor, type DashboardBands } from './dashboard-bands';
 
@@ -44,19 +45,21 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly assignments: AssignmentsService,
   ) {}
 
   async overview(user: AuthenticatedUser): Promise<Dashboard> {
     const bands = bandsFor(user);
 
-    const [headline, bank, activity, windows] = await Promise.all([
+    const [headline, bank, activity, windows, work] = await Promise.all([
       this.headline(bands),
       bands.bank ? this.bank() : undefined,
       this.activity(bands, user),
       bands.windows ? this.windows() : undefined,
+      bands.work ? this.assignments.summary(user.id) : undefined,
     ]);
 
-    return { headline, bank, activity, windows };
+    return { headline, bank, activity, windows, work };
   }
 
   private async headline(bands: DashboardBands): Promise<DashboardHeadline | undefined> {
@@ -186,8 +189,7 @@ export class DashboardService {
   private async windows(): Promise<DashboardWindows> {
     // Open from when students may begin it, which is `testIsOpen`'s grace before the hour.
     const sittable = new Date(Date.now() + START_GRACE_MS);
-    // A test in a series nobody can reach is not a window, however open its own clock is.
-    const live = { status: TEST_STATUS.ACTIVE, testSeries: { isEnabled: true } } as const;
+    const live = { status: TEST_STATUS.ACTIVE } as const;
 
     const [open, upcoming] = await Promise.all([
       this.prisma.test.findMany({

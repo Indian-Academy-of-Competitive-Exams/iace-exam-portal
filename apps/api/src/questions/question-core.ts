@@ -15,6 +15,7 @@ import {
   type LocalizedRich,
   type LocalizedText,
   type QuestionDraft,
+  type QuestionIdentity,
   type QuestionLanguage,
   type QuestionOption,
   type QuestionType,
@@ -119,7 +120,7 @@ export function validateQuestion(
 /** Bumped whenever canonicalStemKey's fold changes; the worker rehashes every row below it. */
 export const STEM_HASH_VERSION = 2;
 
-export function computeStemHash(draft: QuestionDraft): string {
+export function computeStemHash(draft: QuestionIdentity): string {
   return createHash('sha256').update(canonicalStemKey(draft)).digest('hex');
 }
 

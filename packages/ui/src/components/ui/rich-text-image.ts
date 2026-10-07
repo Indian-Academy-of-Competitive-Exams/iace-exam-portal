@@ -1,5 +1,7 @@
 import { ResizableNodeView } from '@tiptap/core';
 import { Image } from '@tiptap/extension-image';
+import { type Node as ProseNode } from '@tiptap/pm/model';
+import { Selection } from '@tiptap/pm/state';
 import { type EditorView } from '@tiptap/pm/view';
 import { REMOVE_LABELS, removeControl } from './rich-text-remove';
 import { toast } from './toast';
@@ -134,11 +136,29 @@ export function insertUploaded(
       const type = view.state.schema.nodes.image;
       if (!type) throw new Error('This field does not take images');
       view.focus();
-      view.dispatch(view.state.tr.replaceSelectionWith(type.create({ src: url, 'data-key': key })));
+      insertFigure(view, type.create({ src: url, 'data-key': key }));
     })
     .catch((error: unknown) =>
       toast.error((error instanceof Error && error.message) || 'That image could not be uploaded'),
     );
+}
+
+/** A figure is a block, so the caret goes to the line beneath it, and that line is made where there is none. */
+function insertFigure(view: EditorView, figure: ProseNode): void {
+  const tr = view.state.tr.replaceSelectionWith(figure);
+  // Where the insertion ended, read off its step the way ProseMirror places its own caret.
+  let end = tr.selection.from;
+  tr.mapping.maps.at(-1)?.forEach((_from, _to, _start, inserted) => {
+    end = inserted;
+  });
+
+  const $end = tr.doc.resolve(end);
+  if (!$end.parent.inlineContent && !$end.nodeAfter?.isTextblock) {
+    const line = $end.parent.contentMatchAt($end.index()).defaultType?.createAndFill();
+    if (line) tr.insert(end, line);
+  }
+
+  view.dispatch(tr.setSelection(Selection.near(tr.doc.resolve(end), 1)).scrollIntoView());
 }
 
 /** True when it swallowed the event, which is what stops ProseMirror inlining the bytes itself. */

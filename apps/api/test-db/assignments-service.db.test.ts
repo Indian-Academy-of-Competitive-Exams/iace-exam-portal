@@ -85,6 +85,7 @@ const body = (over: Partial<CreateAssignmentInput>): CreateAssignmentInput =>
     baseConfigSectionId: '',
     assigneeId: '',
     role: ASSIGNMENT_ROLES.TYPIST,
+    dueAt: '2026-10-09',
     ...over,
   });
 
@@ -109,7 +110,12 @@ const UNHELD = {
   assigneeName: null,
   dueAt: null,
   finalizedAt: null,
+  standing: null,
+  secondsSpent: 0,
 };
+
+/** Somebody reading a test's assignments who holds no seat on it. */
+const OWNER = { id: '00000000-0000-7000-8000-000000000001' };
 
 const refusedWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
@@ -227,7 +233,7 @@ describe('AssignmentsService — assigning', () => {
       reader.id,
     );
 
-    const rows = await assignments.forTest(test.id);
+    const rows = await assignments.forTest(test.id, OWNER);
     assert.equal(rows.length, 2);
     assert.deepEqual(
       rows.map((row) => [row.assigneeName, row.role, row.sectionName, row.writtenCount]).sort(),
@@ -425,7 +431,7 @@ describe('AssignmentsService — a role its section took with it', () => {
       scopeRef: { sectionId: kept.id },
     });
 
-    const rows = await assignments.forTest(test.id);
+    const rows = await assignments.forTest(test.id, OWNER);
     const byId = new Map(rows.map((row) => [row.id, row]));
     assert.equal(byId.get(passedOn.id)?.sectionDropped, false);
     assert.equal(byId.get(standing.id)?.sectionDropped, true);
@@ -887,7 +893,7 @@ describe('AssignmentsService — mine', () => {
         baseConfigSectionId: reasoning.id,
         assigneeId: typist.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-05T04:00:00.000Z',
+        dueAt: '2026-10-05',
       }),
       typist.id,
     );
@@ -897,7 +903,7 @@ describe('AssignmentsService — mine', () => {
         baseConfigSectionId: english.id,
         assigneeId: typist.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-09T04:00:00.000Z',
+        dueAt: '2026-10-09',
       }),
       typist.id,
     );
@@ -995,7 +1001,7 @@ describe('AssignmentsService — section progress', () => {
         baseConfigSectionId: section.id,
         assigneeId: typist.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-05T04:00:00.000Z',
+        dueAt: '2026-10-05',
       }),
       typist.id,
     );
@@ -1014,7 +1020,7 @@ describe('AssignmentsService — section progress', () => {
     assert.equal(rows.length, 1);
     assert.deepEqual(
       [rows[0]?.typing?.assignmentId, rows[0]?.typing?.assigneeName, rows[0]?.typing?.dueAt],
-      [typing.id, 'Priya', '2026-10-05T04:00:00.000Z'],
+      [typing.id, 'Priya', '2026-10-05T18:29:59.999Z'],
     );
     assert.deepEqual(
       [rows[0]?.reading?.assignmentId, rows[0]?.reading?.assigneeName],
@@ -1142,7 +1148,7 @@ describe('AssignmentsService — section progress', () => {
         baseConfigSectionId: shared.id,
         assigneeId: priya.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-05T04:00:00.000Z',
+        dueAt: '2026-10-05',
       }),
       priya.id,
     );
@@ -1152,7 +1158,7 @@ describe('AssignmentsService — section progress', () => {
         baseConfigSectionId: shared.id,
         assigneeId: arjun.id,
         role: ASSIGNMENT_ROLES.PROOFREADER,
-        dueAt: '2026-10-20T04:00:00.000Z',
+        dueAt: '2026-10-20',
       }),
       arjun.id,
     );
@@ -1162,7 +1168,7 @@ describe('AssignmentsService — section progress', () => {
         baseConfigSectionId: late.id,
         assigneeId: arjun.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-09T04:00:00.000Z',
+        dueAt: '2026-10-09',
       }),
       arjun.id,
     );
@@ -1479,7 +1485,7 @@ describe('AssignmentsService — what a section has written so far', () => {
       });
     }
 
-    const rows = await assignments.forTest(test.id);
+    const rows = await assignments.forTest(test.id, OWNER);
 
     assert.deepEqual(
       rows.map((row) => [row.role, row.writtenCount]).sort(),
@@ -1622,5 +1628,238 @@ describe('AssignmentsService — a reader gets a whole section', () => {
 
     await assignments.remove(test.id, typing.id);
     assert.equal(await prisma.questionAssignment.count({ where: { id: typing.id } }), 0);
+  });
+});
+
+const DAY_MS = 86_400_000;
+const daysFromNow = (days: number) => new Date(Date.now() + days * DAY_MS);
+
+describe('AssignmentsService — a due date', () => {
+  /** The failure this prevents: a section handed out with no day it is wanted by. */
+  it('refuses an assignment that names no due date', () => {
+    const named = { baseConfigSectionId: 'sec', assigneeId: 'adm', role: ASSIGNMENT_ROLES.TYPIST };
+
+    assert.equal(createAssignmentSchema.safeParse(named).success, false);
+    assert.equal(createAssignmentSchema.safeParse({ ...named, dueAt: '' }).success, false);
+    assert.equal(
+      createAssignmentSchema.safeParse({ ...named, dueAt: '2026-02-31' }).success,
+      false,
+    );
+    assert.equal(createAssignmentSchema.safeParse({ ...named, dueAt: '2026-10-09' }).success, true);
+  });
+
+  it('holds the section until the due day ends at the institute, not at UTC midnight', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+
+    const typing = await assignments.assign(
+      test.id,
+      body({ baseConfigSectionId: section.id, assigneeId: typist.id, dueAt: '2026-10-09' }),
+      typist.id,
+    );
+
+    assert.equal(typing.dueAt, '2026-10-09T18:29:59.999Z');
+  });
+});
+
+/** One active row straight into the table: a standing is read off its dates, whoever set them. */
+async function held(
+  catalog: Catalog,
+  testId: string,
+  assigneeId: string,
+  over: Partial<Prisma.QuestionAssignmentUncheckedCreateInput> & { name: string },
+) {
+  const { name, ...data } = over;
+  const section = await makeSection(prisma, catalog, { name, order: sectionOrder++ });
+  return prisma.questionAssignment.create({
+    data: {
+      testId,
+      baseConfigId: catalog.baseConfigId,
+      baseConfigSectionId: section.id,
+      assigneeId,
+      role: ASSIGNMENT_ROLES.TYPIST,
+      ...data,
+    },
+  });
+}
+let sectionOrder = 1;
+
+/** Seconds one admin has had one question of a row's section on screen, in the row's own seat. */
+async function timeOn(
+  row: { testId: string; baseConfigSectionId: string; role: 'TYPIST' | 'PROOFREADER' },
+  adminId: string,
+  seconds: number,
+) {
+  const subject = await makeSubject(prisma);
+  const question = await makeQuestion(prisma, { subjectId: subject.id });
+  await prisma.questionWorkTime.create({
+    data: {
+      testId: row.testId,
+      baseConfigSectionId: row.baseConfigSectionId,
+      questionId: question.id,
+      adminId,
+      role: row.role,
+      seconds,
+    },
+  });
+}
+
+describe('AssignmentsService — time spent on a section', () => {
+  /** The failure this prevents: a typist's row carrying their reader's time, or the two merging. */
+  it('gives each holder their own seat’s time, on the queue, the test and the progress list', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const typist = await makeAdmin(prisma);
+    const reader = await makeAdmin(prisma);
+    const typing = await held(catalog, test.id, typist.id, { name: 'Reasoning' });
+    const reading = await prisma.questionAssignment.create({
+      data: {
+        testId: test.id,
+        baseConfigId: catalog.baseConfigId,
+        baseConfigSectionId: typing.baseConfigSectionId,
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      },
+    });
+    await timeOn(typing, typist.id, 90);
+    await timeOn(typing, typist.id, 30);
+    await timeOn(reading, reader.id, 45);
+
+    const [mine] = await queue(assignments, typist.id);
+    const onTest = await assignments.forTest(test.id, OWNER);
+    const [row] = await progress(assignments);
+
+    assert.equal(mine?.secondsSpent, 120);
+    assert.deepEqual(
+      onTest.map((one) => [one.role, one.secondsSpent]).sort(),
+      [
+        [ASSIGNMENT_ROLES.PROOFREADER, 45],
+        [ASSIGNMENT_ROLES.TYPIST, 120],
+      ].sort(),
+    );
+    assert.deepEqual([row?.typing?.secondsSpent, row?.reading?.secondsSpent], [120, 45]);
+  });
+
+  /** The failure this prevents: a typist who also manages tests reading their reader's time off the builder. */
+  it('sends a seat holder nobody else’s time on their own section', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const typist = await makeAdmin(prisma);
+    const reader = await makeAdmin(prisma);
+    const typing = await held(catalog, test.id, typist.id, { name: 'Reasoning' });
+    const reading = await prisma.questionAssignment.create({
+      data: {
+        testId: test.id,
+        baseConfigId: catalog.baseConfigId,
+        baseConfigSectionId: typing.baseConfigSectionId,
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      },
+    });
+    await timeOn(typing, typist.id, 90);
+    await timeOn(reading, reader.id, 45);
+    const timesFor = async (viewer: { id: string; isSuperAdmin?: boolean }) =>
+      (await assignments.forTest(test.id, viewer))
+        .map((one) => [one.role, one.secondsSpent])
+        .sort();
+
+    assert.deepEqual(await timesFor({ id: typist.id }), [
+      [ASSIGNMENT_ROLES.PROOFREADER, null],
+      [ASSIGNMENT_ROLES.TYPIST, 90],
+    ]);
+    assert.deepEqual(await timesFor({ id: typist.id, isSuperAdmin: true }), [
+      [ASSIGNMENT_ROLES.PROOFREADER, 45],
+      [ASSIGNMENT_ROLES.TYPIST, 90],
+    ]);
+  });
+});
+
+describe('AssignmentsService — an admin’s own summary', () => {
+  it('is absent for an admin who holds no section', async () => {
+    const { assignments } = build();
+    const idle = await makeAdmin(prisma);
+
+    assert.equal(await assignments.summary(idle.id), undefined);
+  });
+
+  /** The failure this prevents: a section finished after its day read as on time, or an open one never flagged. */
+  it('counts what was completed by its due day apart from what was late or is overdue', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const typist = await makeAdmin(prisma);
+    const hold = (over: Parameters<typeof held>[3]) => held(catalog, test.id, typist.id, over);
+    const onTime = await hold({
+      name: 'On time',
+      dueAt: daysFromNow(-2),
+      finalizedAt: daysFromNow(-3),
+    });
+    await hold({ name: 'Late', dueAt: daysFromNow(-3), finalizedAt: daysFromNow(-1) });
+    await hold({ name: 'Undated', dueAt: null, finalizedAt: daysFromNow(-1) });
+    const overdue = await hold({ name: 'Overdue', dueAt: daysFromNow(-2) });
+    const ahead = await hold({ name: 'Ahead', dueAt: daysFromNow(3) });
+    await hold({ name: 'Passed on', dueAt: daysFromNow(-5), replacedAt: new Date() });
+    await timeOn(onTime, typist.id, 600);
+    await timeOn(overdue, typist.id, 120);
+
+    const summary = await assignments.summary(typist.id);
+
+    assert.deepEqual(summary?.roles, [
+      {
+        role: ASSIGNMENT_ROLES.TYPIST,
+        assigned: 5,
+        completed: 3,
+        onTime: 1,
+        overdue: 1,
+        secondsSpent: 720,
+      },
+    ]);
+    assert.deepEqual(
+      summary?.next.map((row) => [row.assignmentId, row.sectionName, row.secondsSpent]),
+      [
+        [overdue.id, 'Overdue', 120],
+        [ahead.id, 'Ahead', 0],
+      ],
+    );
+  });
+
+  it('owes nothing on a test that has been offered over an open section', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const reader = await makeAdmin(prisma);
+    await held(catalog, test.id, reader.id, {
+      name: 'Unread',
+      role: ASSIGNMENT_ROLES.PROOFREADER,
+      dueAt: daysFromNow(-2),
+    });
+    await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: new Date() } });
+
+    const summary = await assignments.summary(reader.id);
+
+    assert.equal(summary?.roles[0]?.overdue, 0);
+    assert.deepEqual(summary?.next, []);
+  });
+
+  /** The failure this prevents: a picked paper's typist, who has no Done to give, flagged overdue for good. */
+  it('owes nothing from a typist on a picked paper, who only fixes what comes back', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const picked = await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.PICKED });
+    const typist = await makeAdmin(prisma);
+    await held(catalog, picked.id, typist.id, { name: 'Picked', dueAt: daysFromNow(-2) });
+
+    const summary = await assignments.summary(typist.id);
+    const [mine] = await queue(assignments, typist.id);
+
+    assert.equal(summary?.roles[0]?.overdue, 0);
+    assert.deepEqual(summary?.next, []);
+    assert.equal(mine?.standing, null);
   });
 });

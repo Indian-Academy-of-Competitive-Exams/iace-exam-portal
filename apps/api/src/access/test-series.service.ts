@@ -24,7 +24,6 @@ import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
-import { isEnabledPatch, startsSwitchedOn } from './series-switch';
 import { everyTermMatches } from '../common/search-terms';
 
 /** What the four CHECKs on `TestSeries` refuse, in the words the form uses for the fields. */
@@ -63,7 +62,6 @@ export const AUDITED_SERIES_FIELDS = [
   'sequentialTests',
   'kind',
   'eventId',
-  'isEnabled',
 ] as const;
 
 /** Owns `TestSeries`. A test reaches a student only through a series, a STANDARD one only through `branchIds`. */
@@ -93,7 +91,6 @@ export class TestSeriesService {
         : []),
       ...(query.programCode ? [{ programCode: query.programCode }] : []),
       ...(query.kind === undefined ? [] : [{ kind: query.kind }]),
-      ...(query.isEnabled === undefined ? [] : [{ isEnabled: query.isEnabled }]),
     ];
     const always: Prisma.TestSeriesWhereInput[] = query.q
       ? [
@@ -163,16 +160,12 @@ export class TestSeriesService {
     });
 
     const series = await this.prisma.testSeries.create({
-      data: {
-        ...columnsOf(input),
-        name: input.name,
-        isEnabled: input.isEnabled ?? startsSwitchedOn(kind),
-      },
+      data: { ...columnsOf(input), name: input.name },
     });
 
     // No `:id` in the path and a summary coming back, so the row is named explicitly. Who did it is the audit row's actor — `TestSeries` has no `createdById` column of its own.
     this.auditContext.setEntityId(series.id);
-    // A kind that reaches past every branch is switched on the moment it saves, cached catalogs and all.
+    // A free, program or event series reaches its students the moment it saves, and every held catalog must hear of it.
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: series.id });
 
     return this.detail(series.id);
@@ -193,7 +186,7 @@ export class TestSeriesService {
 
     await this.prisma.testSeries.update({
       where: { id },
-      data: { ...columnsOf(input), ...isEnabledPatch(input.isEnabled) },
+      data: columnsOf(input),
     });
 
     const updated = await this.requireSeries(id);
@@ -407,7 +400,6 @@ function toSummary(row: SeriesRow, branchCount: number): TestSeriesSummary {
     sequentialTests: row.sequentialTests,
     kind: row.kind,
     branchIds: row.branchIds,
-    isEnabled: row.isEnabled,
     eventId: row.eventId,
     testCount: row._count.tests,
     enabledBranchCount: row.branchIds.length,

@@ -36,12 +36,7 @@ import { ImportsService } from '../src/imports/imports.service';
 import { buildStudentExport } from '../src/students/student-export';
 import { StudentsController } from '../src/students/students.controller';
 import { StudentsService } from '../src/students/students.service';
-import {
-  FakeEventsService,
-  FakeProgramsService,
-  fakeStartingPins,
-  FakeStorage,
-} from '../test/support/fakes';
+import { FakeEventsService, FakeProgramsService, FakeStorage } from '../test/support/fakes';
 import {
   makeAdmin,
   makeBranch,
@@ -63,14 +58,12 @@ const students = new StudentsService(
   unused,
   unused,
   unused,
-  unused,
   auditContext,
   unused,
   unused,
 );
 const imports = new ImportsService(
   prisma,
-  fakeStartingPins(),
   new FakeStorage() as never,
   new AuditService(prisma, new FakeStorage() as never),
   new FakeEventsService().asService(),
@@ -82,7 +75,7 @@ let caller: AuthenticatedUser;
 /** tsx emits no decorator metadata, so Nest cannot inject by type; the route itself is inherited whole. */
 class ExportController extends StudentsController {
   constructor() {
-    super(students, unused, prisma, rollups, auditContext);
+    super(students, unused, prisma, rollups, auditContext, unused);
   }
 }
 

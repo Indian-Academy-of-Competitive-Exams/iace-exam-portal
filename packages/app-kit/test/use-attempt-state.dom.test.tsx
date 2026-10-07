@@ -1051,3 +1051,82 @@ test('a backlog larger than one batch is saved before the paper goes in, so the 
   ]);
   assert.equal(delivered.size, backlog, 'every answer went up, in a save or on the paper');
 });
+
+/** The failure this prevents: a student reading a long passage looking, to the server, like a device that dropped. */
+test('an idle tick still sends, quietly, so the server knows this device is here', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const sent: SentAnswers[] = [];
+  const { result, unmount } = renderHook(() =>
+    useAttemptState('attempt-1', depsFor(apiThatSaves(sent))),
+  );
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+  await act(async () => void (await Promise.resolve()));
+
+  await act(async () => {
+    mock.timers.tick(31_000);
+    await Promise.resolve();
+  });
+
+  assert.equal(sent.length, 1, 'the tick sent with nothing to save');
+  assert.deepEqual(sent[0]?.answers, []);
+  assert.equal(result.current.isSaving, false, 'and the screen never said Saving');
+});
+
+/** An idle device that lost the sitting learns it from its heartbeat, with no unsaved-work warning to explain. */
+test('a heartbeat the server refuses stands the tab down without reporting unsaved work', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async () => {
+        throw new AppException(ErrorCodes.SITTING_TAKEN_OVER);
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+  await act(async () => void (await Promise.resolve()));
+
+  await act(async () => {
+    mock.timers.tick(31_000);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  assert.equal(result.current.takenOver, true);
+  assert.equal(result.current.hasUnsaved, false);
+});
+
+/** The failure this prevents: a laptop waking from sleep sending a beat that spends the pause its reload would get back. */
+test('an idle screen out of touch past the grace stops sending until the student acts', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const calls: unknown[] = [];
+  const { unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(apiThatFails(calls))));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+  const pass = (ms: number) =>
+    act(async () => {
+      mock.timers.tick(ms);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  await pass(0);
+
+  await pass(31_000);
+  await pass(31_000);
+  const whileInTouch = calls.length;
+  await pass(31_000);
+  await pass(31_000);
+  await pass(31_000);
+
+  assert.ok(whileInTouch >= 1, 'it said it was here while it could still be heard');
+  assert.equal(calls.length, whileInTouch, 'and nothing once the grace had passed unanswered');
+});

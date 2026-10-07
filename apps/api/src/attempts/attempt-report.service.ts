@@ -111,7 +111,7 @@ export class AttemptReportService {
   }
 
   /** The PAPER's own marks, so one sitting cannot read one percentage here and another on its card. */
-  private async paperMarks(testIds: readonly string[]): Promise<Map<string, number>> {
+  async paperMarks(testIds: readonly string[]): Promise<Map<string, number>> {
     const rows = await this.prisma.paperQuestion.groupBy({
       by: ['testId'],
       where: { testId: { in: [...testIds] } },

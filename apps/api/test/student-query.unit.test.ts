@@ -67,11 +67,6 @@ describe('studentWhere — three-state filters', () => {
     }
   });
 
-  it('can ask for exactly the students still on a starting PIN', () => {
-    assertHas({ hasDefaultPin: 'true' }, { pinIsDefault: true });
-    assert.equal(chosenFor().length, 0);
-  });
-
   /** The badge beside it reads the same rule, so "no access of their own" means one thing on the screen. */
   it('reads noAccess as the one own-access rule, both ways round', () => {
     assertHas({ noAccess: 'true' }, { NOT: HOLDS_OWN_ACCESS });
@@ -156,11 +151,11 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
     assertHas(params, HOLDS_OWN_ACCESS);
   });
 
-  /** The likeliest one to be hit: pick "Still on the default PIN", then type a name. The status filter used to disappear and the search ran across everyone. */
-  it('keeps "still on the default PIN" when a search is typed', () => {
-    const params = { hasDefaultPin: 'true', q: 'ravi' };
+  /** The likeliest one to be hit: pick a status, then type a name. The status filter used to disappear and the search ran across everyone. */
+  it('keeps "blocked from tests" when a search is typed', () => {
+    const params = { isTestBlocked: 'true', q: 'ravi' };
 
-    assertHas(params, { pinIsDefault: true });
+    assertHas(params, { isTestBlocked: true });
     assertHas(params, {
       AND: [
         {
@@ -180,12 +175,11 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
       isActive: 'true',
       isTestBlocked: 'false',
       preTestReady: 'false',
-      hasDefaultPin: 'true',
       course: 'SSC',
       programCode: 'FOUNDATION',
     });
 
-    assert.equal(conditions.length, 8, 'every filter must survive');
+    assert.equal(conditions.length, 7, 'every filter must survive');
   });
 
   it('searches a mobile number and a name together', () => {
@@ -225,6 +219,6 @@ describe('studentOrderBy', () => {
   });
 
   it('refuses a sort the database was never asked to serve', () => {
-    assert.equal(studentListQuerySchema.safeParse({ sort: 'pinHash' }).success, false);
+    assert.equal(studentListQuerySchema.safeParse({ sort: 'updatedAt' }).success, false);
   });
 });

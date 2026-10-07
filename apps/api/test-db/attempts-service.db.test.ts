@@ -309,6 +309,32 @@ describe('AttemptsService — what cannot be sat', () => {
   });
 });
 
+describe('AttemptsService — one sitting at a time, on one sign-in', () => {
+  /** The failure this prevents: a second device starting another paper, its clock running, under the one being written. */
+  it('refuses the other sign-in a different test while one is being answered, and starts nothing', async () => {
+    const { service, student, paper } = await hall();
+    const another = await hall();
+    await service.start(student, paper.testId, { tab: 'tab_web' }, 'web');
+
+    await assert.rejects(
+      () => service.start(student, another.paper.testId, { tab: 'tab_app' }, 'app'),
+      (error: unknown) =>
+        AppException.is(error) && error.code === ErrorCodes.SITTING_HELD_ELSEWHERE,
+    );
+    assert.equal(await sittingsOf(another.paper), 0);
+  });
+
+  it('lets the same sign-in open a different test, as it always could', async () => {
+    const { service, student, paper } = await hall();
+    const another = await hall();
+    await service.start(student, paper.testId, { tab: 'tab_one' }, 'web');
+
+    await service.start(student, another.paper.testId, { tab: 'tab_two' }, 'web');
+
+    assert.equal(await sittingsOf(another.paper), 1);
+  });
+});
+
 describe('AttemptsService — resuming what is already running', () => {
   it('resumes a sitting the window has since closed under', async () => {
     const { service, student, paper } = await hall({ permitted: false });

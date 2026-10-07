@@ -13,6 +13,7 @@ import {
   type AuthoringStats,
   type Paginated,
   type QuestionDraft,
+  type QuestionIdentity,
   type QuestionListQuery,
   type QuestionSummary,
 } from '@iace/contracts';
@@ -109,7 +110,7 @@ export class AuthoringService {
   }
 
   /** Asked while the question is typed; the save itself refuses one. */
-  async duplicateFor(draft: QuestionDraft, exceptId: string | null) {
+  async duplicateFor(draft: QuestionIdentity, exceptId: string | null) {
     return this.questions.duplicateOf(computeStemHash(draft), exceptId);
   }
 

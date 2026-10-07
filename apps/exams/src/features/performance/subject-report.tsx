@@ -67,6 +67,7 @@ function Body({ sections }: Readonly<{ sections: readonly SectionalStanding[] }>
           rowKey={(row) => row.baseConfigSectionId}
           isLoading={false}
           empty="This paper had no sections"
+          stacks
         />
       </Section>
 
@@ -79,6 +80,7 @@ const COLUMNS: readonly DataTableColumn<SectionalStanding>[] = [
   {
     key: 'name',
     header: 'Section',
+    pinned: true,
     className: 'max-w-[14rem]',
     cell: (row) => <TruncatedText>{row.name}</TruncatedText>,
   },

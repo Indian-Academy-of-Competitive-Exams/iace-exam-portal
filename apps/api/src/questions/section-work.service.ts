@@ -22,15 +22,17 @@ import {
   type QuestionImportResult,
   type QuestionOnOtherTest,
   type QuestionReview,
+  type QuestionTime,
   type SectionQuestion,
   type SectionSeat,
   type SectionWork,
   type SendBackBody,
+  type WorkTimeTotal,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertSourceChosen } from '../common/paper-edit';
 import { RedisService } from '../redis/redis.service';
-import { sectionEditingBy, takeSectionEditLock } from '../common/edit-lock';
+import { releaseSectionEditLock, sectionEditingBy, takeSectionEditLock } from '../common/edit-lock';
 import { AssignmentsService } from '../assignments';
 import { stemPreviewOf } from './question-core';
 import { QuestionImportService } from './question-import.service';
@@ -93,6 +95,7 @@ const NO_LONGER_TYPING_MESSAGE =
   'This section is no longer yours, so nothing new is typed into it.';
 const NOTHING_TO_TYPE_MESSAGE =
   'This test is picked from the bank, so its sections are not typed. Fix what is sent back to you.';
+const SEATS_ONLY_MESSAGE = "Only this section's typist or proof-reader has time counted on it.";
 const SECTION_HANDED_OVER_MESSAGE =
   'You have marked this section done. New questions go to the bank, not this paper.';
 
@@ -144,10 +147,11 @@ export class SectionWorkService {
   /** A review write changes nothing `load` read, so an action answers from the context it checked. */
   private async workOf(context: Context): Promise<SectionWork> {
     const { pair } = context;
-    const [scoped, editingBy, canRelease] = await Promise.all([
+    const [scoped, editingBy, canRelease, times] = await Promise.all([
       this.scoped(context),
       sectionEditingBy(this.redis, this.prisma, pair),
       this.canRelease(context),
+      this.timesOf(context),
     ]);
     const history = context.rows.filter((row) => row.replacedAt !== null);
     return {
@@ -176,13 +180,66 @@ export class SectionWorkService {
         review: question.review,
         editable: this.editable(context, question),
         deletable: this.deletable(context, question),
+        time: times.get(question.id) ?? noTime(seesEverySeat(context)),
       })),
     };
+  }
+
+  /** Each question's time folded for the viewer: their own, and each seat's where they may see it. */
+  private async timesOf(context: Context): Promise<Map<string, QuestionTime>> {
+    const rows = await this.prisma.questionWorkTime.findMany({
+      where: context.pair,
+      select: { questionId: true, adminId: true, role: true, seconds: true },
+    });
+    const all = seesEverySeat(context);
+    const times = new Map<string, QuestionTime>();
+    for (const row of rows) {
+      const time = times.get(row.questionId) ?? noTime(all);
+      if (row.adminId === context.viewer.id) time.own += row.seconds;
+      const seat = row.role === ASSIGNMENT_ROLES.TYPIST ? 'typist' : 'reader';
+      if (all) time[seat] = (time[seat] ?? 0) + row.seconds;
+      times.set(row.questionId, time);
+    }
+    return times;
+  }
+
+  /** Seconds the caller has just had this question on screen, added to their total in the seat they hold. */
+  async spend(
+    pair: Pair,
+    questionId: string,
+    seconds: number,
+    viewer: SectionViewer,
+  ): Promise<WorkTimeTotal> {
+    const context = await this.load(pair, viewer);
+    const own = heldNow(context);
+    if (!own) throw new AppException(ErrorCodes.FORBIDDEN, SEATS_ONLY_MESSAGE);
+    if (context.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
+    await this.requireScoped(context, questionId);
+
+    const key = { testId: pair.testId, questionId, adminId: viewer.id, role: own.role };
+    return this.prisma.questionWorkTime.upsert({
+      where: { testId_questionId_adminId_role: key },
+      create: { ...key, baseConfigSectionId: pair.baseConfigSectionId, seconds },
+      update: { seconds: { increment: seconds } },
+      select: { seconds: true },
+    });
   }
 
   /** The typist row a Done is taken under; its own state is the Done's to judge. */
   async actingTypist(pair: Pair, viewer: SectionViewer): Promise<Assignment> {
     return actingAs(await this.load(pair, viewer), ASSIGNMENT_ROLES.TYPIST);
+  }
+
+  /** The section as a Done leaves it: it is the reader's now, so no typing claim outlives it. */
+  async handedOver(pair: Pair, viewer: SectionViewer): Promise<SectionWork> {
+    await releaseSectionEditLock(this.redis, pair);
+    return this.one(pair, viewer);
+  }
+
+  /** The viewer's turn has ended: their own claim goes, and the section answers as it now stands. */
+  private async passedOn(context: Context): Promise<SectionWork> {
+    await releaseSectionEditLock(this.redis, context.pair, context.viewer.id);
+    return this.workOf(context);
   }
 
   /** A question typed for the section, under the open typing job the viewer acts through. */
@@ -218,6 +275,7 @@ export class SectionWorkService {
   async release(pair: Pair, viewer: SectionViewer): Promise<SectionWork> {
     const reading = actingAs(await this.load(pair, viewer), ASSIGNMENT_ROLES.PROOFREADER);
     await this.assignments.finalize(reading.id);
+    await releaseSectionEditLock(this.redis, pair, viewer.id);
     return this.one(pair, viewer);
   }
 
@@ -330,7 +388,7 @@ export class SectionWorkService {
       create: { ...pair, questionId, ...checked },
       update: checked,
     });
-    return this.workOf(context);
+    return this.passedOn(context);
   }
 
   async uncheck(pair: Pair, questionId: string, viewer: SectionViewer): Promise<SectionWork> {
@@ -371,7 +429,7 @@ export class SectionWorkService {
       create: { ...pair, questionId, ...sent },
       update: sent,
     });
-    return this.workOf(context);
+    return this.passedOn(context);
   }
 
   /** The typist's answer to a send-back: it goes back to the reader to be checked again. */
@@ -391,7 +449,7 @@ export class SectionWorkService {
       where: { testId_questionId: { testId: pair.testId, questionId } },
       data: { fixedAt: new Date(), fixedById: viewer.id },
     });
-    return this.workOf(context);
+    return this.passedOn(context);
   }
 
   private async load(pair: Pair, viewer: SectionViewer): Promise<Context> {
@@ -412,7 +470,11 @@ export class SectionWorkService {
       : null;
     if (!test || !section) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
 
-    const rows = await this.assignments.sectionAssignments(pair.testId, pair.baseConfigSectionId);
+    const rows = await this.assignments.sectionAssignments(
+      pair.testId,
+      pair.baseConfigSectionId,
+      viewer,
+    );
     const active = rows.filter((row) => row.replacedAt === null);
     const own = rows.filter((row) => row.assigneeId === viewer.id);
     const mine = own.find((row) => row.replacedAt === null) ?? own.at(-1) ?? null;
@@ -561,6 +623,16 @@ export class SectionWorkService {
     });
   }
 }
+
+/** The owner's seat and a super admin read every seat's time; a typist and a reader read their own. */
+const seesEverySeat = (context: Context): boolean =>
+  context.seat === SECTION_SEATS.OWNER || context.viewer.isSuperAdmin === true;
+
+const noTime = (everySeat: boolean): QuestionTime => ({
+  own: 0,
+  typist: everySeat ? 0 : null,
+  reader: everySeat ? 0 : null,
+});
 
 /** For a super admin whoever holds the role now, a seat they once left included; else the viewer's own row in it. */
 function actingAs(context: Context, role: AssignmentRole): Assignment {

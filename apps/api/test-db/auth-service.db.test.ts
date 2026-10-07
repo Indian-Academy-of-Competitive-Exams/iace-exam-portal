@@ -16,10 +16,9 @@ import { AdminsService } from '../src/admins';
 import { AuditContext } from '../src/audit';
 import { AuthService } from '../src/auth/auth.service';
 import { OtpService } from '../src/auth/otp/otp.service';
-import { PinService } from '../src/auth/pin/pin.service';
 import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
-import { DOMAIN_EVENTS, PIN_RESET_REASONS } from '../src/common/events';
+import { DOMAIN_EVENTS } from '../src/common/events';
 import { DomainEventBus } from '../src/common/events/domain-event-bus';
 import {
   FakeConfig,
@@ -31,7 +30,7 @@ import {
 } from '../test/support/fakes';
 import { makeStudent, resetDatabase, testPrisma } from './support/database';
 
-/** The orchestration. Most of what matters is what the API refuses to disclose: who has an account, and why a login failed. */
+/** The orchestration. Most of what matters is who is let in, and what the API refuses to disclose about who has an account. */
 
 const MOBILE = '9876543210';
 const ADMIN_EMAIL = 'admin@iace.co.in';
@@ -42,9 +41,12 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
-function build(bus: { asService(): DomainEventBus } = new FakeEventBus()) {
+function build(
+  bus: { asService(): DomainEventBus } = new FakeEventBus(),
+  env: ConstructorParameters<typeof FakeConfig>[0] = {},
+) {
   const redis = new FakeRedis();
-  const config = new FakeConfig();
+  const config = new FakeConfig(env);
   const sender = new FakeMessageSender();
   const metrics = new FakeMetrics();
   const tokens = new TokenService(new JwtService({}), config.asService());
@@ -52,7 +54,6 @@ function build(bus: { asService(): DomainEventBus } = new FakeEventBus()) {
   const auth = new AuthService(
     prisma,
     new OtpService(redis.asService(), config.asService(), sender, metrics.asService()),
-    new PinService(redis.asService(), config.asService()),
     tokens,
     sessions,
     bus.asService(),
@@ -64,11 +65,10 @@ function build(bus: { asService(): DomainEventBus } = new FakeEventBus()) {
 
 type Ctx = ReturnType<typeof build>;
 
-/** Drives signup the way the endpoints do: OTP → ticket → PIN. */
-async function signUp(ctx: Ctx, mobile: string, pinCode: string) {
+/** Signs in the way the endpoints do: a code asked for, then the code back. A first time is the signup. */
+async function signIn(ctx: Ctx, mobile: string) {
   await ctx.auth.requestStudentOtp(mobile);
-  const ticket = await ctx.auth.verifyStudentOtp(mobile, ctx.sender.lastCode);
-  return ctx.auth.setStudentPin(mobile, ticket.setupToken, pinCode, NO_DEVICE);
+  return ctx.auth.verifyStudentOtp(mobile, ctx.sender.lastCode, NO_DEVICE);
 }
 
 const setStudent = (data: { isActive?: boolean; isTestBlocked?: boolean }) =>
@@ -93,309 +93,167 @@ const admin = (over: { id?: string; isSuperAdmin?: boolean; isActive?: boolean }
 const failsWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
 
-describe('AuthService — student login', () => {
-  it('signs in with the right PIN and returns tokens plus identity', async () => {
+describe('AuthService — a student signs in with a code', () => {
+  it('signs in a student the roster holds, and returns tokens plus identity', async () => {
     const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
+    await makeStudent(prisma, { mobile: MOBILE });
 
-    const { tokens, identity } = await ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE);
+    const { tokens, identity } = await signIn(ctx, MOBILE);
 
     assert.ok(tokens.accessToken);
     assert.ok(tokens.refreshToken);
     assert.equal(identity.actor, ActorTypes.STUDENT);
     assert.equal(identity.mobile, MOBILE);
+    assert.equal(await prisma.student.count(), 1);
+    assert.deepEqual(ctx.metrics.authAttempts, ['ok']);
   });
 
-  /** Three internal states, one external answer — otherwise the message says who has an account. */
-  it('gives the SAME answer for unknown number, no PIN set, and wrong PIN', async () => {
-    const ctx = build();
-    await makeStudent(prisma, { mobile: '9000000001' });
-    await signUp(ctx, MOBILE, '4813');
-
-    const messages: string[] = [];
-    for (const [mobile, pinCode] of [
-      ['9999999999', '4813'],
-      ['9000000001', '4813'],
-      [MOBILE, '0000'],
-    ] as const) {
-      const error = await ctx.auth
-        .loginStudent(mobile, pinCode, NO_DEVICE)
-        .catch((e: unknown) => e);
-      assert.ok(AppException.is(error));
-      assert.equal(error.code, 'PIN_INVALID');
-      messages.push(error.message);
-    }
-
-    assert.equal(
-      new Set(messages).size,
-      1,
-      `expected one message, got ${JSON.stringify(messages)}`,
-    );
-  });
-
-  /** Otherwise "which numbers get locked out" is itself an enumeration oracle. */
-  it('counts a failure against an unknown number too', async () => {
-    const ctx = build();
-
-    for (let i = 0; i < 5; i++) {
-      await assert.rejects(() => ctx.auth.loginStudent('9999999999', '0000', NO_DEVICE));
-    }
-
-    await assert.rejects(
-      () => ctx.auth.loginStudent('9999999999', '0000', NO_DEVICE),
-      failsWith('PIN_LOCKED'),
-    );
-  });
-
-  /** A 401 says a call was refused; only this says whether one student forgot their PIN or someone is enumerating numbers. */
-  it('counts each sign-in outcome apart, while telling the caller the same thing', async () => {
-    const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
-    ctx.metrics.authAttempts.length = 0;
-
-    await ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE);
-    await assert.rejects(() => ctx.auth.loginStudent(MOBILE, '0000', NO_DEVICE));
-    await assert.rejects(() => ctx.auth.loginStudent('9999999999', '0000', NO_DEVICE));
-
-    assert.deepEqual(ctx.metrics.authAttempts, ['ok', 'bad_pin', 'no_student']);
-  });
-
-  it('counts a lockout as its own outcome, not as another bad PIN', async () => {
-    const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
-
-    for (let i = 0; i < 6; i++) {
-      await assert.rejects(() => ctx.auth.loginStudent(MOBILE, '0000', NO_DEVICE));
-    }
-
-    assert.equal(ctx.metrics.authAttempts.at(-1), 'locked');
-  });
-
-  it('refuses a deactivated account, even with the correct PIN', async () => {
-    const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
-    await setStudent({ isActive: false });
-
-    await assert.rejects(
-      () => ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE),
-      failsWith('FORBIDDEN'),
-    );
-  });
-
-  /** A test block is not a lockout: they sign in to read the results they already have. */
-  it('signs a test-blocked student in, and says so on the identity', async () => {
-    const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
-    await setStudent({ isTestBlocked: true });
-
-    const { identity } = await ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE);
-
-    assert.equal(identity.actor === ActorTypes.STUDENT ? identity.isTestBlocked : null, true);
-  });
-
-  it('checks the lockout before the PIN, so a locked number cannot be probed', async () => {
-    const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
-    for (let i = 0; i < 5; i++) {
-      await assert.rejects(() => ctx.auth.loginStudent(MOBILE, '0000', NO_DEVICE));
-    }
-
-    await assert.rejects(
-      () => ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE),
-      failsWith('PIN_LOCKED'),
-    );
-  });
-
-  it('clears the lockout ladder on a correct sign-in', async () => {
-    const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
-    for (let i = 0; i < 4; i++) {
-      await assert.rejects(() => ctx.auth.loginStudent(MOBILE, '0000', NO_DEVICE));
-    }
-
-    await ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE);
-
-    assert.deepEqual(
-      Object.keys(ctx.redis.snapshot()).filter((key) => key.startsWith('pin:')),
-      [],
-    );
-  });
-});
-
-describe('AuthService — signup and PIN reset', () => {
-  /** An abandoned signup must leave nothing behind. */
-  it('creates no student until a PIN is chosen', async () => {
+  /** Asking for a code proves nothing, so it must not leave a row behind for every number typed. */
+  it('creates no student until the code is proved', async () => {
     const ctx = build();
 
     await ctx.auth.requestStudentOtp(MOBILE);
-    await ctx.auth.verifyStudentOtp(MOBILE, ctx.sender.lastCode);
 
     assert.equal(await prisma.student.count(), 0);
   });
 
-  /** ONLINE means an IACE student at the online branch; somebody signing themselves up is neither. */
-  it('creates the student when the PIN is set, outside the institute and at no branch', async () => {
-    const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
+  it('makes the account on the first sign-in, outside the institute and at no branch, once', async () => {
+    const bus = new FakeEventBus();
+    const ctx = build(bus);
+
+    const first = await signIn(ctx, MOBILE);
+    const again = await signIn(ctx, MOBILE);
 
     const [student, ...others] = await prisma.student.findMany();
     assert.equal(others.length, 0);
-    assert.equal(student?.mobile, MOBILE);
-    assert.ok(student?.pinHash);
     assert.equal(student?.studentType, STUDENT_TYPE.NON_IACE);
     assert.equal(student?.currentBranchId, null);
+    assert.equal(again.identity.id, first.identity.id);
+    assert.deepEqual(bus.of(DOMAIN_EVENTS.STUDENT_SIGNED_UP), [{ studentId: first.identity.id }]);
   });
 
-  it('tells the caller whether this is a signup or a reset', async () => {
+  /** The failure this prevents: a guessed code opening an account, or making one. */
+  it('refuses a wrong code, counts it apart, and lets nobody in', async () => {
     const ctx = build();
-
     await ctx.auth.requestStudentOtp(MOBILE);
-    const first = await ctx.auth.verifyStudentOtp(MOBILE, ctx.sender.lastCode);
-    assert.equal(first.pinAlreadySet, false);
-    await ctx.auth.setStudentPin(MOBILE, first.setupToken, '4813', NO_DEVICE);
+    const wrong = ctx.sender.lastCode === '000000' ? '111111' : '000000';
 
-    ctx.redis.advanceSeconds(46);
-    await ctx.auth.requestStudentOtp(MOBILE);
-    const second = await ctx.auth.verifyStudentOtp(MOBILE, ctx.sender.lastCode);
-    assert.equal(second.pinAlreadySet, true);
+    await assert.rejects(
+      () => ctx.auth.verifyStudentOtp(MOBILE, wrong, NO_DEVICE),
+      failsWith(ErrorCodes.OTP_INVALID),
+    );
+
+    assert.equal(await prisma.student.count(), 0);
+    assert.deepEqual(ctx.metrics.authAttempts, ['bad_code']);
+    assert.ok(!Object.keys(ctx.redis.snapshot()).some((key) => key.startsWith('session:')));
   });
 
-  it('replaces the PIN on reset, retires the old one, and ends every existing session', async () => {
+  it('refuses a deactivated account, even with the right code', async () => {
     const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
-    const before = await ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE);
-    const claims = await ctx.tokens.verifyAccess(before.tokens.accessToken);
-
-    ctx.redis.advanceSeconds(46);
-    await signUp(ctx, MOBILE, '7261');
-
-    await assert.doesNotReject(() => ctx.auth.loginStudent(MOBILE, '7261', NO_DEVICE));
-    await assert.rejects(() => ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE));
-    assert.equal(await prisma.student.count(), 1, 'reset must not create a second student');
-    // Most of the point of a reset: whoever knew the old PIN is signed out.
-    assert.equal(await ctx.sessions.exists(ActorTypes.STUDENT, claims.sub, claims.sid), false);
-  });
-
-  it('refuses a student deactivated after OTP verify, and leaves their PIN as it was', async () => {
-    const ctx = build();
-    await signUp(ctx, MOBILE, '4813');
-    const before = await prisma.student.findFirstOrThrow({ where: { mobile: MOBILE } });
-
-    ctx.redis.advanceSeconds(46);
-    await ctx.auth.requestStudentOtp(MOBILE);
-    const ticket = await ctx.auth.verifyStudentOtp(MOBILE, ctx.sender.lastCode);
+    await makeStudent(prisma, { mobile: MOBILE });
     await setStudent({ isActive: false });
 
-    await assert.rejects(
-      () => ctx.auth.setStudentPin(MOBILE, ticket.setupToken, '7261', NO_DEVICE),
-      failsWith('FORBIDDEN'),
-    );
-    const after = await prisma.student.findFirstOrThrow({ where: { mobile: MOBILE } });
-    assert.equal(after.pinHash, before.pinHash);
+    await assert.rejects(() => signIn(ctx, MOBILE), failsWith(ErrorCodes.FORBIDDEN));
+
+    assert.deepEqual(ctx.metrics.authAttempts, ['deactivated']);
   });
 
-  it('refuses a deactivated account at OTP verify', async () => {
+  /** Blocked from tests is not blocked from signing in: their results stay theirs to read. */
+  it('signs a test-blocked student in, and says so on the identity', async () => {
     const ctx = build();
-    await makeStudent(prisma, { mobile: MOBILE, isActive: false });
-    await ctx.auth.requestStudentOtp(MOBILE);
+    await makeStudent(prisma, { mobile: MOBILE });
+    await setStudent({ isTestBlocked: true });
+
+    const { identity } = await signIn(ctx, MOBILE);
+
+    assert.equal(identity.actor === ActorTypes.STUDENT && identity.isTestBlocked, true);
+  });
+
+  /** The failure this prevents: codes asked for unknown numbers pausing every student's sign-in for the day. */
+  it('pays for a stranger’s code from the signup budget, and a student’s from their own', async () => {
+    const ctx = build(new FakeEventBus(), {
+      OTP_RESEND_COOLDOWN_SEC: 0,
+      OTP_MAX_PER_DAY: 1000,
+      OTP_MAX_PER_DAY_PER_IP: 1000,
+      NOTIFICATION_COST_SMS_PAISE: 100,
+      OTP_GLOBAL_DAILY_BUDGET_PAISE: 1000,
+      OTP_SIGNUP_DAILY_BUDGET_PAISE: 100,
+    });
+    await makeStudent(prisma, { mobile: MOBILE });
+    await ctx.auth.requestStudentOtp('9000000001');
 
     await assert.rejects(
-      () => ctx.auth.verifyStudentOtp(MOBILE, ctx.sender.lastCode),
-      failsWith('FORBIDDEN'),
+      () => ctx.auth.requestStudentOtp('9000000002'),
+      failsWith(ErrorCodes.RATE_LIMITED),
     );
-  });
-});
 
-describe('student.pin_reset', () => {
-  const resetPinByOtp = (ctx: Ctx, pin: string) => signUp(ctx, MOBILE, pin);
-
-  it('is announced when a forgotten PIN is reset by OTP, and again when a known one is changed', async () => {
-    const events = new FakeEventBus();
-    const ctx = build(events);
-    const session = await resetPinByOtp(ctx, '1234');
-
-    await ctx.auth.changeStudentPin(session.identity.id, '1234', '5678', NO_DEVICE);
-
-    const published = events.of(DOMAIN_EVENTS.STUDENT_PIN_RESET);
-    assert.equal(published[0]?.mobile, MOBILE);
-    // Both paths end every other session, so both announce it, with how the student proved themselves.
-    assert.deepEqual(
-      published.map((event) => event.reason),
-      [PIN_RESET_REASONS.OTP_RESET, PIN_RESET_REASONS.SELF_CHANGE],
-    );
-  });
-
-  /** An event is a fact that happened; a refused change is not one. */
-  it('is not announced when the current PIN is wrong', async () => {
-    const events = new FakeEventBus();
-    const ctx = build(events);
-    const session = await resetPinByOtp(ctx, '1234');
-
-    await ctx.auth
-      .changeStudentPin(session.identity.id, '0000', '5678', NO_DEVICE)
-      .catch(() => undefined);
-
-    assert.equal(events.of(DOMAIN_EVENTS.STUDENT_PIN_RESET).length, 1);
+    assert.equal((await ctx.auth.requestStudentOtp(MOBILE)).sent, true);
   });
 
   /** The guarantee the event must never take over. */
-  it('completes the reset even when a listener throws', async () => {
+  it('signs a new student in even when a listener throws', async () => {
     const emitter = new EventEmitter2({ wildcard: false, delimiter: '.' });
-    emitter.on(DOMAIN_EVENTS.STUDENT_PIN_RESET, () => {
+    emitter.on(DOMAIN_EVENTS.STUDENT_SIGNED_UP, () => {
       throw new Error('the notifications handler is broken');
     });
-    const bus = new DomainEventBus(emitter);
-    const ctx = build({ asService: () => bus });
+    const ctx = build({ asService: () => new DomainEventBus(emitter) });
 
-    const session = await resetPinByOtp(ctx, '1234');
+    const session = await signIn(ctx, MOBILE);
 
-    assert.ok(session.tokens.accessToken, 'the reset must complete regardless');
-    assert.ok(
-      Object.keys(ctx.redis.snapshot()).some((key) => key.includes('session')),
-      'and the sessions really were revoked before anything was published',
-    );
+    assert.ok(session.tokens.accessToken, 'the sign-in must complete regardless');
   });
 });
 
-describe('changeStudentPin — the PIN gate in front of the write', () => {
-  it('clears the ladder and replaces the PIN once the current one is proved', async () => {
+describe('AuthService — the code an admin reads out at the desk', () => {
+  const studentId = async () => (await makeStudent(prisma, { mobile: MOBILE })).id;
+
+  /** The failure this prevents: a hall where the codes are not arriving and nobody can be let in. */
+  it('signs the student in with a code that was read out and never sent', async () => {
     const ctx = build();
-    const session = await signUp(ctx, MOBILE, '4813');
-    await assert.rejects(() =>
-      ctx.auth.changeStudentPin(session.identity.id, '0000', '7261', NO_DEVICE),
-    );
 
-    await ctx.auth.changeStudentPin(session.identity.id, '4813', '7261', NO_DEVICE);
+    const { code, expiresInSec } = await ctx.auth.issueStudentDeskCode(await studentId());
+    const { identity } = await ctx.auth.verifyStudentOtp(MOBILE, code, NO_DEVICE);
 
-    await assert.doesNotReject(() => ctx.auth.loginStudent(MOBILE, '7261', NO_DEVICE));
-    assert.deepEqual(
-      Object.keys(ctx.redis.snapshot()).filter((key) => key.startsWith('pin:')),
-      [],
+    assert.equal(ctx.sender.sent.length, 0);
+    assert.equal(expiresInSec, 300);
+    assert.equal(identity.actor === ActorTypes.STUDENT && identity.mobile, MOBILE);
+  });
+
+  /** A student pressing Resend while they queue must not void the code the desk just gave them. */
+  it('survives a sent code asked for after it, and is good once', async () => {
+    const ctx = build();
+    const { code } = await ctx.auth.issueStudentDeskCode(await studentId());
+    await ctx.auth.requestStudentOtp(MOBILE);
+
+    await ctx.auth.verifyStudentOtp(MOBILE, code, NO_DEVICE);
+
+    await assert.rejects(
+      () => ctx.auth.verifyStudentOtp(MOBILE, code, NO_DEVICE),
+      failsWith(ErrorCodes.OTP_EXPIRED),
     );
   });
 
-  /** The failure this exists to prevent: a bearer token alone reaching the write. */
-  it('refuses the wrong current PIN, leaves the old one standing, and climbs the sign-in ladder', async () => {
+  it('stops opening anything once its five minutes are up', async () => {
     const ctx = build();
-    const session = await signUp(ctx, MOBILE, '4813');
-    const before = await prisma.student.findUniqueOrThrow({ where: { id: session.identity.id } });
+    const { code, expiresInSec } = await ctx.auth.issueStudentDeskCode(await studentId());
+
+    ctx.redis.advanceSeconds(expiresInSec + 1);
 
     await assert.rejects(
-      () => ctx.auth.changeStudentPin(session.identity.id, '0000', '7261', NO_DEVICE),
-      failsWith('PIN_INVALID'),
+      () => ctx.auth.verifyStudentOtp(MOBILE, code, NO_DEVICE),
+      failsWith(ErrorCodes.OTP_EXPIRED),
     );
-    const after = await prisma.student.findUniqueOrThrow({ where: { id: session.identity.id } });
-    assert.equal(after.pinHash, before.pinHash);
+  });
 
-    for (let i = 0; i < 4; i++) {
-      await assert.rejects(() =>
-        ctx.auth.changeStudentPin(session.identity.id, '0000', '7261', NO_DEVICE),
-      );
-    }
+  it('is not issued for a suspended student, nor for one who is not there', async () => {
+    const ctx = build();
+    const id = await studentId();
+    await setStudent({ isActive: false });
 
+    await assert.rejects(() => ctx.auth.issueStudentDeskCode(id), failsWith(ErrorCodes.CONFLICT));
     await assert.rejects(
-      () => ctx.auth.changeStudentPin(session.identity.id, '4813', '7261', NO_DEVICE),
-      failsWith('PIN_LOCKED'),
+      () => ctx.auth.issueStudentDeskCode(randomUUID()),
+      failsWith(ErrorCodes.NOT_FOUND),
     );
   });
 });
@@ -510,7 +368,7 @@ describe('AuthService — admin', () => {
 describe('AuthService — refresh and me', () => {
   it('rotates the refresh token and keeps the session id', async () => {
     const ctx = build();
-    const session = await signUp(ctx, MOBILE, '4813');
+    const session = await signIn(ctx, MOBILE);
     const before = await ctx.tokens.verifyRefresh(session.tokens.refreshToken);
 
     const next = await ctx.auth.refresh(session.tokens.refreshToken);
@@ -522,7 +380,7 @@ describe('AuthService — refresh and me', () => {
 
   it('reads identity fresh, so a change lands without re-login', async () => {
     const ctx = build();
-    const session = await signUp(ctx, MOBILE, '4813');
+    const session = await signIn(ctx, MOBILE);
     const claims = await ctx.tokens.verifyAccess(session.tokens.accessToken);
     await prisma.studentProfile.create({
       data: {
@@ -547,7 +405,7 @@ describe('AuthService — refresh and me', () => {
 
   it('refuses to refresh once the account is deactivated', async () => {
     const ctx = build();
-    const session = await signUp(ctx, MOBILE, '4813');
+    const session = await signIn(ctx, MOBILE);
     await setStudent({ isActive: false });
 
     await assert.rejects(

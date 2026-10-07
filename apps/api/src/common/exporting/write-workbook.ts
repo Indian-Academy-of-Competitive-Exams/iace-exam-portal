@@ -8,7 +8,7 @@ export const EXPORT_DATE_FORMATS = {
   INSTANT: 'yyyy-mm-dd hh:mm',
   DAY: 'yyyy-mm-dd',
 } as const;
-type ExportDateFormat = (typeof EXPORT_DATE_FORMATS)[keyof typeof EXPORT_DATE_FORMATS];
+export type ExportDateFormat = (typeof EXPORT_DATE_FORMATS)[keyof typeof EXPORT_DATE_FORMATS];
 
 const TEXT_FORMAT = '@';
 
@@ -21,6 +21,8 @@ export interface ExportColumn<Row> {
   text?: true;
   /** A `@db.Date` value goes in as it is; an instant goes through `exportInstant` first. */
   date?: ExportDateFormat;
+  /** In the file and off the page: a sheet has room for a column a printed report does not. */
+  fileOnly?: true;
 }
 
 export interface ExportSheet<Row = unknown> {

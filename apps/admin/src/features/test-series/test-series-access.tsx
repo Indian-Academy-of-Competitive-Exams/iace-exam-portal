@@ -1,18 +1,6 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import { TEST_SERIES_KIND, type TestSeriesKind, type TestSeriesSummary } from '@iace/contracts';
-import {
-  Checkbox,
-  ConfirmDialog,
-  FieldRow,
-  FormCombobox,
-  FormField,
-  FormSection,
-  plural,
-} from '@iace/ui';
-import { api } from '../../lib/api';
-import { QUERY_KEYS, seriesQueryKey } from '../../lib/constants';
+import { FieldRow, FormCombobox, FormField, FormSection } from '@iace/ui';
 import { ExamStagePicker, type StageChoice } from '../../components/exam-picker';
 import { EventPicker, ProgramPicker } from '../../components/access-picker';
 import { KIND_ITEMS, chooseKind, type SeriesFormValues } from './test-series-detail';
@@ -119,72 +107,5 @@ export function SeriesAccess({
         <KindTarget form={form} detail={detail} kind={kind} />
       </FieldRow>
     </FormSection>
-  );
-}
-
-/** Turning it on and turning it off are not the same question, so they are not the same words. */
-function switchQuestion(
-  series: TestSeriesSummary,
-  next: boolean,
-): { title: string; description: string; confirmLabel: string; destructive: boolean } {
-  const tests = plural(series.testCount, 'test');
-
-  if (next) {
-    return {
-      title: `Switch ${series.name} on?`,
-      description: `Everyone its kind reaches can start its ${tests} from now on. Which students that is comes from the kind; this switch decides whether any of them may sit anything at all.`,
-      confirmLabel: 'Switch it on',
-      destructive: false,
-    };
-  }
-
-  return {
-    title: `Switch ${series.name} off?`,
-    description: `It reaches nobody while it is off, and its ${tests} leave every student's list at once. Attempts already made and their results are kept, and a test somebody is sitting right now is not stopped.`,
-    confirmLabel: 'Switch it off',
-    destructive: true,
-  };
-}
-
-/** The master switch. It changes who can sit a test, so it asks in both directions. */
-export function SeriesSwitch({ series }: Readonly<{ series: TestSeriesSummary }>) {
-  const queryClient = useQueryClient();
-  const [asking, setAsking] = useState<boolean | null>(null);
-
-  const save = useMutation({
-    meta: { success: `${series.name} saved.` },
-    mutationFn: (isEnabled: boolean) => api.admin.testSeries.update(series.id, { isEnabled }),
-    onSuccess: (saved) => {
-      setAsking(null);
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES, refetchType: 'none' });
-      queryClient.setQueryData(seriesQueryKey(saved.id), saved);
-    },
-    // Drop out of the confirm on failure, or the row is left asking a question already answered.
-    onError: () => setAsking(null),
-  });
-
-  const question = switchQuestion(series, asking ?? !series.isEnabled);
-
-  return (
-    <>
-      <Checkbox
-        checked={series.isEnabled}
-        disabled={save.isPending}
-        onChange={(event) => setAsking(event.target.checked)}
-        label="Enabled"
-        /* ui-copy-ok: consequence */ hint="Off reaches nobody, whatever the kind"
-      />
-
-      <ConfirmDialog
-        open={asking !== null}
-        onOpenChange={(open) => !open && setAsking(null)}
-        destructive={question.destructive}
-        loading={save.isPending}
-        title={question.title}
-        description={question.description}
-        confirmLabel={question.confirmLabel}
-        onConfirm={() => asking !== null && save.mutate(asking)}
-      />
-    </>
   );
 }

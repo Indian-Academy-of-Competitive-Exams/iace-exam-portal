@@ -1,7 +1,7 @@
 /**
- * One test's report as a workbook: every sitting with its live standing, who it reached and did not
- * sit, and the paper's figures as the analytics screen reads them. Standing comes from the whole-test
- * window query; the paper figures are the analytics service's own, so the file matches the screen.
+ * One test's report, a sheet at a time: every sitting with its live standing, who it reached and did
+ * not sit, and the paper's figures as the analytics screen reads them. The workbook writes all five
+ * sheets and a printed report takes one, so the page and the file cannot disagree.
  */
 import { type Prisma } from '@prisma/client';
 import {
@@ -19,6 +19,7 @@ import {
   exportInstant,
   writeWorkbook,
   type ExportColumn,
+  type ExportSheet,
 } from '../common/exporting';
 import { type PrismaService } from '../prisma/prisma.service';
 import { STUDENT_CARD_SELECT, studentCardsOf, type StudentCard } from '../students';
@@ -54,7 +55,8 @@ const SITTING_SELECT = {
 
 type Sitting = Prisma.AttemptGetPayload<{ select: typeof SITTING_SELECT }>;
 
-interface ResultRow extends Sitting {
+/** A sitting as the result sheet reads it; outside the cohort its rank and percentile are null. */
+export interface ResultRow extends Sitting {
   rank: number | null;
   percentile: number | null;
   bySection: ReadonlyMap<string, AttemptSectionScore>;
@@ -74,42 +76,101 @@ export interface TestReportSources {
 }
 
 export async function buildTestReport(
-  { prisma, analytics, access }: TestReportSources,
+  sources: TestReportSources,
   testId: string,
 ): Promise<TestReport> {
-  const report = await analytics.forTest(testId);
-  assertExportable(report.summary.attemptCount);
-
-  const [standings, sittings, test] = await Promise.all([
-    prisma.$queryRaw<TestResultRow[]>(testResultsSql(testId)),
-    prisma.attempt.findMany({ where: { testId }, select: SITTING_SELECT }),
-    prisma.test.findUniqueOrThrow({ where: { id: testId }, select: { testSeriesId: true } }),
-  ]);
-  const byId = new Map(sittings.map((sitting) => [sitting.id, sitting]));
-  const results = standings.flatMap((standing) => {
-    const sitting = byId.get(standing.attempt_id);
-    if (!sitting) return [];
-    const { rank, percentile } = standing;
-    return [{ ...sitting, rank, percentile, bySection: sectionsOf(sitting) }];
-  });
-
-  // Reached, minus anyone holding any sitting of the test, a voided one included.
-  const sat = new Set(sittings.map((sitting) => sitting.studentId));
-  const absentIds = (await access.studentsReaching(test.testSeriesId)).filter((id) => !sat.has(id));
-  assertExportable(absentIds.length);
-  const absent = (await studentCardsOf(prisma, absentIds)).sort((a, b) =>
-    (a.fullName ?? '').localeCompare(b.fullName ?? ''),
-  );
-
-  const sections = [...report.sections].sort((a, b) => a.order - b.order);
+  const sheets = await TestReportSheets.of(sources, testId);
+  const [results, absent] = await Promise.all([sheets.results(), sheets.absent()]);
   const workbook = await writeWorkbook([
-    { name: 'Results', columns: resultColumns(sections), rows: results },
-    { name: 'Absent', columns: PERSON_COLUMNS, rows: absent },
-    { name: 'Sections', columns: SECTION_COLUMNS, rows: sections },
-    { name: 'Questions', columns: questionColumns(sections), rows: report.items },
-    { name: 'Summary', columns: SUMMARY_COLUMNS, rows: summaryRows(report) },
+    results,
+    absent,
+    sheets.sections(),
+    sheets.questions(),
+    sheets.summary(),
   ]);
-  return { workbook, results: results.length, absent: absent.length };
+  return { workbook, results: results.rows.length, absent: absent.rows.length };
+}
+
+export class TestReportSheets {
+  private held?: Promise<Sitting[]>;
+
+  private constructor(
+    private readonly sources: TestReportSources,
+    private readonly testId: string,
+    readonly analytics: TestAnalytics,
+  ) {}
+
+  static async of(sources: TestReportSources, testId: string): Promise<TestReportSheets> {
+    return new TestReportSheets(sources, testId, await sources.analytics.forTest(testId));
+  }
+
+  /** In paper order, which is the order every sheet names them in. */
+  get orderedSections(): TestSectionAnalytics[] {
+    return [...this.analytics.sections].sort((a, b) => a.order - b.order);
+  }
+
+  /** Read once: the results list them and the absentees are whoever is not among them. */
+  private sittings(): Promise<Sitting[]> {
+    this.held ??= this.sources.prisma.attempt.findMany({
+      where: { testId: this.testId },
+      select: SITTING_SELECT,
+    });
+    return this.held;
+  }
+
+  /** The ranked in rank order, then the sittings outside the cohort. */
+  async results(): Promise<ExportSheet<ResultRow>> {
+    assertExportable(this.analytics.summary.attemptCount);
+    const [standings, sittings] = await Promise.all([
+      this.sources.prisma.$queryRaw<TestResultRow[]>(testResultsSql(this.testId)),
+      this.sittings(),
+    ]);
+    const byId = new Map(sittings.map((sitting) => [sitting.id, sitting]));
+    const rows = standings.flatMap((standing) => {
+      const sitting = byId.get(standing.attempt_id);
+      if (!sitting) return [];
+      const { rank, percentile } = standing;
+      return [{ ...sitting, rank, percentile, bySection: sectionsOf(sitting) }];
+    });
+    return { name: 'Results', columns: resultColumns(this.orderedSections), rows };
+  }
+
+  /** Reached, minus anyone holding any sitting of the test, a voided one included. */
+  async absent(): Promise<ExportSheet<StudentCard>> {
+    const { prisma, access } = this.sources;
+    const [sittings, test] = await Promise.all([
+      this.sittings(),
+      prisma.test.findUniqueOrThrow({
+        where: { id: this.testId },
+        select: { testSeriesId: true },
+      }),
+    ]);
+    const sat = new Set(sittings.map((sitting) => sitting.studentId));
+    const absentIds = (await access.studentsReaching(test.testSeriesId)).filter(
+      (id) => !sat.has(id),
+    );
+    assertExportable(absentIds.length);
+    const rows = (await studentCardsOf(prisma, absentIds)).sort((a, b) =>
+      (a.fullName ?? '').localeCompare(b.fullName ?? ''),
+    );
+    return { name: 'Absent', columns: PERSON_COLUMNS, rows };
+  }
+
+  sections(): ExportSheet<TestSectionAnalytics> {
+    return { name: 'Sections', columns: SECTION_COLUMNS, rows: this.orderedSections };
+  }
+
+  questions(): ExportSheet<TestItemAnalytics> {
+    return {
+      name: 'Questions',
+      columns: questionColumns(this.orderedSections),
+      rows: this.analytics.items,
+    };
+  }
+
+  summary(): ExportSheet<SummaryRow> {
+    return { name: 'Summary', columns: SUMMARY_COLUMNS, rows: summaryRows(this.analytics) };
+  }
 }
 
 function sectionsOf(sitting: Sitting): ReadonlyMap<string, AttemptSectionScore> {
@@ -121,7 +182,7 @@ const PERSON_COLUMNS: ExportColumn<StudentCard>[] = [
   { header: 'Student', width: 28, value: (row) => row.fullName },
   { header: 'Mobile', width: 14, text: true, value: (row) => row.mobile },
   { header: 'Branch', width: 20, value: (row) => row.currentBranch?.name ?? null },
-  { header: 'Programs', width: 24, value: (row) => row.programs.join(', ') },
+  { header: 'Programs', width: 24, fileOnly: true, value: (row) => row.programs.join(', ') },
 ];
 
 function resultColumns(sections: readonly TestSectionAnalytics[]): ExportColumn<ResultRow>[] {
@@ -133,7 +194,7 @@ function resultColumns(sections: readonly TestSectionAnalytics[]): ExportColumn<
     { header: 'Rank', width: 8, value: (row) => row.rank },
     { header: 'Percentile', width: 11, value: (row) => row.percentile },
     ...person,
-    { header: 'Attempt no', width: 11, value: (row) => row.attemptNo },
+    { header: 'Attempt no', width: 11, fileOnly: true, value: (row) => row.attemptNo },
     { header: 'Status', width: 12, value: (row) => STATUS_LABELS[row.status] },
     { header: 'Score', width: 9, value: (row) => numberOrNull(row.score) },
     { header: 'Correct', width: 9, value: (row) => row.correctCount },
@@ -143,6 +204,7 @@ function resultColumns(sections: readonly TestSectionAnalytics[]): ExportColumn<
     {
       header: 'Submitted at',
       width: 18,
+      fileOnly: true,
       date: EXPORT_DATE_FORMATS.INSTANT,
       value: (row) => exportInstant(row.submittedAt),
     },
@@ -158,11 +220,13 @@ function sectionColumns(section: TestSectionAnalytics): ExportColumn<ResultRow>[
     {
       header: `${section.name} correct`,
       width: 12,
+      fileOnly: true,
       value: (row) => scoreIn(row)?.correctCount ?? null,
     },
     {
       header: `${section.name} wrong`,
       width: 12,
+      fileOnly: true,
       value: (row) => scoreIn(row)?.wrongCount ?? null,
     },
   ];
@@ -198,7 +262,7 @@ function questionColumns(
   ];
 }
 
-interface SummaryRow {
+export interface SummaryRow {
   label: string;
   value: string | number | Date | null;
 }

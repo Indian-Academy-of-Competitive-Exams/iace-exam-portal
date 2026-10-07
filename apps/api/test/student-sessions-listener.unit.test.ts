@@ -20,6 +20,18 @@ describe('StudentSessionsListener', () => {
     assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), false);
   });
 
+  /** The device that held the old number may no longer be theirs. */
+  it('signs out every device when their number is moved', async () => {
+    const sessions = new SessionService(new FakeRedis().asService());
+    const sessionId = sessions.newSessionId();
+    await sessions.create(ActorTypes.STUDENT, SUBJECT, sessionId, 'refresh-1', NO_DEVICE, TTL);
+    const listener = new StudentSessionsListener(sessions);
+
+    await listener.onStudentMobileChanged({ studentId: SUBJECT });
+
+    assert.equal(await sessions.exists(ActorTypes.STUDENT, SUBJECT, sessionId), false);
+  });
+
   /** The write already happened. A Redis blip must not fail the producer that reported it. */
   it('swallows a failing revocation rather than failing the producer', async () => {
     const failing = {

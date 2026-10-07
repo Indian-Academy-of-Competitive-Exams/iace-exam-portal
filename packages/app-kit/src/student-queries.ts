@@ -3,7 +3,8 @@ import { queryOptions } from '@tanstack/react-query';
 import { type LanguageCode } from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { isBriefRefused } from './catalog';
-import { isMarkingPending } from './marking';
+import { isMarkingPending, retryWhileMarking } from './marking';
+import { type DownloadAsk } from './report-downloads';
 
 /** The signed-in student's identity. */
 export const ME_QUERY_KEY = ['auth', 'me'] as const;
@@ -46,6 +47,9 @@ const attemptQueryKey = (attemptId: string) => [ME, 'attempts', attemptId] as co
 export const scoreCardQueryKey = (attemptId: string) =>
   [...attemptQueryKey(attemptId), 'score-card'] as const;
 
+export const fieldEffortQueryKey = (attemptId: string) =>
+  [...attemptQueryKey(attemptId), 'field'] as const;
+
 /** Keyed by the section, because the review is fetched one section at a time. */
 export const solutionsQueryKey = (attemptId: string, sectionId = '') =>
   [...attemptQueryKey(attemptId), 'solutions', sectionId] as const;
@@ -81,6 +85,9 @@ export const attemptPaperQueryKey = (attemptId: string) =>
 export const testPaperQueryKey = (testId: string, languages: readonly string[]) =>
   [ME, 'test-paper', testId, [...languages].sort((a, b) => a.localeCompare(b)).join(',')] as const;
 
+/** What every read of a MARKED paper shares: it waits on the queue quietly, then draws its own refusal. */
+const AWAITS_MARKING = { retry: retryWhileMarking, meta: { silent: isMarkingPending } } as const;
+
 /** The reads several screens share, over whichever client the app built; each screen draws its own expected refusal. */
 export function createStudentQueries(api: AppApiClient) {
   return {
@@ -107,7 +114,22 @@ export function createStudentQueries(api: AppApiClient) {
       queryOptions({
         queryKey: scoreCardQueryKey(attemptId),
         queryFn: () => api.me.scoreCard(attemptId),
-        meta: { silent: isMarkingPending },
+        ...AWAITS_MARKING,
+      }),
+    fieldEffortQuery: (attemptId: string) =>
+      queryOptions({
+        queryKey: fieldEffortQueryKey(attemptId),
+        queryFn: () => api.me.fieldEffort(attemptId),
+        // The page stands without it, so a failed read is a comparison left out, never a banner.
+        meta: { silent: true },
+      }),
+    /** The same card, asked for behind the handed-in page: one more try, and never a banner on a page that did not ask. */
+    scoreCardAheadQuery: (attemptId: string) =>
+      queryOptions({
+        queryKey: scoreCardQueryKey(attemptId),
+        queryFn: () => api.me.scoreCard(attemptId),
+        retry: (failures: number, error: unknown) => failures < 1 && isMarkingPending(error),
+        meta: { silent: true },
       }),
     solutionsQuery: (attemptId: string, sectionId = '') =>
       queryOptions({
@@ -115,19 +137,24 @@ export function createStudentQueries(api: AppApiClient) {
         queryFn: () => api.me.solutions(attemptId, { sectionId: sectionId || undefined }),
         // The section on screen stays there while the next one loads, so its tabs do not leave.
         placeholderData: (held) => held,
-        meta: { silent: isMarkingPending },
+        ...AWAITS_MARKING,
       }),
     savedSolutionQuery: (attemptId: string, questionId: string) =>
       queryOptions({
         queryKey: [...solutionsQueryKey(attemptId), 'question', questionId] as const,
         queryFn: () => api.me.solutions(attemptId, { questionId }),
-        meta: { silent: isMarkingPending },
+        ...AWAITS_MARKING,
+      }),
+    ownReportQuery: (ask: DownloadAsk) =>
+      queryOptions({
+        queryKey: [ME, 'report', ask.key, ask.query] as const,
+        queryFn: () => api.me.report(ask.key, ask.query),
       }),
     questionReportQuery: (attemptId: string) =>
       queryOptions({
         queryKey: questionReportQueryKey(attemptId),
         queryFn: () => api.me.questionReport(attemptId),
-        meta: { silent: isMarkingPending },
+        ...AWAITS_MARKING,
       }),
   };
 }

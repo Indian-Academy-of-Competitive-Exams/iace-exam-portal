@@ -6,9 +6,6 @@ import {
   csvQuery,
   CSV_QUERY_MAX,
   mobileSchema,
-  newPinSchema,
-  pinSchema,
-  PIN_LENGTH,
   searchQuery,
   SEARCH_QUERY_MAX,
 } from '../src/index';
@@ -54,37 +51,6 @@ describe('mobileSchema', () => {
   it('rejects what is genuinely not a mobile number', () => {
     for (const bad of ['123456789', '12345678901', '5876543210', '', 'abcdefghij', '98765 4321']) {
       assert.equal(parse(mobileSchema, bad), null, `expected ${bad} to be rejected`);
-    }
-  });
-});
-
-describe('pinSchema', () => {
-  it('takes exactly PIN_LENGTH digits', () => {
-    assert.equal(PIN_LENGTH, 4);
-    assert.equal(parse(pinSchema, '4813'), '4813');
-    assert.equal(parse(pinSchema, ' 4813 '), '4813');
-    assert.equal(parse(pinSchema, '481'), null);
-    assert.equal(parse(pinSchema, '48130'), null);
-    assert.equal(parse(pinSchema, '48a3'), null);
-  });
-
-  it('accepts a weak PIN at LOGIN — the rules only apply when choosing one', () => {
-    // Rejecting 1111 here would lock out an account that already has it.
-    assert.equal(parse(pinSchema, '1111'), '1111');
-    assert.equal(parse(pinSchema, '1234'), '1234');
-  });
-});
-
-describe('newPinSchema', () => {
-  it('refuses the shapes an attacker tries first', () => {
-    for (const weak of ['0000', '1111', '9999', '1234', '4321', '2345', '0123', '3210']) {
-      assert.equal(parse(newPinSchema, weak), null, `expected ${weak} to be refused`);
-    }
-  });
-
-  it('allows an ordinary PIN', () => {
-    for (const ok of ['4813', '7261', '1122', '2580', '1032']) {
-      assert.equal(parse(newPinSchema, ok), ok);
     }
   });
 });

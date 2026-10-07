@@ -42,6 +42,7 @@ describe('bandsFor — which bands a caller may see', () => {
       sittings: true,
       feed: true,
       windows: true,
+      work: true,
     });
   });
 
@@ -81,6 +82,12 @@ describe('bandsFor — which bands a caller may see', () => {
     assert.equal(bandsFor(holding(FEATURE_KEYS.STUDENT_PERFORMANCE)).sittings, true);
     assert.equal(bandsFor(holding(FEATURE_KEYS.TEST_OPERATIONS)).sittings, true);
     assert.equal(bandsFor(holding(FEATURE_KEYS.TEST_MANAGEMENT)).sittings, false);
+  });
+
+  it('opens their own sections to whoever a section can be handed to', () => {
+    assert.equal(bandsFor(holding(FEATURE_KEYS.QUESTION_AUTHORING)).work, true);
+    assert.equal(bandsFor(holding(FEATURE_KEYS.QUESTION_PROOFREAD)).work, true);
+    assert.equal(bandsFor(holding(FEATURE_KEYS.QUESTION_MANAGEMENT)).work, false);
   });
 
   it('leaves the audit feed to every admin who is still active', () => {

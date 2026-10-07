@@ -4,20 +4,15 @@ import {
   refreshTokenSchema,
   requestAdminOtpSchema,
   requestStudentOtpSchema,
-  setStudentPinSchema,
-  studentLoginSchema,
   verifyAdminOtpSchema,
   verifyStudentOtpSchema,
   type AuthIdentity,
   type AuthSessionResponse,
   type AuthTokens,
   type OtpRequestResponse,
-  type PinSetupTicket,
   type RefreshTokenBody,
   type RequestAdminOtpBody,
   type RequestStudentOtpBody,
-  type SetStudentPinBody,
-  type StudentLoginBody,
   type VerifyAdminOtpBody,
   type VerifyStudentOtpBody,
 } from '@iace/contracts';
@@ -31,9 +26,9 @@ import { ZodBody } from '../common/zod-validation.pipe';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  // ---- Students: OTP at signup / reset, then mobile + 4-digit PIN ------------
+  // ---- Students: mobile + OTP, every sign-in; the first one is the signup ------
 
-  /** Step 1 of signup and of a PIN reset — the same endpoint for both, and the one that pays for a send. */
+  /** Step 1 — the one route that pays for a send. */
   @Public()
   @OtpRequestRateLimit()
   @Post('student/otp/request')
@@ -42,47 +37,19 @@ export class AuthController {
     @Body(new ZodBody(requestStudentOtpSchema)) body: RequestStudentOtpBody,
     @Req() request: Request,
   ): Promise<OtpRequestResponse> {
-    return this.auth.requestStudentOtp(body.mobile, request.ip ?? 'unknown');
+    return this.auth.requestStudentOtp(body.mobile, request.ip ?? 'unknown', body.channel);
   }
 
-  /** Step 2 — returns a ticket to set a PIN, not a session. */
+  /** Step 2 — signs them in, as a new account if the number had none. */
   @Public()
   @AuthRateLimit()
   @Post('student/otp/verify')
   @HttpCode(HttpStatus.OK)
   verifyStudentOtp(
     @Body(new ZodBody(verifyStudentOtpSchema)) body: VerifyStudentOtpBody,
-  ): Promise<PinSetupTicket> {
-    return this.auth.verifyStudentOtp(body.mobile, body.code);
-  }
-
-  /** Step 3 — sets the PIN and signs in. */
-  @Public()
-  @AuthRateLimit()
-  @Post('student/pin/set')
-  @HttpCode(HttpStatus.OK)
-  setStudentPin(
-    @Body(new ZodBody(setStudentPinSchema)) body: SetStudentPinBody,
     @Req() request: Request,
   ): Promise<AuthSessionResponse> {
-    return this.auth.setStudentPin(
-      body.mobile,
-      body.setupToken,
-      body.pin,
-      deviceFrom(request, body.device),
-    );
-  }
-
-  /** Every login after signup. No SMS involved. */
-  @Public()
-  @AuthRateLimit()
-  @Post('student/login')
-  @HttpCode(HttpStatus.OK)
-  loginStudent(
-    @Body(new ZodBody(studentLoginSchema)) body: StudentLoginBody,
-    @Req() request: Request,
-  ): Promise<AuthSessionResponse> {
-    return this.auth.loginStudent(body.mobile, body.pin, deviceFrom(request, body.device));
+    return this.auth.verifyStudentOtp(body.mobile, body.code, deviceFrom(request, body.device));
   }
 
   // ---- Admins: email + OTP ---------------------------------------------------

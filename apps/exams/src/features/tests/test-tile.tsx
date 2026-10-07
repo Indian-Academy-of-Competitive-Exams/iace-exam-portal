@@ -43,12 +43,7 @@ export function TestTile({
   const opens = opensOn(row.test, now);
 
   return (
-    <Card
-      className={cn(
-        'flex w-72 shrink-0 snap-start flex-col bg-gradient-to-b to-card to-45%',
-        state.wash,
-      )}
-    >
+    <Card className={cn('flex min-w-0 flex-col bg-gradient-to-b to-card to-45%', state.wash)}>
       <div className="flex flex-1 flex-col gap-3 p-4">
         <span
           data-tour={TOUR_TARGETS.TEST_STATE}

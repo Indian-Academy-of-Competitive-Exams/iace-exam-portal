@@ -13,6 +13,7 @@ export {
   createAppQueryClient,
   isWorthAskingAgain,
   retryDelayMs,
+  shouldRetryRead,
   type AppMutationMeta,
   type Notifier,
 } from './query-client';
@@ -43,6 +44,8 @@ export {
 } from './exam/use-exam-view';
 export {
   beginChoice,
+  HELD_ELSEWHERE_SAYS,
+  isHeldElsewhere,
   shouldRetryStart,
   useStartedSitting,
   type BeginChoice,
@@ -59,7 +62,17 @@ export {
 } from './exam/exam-view';
 export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
-export { isMarkingPending } from './marking';
+export { MARKING_TRIES, isMarkingPending, retryWhileMarking } from './marking';
+export {
+  EFFORT_RUNNERS,
+  FIELD_SAMPLE_FLOOR,
+  effortLine,
+  paperEffort,
+  sectionReadings,
+  type EffortReading,
+  type EffortRunner,
+  type PaperEffort,
+} from './handed-in';
 export { markNotificationRead } from './notifications';
 export {
   greetingFor,
@@ -99,6 +112,7 @@ export {
   savedFacetsQueryKey,
   bookmarksInAttemptQueryKey,
   scoreCardQueryKey,
+  fieldEffortQueryKey,
   solutionsQueryKey,
   questionReportQueryKey,
   PERFORMANCE_QUERY_KEY,
@@ -112,7 +126,7 @@ export {
 } from './student-queries';
 export { paperFor } from './exam/served-paper';
 export { TOP_QUARTER, trendOf, type Trendline } from './trend';
-export { LOGIN_FIELDS, OTP_INTENTS, type LoginStep, type OtpIntent } from './login-steps';
+export { LOGIN_FIELDS, resendSays, sentSays, useResendCode, type LoginStep } from './login-steps';
 export { PODIUM_LABELS } from './leaderboard';
 export {
   VERDICT,
@@ -123,6 +137,19 @@ export {
   type Verdict,
 } from './review';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
+export { reportHtml } from './report-html';
+export { PRINT_WATERMARK, logoSvg, logoUrl, printPageCss } from './print-page';
+export {
+  DOWNLOAD_CHOICE_LABELS,
+  DOWNLOAD_KINDS,
+  DOWNLOAD_KIND_LABELS,
+  downloadChoices,
+  downloadKindOf,
+  downloadOf,
+  type DownloadAsk,
+  type DownloadChoice,
+  type DownloadKind,
+} from './report-downloads';
 export {
   ANY_CHOICE,
   asSet,

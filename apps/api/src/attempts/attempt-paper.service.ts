@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  optionLetter,
   scopedSections,
   servedQuestions,
   scopedDurationSec,
@@ -14,6 +15,8 @@ import {
   type ExamQuestion,
   type LanguageCode,
   type LocalizedContent,
+  type PrintablePaper,
+  type PrintablePaperQuery,
   type QuestionOption,
   languagesFor,
 } from '@iace/contracts';
@@ -63,6 +66,27 @@ const PAPER_SELECT = {
     },
   },
 } as const satisfies Prisma.AttemptSelect;
+
+/** What a printed paper says of itself above its first question. */
+const PRINT_CARD_SELECT = {
+  title: true,
+  testSeries: { select: { name: true } },
+  baseConfig: {
+    select: {
+      durationSec: true,
+      totalQuestions: true,
+      sections: {
+        select: {
+          id: true,
+          moduleId: true,
+          questionCount: true,
+          durationSec: true,
+          perQuestionSec: true,
+        },
+      },
+    },
+  },
+} as const satisfies Prisma.TestSelect;
 
 /** PAPER_SELECT's test half, reachable without a sitting — the shared paper has no attempt to read. */
 const TEST_PAPER_SELECT = PAPER_SELECT.test.select;
@@ -189,14 +213,72 @@ export class AttemptPaperService {
     return test;
   }
 
+  /** The whole paper to print, read fresh so a draft prints as it stands and leaves no held copy behind. */
+  async printable(testId: string, query: PrintablePaperQuery): Promise<PrintablePaper> {
+    const [test, card, rows] = await Promise.all([
+      this.requireTest(testId),
+      this.prisma.test.findUnique({ where: { id: testId }, select: PRINT_CARD_SELECT }),
+      this.papers.servedNow(testId),
+    ]);
+    if (!card) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+
+    const available = test.baseConfig.languages as LanguageCode[];
+    const asked = (query.languages ?? []).filter((language) => available.includes(language));
+    const languages = asked.length > 0 ? asked : available;
+    const shared = await this.shapeOf(test, testId, languages, rows);
+
+    return {
+      testId,
+      title: card.title,
+      series: card.testSeries.name,
+      languages,
+      available,
+      durationSec: scopedDurationSec(
+        card.baseConfig.sections,
+        card.baseConfig,
+        test.scope,
+        scopeRefOf(test),
+      ),
+      maxMarks: shared.questions.reduce((total, question) => total + question.marks, 0),
+      sections: shared.sections,
+      questions: shared.questions,
+      answerKey: query.answerKey ? await this.keyOf(testId, shared.questions) : null,
+    };
+  }
+
+  /** Each answer by the letter its option is printed under, off the terms the scorer marks against. */
+  private async keyOf(
+    testId: string,
+    questions: readonly ExamQuestion[],
+  ): Promise<PrintablePaper['answerKey']> {
+    const terms = new Map(
+      (await this.papers.termsNow(testId)).map((term) => [term.questionId, term]),
+    );
+    return questions.flatMap((question) => {
+      const term = terms.get(question.questionId);
+      if (!term) return [];
+      const letters = question.options
+        .flatMap((option, place) =>
+          term.correctOptionIds.includes(option.id) ? [optionLetter(place)] : [],
+        )
+        .join(', ');
+      const typed = Object.values(term.answerKey?.answers ?? {}).find(
+        (answer) => typeof answer === 'string',
+      );
+      const answer = letters || typed;
+      return answer ? [{ questionId: question.questionId, answer }] : [];
+    });
+  }
+
   /** Everything a paper is before a sitting narrows it: sections, questions, and how it is drawn. */
   private async shapeOf(
     test: PaperTest,
     testId: string,
     languages: readonly LanguageCode[],
+    held?: ServedPaperRow[],
   ): Promise<SharedPaper> {
     const config = test.baseConfig;
-    const rows = await this.papers.servedOf(testId);
+    const rows = held ?? (await this.papers.servedOf(testId));
 
     return {
       languages: [...languages],

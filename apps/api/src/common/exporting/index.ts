@@ -8,5 +8,6 @@ export {
   exportInstant,
   writeWorkbook,
   type ExportColumn,
+  type ExportDateFormat,
   type ExportSheet,
 } from './write-workbook';

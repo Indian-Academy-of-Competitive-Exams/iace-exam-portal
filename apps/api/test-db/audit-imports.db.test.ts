@@ -18,14 +18,7 @@ import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { QuestionImportService } from '../src/questions/question-import.service';
-import {
-  FakeEventsService,
-  FakeMessageSender,
-  FakeProgramsService,
-  FakeStorage,
-  fakeStartingPins,
-  roster,
-} from '../test/support/fakes';
+import { FakeEventsService, FakeProgramsService, FakeStorage, roster } from '../test/support/fakes';
 import { makeQuestionBank, makeStudent, resetDatabase, testPrisma } from './support/database';
 
 const ADMIN = randomUUID();
@@ -105,21 +98,35 @@ describe('AuditService.recordImportRows', () => {
   });
 });
 
-/** A hash that refuses is how a run is made to die partway, which is what one test is about. */
-const startingPins = (hash?: (pin: string) => Promise<string>) =>
-  fakeStartingPins(new FakeMessageSender(), hash);
+/** The real database, refusing every student create after the first `allowed`: how a run is made to die partway. */
+const studentWritesFailAfter = (allowed: number): PrismaService => {
+  let writes = 0;
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== 'student') return Reflect.get(target, key) as unknown;
+      return new Proxy(target.student, {
+        get(delegate, method: string | symbol) {
+          if (method !== 'create') return Reflect.get(delegate, method) as unknown;
+          return (args: Parameters<typeof delegate.create>[0]) => {
+            writes += 1;
+            if (writes > allowed) return Promise.reject(new Error('student write failed'));
+            return delegate.create(args);
+          };
+        },
+      });
+    },
+  });
+};
 
 const importsOn = (
   client: PrismaService = prisma,
   over: {
-    hash?: (pin: string) => Promise<string>;
     audit?: AuditService;
     storage?: FakeStorage;
   } = {},
 ) =>
   new ImportsService(
     client,
-    startingPins(over.hash),
     (over.storage ?? new FakeStorage()) as never,
     over.audit ?? new AuditService(prisma, new FakeStorage() as never),
     // The event path is not what these tests exercise — see event-candidate-import.
@@ -190,42 +197,29 @@ describe('ImportsService.commitStudents — what an import run actually left beh
 
     await assert.rejects(
       () =>
-        importsOn(prisma, {
-          hash: () => Promise.reject(new Error('argon2 unavailable')),
-        }).commitStudents(Buffer.from(roster('mobile\n9876543210')), ADMIN),
-      /argon2 unavailable/,
+        importsOn(studentWritesFailAfter(0)).commitStudents(
+          Buffer.from(roster('mobile\n9876543210')),
+          ADMIN,
+        ),
+      /student write failed/,
     );
 
     const [log, ...others] = await importLogs();
     assert.equal(others.length, 0);
     assert.equal(log?.status, IMPORT_LOG_STATUS.FAILED);
-    assert.match((log?.errors as { message?: string } | null)?.message ?? '', /argon2 unavailable/);
+    assert.match(
+      (log?.errors as { message?: string } | null)?.message ?? '',
+      /student write failed/,
+    );
     assert.equal(await prisma.rowActionLog.count(), 0);
   });
 
   /** The loop is not a transaction, so the rows written before a throw must still be audited. */
   it('records the rows it did write when the commit throws partway through the loop', async () => {
     await onlineBranch();
-    let writes = 0;
-    const failingOnTheThird = new Proxy(prisma, {
-      get(target, key: string | symbol) {
-        if (key !== 'student') return Reflect.get(target, key) as unknown;
-        return new Proxy(target.student, {
-          get(delegate, method: string | symbol) {
-            if (method !== 'create') return Reflect.get(delegate, method) as unknown;
-            return (args: Parameters<typeof delegate.create>[0]) => {
-              writes += 1;
-              if (writes > 2) return Promise.reject(new Error('student write failed'));
-              return delegate.create(args);
-            };
-          },
-        });
-      },
-    });
-
     await assert.rejects(
       () =>
-        importsOn(failingOnTheThird).commitStudents(
+        importsOn(studentWritesFailAfter(2)).commitStudents(
           Buffer.from(roster('mobile\n9000000001\n9000000002\n9000000003')),
           ADMIN,
         ),

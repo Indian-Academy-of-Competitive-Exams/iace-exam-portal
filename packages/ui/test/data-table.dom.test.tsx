@@ -390,3 +390,26 @@ describe('DataTable that scrolls instead of paging', () => {
     assert.equal(calls.length, 0);
   });
 });
+
+describe('DataTable that stacks on a phone', () => {
+  const cellsOf = (row: number) => [...(bodyRows()[row]?.querySelectorAll('td') ?? [])];
+
+  /** The failure this prevents: with the heading row gone, a figure nobody can name. */
+  it('names every value by its column, since the heading row is hidden there', () => {
+    render(table({ stacks: true }));
+
+    assert.match(cellsOf(0)[1]?.textContent ?? '', /^Mobile9876543210$/);
+  });
+
+  it('leaves the first column bare, as the heading of its block', () => {
+    render(table({ stacks: true }));
+
+    assert.equal(cellsOf(0)[0]?.textContent, 'Ravi');
+  });
+
+  it('labels nothing in a table that does not stack', () => {
+    render(table());
+
+    assert.equal(cellsOf(0)[1]?.textContent, '9876543210');
+  });
+});

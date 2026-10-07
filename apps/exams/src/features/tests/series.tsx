@@ -124,6 +124,7 @@ export function SeriesPage() {
                 rowKey={(row) => row.id}
                 isLoading={catalog.isLoading}
                 empty="Nothing has been put in this series yet"
+                stacks
               />
             </Section>
           </>

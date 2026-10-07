@@ -35,6 +35,7 @@ export function AuthoringHeaderBar({
   actions,
   lead,
   subjectLocked = false,
+  disabled = false,
   onHeaderChange,
   onStateChange,
 }: Readonly<{
@@ -45,6 +46,8 @@ export function AuthoringHeaderBar({
   lead?: React.ReactNode;
   /** The section a scoped editor was opened on names the subject; a typist must not write past it. */
   subjectLocked?: boolean;
+  /** Not the viewer's to change, or held by somebody else: the settings show, and take nothing. */
+  disabled?: boolean;
   onHeaderChange: (next: AuthoringHeader) => void;
   onStateChange: (next: AuthoringState) => void;
 }>) {
@@ -56,7 +59,11 @@ export function AuthoringHeaderBar({
       {/* The batch's settings give way first; what a typist presses must never leave the row. */}
       <div
         data-tour={TOUR_TARGETS.AUTHORING_SETTINGS}
-        className="flex min-w-0 flex-1 items-center gap-x-4 overflow-x-auto"
+        inert={disabled}
+        className={cn(
+          'flex min-w-0 flex-1 items-center gap-x-4 overflow-x-auto',
+          disabled && 'opacity-60',
+        )}
       >
         <Slot caption="Subject">
           <SubjectPicker

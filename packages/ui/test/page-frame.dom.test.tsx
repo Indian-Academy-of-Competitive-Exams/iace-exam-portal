@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { cleanup, render, screen } from '@testing-library/react';
-import { PageFrame, PanelFrame, TableFrame } from '../src/components/ui/table-frame';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { PageFrame, PanelFrame, SplitFrame, TableFrame } from '../src/components/ui/table-frame';
 import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
@@ -210,5 +210,62 @@ describe('TableFrame — tabs', () => {
     assert.ok(screen.getByText('The form'));
     assert.equal(screen.queryByText('The record'), null);
     assert.ok(container.querySelector('[data-page-frame]'));
+  });
+});
+
+describe('SplitFrame', () => {
+  const state = {
+    values: { branch: '' },
+    setFilter: () => undefined,
+    clearFilters: () => undefined,
+  };
+  const spec = [
+    { key: 'branch', kind: 'choice', label: 'Branch', items: [{ value: '', label: 'Any branch' }] },
+  ] as const;
+
+  /** What the rows are asked by sits beside them, so nothing above a table pushes it down the page. */
+  it('names each filter in the side card, apart from the card the rows are in', () => {
+    render(
+      <TooltipProvider>
+        <SplitFrame header={<h1>Merit list</h1>} filters={{ spec, state }} side={<p>Figures</p>}>
+          <p>The rows</p>
+        </SplitFrame>
+      </TooltipProvider>,
+    );
+
+    const side = screen.getByText('Figures').parentElement;
+    assert.ok(side?.contains(screen.getByLabelText('Branch')));
+    assert.equal(screen.getByText('The rows').parentElement?.contains(side ?? null), false);
+  });
+
+  /** Folded away, the panel still has to leave the one control that brings it back. */
+  it('folds its side card away and brings it back', () => {
+    render(
+      <SplitFrame collapsible side={<p>Figures</p>}>
+        <p>The rows</p>
+      </SplitFrame>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the side panel' }));
+    assert.equal(screen.queryByText('Figures'), null);
+    assert.ok(screen.getByText('The rows'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show the side panel' }));
+    assert.ok(screen.getByText('Figures'));
+  });
+
+  /** The failure this prevents: a card that scrolls around a table that scrolls. */
+  it('leaves a body that fills without a scroller of its own', () => {
+    render(
+      <SplitFrame fills side={<p>Figures</p>}>
+        <p>The rows</p>
+      </SplitFrame>,
+    );
+
+    assert.equal(
+      screen.getByText('The rows').parentElement?.className.includes('overflow-y'),
+      false,
+    );
+    assert.ok(screen.getByText('Figures').parentElement?.className.includes('lg:overflow-y-auto'));
   });
 });

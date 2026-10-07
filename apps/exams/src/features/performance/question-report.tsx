@@ -145,6 +145,7 @@ function Body({
           empty="This paper served no questions"
           emptyFiltered="No question matches that filter"
           expand={expand}
+          stacks
         />
       </Card>
     </div>
@@ -213,7 +214,19 @@ function optionMark(
 
 function columnsFor(): DataTableColumn<QuestionReportRow>[] {
   const columns: DataTableColumn<QuestionReportRow>[] = [
-    { key: 'order', header: '#', numeric: true, cell: (row) => row.order },
+    {
+      key: 'order',
+      header: '#',
+      numeric: true,
+      pinned: true,
+      // Stacked on a phone the cell is the row's heading, where a bare number names nothing.
+      cell: (row) => (
+        <>
+          <span className="sm:hidden">Question </span>
+          {row.order}
+        </>
+      ),
+    },
     {
       key: 'result',
       header: 'Result',

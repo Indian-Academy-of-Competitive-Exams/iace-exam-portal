@@ -17,7 +17,7 @@ export function TestsAndSeriesPage() {
   const { can } = useAuth();
   usePageTour({ id: TOUR_IDS.TESTS_AND_SERIES, steps: TESTS_AND_SERIES_TOUR, ready: true });
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const filters = useFilters<'view' | 'q' | 'examId' | 'examStageId' | 'kind' | 'isEnabled'>();
+  const filters = useFilters<'view' | 'q' | 'examId' | 'examStageId' | 'kind'>();
   const view = filters.get('view') || VIEW.SERIES;
 
   const header = (
@@ -45,7 +45,7 @@ export function TestsAndSeriesPage() {
         value: view,
         // The two lists share `q` and `examId`, so a switch leaves neither behind narrowing the other.
         onValueChange: (value) =>
-          filters.set({ view: value, q: '', examId: '', examStageId: '', kind: '', isEnabled: '' }),
+          filters.set({ view: value, q: '', examId: '', examStageId: '', kind: '' }),
         items: [
           { value: VIEW.SERIES, label: 'Series', content: <SeriesList /> },
           { value: VIEW.TESTS, label: 'All tests', content: <TestsList /> },

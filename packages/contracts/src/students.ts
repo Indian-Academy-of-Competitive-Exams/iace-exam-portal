@@ -125,8 +125,6 @@ export const studentSummarySchema = z.object({
   isActive: z.boolean(),
   /** Signs in and sees their history, but cannot start a test. Not a sign-in state. */
   isTestBlocked: z.boolean(),
-  /** Still on an import's default PIN, which anyone holding the roster can guess. */
-  hasDefaultPin: z.boolean(),
   preTestReady: z.boolean(),
   profileCompleted: z.boolean(),
   createdAt: z.string(),
@@ -190,9 +188,18 @@ const studentEventSchema = z.object({
 });
 export type StudentEvent = z.infer<typeof studentEventSchema>;
 
+/** A number they used to sign in with, and when it stopped being theirs. */
+const formerMobileSchema = z.object({
+  mobile: z.string(),
+  replacedAt: z.string(),
+});
+export type FormerMobile = z.infer<typeof formerMobileSchema>;
+
 export const studentDetailSchema = studentSummarySchema.extend({
   /** A join row rather than an array on the student, so it is read here and never patched here. */
   events: z.array(studentEventSchema),
+  /** Newest first. Found by in the roster search, and never a way to sign in. */
+  formerMobiles: z.array(formerMobileSchema),
   currentBranchId: z.string().nullable(),
   updatedAt: z.string(),
   profile: studentProfileSchema.nullable(),
@@ -222,8 +229,6 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   course: csvQuery(examCourseSchema),
   isActive: optionalBooleanQuery(),
   isTestBlocked: optionalBooleanQuery(),
-  /** Still on the starting PIN an import gave them — a list worth chasing. */
-  hasDefaultPin: optionalBooleanQuery(),
   /** Mother's name, father's name and DOB — what a student needs before a test. */
   preTestReady: optionalBooleanQuery(),
   profileCompleted: optionalBooleanQuery(),
@@ -327,6 +332,18 @@ export type UpdateStudentBody = z.infer<typeof updateStudentSchema>;
 export const setStudentActiveSchema = z.object({ isActive: z.boolean() });
 export type SetStudentActiveBody = z.infer<typeof setStudentActiveSchema>;
 
+/** Its own route, not a patch field: it is who they sign in as, and moving it signs them out. */
+export const changeStudentMobileSchema = z.object({ mobile: mobileSchema });
+export type ChangeStudentMobileInput = z.input<typeof changeStudentMobileSchema>;
+export type ChangeStudentMobileBody = z.infer<typeof changeStudentMobileSchema>;
+
+/** A sign-in code an admin reads out to a student whose sent one did not arrive. Shown once, never stored in the clear. */
+export const studentDeskCodeSchema = z.object({
+  code: z.string(),
+  expiresInSec: z.number().int(),
+});
+export type StudentDeskCode = z.infer<typeof studentDeskCodeSchema>;
+
 export const setStudentTestBlockedSchema = z.object({ isTestBlocked: z.boolean() });
 export type SetStudentTestBlockedBody = z.infer<typeof setStudentTestBlockedSchema>;
 
@@ -346,6 +363,8 @@ export const ADMIN_STUDENT_ROUTES = {
   update: (id: string) => `/admin/students/${id}`,
   setActive: (id: string) => `/admin/students/${id}/active`,
   setTestBlocked: (id: string) => `/admin/students/${id}/test-blocked`,
+  changeMobile: (id: string) => `/admin/students/${id}/mobile`,
+  deskCode: (id: string) => `/admin/students/${id}/desk-code`,
   erasure: (id: string) => `/admin/students/${id}/erasure`,
   sittings: (id: string) => `/admin/students/${id}/sittings`,
   export: '/admin/students/export',

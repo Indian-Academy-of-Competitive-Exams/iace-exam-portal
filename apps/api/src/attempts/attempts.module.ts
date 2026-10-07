@@ -5,6 +5,7 @@ import { ATTEMPT_FLUSH_EVERY_MS, ATTEMPT_SWEEP_EVERY_MS, QUEUE_NAMES } from '../
 import { API_ROLES, onRole, servesRole } from '../config/api-role';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
+import { keepScheduled } from '../queue/keep-scheduled';
 import { QueueModule } from '../queue/queue.module';
 import { AccessModule } from '../access';
 import { NotificationsModule } from '../notifications';
@@ -25,6 +26,7 @@ import { AttemptsService } from './attempts.service';
 import { AttemptResolutionService } from './attempt-resolution.service';
 import { LiveOpsService } from './live-ops.service';
 import { AttemptPaperService } from './attempt-paper.service';
+import { AdminPaperPrintController } from './paper-print.controller';
 import { AttemptReportService } from './attempt-report.service';
 import { AttemptStateService } from './attempt-state.service';
 import { PaperSheetService } from './paper-sheet.service';
@@ -56,6 +58,7 @@ import { SubmitService } from './submit.service';
         MeOverviewController,
         MeQuestionReportController,
         AdminTestAnalyticsController,
+        AdminPaperPrintController,
       ],
     ),
   ],
@@ -84,7 +87,14 @@ import { SubmitService } from './submit.service';
     ),
   ],
   // Neither processor is here on purpose: an export is how a worker reaches a request path.
-  exports: [LeaderboardService, StudentOverviewService],
+  exports: [
+    LeaderboardService,
+    StudentOverviewService,
+    TestAnalyticsService,
+    PerformanceAnalyticsService,
+    AttemptReportService,
+    PaperSheetService,
+  ],
 })
 export class AttemptsModule implements OnModuleInit {
   constructor(
@@ -97,11 +107,13 @@ export class AttemptsModule implements OnModuleInit {
     // The container that runs the jobs is the one that schedules them.
     if (!servesRole(API_ROLES.WORKER)) return;
 
-    await this.flushQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_FLUSH, {
-      every: ATTEMPT_FLUSH_EVERY_MS,
-    });
-    await this.sweepQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_SWEEP, {
-      every: ATTEMPT_SWEEP_EVERY_MS,
+    await keepScheduled(this.flushQueue, async () => {
+      await this.flushQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_FLUSH, {
+        every: ATTEMPT_FLUSH_EVERY_MS,
+      });
+      await this.sweepQueue.upsertJobScheduler(QUEUE_NAMES.ATTEMPT_SWEEP, {
+        every: ATTEMPT_SWEEP_EVERY_MS,
+      });
     });
   }
 }

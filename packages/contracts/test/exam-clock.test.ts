@@ -269,6 +269,7 @@ describe('what a sitting knows about itself the moment it ends', () => {
       total: 3,
       attempted: 2,
       unattempted: 1,
+      timeSpentSec: 0,
     });
     assert.deepEqual(effort[1], {
       id: 'sec_reason',
@@ -276,7 +277,22 @@ describe('what a sitting knows about itself the moment it ends', () => {
       total: 2,
       attempted: 0,
       unattempted: 2,
+      timeSpentSec: 0,
     });
+  });
+
+  /** Time on a question left unanswered still went on that section, so it counts there. */
+  it('adds up the clock on every question a section served, answered or not', () => {
+    const effort = sectionEffort(sections, questions, {
+      q1: { state: ANSWER_STATE.ANSWERED, timeSpentSec: 40 },
+      q3: { state: ANSWER_STATE.NOT_ANSWERED, timeSpentSec: 25 },
+      q4: { state: ANSWER_STATE.ANSWERED, timeSpentSec: 70 },
+    });
+
+    assert.deepEqual(
+      effort.map((row) => row.timeSpentSec),
+      [65, 70],
+    );
   });
 
   /** The two numbers are the section, so a screen showing both can never leave a question out. */

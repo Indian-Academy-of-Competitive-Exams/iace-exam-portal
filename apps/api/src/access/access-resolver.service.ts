@@ -30,7 +30,7 @@ import { byOrderThenId } from '../common/series-order';
 /** The safety net under the counter: a write that changes a held field without bumping it lasts this long at most. */
 const CATALOG_MAX_AGE_MS = 15 * MS_PER_MINUTE;
 
-/** Every enabled series and its ACTIVE tests: the same for every student, so one copy per process. */
+/** Every series and its ACTIVE tests: the same for every student, so one copy per process. */
 const SHARED_SELECT = {
   id: true,
   name: true,
@@ -207,7 +207,7 @@ export class AccessResolverService {
       where: { id: testSeriesId },
       select: AUDIENCE_SELECT,
     });
-    if (series === null || !series.isEnabled) return [];
+    if (series === null) return [];
 
     const students = await this.prisma.student.findMany({
       where: audienceOf(series),
@@ -216,7 +216,7 @@ export class AccessResolverService {
     return students.map((student) => student.id);
   }
 
-  /** The same cohort as a number. Counted on a switched-off series too: the switch is not the cohort. */
+  /** The same cohort as a number. */
   async audienceCount(testSeriesId: string): Promise<number> {
     const series = await this.prisma.testSeries.findUnique({
       where: { id: testSeriesId },
@@ -255,7 +255,6 @@ export class AccessResolverService {
       epoch,
       builtAt: Date.now(),
       series: this.prisma.testSeries.findMany({
-        where: { isEnabled: true },
         select: SHARED_SELECT,
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
       }),
@@ -447,7 +446,6 @@ function automaticAudience(series: Parameters<typeof audienceOf>[0]): Prisma.Stu
 
 const AUDIENCE_SELECT = {
   id: true,
-  isEnabled: true,
   kind: true,
   programCode: true,
   branchIds: true,

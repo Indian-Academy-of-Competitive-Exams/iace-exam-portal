@@ -1,5 +1,4 @@
 import * as React from 'react';
-import katex from 'katex';
 import { useEditorState, type Editor } from '@tiptap/react';
 import {
   AArrowDown,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { mathErrorIn } from '../../lib/rich-html';
 import { cn } from '../../lib/utils';
+import { Alert } from './alert';
 import { Button } from './button';
 import { Input } from './input';
 import {
@@ -28,9 +28,11 @@ import {
   DialogTitle,
 } from './dialog';
 import { Label } from './label';
+import type { MathFieldProps } from './math-field';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { insertUploaded, type ImageLimits, type UploadImage } from './rich-text-image';
 import { TEXT_SIZES, TEXT_SIZE_MARK, type TextSize } from './rich-text-size';
+import { Skeleton } from './skeleton';
 
 /** The mark buttons, in the order a writer reaches for them. */
 const MARKS = [
@@ -87,13 +89,41 @@ function ToolButton({
   );
 }
 
-/** The preview draws leniently; the error is the strict check a stored formula must pass. */
-function parse(latex: string): { html: string; error: string | null } {
-  const html = katex.renderToString(latex || '', { throwOnError: false, displayMode: false });
-  return { html, error: latex.trim() ? mathErrorIn(latex) : null };
+/** MathLive's marker for a slot nobody typed in, which KaTeX would report as an unknown command. */
+const EMPTY_SLOT = String.raw`\placeholder`;
+
+/** The strict check a stored formula must pass, in words for someone who never saw LaTeX. */
+function errorIn(latex: string): string | null {
+  if (!latex.trim()) return null;
+  return latex.includes(EMPTY_SLOT) ? 'Fill in every empty box' : mathErrorIn(latex);
 }
 
-/** The LaTeX box. A real dialog rather than `prompt`, which the docs suggest and this repo forbids. */
+/** What is left when the editor's chunk will not load: the formula typed as LaTeX. */
+function LatexField({ value, onChange, invalid }: Readonly<MathFieldProps>) {
+  return (
+    <>
+      <Alert variant="warning">
+        The equation editor did not load. Save your work and reload the page.
+      </Alert>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="latex">LaTeX</Label>
+        <Input
+          id="latex"
+          autoFocus
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="\frac{a}{b}"
+          invalid={invalid}
+        />
+      </div>
+    </>
+  );
+}
+
+// Falling back keeps the page: a failed chunk thrown to the page boundary costs the unsaved question.
+const MathField = React.lazy(() => import('./math-field').catch(() => ({ default: LatexField })));
+
+/** A real dialog rather than `prompt`, which the docs suggest and this repo forbids. */
 function MathDialog({
   open,
   latex,
@@ -109,40 +139,28 @@ function MathDialog({
   onOpenChange: (open: boolean) => void;
   onSubmit: () => void;
 }>) {
-  const { html, error } = parse(latex);
+  const error = errorIn(latex);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="sm">
+      <DialogContent
+        size="lg"
+        // The field focuses itself once loaded; MathLive abandons a focus the dialog then moves.
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Equation</DialogTitle>
         </DialogHeader>
 
         <DialogBody className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="latex">LaTeX</Label>
-            <Input
-              id="latex"
-              autoFocus
-              value={latex}
-              onChange={(event) => onLatexChange(event.target.value)}
-              placeholder="\frac{a}{b}"
-              invalid={Boolean(error)}
-            />
-            {error ? (
-              <p role="alert" className="text-xs text-destructive">
-                {error}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex min-h-20 items-center justify-center overflow-x-auto rounded-md border border-border bg-surface-2 px-3 py-2 text-xl">
-            <span
-              aria-label="Preview"
-              // KaTeX's own output, from LaTeX this dialog owns — no user HTML reaches here.
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          </div>
+          <React.Suspense fallback={<Skeleton className="h-80" />}>
+            <MathField value={latex} onChange={onLatexChange} invalid={Boolean(error)} />
+          </React.Suspense>
+          {error ? (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          ) : null}
         </DialogBody>
 
         <DialogFooter>

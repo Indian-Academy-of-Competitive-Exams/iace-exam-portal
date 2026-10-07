@@ -7,6 +7,8 @@ import {
   previewTextOf,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_MAX_ROWS,
+  SECTION_IMPORT_MAX_ROWS,
+  fileDuplicateOf,
   QUESTION_IMPORT_TAG,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
@@ -53,6 +55,12 @@ export interface PlannedRow extends QuestionImportRow {
   pictures: Map<string, CheckedImage>;
   /** The question this row reads as, whatever its action: what the review window opens. */
   editable: QuestionDraft;
+}
+
+/** The one section a sheet is imported into, and the subject it takes. */
+export interface ImportScope {
+  sectionName: string;
+  subject: { id: string; name: string } | null;
 }
 
 /** No row corrected yet: the sheet speaks for every line. */
@@ -169,8 +177,9 @@ export function planQuestionImport(
   dedup: ImportDedupContext,
   edits: ReadonlyMap<number, QuestionDraft> = NO_EDITS,
   leftOut: ReadonlySet<number> = NO_LINES,
+  scope: ImportScope | null = null,
 ): QuestionImportPlanning {
-  const fileErrors = fileLevelErrors(table);
+  const fileErrors = fileLevelErrors(table, scope);
   if (fileErrors.length > 0) {
     return {
       rows: [],
@@ -187,6 +196,7 @@ export function planQuestionImport(
     planRow(row, catalog, dedup, lineByHash, codesInFile, {
       edit: edits.get(row.line),
       leftOut: leftOut.has(row.line),
+      scope,
     }),
   );
 
@@ -203,7 +213,7 @@ export function planQuestionImport(
   };
 }
 
-function fileLevelErrors(table: CsvTable): string[] {
+function fileLevelErrors(table: CsvTable, scope: ImportScope | null): string[] {
   const errors: string[] = [];
 
   if (table.rows.length === 0) {
@@ -211,9 +221,11 @@ function fileLevelErrors(table: CsvTable): string[] {
     return errors;
   }
 
-  if (table.rows.length > QUESTION_IMPORT_MAX_ROWS) {
+  const most = scope ? SECTION_IMPORT_MAX_ROWS : QUESTION_IMPORT_MAX_ROWS;
+  if (table.rows.length > most) {
+    const where = scope ? ` into ${scope.sectionName}` : '';
     errors.push(
-      `That file has ${table.rows.length} rows. Import at most ${QUESTION_IMPORT_MAX_ROWS} at a time.`,
+      `That file has ${table.rows.length} rows. Import at most ${most} at a time${where}.`,
     );
   }
 
@@ -234,19 +246,11 @@ function planRow(
   dedup: ImportDedupContext,
   lineByHash: Map<string, number>,
   codesInFile: Set<string>,
-  { edit, leftOut }: { edit: QuestionDraft | undefined; leftOut: boolean },
+  { edit, leftOut, scope }: RowJudgement,
 ): PlannedRow {
   const issues: ValidationIssue[] = [];
   const warnings: ImportWarning[] = [];
-
-  // A corrected line is judged as corrected; its cells still name the pictures it may keep showing.
-  const content = rowContent(row, edit ? [] : issues, edit ? [] : warnings);
-  const names = edit
-    ? namesOf(edit, catalog)
-    : { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
-  const draft = edit
-    ? withImportTag(edit)
-    : buildDraft(row, content, readType(row, issues), names, catalog, issues);
+  const { content, names, draft } = readRow(row, catalog, edit, issues, warnings);
 
   // The core rules run on every row, whatever the sheet got wrong: an admin fixing one column should see the rest of that row's problems in the same pass.
   issues.push(...validateQuestion(draft, catalog.context));
@@ -258,17 +262,12 @@ function planRow(
   // Only a row that would be written can clash: a row that is already in the bank is carrying the code it was imported with, and re-uploading last week's sheet must not turn every coded row into an error.
   const code = draft.questionCode;
   if (code && !duplicateOf && !leftOut) {
-    if (dedup.questionIdByCode.has(code) || codesInFile.has(code)) {
-      issues.push({
-        code: CODE.QUESTION_CODE_TAKEN,
-        message: `The code ${code} is already used by another question`,
-        field: 'questionCode',
-        column: 'question_code',
-      });
-    } else {
-      codesInFile.add(code);
-    }
+    const taken = claimCode(code, dedup, codesInFile);
+    if (taken) issues.push(taken);
   }
+
+  const outside = scope ? outsideSection(draft, scope) : null;
+  if (outside) issues.push(outside);
 
   const reported = dedupeIssues(issues);
 
@@ -298,6 +297,53 @@ function planRow(
   };
 }
 
+/** A row as the question it reads as, the pictures its cells carry, and the names it is filed under. */
+interface ReadRow {
+  content: RowContent;
+  names: { subject: string; topic: string };
+  draft: QuestionDraft;
+}
+
+/** A corrected line is judged as corrected; its cells still name the pictures it may keep showing. */
+function readRow(
+  row: CsvRow,
+  catalog: TaxonomyCatalog,
+  edit: QuestionDraft | undefined,
+  issues: ValidationIssue[],
+  warnings: ImportWarning[],
+): ReadRow {
+  if (edit) {
+    return {
+      content: rowContent(row, [], []),
+      names: namesOf(edit, catalog),
+      draft: withImportTag(edit),
+    };
+  }
+
+  const content = rowContent(row, issues, warnings);
+  const names = { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
+  const draft = buildDraft(row, content, readType(row, issues), names, catalog, issues);
+  return { content, names, draft };
+}
+
+/** The first row that would write a code holds it; the bank's own and an earlier line's are a clash. */
+function claimCode(
+  code: string,
+  dedup: ImportDedupContext,
+  codesInFile: Set<string>,
+): ValidationIssue | null {
+  if (!dedup.questionIdByCode.has(code) && !codesInFile.has(code)) {
+    codesInFile.add(code);
+    return null;
+  }
+  return {
+    code: CODE.QUESTION_CODE_TAKEN,
+    message: `The code ${code} is already used by another question`,
+    field: 'questionCode',
+    column: 'question_code',
+  };
+}
+
 /** What a corrected line is filed under, by name, as the preview lists every row. */
 function namesOf(
   draft: QuestionDraft,
@@ -316,6 +362,25 @@ function withImportTag(draft: QuestionDraft): QuestionDraft {
     : { ...draft, tags: [QUESTION_IMPORT_TAG, ...draft.tags] };
 }
 
+/** How one line is judged beyond its own cells: a correction, a setting aside, and the section it lands in. */
+interface RowJudgement {
+  edit: QuestionDraft | undefined;
+  leftOut: boolean;
+  scope: ImportScope | null;
+}
+
+/** A row filed under a subject the section it is going into does not take. */
+function outsideSection(draft: QuestionDraft, scope: ImportScope): ValidationIssue | null {
+  const { subject, sectionName } = scope;
+  if (!subject || !draft.subjectId || draft.subjectId === subject.id) return null;
+  return {
+    code: CODE.SUBJECT_OUTSIDE_SECTION,
+    message: `Only ${subject.name} questions go into ${sectionName}`,
+    field: 'subjectId',
+    column: 'subject',
+  };
+}
+
 /** A row with anything to report is never written, so the duplicate it repeats does not matter. */
 function actionFor(hasIssues: boolean, duplicateOf: string | null): QuestionImportAction {
   if (hasIssues) return 'skip';
@@ -332,7 +397,7 @@ function duplicateFor(
   if (existing) return existing;
 
   const earlier = lineByHash.get(stemHash);
-  return earlier === undefined ? null : `line ${earlier}`;
+  return earlier === undefined ? null : fileDuplicateOf(earlier);
 }
 
 function readType(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['type'] {

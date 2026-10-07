@@ -12,7 +12,6 @@ import {
 import {
   Badge,
   Button,
-  SegmentedControl,
   Skeleton,
   Tooltip,
   TooltipContent,
@@ -24,7 +23,6 @@ import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { usePageTour } from '@iace/app-kit/browser';
 import { AUTHORING_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { AuthoringHeaderBar } from './authoring-header-bar';
-import { AuthoringPreview } from './authoring-preview';
 import { Legend, useFocusMode } from './authoring-chrome';
 import { QuestionPanes } from './question-panes';
 import {
@@ -64,7 +62,14 @@ export interface WorkspaceSource {
   /** Only where a copy of a bank question refuses the save; an import row just becomes a duplicate. */
   checkDuplicates: boolean;
   /** A blank card after the last, for writing the next question; absent where nothing new is written. */
-  create?: { header: AuthoringHeader; save: (held: Held) => Promise<unknown> };
+  create?: {
+    header: AuthoringHeader;
+    save: (held: Held) => Promise<unknown>;
+    /** After the blank card's own name, in its bar. */
+    lead?: React.ReactNode;
+  };
+  /** Somebody else holds every card: none of them takes an edit until they hand it on. */
+  blocked?: boolean;
 }
 
 interface PanelPosition {
@@ -170,7 +175,10 @@ export function AuthoringWorkspace({
   });
   const base = isNew ? blank : (activeBase.data ?? null);
   const shown = edits[active] ?? base;
-  const editable = isNew || Boolean(source.cards.find((card) => card.key === active)?.editable);
+  const editableCard = (key: string) =>
+    !source.blocked &&
+    (key === NEW_CARD || Boolean(source.cards.find((card) => card.key === key)?.editable));
+  const editable = editableCard(active);
 
   const held = useRef(active);
   useEffect(() => {
@@ -274,7 +282,8 @@ export function AuthoringWorkspace({
   const dirty = active in edits;
   const anyDirty = Object.keys(edits).length > 0;
   useEffect(() => onDirtyChange?.(anyDirty), [anyDirty, onDirtyChange]);
-  const canSave = !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
+  const canSave =
+    !editable || !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
 
   const saveAndNext = () => {
     const held = edits[active];
@@ -302,11 +311,12 @@ export function AuthoringWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
-      {editable && shown ? (
+      {shown ? (
         <AuthoringHeaderBar
           header={shown.header}
           state={shown.state}
           subjectLocked={source.subjectLocked}
+          disabled={!editable}
           onHeaderChange={(next) => edit(active, (current) => ({ ...current, header: next }))}
           onStateChange={(next) => {
             edit(active, (current) => ({ ...current, state: next }));
@@ -330,7 +340,9 @@ export function AuthoringWorkspace({
         >
           {keys.map((key, index) => {
             const card = source.cards.find((one) => one.key === key);
-            const lead = <CardLead title={title}>{leadOf(key, card)}</CardLead>;
+            const lead = (
+              <CardLead title={title}>{leadOf(key, card, source.create?.lead)}</CardLead>
+            );
             return (
               <section
                 key={key}
@@ -351,7 +363,7 @@ export function AuthoringWorkspace({
                         source={source}
                         blank={blank}
                         held={edits[key]}
-                        editable={key === NEW_CARD || Boolean(card?.editable)}
+                        editable={editableCard(key)}
                         lead={lead}
                         actions={card?.actions}
                         view={views[key] ?? FIRST_VIEW}
@@ -438,9 +450,18 @@ function scrollToCard(card: HTMLElement | undefined) {
   else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 }
 
-function leadOf(key: string, card: WorkspaceCard | undefined): React.ReactNode {
-  if (key === NEW_CARD) return <span className="text-sm font-semibold">New question</span>;
-  return card?.lead;
+function leadOf(
+  key: string,
+  card: WorkspaceCard | undefined,
+  blankLead: React.ReactNode,
+): React.ReactNode {
+  if (key !== NEW_CARD) return card?.lead;
+  return (
+    <>
+      <span className="text-sm font-semibold">New question</span>
+      {blankLead}
+    </>
+  );
 }
 
 /** The progress panel over the cards' right edge, like the app shell's menu: nothing moves under it. */
@@ -535,16 +556,11 @@ function CardBody({
       </>
     );
   }
-  const shown = held ?? saved;
-  if (!editable) {
-    return (
-      <ReadBody state={shown.state} lead={lead} actions={actions} view={view} onView={onView} />
-    );
-  }
   return (
     <EditBody
       questionKey={isNew ? '' : questionKey}
-      shown={shown}
+      shown={held ?? saved}
+      readOnly={!editable}
       lead={lead}
       actions={actions}
       view={view}
@@ -557,50 +573,11 @@ function CardBody({
   );
 }
 
-/** A question as its reader will see it, one language at a time, with nothing to type into. */
-function ReadBody({
-  state,
-  lead,
-  actions,
-  view,
-  onView,
-}: Readonly<{
-  state: AuthoringState;
-  lead: React.ReactNode;
-  actions: React.ReactNode;
-  view: View;
-  onView: (change: (current: View) => View) => void;
-}>) {
-  return (
-    <>
-      <div className={BAR}>
-        {lead}
-        <span className="flex flex-none items-center gap-2">
-          {actions}
-          <SegmentedControl
-            value={view.language}
-            onChange={(value) =>
-              onView((current) => ({ ...current, language: value as QuestionLanguage }))
-            }
-            aria-label="Language"
-            items={LANGUAGE_ORDER.map((code) => ({
-              value: code,
-              label: code.toUpperCase(),
-              name: LANGUAGE_LABELS[code],
-            }))}
-          />
-        </span>
-      </div>
-      <div className="relative min-h-0 flex-1 overflow-y-auto p-4">
-        <AuthoringPreview state={state} language={view.language} />
-      </div>
-    </>
-  );
-}
-
+/** One question in its two panes; read-only, the same two with the editor frozen. */
 function EditBody({
   questionKey,
   shown,
+  readOnly,
   lead,
   actions,
   view,
@@ -612,6 +589,7 @@ function EditBody({
 }: Readonly<{
   questionKey: string;
   shown: Held;
+  readOnly: boolean;
   lead: React.ReactNode;
   actions: React.ReactNode;
   view: View;
@@ -634,7 +612,8 @@ function EditBody({
       state={shown.state}
       language={view.language}
       romanised={romanised}
-      canSave
+      canSave={!readOnly}
+      readOnly={readOnly}
       boxVersion={view.box}
       checks={checks}
       onRegions={(regions: ScaffoldRegion[]) =>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Avatar, PageFrame, PageHeader } from '@iace/ui';
+import { Alert, Avatar } from '@iace/ui';
 import {
   AppShell as Shell,
   browserStorage,
@@ -20,7 +20,6 @@ import {
 } from '../lib/constants';
 import { onPushReceived, rebindOncePerLoad, unsubscribeFromPush } from '../lib/pwa';
 import { useAuth } from '../providers/auth';
-import { ChangePinCard } from '../features/account/account';
 
 /** The student's shell. Same width as the admin's, so neither wastes the screen it is on. */
 export function AppShell() {
@@ -85,36 +84,10 @@ export function AppShell() {
         }
         // No `can`: the student portal has no permissions, so every section shows.
       >
-        {/*
-        A student still on the PIN the institute set cannot get past this.
-        Not a banner they can scroll past: the PIN is the first four digits of
-        their own mobile number, so anyone holding the class list can sign in
-        as them, and every test they sit until they change it is a result
-        somebody else could have produced.
-
-        It sits INSIDE the shell rather than being a redirect, so the header
-        and Log out stay reachable and there is no navigation to fight.
-      */}
-        {student?.hasDefaultPin ? (
-          <DefaultPinGate />
-        ) : (
-          <>
-            {student?.isTestBlocked ? <TestBlockedBanner /> : null}
-            <Outlet />
-          </>
-        )}
+        {student?.isTestBlocked ? <TestBlockedBanner /> : null}
+        <Outlet />
       </Shell>
     </TourProvider>
-  );
-}
-
-function DefaultPinGate() {
-  return (
-    <PageFrame header={<PageHeader size="display" title="PIN" />}>
-      <div className="max-w-lg">
-        <ChangePinCard onDefaultPin />
-      </div>
-    </PageFrame>
   );
 }
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { Editor } from '@tiptap/react';
 import { ScaffoldEditor, type ScaffoldRegion } from '../src/components/ui/scaffold-editor';
 import { TooltipProvider } from '../src/components/ui/tooltip';
 
@@ -47,6 +48,32 @@ function down(box: HTMLElement, times: number): void {
 
 const FIGURE = '<img src="https://iace.invalid/chart.png" data-key="questions/images/chart.png">';
 
+const upload = async () => ({ key: 'k', url: 'https://iace.invalid/chart.png' });
+
+const editorOf = (box: HTMLElement) => (box as HTMLElement & { editor: Editor }).editor;
+
+/** Where the caret is: which slot, and whether it is somewhere text goes. */
+function caret(box: HTMLElement) {
+  const { $from } = editorOf(box).state.selection;
+  return { slot: $from.index(0), inText: $from.parent.isTextblock };
+}
+
+/** What a slot holds, block by block, in the order it is drawn. */
+function blocksOf(key: string): string[] {
+  const body = document.querySelector(`[data-region="${key}"] .scaffold-body`);
+  return [...(body?.children ?? [])].map((node) => (node.matches('p') ? 'line' : 'figure'));
+}
+
+/** The toolbar's own way in, so the figure arrives the way a typist adds one. */
+async function addFigure(): Promise<void> {
+  const input = document.querySelector('input[type="file"]');
+  assert.ok(input);
+  fireEvent.change(input, {
+    target: { files: [new File(['x'], 'chart.png', { type: 'image/png' })] },
+  });
+  await screen.findByRole('button', { name: 'Remove image' });
+}
+
 /** What Ctrl+A leaves behind, without depending on the browser's own select-all. */
 function selectWholeDocument(): void {
   const range = document.createRange();
@@ -55,6 +82,24 @@ function selectWholeDocument(): void {
   selection?.removeAllRanges();
   selection?.addRange(range);
 }
+
+describe('a box that is switched off', () => {
+  /** The failure this prevents: a question held by somebody else that still takes typing and still offers its tools. */
+  it('shows the question, takes no typing and offers no tools', () => {
+    const { box } = mount({ disabled: true, toolbarEnd: <button type="button">Language</button> });
+
+    assert.deepEqual(bodies().slice(0, 2), ['What is 20% of 150?', '25']);
+    assert.equal(box.getAttribute('contenteditable'), 'false');
+    assert.equal(screen.queryAllByRole('button').length, 0);
+  });
+
+  it('takes typing again once it is switched back on', () => {
+    const { box } = mount();
+
+    assert.equal(box.getAttribute('contenteditable'), 'true');
+    assert.ok(screen.queryAllByRole('button').length > 0);
+  });
+});
 
 describe('the scaffold labels', () => {
   it('are drawn for every slot, in order', () => {
@@ -87,7 +132,7 @@ describe('the scaffold labels', () => {
 describe('a figure in a slot', () => {
   const withFigure = () =>
     mount({
-      onUploadImage: async () => ({ key: 'k', url: 'https://iace.invalid/chart.png' }),
+      onUploadImage: upload,
       regions: [
         { key: 'stem', label: 'Question:', html: '<p>Which curve is it?</p>' },
         { key: 'option:0', label: '(A)', html: FIGURE },
@@ -124,6 +169,71 @@ describe('a figure in a slot', () => {
 
     assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
     assert.equal(box.querySelectorAll('img').length, 1);
+  });
+
+  /** The reported gap: a figure that ended its slot left nowhere beneath it to type. */
+  it('is followed by a line, so text can go beneath it', () => {
+    withFigure();
+
+    assert.deepEqual(blocksOf('option:0'), ['figure', 'line']);
+  });
+
+  /** The failure this prevents: a question nobody touched, marked unsaved for being opened. */
+  it('gets that line without the box reporting an edit', () => {
+    const { changes } = withFigure();
+
+    assert.deepEqual(changes, []);
+  });
+
+  it('keeps that line out of what the box reports, because nobody wrote it', () => {
+    const { box, changes } = withFigure();
+    act(() => {
+      editorOf(box).commands.insertContent('!');
+    });
+
+    assert.match(changes.at(-1)?.[1]?.html ?? '', /^<img[^>]*>$/);
+  });
+
+  /** Backspace on the empty line reaches the figure; the way back under it is not lost for that. */
+  it('has that line back the moment it is deleted', () => {
+    const { box } = withFigure();
+    act(() => {
+      down(box, 1);
+      fireEvent.keyDown(box, { key: 'Backspace' });
+    });
+
+    assert.deepEqual(blocksOf('option:0'), ['figure', 'line']);
+    assert.deepEqual(caret(box), { slot: 1, inText: false });
+  });
+
+  /** The failure this prevents: Enter into a slot that opens with a figure put the caret where no text goes. */
+  it('hands Enter on to the line beneath it', () => {
+    const { box } = withFigure();
+    act(() => down(box, 1));
+
+    assert.deepEqual(caret(box), { slot: 1, inText: true });
+  });
+
+  /** The reported gap: the caret left for the next slot, and nothing brought it back under the figure. */
+  it('leaves the caret on the line beneath it when it is added', async () => {
+    const { box } = mount({ onUploadImage: upload });
+    act(() => down(box, 3));
+    await addFigure();
+
+    assert.deepEqual(blocksOf('option:2'), ['figure', 'line']);
+    assert.deepEqual(caret(box), { slot: 3, inText: true });
+  });
+
+  it('makes no line of its own when text already follows it', async () => {
+    const { box } = mount({ onUploadImage: upload });
+    await addFigure();
+
+    assert.deepEqual(blocksOf('stem'), ['figure', 'line']);
+    assert.equal(
+      document.querySelector('[data-region="stem"] p')?.textContent,
+      'What is 20% of 150?',
+    );
+    assert.deepEqual(caret(box), { slot: 0, inText: true });
   });
 });
 

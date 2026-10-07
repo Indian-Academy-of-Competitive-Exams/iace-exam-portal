@@ -3,6 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { type Queue } from 'bullmq';
 import { PrismaModule } from '../prisma/prisma.module';
 import { type AccessModule } from '../access';
+import { keepScheduled } from '../queue/keep-scheduled';
 import { QueueModule } from '../queue/queue.module';
 import {
   NOTIFICATION_JOBS,
@@ -61,19 +62,21 @@ export class NotificationsModule implements OnModuleInit {
     // The container that runs the jobs is the one that schedules them.
     if (!servesRole(API_ROLES.WORKER)) return;
 
-    await this.notifications.upsertJobScheduler(
-      NOTIFICATION_JOBS.SWEEP,
-      { every: NOTIFICATION_SWEEP_EVERY_MS },
-      { name: NOTIFICATION_JOBS.SWEEP },
-    );
-    await this.notifications.upsertJobScheduler(
-      NOTIFICATION_JOBS.TESTS_OPENED,
-      { every: TESTS_OPENED_SWEEP_EVERY_MS },
-      { name: NOTIFICATION_JOBS.TESTS_OPENED },
-    );
-    await this.pruneQueue.upsertJobScheduler(QUEUE_NAMES.NOTIFICATION_PRUNE, {
-      pattern: NOTIFICATION_PRUNE_CRON,
-      tz: 'UTC',
+    await keepScheduled(this.notifications, async () => {
+      await this.notifications.upsertJobScheduler(
+        NOTIFICATION_JOBS.SWEEP,
+        { every: NOTIFICATION_SWEEP_EVERY_MS },
+        { name: NOTIFICATION_JOBS.SWEEP },
+      );
+      await this.notifications.upsertJobScheduler(
+        NOTIFICATION_JOBS.TESTS_OPENED,
+        { every: TESTS_OPENED_SWEEP_EVERY_MS },
+        { name: NOTIFICATION_JOBS.TESTS_OPENED },
+      );
+      await this.pruneQueue.upsertJobScheduler(QUEUE_NAMES.NOTIFICATION_PRUNE, {
+        pattern: NOTIFICATION_PRUNE_CRON,
+        tz: 'UTC',
+      });
     });
   }
 }

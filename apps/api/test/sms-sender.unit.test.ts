@@ -15,7 +15,6 @@ const CONFIGURED = {
   SMS_PROVIDER_KEY: 'key-123',
   SMS_SENDER_ID: 'IACEIN',
   SMS_TEMPLATE_OTP: 'dlt-otp',
-  SMS_TEMPLATE_PIN: 'dlt-pin',
 };
 
 const sender = (env: Record<string, unknown> = CONFIGURED) =>
@@ -85,17 +84,11 @@ describe('SmsMessageSender', () => {
   });
 
   /** Silence is fine for an announcement and fatal for a credential: somebody is waiting on it. */
-  it('refuses to silently drop an OTP or a PIN', async () => {
+  it('refuses to silently drop an OTP', async () => {
     capture();
     const unconfigured = sender({ ...CONFIGURED, SMS_TEMPLATE_OTP: undefined });
 
     await assert.rejects(unconfigured.send(message()), /template/);
-    await assert.rejects(
-      sender({ ...CONFIGURED, SMS_TEMPLATE_PIN: undefined }).send(
-        message({ kind: MESSAGE_KINDS.PIN }),
-      ),
-      /template/,
-    );
   });
 
   it('raises what the provider refused, so a caller can log or retry it', async () => {

@@ -153,11 +153,6 @@ function DocumentLink({ label, url }: Readonly<{ label: string; url?: string | n
   );
 }
 
-/** The sign-in state as a value the header carries; what is WRONG with it belongs in the notice. */
-function signInSummary(detail: StudentDetail): string {
-  return detail.hasDefaultPin ? 'Never signed in' : 'Has signed in';
-}
-
 /** Everything outstanding, said once: a strip of chips makes the reader assemble what a sentence carries. */
 function StudentStateNotice({
   detail,
@@ -166,7 +161,6 @@ function StudentStateNotice({
   const notes = [
     !detail.isActive ? 'Sign-in is suspended, so they cannot sign in on any device.' : null,
     detail.isTestBlocked ? 'They cannot start a new test until the block is lifted.' : null,
-    detail.hasDefaultPin ? 'They are still on the default PIN.' : null,
     !detail.preTestReady
       ? "Mother's name, father's name and date of birth are needed before they can sit a test."
       : null,
@@ -561,7 +555,7 @@ export function StudentDetailPage() {
               />
             }
             title={detail.fullName ?? detail.mobile}
-            meta={`+91 ${detail.mobile} · ${signInSummary(detail)}`}
+            meta={`+91 ${detail.mobile}`}
             action={
               onDetails && !isEditing ? (
                 <Button

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, PanelsTopLeft, Upload } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Ban, PanelsTopLeft, Undo2, Upload } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   LANGUAGE_LABELS,
   QUESTION_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
+  repeatedLineOf,
   type QuestionImportPlan,
   type QuestionImportRow,
   type QuestionImportResult,
@@ -15,8 +16,10 @@ import {
   Alert,
   Badge,
   Button,
+  DropdownMenuItem,
   ImportView,
   PageHeader,
+  RowActions,
   Table,
   TableBody,
   TableCell,
@@ -88,6 +91,18 @@ function BlurryNotice({ count }: Readonly<{ count: number }>) {
   );
 }
 
+/** A row repeated inside the file is counted apart from one already in the bank; a count of none is left out. */
+function statsOf({ summary }: QuestionImportPlan, repeated: number) {
+  return [
+    { label: 'Rows read', value: summary.total },
+    { label: 'New questions', value: summary.willCreate },
+    { label: 'Already in the bank', value: summary.duplicates - repeated },
+    ...(repeated > 0 ? [{ label: 'Repeated in this file', value: repeated }] : []),
+    { label: 'Skipped (have problems)', value: summary.invalid },
+    ...(summary.leftOut > 0 ? [{ label: 'Left out', value: summary.leftOut }] : []),
+  ];
+}
+
 /** Registered only while the sheet is on screen: the authoring page over it registers its own. */
 function SheetTour() {
   usePageTour({ id: TOUR_IDS.IMPORT_QUESTIONS, steps: IMPORT_QUESTIONS_TOUR, ready: true });
@@ -132,7 +147,14 @@ export function ImportQuestionsPage() {
     setStartAt(line);
     setLeftRun(null);
   };
+  // Held against the run like a correction, so every row is judged again and a left-out one can come back.
+  const leaveOut = useMutation({
+    mutationFn: ({ run, line, leftOut }: { run: string; line: number; leftOut: boolean }) =>
+      api.admin.imports.leaveOutQuestionRow(run, line, { leftOut }),
+    onSuccess: (judged) => intake.stage(intake.file, judged),
+  });
   const blurry = plan?.rows.reduce((count, row) => count + row.warnings.length, 0) ?? 0;
+  const repeated = plan?.rows.filter((row) => repeatedLineOf(row.duplicateOf) !== null).length ?? 0;
   // A section's typist previews through authoring, which this bank-wide route does not answer for.
   const errorRows = useErrorRows(into ? null : intake.file, plan?.summary.invalid ?? 0, (file) =>
     api.admin.imports.questionErrors(file),
@@ -214,19 +236,7 @@ export function ImportQuestionsPage() {
       fileErrors={plan?.fileErrors}
       outcome={intake.result ? <ImportOutcome result={intake.result} into={into} /> : null}
       errorRows={errorRows}
-      stats={
-        plan
-          ? [
-              { label: 'Rows read', value: plan.summary.total },
-              { label: 'New questions', value: plan.summary.willCreate },
-              { label: 'Already in the bank', value: plan.summary.duplicates },
-              { label: 'Skipped (have problems)', value: plan.summary.invalid },
-              ...(plan.summary.leftOut > 0
-                ? [{ label: 'Left out', value: plan.summary.leftOut }]
-                : []),
-            ]
-          : undefined
-      }
+      stats={plan ? statsOf(plan, repeated) : undefined}
     >
       <BlurryNotice count={blurry} />
 
@@ -237,13 +247,14 @@ export function ImportQuestionsPage() {
             <TableHead>Filed under</TableHead>
             <TableHead>Languages</TableHead>
             <TableHead>What happens</TableHead>
+            <TableHead />
           </TableRow>
         </thead>
         <TableBody>
           <TableState
             isLoading={false}
             isEmpty={plan === null || plan.rows.length === 0}
-            colSpan={4}
+            colSpan={5}
             empty={
               plan === null
                 ? {
@@ -258,6 +269,12 @@ export function ImportQuestionsPage() {
                 key={row.line}
                 row={row}
                 onOpen={reviewable ? () => review(String(row.line)) : undefined}
+                onLeaveOut={
+                  reviewable
+                    ? (leftOut) =>
+                        leaveOut.mutate({ run: plan.importLogId, line: row.line, leftOut })
+                    : undefined
+                }
               />
             ))}
           </TableState>
@@ -270,8 +287,15 @@ export function ImportQuestionsPage() {
 function ImportRow({
   row,
   onOpen,
-}: Readonly<{ row: QuestionImportRow; onOpen: (() => void) | undefined }>) {
+  onLeaveOut,
+}: Readonly<{
+  row: QuestionImportRow;
+  onOpen: (() => void) | undefined;
+  /** Sets the row aside from Import or brings it back; absent once there is nothing left to import. */
+  onLeaveOut: ((leftOut: boolean) => void) | undefined;
+}>) {
   const filedUnder = [row.subjectName, row.topicName].filter(Boolean).join(' / ');
+  const leftOut = row.action === 'left_out';
 
   return (
     <TableRow>
@@ -294,6 +318,16 @@ function ImportRow({
       </TableCell>
       <TableCell>
         <RowOutcome row={row} />
+      </TableCell>
+      <TableCell className="w-10">
+        {onLeaveOut ? (
+          <RowActions label={`Row ${row.line}`}>
+            <DropdownMenuItem onSelect={() => onLeaveOut(!leftOut)}>
+              {leftOut ? <Undo2 aria-hidden /> : <Ban aria-hidden />}
+              {leftOut ? 'Bring back' : 'Leave out'}
+            </DropdownMenuItem>
+          </RowActions>
+        ) : null}
       </TableCell>
     </TableRow>
   );
@@ -327,13 +361,15 @@ function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
 
   // A repeat is not an error — re-uploading last week's sheet with ten new rows added is normal use.
   if (row.action === 'duplicate') {
+    const repeats = repeatedLineOf(row.duplicateOf);
     return (
       <span className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="info">Already in the bank</Badge>
+        {repeats === null ? (
+          <Badge variant="info">Already in the bank</Badge>
+        ) : (
+          <Badge variant="warning">{`Same as row ${repeats}`}</Badge>
+        )}
         {edited}
-        {row.duplicateOf?.startsWith('line ') ? (
-          <span className="text-xs text-muted-foreground">same as {row.duplicateOf}</span>
-        ) : null}
       </span>
     );
   }

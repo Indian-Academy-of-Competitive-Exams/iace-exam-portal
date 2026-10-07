@@ -13,6 +13,10 @@ export function isWorthAskingAgain(error: unknown): boolean {
   return httpStatus === 0 || httpStatus === THROTTLED || httpStatus >= SERVER_FAULT;
 }
 
+/** The default for every read: once more, and only for what a refusal did not answer. */
+export const shouldRetryRead = (failures: number, error: unknown): boolean =>
+  failures < 1 && isWorthAskingAgain(error);
+
 const THROTTLED = 429;
 const SERVER_FAULT = 500;
 const RETRY_BASE_MS = 1_000;
@@ -73,7 +77,7 @@ export function createAppQueryClient(options: { notify?: Notifier } = {}): Query
 
     defaultOptions: {
       queries: {
-        retry: (failures, error) => failures < 1 && isWorthAskingAgain(error),
+        retry: shouldRetryRead,
         retryDelay: (failures) => retryDelayMs(failures),
         staleTime: 30_000,
         refetchOnWindowFocus: false,

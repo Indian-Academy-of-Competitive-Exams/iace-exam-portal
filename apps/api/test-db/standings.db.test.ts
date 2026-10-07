@@ -261,3 +261,69 @@ describe('standingsOf', () => {
     assert.equal((await leaderboard.standingsOf([])).size, 0);
   });
 });
+
+describe('standingsOfTests', () => {
+  it('gives every ranked sitting the standing the per-sitting count gives it, ties included', async () => {
+    const [first, second] = [await paper(), await paper()];
+    const sat = [
+      await sitter(first, 90, { timeTakenSec: 1200 }),
+      await sitter(first, 90, { timeTakenSec: 2400 }),
+      await sitter(first, 90, { timeTakenSec: 2400 }),
+      await sitter(first, 40),
+      await sitter(second, 70),
+      await sitter(second, 10),
+    ];
+    const retake = await sitter(first, 99, { isGraded: false, attemptNo: 2 });
+
+    const whole = await leaderboard.standingsOfTests([first, second]);
+    const each = await leaderboard.standingsOf(sat.map((row) => row.attemptId));
+
+    assert.equal(whole.size, sat.length);
+    assert.equal(whole.has(retake.attemptId), false);
+    for (const { attemptId, studentId } of sat) {
+      const { rank, percentile, cohortSize } = each.get(attemptId) ?? {};
+      assert.deepEqual(
+        whole.get(attemptId),
+        { attemptId, studentId, testId: each.get(attemptId)?.testId, rank, percentile, cohortSize },
+        attemptId,
+      );
+    }
+  });
+
+  it('returns only the sittings handed in within a period, still ranked among every sitting', async () => {
+    const testId = await paper();
+    const june = new Date('2026-06-09T06:00:00.000Z');
+    await sitter(testId, 90, { submittedAt: new Date('2026-05-01T06:00:00.000Z') });
+    const inPeriod = await sitter(testId, 40, { submittedAt: june });
+
+    const within = await leaderboard.standingsOfTests([testId], {
+      gte: new Date('2026-06-01T00:00:00.000Z'),
+      lte: new Date('2026-06-30T00:00:00.000Z'),
+    });
+
+    assert.deepEqual([...within.keys()], [inPeriod.attemptId]);
+    assert.equal(within.get(inPeriod.attemptId)?.rank, 2);
+    assert.equal(within.get(inPeriod.attemptId)?.cohortSize, 2);
+  });
+});
+
+describe('cohortsOf', () => {
+  it('sums a cohort up, and names as its topper whoever holds rank 1', async () => {
+    const testId = await paper();
+    await sitter(testId, 80, { timeTakenSec: 2400 });
+    const fastest = await sitter(testId, 80, { timeTakenSec: 1200 });
+    await sitter(testId, 35);
+    await sitter(testId, 100, { isGraded: false, attemptNo: 2 });
+
+    const cohorts = await leaderboard.cohortsOf([testId, await paper()]);
+
+    assert.equal(cohorts.size, 1);
+    assert.deepEqual(cohorts.get(testId), {
+      size: 3,
+      mean: 65,
+      highest: 80,
+      topperId: fastest.studentId,
+    });
+    assert.equal(await rankOf(testId, fastest.attemptId), 1);
+  });
+});

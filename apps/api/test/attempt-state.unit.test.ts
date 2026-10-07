@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ANSWER_STATE, type AnswerChange, type LiveAnswer } from '@iace/contracts';
+import {
+  ANSWER_STATE,
+  PRESENT_GRACE_SEC,
+  type AnswerChange,
+  type LiveAnswer,
+} from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { type PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
@@ -18,7 +23,6 @@ import {
   isStale,
   PAUSE_CREDIT_CAP_SEC,
   PAUSE_LIMIT_SEC,
-  PRESENT_GRACE_SEC,
   packHeld,
   SAVE_GRACE_SEC,
   stateOf,

@@ -5,13 +5,17 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { AppException, ErrorCodes } from '@iace/contracts';
+import { MARKING_TRIES } from '@iace/app-kit';
 import './support/offline';
 import { api } from '../src/lib/api';
 import { SubjectPanel } from '../src/features/performance/subject-report';
 import { ComparePanel } from '../src/features/performance/compare';
 
 /** gcTime 0 and an explicit clear: react-query's default 5-minute timer outlives the run. */
-const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
+const client = new QueryClient({
+  // No delay, because a marked paper's read asks again by itself whatever the client's default is.
+  defaultOptions: { queries: { gcTime: 0, retry: false, retryDelay: 0 } },
+});
 
 afterEach(() => {
   cleanup();
@@ -52,6 +56,16 @@ describe('a report tab whose marks are not in yet', () => {
     assert.equal(screen.queryByText('Your sections did not load'), null);
   });
 
+  /** The failure this prevents: a student handed a Retry for a job that lands a second later. */
+  it('asks again by itself, a bounded number of times, before it says so', async () => {
+    const scoreCard = scoreCardRefuses(STILL_MARKING);
+
+    mount(<SubjectPanel />);
+
+    await screen.findByText('No marks yet');
+    assert.equal(scoreCard.mock.callCount(), 1 + MARKING_TRIES);
+  });
+
   it('says it on the comparison too, which reads the same card', async () => {
     scoreCardRefuses(STILL_MARKING);
 
@@ -71,8 +85,9 @@ describe('a report tab whose read failed', () => {
     assert.ok(await screen.findByText('Your sections did not load'));
     assert.equal(screen.queryByText('No marks yet'), null);
 
+    const asked = scoreCard.mock.callCount();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    assert.equal(scoreCard.mock.callCount(), 2);
+    assert.equal(scoreCard.mock.callCount(), asked + 1);
   });
 });

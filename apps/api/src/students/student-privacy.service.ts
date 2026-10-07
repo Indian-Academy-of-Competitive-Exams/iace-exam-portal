@@ -44,6 +44,8 @@ export class StudentPrivacyService {
     const attemptsKept = await this.prisma.$transaction(async (tx) => {
       await tx.student.update({ where: { id: studentId }, data: anonymizedStudent(at) });
       await tx.studentProfile.updateMany({ where: { studentId }, data: anonymizedProfile() });
+      // An old number names them as surely as the current one does.
+      await tx.studentMobileHistory.deleteMany({ where: { studentId } });
       return tx.attempt.count({ where: { studentId } });
     }, TX_LIMITS.SHORT);
 

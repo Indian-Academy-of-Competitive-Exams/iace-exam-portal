@@ -17,7 +17,6 @@ function env(over: Record<string, string> = {}): Record<string, string> {
     REDIS_URL: 'redis://localhost:6379',
     JWT_ACCESS_SECRET: SECRET,
     JWT_REFRESH_SECRET: SECRET,
-    PIN_PEPPER: SECRET,
     S3_BUCKET: 'iace-local',
     S3_ENDPOINT: 'http://localhost:9000',
     S3_ACCESS_KEY_ID: 'key',
@@ -148,11 +147,10 @@ describe('the secrets .env.example publishes', () => {
   const PUBLISHED = {
     JWT_ACCESS_SECRET: 'dev_only_access_secret_change_me_before_any_deploy',
     JWT_REFRESH_SECRET: 'dev_only_refresh_secret_change_me_before_any_deploy',
-    PIN_PEPPER: 'dev_only_pin_pepper_change_me_before_any_deploy',
   };
 
   /** The bug this prevents: a deploy that never edited .env, on secrets anybody can read off GitHub. */
-  it('refuses each of them in production, even though all three clear the length floor', () => {
+  it('refuses each of them in production, even though both clear the length floor', () => {
     for (const [key, published] of Object.entries(PUBLISHED)) {
       assert.ok(published.length > 24, `${key}'s placeholder is short enough for min(24) to catch`);
       assert.throws(
@@ -180,7 +178,7 @@ describe('the secrets .env.example publishes', () => {
 
   /** Local development IS the placeholder: refusing it there would break every fresh clone. */
   it('leaves development on them, which is what .env.example is for', () => {
-    assert.equal(validateEnv(env(PUBLISHED)).PIN_PEPPER, PUBLISHED.PIN_PEPPER);
+    assert.equal(validateEnv(env(PUBLISHED)).JWT_REFRESH_SECRET, PUBLISHED.JWT_REFRESH_SECRET);
   });
 });
 

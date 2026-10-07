@@ -35,6 +35,7 @@ export function SeriesShelf({ series, rows, now, results }: Readonly<SeriesShelf
         </Link>
       }
       meta={`${plural(progress.total, 'test')} · ${progress.done} sat`}
+      all={{ to: ROUTES.SERIES(series.id), label: `Every test in ${series.name}` }}
     >
       {rows.map((row) => (
         <TestTile key={row.test.id} row={row} now={now} result={results.get(row.test.id)} />

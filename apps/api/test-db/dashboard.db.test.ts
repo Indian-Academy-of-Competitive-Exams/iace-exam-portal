@@ -13,6 +13,7 @@ import {
   type AdminPermissions,
   type FeatureKey,
 } from '@iace/contracts';
+import { AssignmentsService } from '../src/assignments/assignments.service';
 import { DashboardService } from '../src/dashboard/dashboard.service';
 import { type AuthenticatedUser } from '../src/common/security';
 import { type PrismaService } from '../src/prisma/prisma.service';
@@ -40,9 +41,12 @@ const DAY_MS = 86_400_000;
 /** Relative to the real clock the service reads: a pinned date turns "upcoming" into "open" on its own. */
 const daysFromNow = (days: number) => new Date(Date.now() + days * DAY_MS);
 
+/** A real id's shape: the caller's own sections are looked up by it. */
+const CALLER = uid();
+
 function admin(over: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
   return {
-    id: 'adm_1',
+    id: CALLER,
     actor: ActorTypes.ADMIN,
     sessionId: 'ses_1',
     isSuperAdmin: false,
@@ -75,7 +79,9 @@ function build(client: PrismaService = prisma) {
       return Reflect.get(target, key) as unknown;
     },
   });
-  return { touched, service: new DashboardService(watched, fakeAudit() as never) };
+  // The summary never asks who may hold a section, so the admins service it would ask is left out.
+  const assignments = new AssignmentsService(watched, undefined as never);
+  return { touched, service: new DashboardService(watched, fakeAudit() as never, assignments) };
 }
 
 /** Three accounts (one closed), four branches, two programs, seven exams, and a small bank. */
@@ -227,16 +233,44 @@ describe('the outstanding assignments tile', () => {
   });
 });
 
+describe('the caller’s own sections', () => {
+  it('is absent while every section is somebody else’s', async () => {
+    await assignedSections(1, 0);
+    const { service } = build();
+
+    const payload = await service.overview(holding(FEATURE_KEYS.QUESTION_AUTHORING));
+
+    assert.equal(payload.work, undefined);
+  });
+
+  it('counts the sections the caller holds, and nobody else’s', async () => {
+    await assignedSections(2, 1);
+    const holder = await prisma.questionAssignment.findFirstOrThrow({
+      select: { assigneeId: true },
+    });
+    const { service } = build();
+
+    const payload = await service.overview(
+      admin({
+        id: holder.assigneeId,
+        permissions: { [FEATURE_KEYS.QUESTION_AUTHORING]: PERMISSION_LEVELS.WRITE },
+      }),
+    );
+
+    assert.deepEqual(
+      payload.work?.roles.map((role) => [role.role, role.assigned, role.completed]),
+      [[ASSIGNMENT_ROLES.TYPIST, 3, 1]],
+    );
+  });
+});
+
 describe('the sittings series and the windows', () => {
-  /** Opened, upcoming, a draft, and one under a series nobody can reach. */
+  /** Opened, upcoming, a draft, and one that is no longer offered. */
   async function schedule() {
     const catalog = await makeCatalog(prisma);
     await prisma.testSeries.update({
       where: { id: catalog.testSeriesId },
-      data: { name: 'SSC CGL Mocks', isEnabled: true },
-    });
-    const hiddenSeries = await prisma.testSeries.create({
-      data: { name: uid(), examStageId: catalog.examStageId, isEnabled: false },
+      data: { name: 'SSC CGL Mocks' },
     });
     const active = TEST_STATUS.ACTIVE;
     const opened = daysFromNow(-13);
@@ -254,16 +288,15 @@ describe('the sittings series and the windows', () => {
       opensAt: daysFromNow(6),
     });
     const draft = await makeTest(prisma, catalog, { status: TEST_STATUS.DRAFT, opensAt: opened });
-    const hidden = await makeTest(
-      prisma,
-      { ...catalog, testSeriesId: hiddenSeries.id },
-      { status: active, opensAt: daysFromNow(-25) },
-    );
+    const hidden = await makeTest(prisma, catalog, {
+      status: TEST_STATUS.INACTIVE,
+      opensAt: daysFromNow(-25),
+    });
     return { catalog, old, soon, draft, hidden, opened };
   }
 
   it('reads each point off the counted cohort, oldest first', async () => {
-    const { old, soon, hidden } = await schedule();
+    const { old, soon } = await schedule();
     const { service, touched } = build();
 
     const payload = await service.overview(holding(FEATURE_KEYS.STUDENT_PERFORMANCE));
@@ -271,7 +304,6 @@ describe('the sittings series and the windows', () => {
     assert.deepEqual(
       payload.activity?.sittings?.map((sitting) => [sitting.testId, sitting.evaluated]),
       [
-        [hidden.id, 0],
         [old.id, 38],
         [soon.id, 0],
       ],
@@ -280,7 +312,7 @@ describe('the sittings series and the windows', () => {
     assert.equal(touched.has('attempt'), false);
   });
 
-  it('splits open from upcoming and leaves out a series nobody can reach', async () => {
+  it('splits open from upcoming and leaves out a test that is not offered', async () => {
     const { old, soon, draft, hidden } = await schedule();
     const { service } = build();
 
@@ -294,7 +326,7 @@ describe('the sittings series and the windows', () => {
       payload.windows?.upcoming.map((window) => window.testId),
       [soon.id],
     );
-    // A draft test and a test under a disabled series are not windows an admin can act on.
+    // A draft and a test no longer offered are not windows an admin can act on.
     const shown = [...(payload.windows?.open ?? []), ...(payload.windows?.upcoming ?? [])];
     assert.equal(
       shown.some((window) => window.testId === hidden.id || window.testId === draft.id),

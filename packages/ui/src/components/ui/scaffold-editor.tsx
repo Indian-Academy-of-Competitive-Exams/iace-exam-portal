@@ -3,7 +3,7 @@ import { EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import { DOMSerializer, type Node as ProseNode } from '@tiptap/pm/model';
-import { TextSelection } from '@tiptap/pm/state';
+import { Selection } from '@tiptap/pm/state';
 import { type EditorView } from '@tiptap/pm/view';
 import { cn } from '../../lib/utils';
 import { TableTools } from './rich-text-table';
@@ -16,7 +16,9 @@ import {
   REGION_NODE,
   ScaffoldDocument,
   ScaffoldRegionNode,
+  seatLoadedScaffold,
   whileLoadingScaffold,
+  writtenIn,
   type RegionKind,
 } from './scaffold-region';
 
@@ -47,6 +49,8 @@ export interface ScaffoldEditorProps {
   imageLimits?: ImageLimits;
   /** At the toolbar's right end, for a control over the whole box. */
   toolbarEnd?: React.ReactNode;
+  /** Shown and not typed into: the grey a disabled field wears, and no toolbar. */
+  disabled?: boolean;
   lang?: string;
   'aria-label': string;
   className?: string;
@@ -56,6 +60,9 @@ const SHELL = [
   'flex flex-col rounded-md border border-input bg-surface text-sm text-foreground shadow-sm',
   'transition-[box-shadow,border-color] focus-within:border-ring focus-within:shadow-focus',
 ].join(' ');
+
+/** The same grey a disabled `RichText` wears, so one question reads as off the same way everywhere. */
+const OFF = 'cursor-not-allowed border-disabled-border bg-disabled text-disabled-foreground';
 
 const CONTENT =
   'scaffold-content rich-content outline-none [&_.ProseMirror]:outline-none [&_p]:m-0';
@@ -101,13 +108,13 @@ function regionsOf(editor: Editor): ScaffoldRegion[] {
   editor.state.doc.forEach((node: ProseNode) => {
     if (node.type.name !== REGION_NODE) return;
     const holder = document.createElement('div');
-    holder.append(serializer.serializeFragment(node.content));
+    holder.append(serializer.serializeFragment(writtenIn(node)));
     out.push({
       key: String(node.attrs.key ?? ''),
       label: String(node.attrs.label ?? ''),
       kind: String(node.attrs.kind ?? REGION_KIND.PLAIN) as RegionKind,
       roman: node.attrs.roman === 'true',
-      html: holder.innerHTML === '<p></p>' ? '' : holder.innerHTML,
+      html: holder.innerHTML,
     });
   });
 
@@ -119,21 +126,21 @@ function regionIndexAt(view: EditorView): number {
   return view.state.doc.resolve(view.state.selection.from).index(0);
 }
 
-/** The document position just inside the nth slot's first (or last) paragraph. */
-function insideRegion(view: EditorView, index: number, atEnd: boolean): number | null {
+/** The first (or last) place in the nth slot that takes text, which a figure or a table at its edge is not. */
+function textIn(view: EditorView, index: number, atEnd: boolean): Selection | null {
   const doc = view.state.doc;
   if (index < 0 || index >= doc.childCount) return null;
 
   const start = startOf(doc, index);
-  const node = doc.child(index);
-  return atEnd ? start + node.nodeSize - 2 : start + 2;
+  const edge = atEnd ? start + doc.child(index).nodeSize - 1 : start + 1;
+  return Selection.findFrom(doc.resolve(edge), atEnd ? -1 : 1, true);
 }
 
 function moveToRegion(view: EditorView, index: number, atEnd: boolean): boolean {
-  const inside = insideRegion(view, index, atEnd);
-  if (inside === null) return false;
+  const caret = textIn(view, index, atEnd);
+  if (caret === null) return false;
 
-  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, inside)));
+  view.dispatch(view.state.tr.setSelection(caret));
   view.focus();
   return true;
 }
@@ -147,6 +154,7 @@ export function ScaffoldEditor({
   onUploadImage,
   imageLimits,
   toolbarEnd,
+  disabled = false,
   script = null,
   lang,
   'aria-label': label,
@@ -175,7 +183,7 @@ export function ScaffoldEditor({
   );
 
   const { editor, math, setMath } = useQuestionEditor({
-    editable: true,
+    editable: !disabled,
     extensions: EXTENSIONS,
     content: docFrom(regions),
     onUpdate: (current) => emit.current(regionsOf(current)),
@@ -183,6 +191,11 @@ export function ScaffoldEditor({
     imageLimits,
     editorProps,
   });
+
+  // Before any other transaction, or the first one would report the seats as the typist's edit.
+  React.useEffect(() => {
+    if (editor) seatLoadedScaffold(editor.view);
+  }, [editor]);
 
   // A transaction, not a ref: the plugin carries the script and the editor is built once.
   React.useEffect(() => {
@@ -196,12 +209,17 @@ export function ScaffoldEditor({
     loaded.current = docKey;
     whileLoadingScaffold(() => editor.commands.setContent(docFrom(regions), { emitUpdate: false }));
     // Back at the first slot, which after a save is the stem of the next question.
-    editor.commands.focus('start');
-  }, [editor, docKey, regions]);
+    if (!disabled) editor.commands.focus('start');
+  }, [editor, docKey, regions, disabled]);
 
   return (
-    <div className={cn(SHELL, className)} data-focus-ring="wrapper">
-      {editor ? (
+    <div
+      className={cn(SHELL, disabled && OFF, className)}
+      aria-disabled={disabled || undefined}
+      data-focus-ring="wrapper"
+    >
+      {/* No toolbar when it is off: a row of dead buttons says nothing the grey does not. */}
+      {editor && !disabled ? (
         <RichTextToolbar
           // Pinned: the box runs the height of the column, and the tools have to stay reachable.
           className="sticky top-0 z-[--z-sticky] px-3"

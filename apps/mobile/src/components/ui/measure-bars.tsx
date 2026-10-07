@@ -8,6 +8,7 @@ const TONES = {
   1: 'bg-series-1',
   2: 'bg-series-2',
   3: 'bg-series-3',
+  4: 'bg-series-4',
 } as const;
 
 export type MeasureTone = keyof typeof TONES;

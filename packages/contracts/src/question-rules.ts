@@ -13,6 +13,7 @@ import {
   previewTextOf,
   type LocalizedText,
   type QuestionDraft,
+  type QuestionIdentity,
   type QuestionLanguage,
   type ValidationIssue,
 } from './questions';
@@ -335,11 +336,8 @@ function checkTaxonomy(
   }
 }
 
-/** What a question's identity is read from — all a stored version still has once the draft is gone. */
-type StemKeyInput = Pick<QuestionDraft, 'type' | 'stem' | 'options' | 'answerKey'>;
-
 /** Two questions in one string: the stem, the options as a SET, and the correct one's text. */
-export function canonicalStemKey(draft: StemKeyInput): string {
+export function canonicalStemKey(draft: QuestionIdentity): string {
   const stem = foldForCompare(draft.stem[DEFAULT_LANGUAGE]);
 
   if (draft.type === QUESTION_TYPE.TEXT_FIELD) {

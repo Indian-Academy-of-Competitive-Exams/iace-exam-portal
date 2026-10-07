@@ -18,6 +18,7 @@ export const ErrorCodes = {
   CONFLICT: 'CONFLICT',
   SITTING_TAKEN_OVER: 'SITTING_TAKEN_OVER',
   SITTING_SET_ASIDE: 'SITTING_SET_ASIDE',
+  SITTING_HELD_ELSEWHERE: 'SITTING_HELD_ELSEWHERE',
   SITTING_ENDED: 'SITTING_ENDED',
   RATE_LIMITED: 'RATE_LIMITED',
   OTP_INVALID: 'OTP_INVALID',
@@ -45,6 +46,7 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.CONFLICT]: 409,
   [ErrorCodes.SITTING_TAKEN_OVER]: 409,
   [ErrorCodes.SITTING_SET_ASIDE]: 409,
+  [ErrorCodes.SITTING_HELD_ELSEWHERE]: 409,
   [ErrorCodes.SITTING_ENDED]: 409,
   [ErrorCodes.RATE_LIMITED]: 429,
   // A wrong or stale credential is an authentication failure, not a malformed request — the body was well-formed.
@@ -72,6 +74,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCodes.CONFLICT]: 'That already exists',
   [ErrorCodes.SITTING_TAKEN_OVER]: 'This test was continued somewhere else',
   [ErrorCodes.SITTING_SET_ASIDE]: 'Another of your tests was opened',
+  [ErrorCodes.SITTING_HELD_ELSEWHERE]: 'A test is being answered on your other device',
   [ErrorCodes.SITTING_ENDED]: 'This sitting has already ended',
   [ErrorCodes.RATE_LIMITED]: 'Too many requests. Please wait a moment',
   [ErrorCodes.OTP_INVALID]: 'Incorrect code',

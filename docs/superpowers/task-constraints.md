@@ -216,7 +216,7 @@ touches.** A test that reads or writes Postgres runs against the real database i
 (`saved-questions.db.test.ts`, `pnpm test:db`), building its rows from
 `apps/api/test-db/support/database.ts` and calling `resetDatabase` first when it reads rows it did
 not write. Pure logic, and code that needs only Redis, S3, a queue, a sender or the clock faked,
-stays in `apps/api/test` (`auth-pin.unit.test.ts`, `pnpm test`, those fakes in
+stays in `apps/api/test` (`auth-otp.unit.test.ts`, `pnpm test`, those fakes in
 `apps/api/test/support/fakes.ts`).
 
 **Never write a fake Prisma, or a fake table.** A hand-written copy of the database drifts from the

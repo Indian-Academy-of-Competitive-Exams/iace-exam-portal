@@ -65,10 +65,10 @@ export function ProfilePage() {
   const gender = useWatch({ control: form.control, name: 'profile.gender' });
   const dob = useWatch({ control: form.control, name: 'profile.dob' });
 
-  // Filled once the record arrives; `reset`, not defaultValues, since the form mounts before the fetch resolves.
+  // Follows the record until an edit starts: an upload or a refetch mid-edit must not wipe what was typed.
   const { reset } = form;
   useEffect(() => {
-    if (!me.data) return;
+    if (!me.data || isEditing) return;
     reset({
       fullName: me.data.fullName ?? '',
       profile: {
@@ -82,7 +82,7 @@ export function ProfilePage() {
         pastExamHistory: me.data.profile?.pastExamHistory ?? [],
       },
     });
-  }, [me.data, reset]);
+  }, [me.data, reset, isEditing]);
 
   const save = useMutation({
     // `fields` keeps a validation failure off the toast and on the input that caused it.

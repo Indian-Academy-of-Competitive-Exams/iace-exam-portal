@@ -2,6 +2,8 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
+  AppException,
+  ErrorCodes,
   LANGUAGE_MODE,
   type ExamBrief,
   type LanguageCode,
@@ -22,6 +24,16 @@ const START_TRIES = 3;
 
 export const shouldRetryStart = (failures: number, error: unknown): boolean =>
   failures < START_TRIES - 1 && isWorthAskingAgain(error);
+
+/** A start refused because the student's other sign-in is still answering a sitting, this one or another. */
+export const isHeldElsewhere = (error: unknown): boolean =>
+  AppException.is(error) && error.code === ErrorCodes.SITTING_HELD_ELSEWHERE;
+
+/** The hold screen's words, the same on both apps: what holds the paper, and what releases it. */
+export const HELD_ELSEWHERE_SAYS = {
+  title: 'A test is open on your other device',
+  hint: 'This one opens here once that device has been quiet for a minute.',
+} as const;
 
 export interface BeginChoice {
   /** A DUAL paper shows every language at once, so there is nothing to choose. */

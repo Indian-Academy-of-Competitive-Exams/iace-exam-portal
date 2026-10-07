@@ -70,6 +70,21 @@ navigation out of it, so both sit outside `AppShell` and take the window. The si
 neither language (below); the instructions still follow this one — a `PageFrame` capped at the
 shell's own narrow width, with the walk in its `footer` so the controls do not scroll away.
 
+## At a phone's width
+
+A student is as likely to open this on a phone as at a desk, so every screen reads at 360px
+without scrolling sideways. The shared pieces already do it; a screen keeps it true by using them.
+
+- **A table passes `stacks`.** Below `sm` each row becomes a block: the first column its heading,
+  every other value under its own column name, figures two to a line. A table of two or three
+  short columns stays a table and bounds its naming column instead — the leaderboard's ranks.
+- **A wide table still pins its naming column,** for the widths between a phone and a desk where
+  it scrolls sideways inside its card.
+- **A header picker fills the row below `sm`.** `PICKER_WIDTH` carries the width, never a call site.
+- **The sitting folds its palette away** below its breakpoint — a drawer on the default skin, a
+  panel over the paper on the railway one — and opening a question puts it away again.
+- **Only a tab strip moves sideways.** Anything else that does is a defect, not a layout.
+
 ## The component vocabulary
 
 The student pattern layer belongs in `apps/exams/src/components/ui/` — with the web app

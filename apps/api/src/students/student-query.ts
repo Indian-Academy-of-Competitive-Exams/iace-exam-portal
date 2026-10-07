@@ -1,12 +1,39 @@
 import { Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
-import { everyTermMatches } from '../common/search-terms';
+import { everyTermMatches, termsOf } from '../common/search-terms';
 import { HOLDS_OWN_ACCESS } from './own-access';
 import { readinessWhere } from './student-flags';
 
+/** Per number searched for, the students who once signed in with it. */
+export type FormerHolders = ReadonlyMap<string, string[]>;
+
+const NOBODY: FormerHolders = new Map();
+const FULL_MOBILE = /^\d{10}$/;
+
+/** Read ahead of the roster query: as ids, an old number costs the search none of its own indexes. */
+export async function formerHoldersOf(
+  prisma: Pick<Prisma.TransactionClient, 'studentMobileHistory'>,
+  search: string | undefined,
+): Promise<FormerHolders> {
+  const numbers = termsOf(search).filter((term) => FULL_MOBILE.test(term));
+  if (numbers.length === 0) return NOBODY;
+
+  const rows = await prisma.studentMobileHistory.findMany({
+    where: { mobile: { in: numbers } },
+    select: { mobile: true, studentId: true },
+  });
+  const holders = new Map<string, string[]>();
+  for (const row of rows)
+    holders.set(row.mobile, [...(holders.get(row.mobile) ?? []), row.studentId]);
+  return holders;
+}
+
 /** Turns the roster's filters into a Prisma query. */
-export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
+export function studentWhere(
+  query: StudentListQuery,
+  formerHolders: FormerHolders = NOBODY,
+): Prisma.StudentWhereInput {
   /** What the match toggle governs. */
   const chosen: Prisma.StudentWhereInput[] = [];
   const add = (condition: Prisma.StudentWhereInput) => chosen.push(condition);
@@ -30,13 +57,12 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   if (query.eventId) add({ eventCandidacies: { some: { eventId: { in: query.eventId } } } });
   if (query.noAccess !== undefined) add(ownAccessFilter(query.noAccess));
 
-  if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
-
   if (query.q?.trim()) {
     always.push(
       everyTermMatches<Prisma.StudentWhereInput>(query.q, (term) => [
         { mobile: { contains: term } },
         { fullName: { contains: term, mode: 'insensitive' } },
+        ...(formerHolders.has(term) ? [{ id: { in: formerHolders.get(term) } }] : []),
       ]),
     );
   }

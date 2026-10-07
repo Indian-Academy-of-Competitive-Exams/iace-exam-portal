@@ -67,7 +67,7 @@ async function hall(questionCount = 2) {
   });
   await prisma.testSeries.update({
     where: { id: paper.catalog.testSeriesId },
-    data: { isEnabled: true, branchIds: [branch] },
+    data: { branchIds: [branch] },
   });
   await prisma.test.update({
     where: { id: paper.testId },

@@ -34,6 +34,7 @@ export function QuestionPanes({
   onSave,
   lead,
   previewAction,
+  readOnly = false,
 }: Readonly<{
   questionId: string;
   state: AuthoringState;
@@ -50,13 +51,30 @@ export function QuestionPanes({
   lead?: React.ReactNode;
   /** At the preview's end: what may be done to this question. */
   previewAction?: React.ReactNode;
+  /** Not the viewer's to change, or held by somebody else: the editor shows, and takes nothing. */
+  readOnly?: boolean;
 }>) {
   const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
+  const languages = (
+    <SegmentedControl
+      value={language}
+      onChange={(value) => onLanguageChange(value as QuestionLanguage)}
+      aria-label="Language"
+      items={LANGUAGE_ORDER.map((code) => ({
+        value: code,
+        label: code.toUpperCase(),
+        name: LANGUAGE_LABELS[code],
+      }))}
+    />
+  );
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section className="flex min-h-0 flex-col border-border lg:border-r">
-        {lead ? <PanelHeading lead={lead} /> : null}
+        {/* Which language is read is navigation, so it leaves the editor that is frozen under it. */}
+        {lead || readOnly ? (
+          <PanelHeading lead={lead} action={readOnly ? languages : undefined} />
+        ) : null}
         <div className={SCROLLS}>
           <ScaffoldEditor
             aria-label="Question"
@@ -71,18 +89,8 @@ export function QuestionPanes({
             imageLimits={IMAGE_LIMITS}
             lang={language}
             script={script}
-            toolbarEnd={
-              <SegmentedControl
-                value={language}
-                onChange={(value) => onLanguageChange(value as QuestionLanguage)}
-                aria-label="Language"
-                items={LANGUAGE_ORDER.map((code) => ({
-                  value: code,
-                  label: code.toUpperCase(),
-                  name: LANGUAGE_LABELS[code],
-                }))}
-              />
-            }
+            toolbarEnd={languages}
+            disabled={readOnly}
             // The card is the frame: the box it fills draws no ring or border of its own.
             className="flex-1 rounded-none border-0 shadow-none focus-within:border-transparent focus-within:shadow-none"
           />

@@ -26,6 +26,6 @@ export function secondsLabel(seconds: number | null | undefined): string {
   return `${Math.round(seconds)}s`;
 }
 
-/** A test with no instant of its own opens when its series does — an absence, not a gap. */
+/** A test with no instant of its own opens once it is active — an absence, not a gap. */
 export const opensLabel = (unlockAt: string | null): string =>
-  unlockAt ? instituteDateTimeLabel(unlockAt) : 'With the series';
+  unlockAt ? instituteDateTimeLabel(unlockAt) : 'Once active';

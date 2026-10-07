@@ -1,6 +1,9 @@
 import * as React from 'react';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Button } from './button';
 import { Card } from './card';
-import { FilterRow, type FilterState, type ListFilter } from './list-view';
+import { FormSection } from './form-panel';
+import { FilterColumn, FilterRow, type FilterState, type ListFilter } from './list-view';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 import { cn, FILLS, TOUR_ANCHORS } from '../../lib/utils';
 
@@ -153,7 +156,8 @@ function FrameTop({
 }>) {
   if (beside) {
     return (
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
+      // The row gap is for a phone, where the controls wrap under the title and their labels notch upward.
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="flex min-w-0 flex-auto flex-col gap-4">{header}</div>
         <FrameFilterRow filters={filters} beside />
       </div>
@@ -285,4 +289,98 @@ export function TableFrame({ header, toolbar, tabs, children }: Readonly<TableFr
   );
 
   return withTabsRoot(tabs, true, frame);
+}
+
+export interface SplitFrameProps {
+  /** Pinned above both cards — usually a `PageHeader`. */
+  header?: React.ReactNode;
+  /** What the body is asked by, stacked at the head of the side card. */
+  filters?: FrameFilters;
+  /** The side card's own sections: the controls that change the body, or what it comes to. */
+  side?: React.ReactNode;
+  /** Views of one record, their strip inside the body's card. */
+  tabs?: TableFrameTabs;
+  /** Hands the body's scrolling to its children — a table that scrolls, not the card around it. */
+  fills?: boolean;
+  /** Lets the reader fold the side card away, for a body that wants the width once it is asked. */
+  collapsible?: boolean;
+  /** Tour stops, for a screen the tour walks. */
+  anchors?: { body?: string; side?: string };
+  children?: React.ReactNode;
+}
+
+/** Below `lg` the two stack and the page scrolls, so neither card is held to a height there. */
+const SPLIT_PANE = 'relative flex flex-col p-4 lg:min-h-0';
+
+/** A body beside the card it is read through: two cards, each its own scroller from `lg` up. */
+export function SplitFrame({
+  header,
+  filters,
+  side,
+  tabs,
+  fills = false,
+  collapsible = false,
+  anchors,
+  children,
+}: Readonly<SplitFrameProps>) {
+  const asked = filters && (filters.spec.length > 0 || filters.leading);
+  const [folded, setFolded] = React.useState(false);
+  const Fold = folded ? PanelRightOpen : PanelRightClose;
+
+  const frame = (
+    <PageFrame className="lg:overflow-hidden" header={header}>
+      <div
+        className={cn(
+          // A bare track is as wide as its widest table, which on a phone is wider than the page.
+          'grid grid-cols-[minmax(0,1fr)] gap-5 lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
+          folded ? 'lg:grid-cols-[minmax(0,1fr)_auto]' : 'lg:grid-cols-[minmax(0,1fr)_360px]',
+        )}
+      >
+        <Card
+          data-tour={anchors?.body}
+          className={cn(SPLIT_PANE, 'order-2 gap-4 lg:order-1', !fills && 'lg:overflow-y-auto')}
+        >
+          {tabs ? <FrameTabs tabs={tabs} scroller={FILLS} bleed /> : children}
+        </Card>
+        {/* First on a phone: what the body is asked by is chosen before there is a body to read. */}
+        <Card
+          data-tour={anchors?.side}
+          className={cn(
+            SPLIT_PANE,
+            'order-1 lg:order-2',
+            folded ? 'items-end p-2' : 'gap-6 lg:overflow-y-auto',
+          )}
+        >
+          {collapsible ? (
+            <Button
+              variant="ghost"
+              size="iconSm"
+              className={cn(!folded && 'absolute right-2 top-2')}
+              aria-expanded={!folded}
+              aria-label={folded ? 'Show the side panel' : 'Hide the side panel'}
+              onClick={() => setFolded((was) => !was)}
+            >
+              <Fold aria-hidden />
+            </Button>
+          ) : null}
+          {folded ? null : (
+            <>
+              {asked ? (
+                <FormSection title="Filters">
+                  <FilterColumn
+                    state={filters.state}
+                    filters={filters.spec}
+                    leading={filters.leading}
+                  />
+                </FormSection>
+              ) : null}
+              {side}
+            </>
+          )}
+        </Card>
+      </div>
+    </PageFrame>
+  );
+
+  return withTabsRoot(tabs, fills, frame);
 }

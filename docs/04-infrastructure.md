@@ -316,10 +316,19 @@ and `TRUST_PROXY_HOPS` must count the real hops or every rate limit counts one a
 
 ## 5. Frontend delivery
 
-The two SPAs live in one private S3 bucket behind two CloudFront distributions, on
-pay-as-you-go: the always-free tier is 1 TB of transfer, 10M requests and 2M function invocations
-a month, which this platform stays inside. The flat-rate plans are refused deliberately — the Free
-plan allows 1M requests per distribution, and the student app passes that in a busy month.
+The two SPAs live in one private S3 bucket behind two CloudFront distributions. **Production is
+pay-as-you-go**: the always-free tier is 1 TB of transfer, 10M requests and 2M function
+invocations a month, which this platform stays inside. The flat-rate plans are refused there — the
+Free plan allows only 1M requests per distribution, and the student app passes that in a busy
+month.
+
+**Staging's three distributions take Free plans, and the reason is isolation rather than price.**
+The free tier is counted per ACCOUNT, so staging's traffic — and a load test's far more than that
+— would otherwise be drawn from the same 1 TB production needs. Three Free plans is exactly the
+account quota, which buys a wall between the environments for nothing. The cost is that a plan
+forfeits the free tier for that distribution, mandates a web ACL that cannot be detached while the
+plan is attached, and withholds custom cache and response-header policies until Business tier; on
+staging none of those bite, and on production all three would.
 
 Rules that make it work:
 
@@ -377,6 +386,31 @@ room for exactly one more container:
 | exam 1, core 1, worker 1 | 75             |
 | exam 2, core 1, worker 1 | 100            |
 | exam 3, core 1, worker 1 | **125 — over** |
+
+**The role's limit and the URL's are different numbers, and setting them the same breaks the
+stack.** `connection_limit=25` in `DATABASE_URL` is Prisma's pool **per container**;
+`CONNECTION LIMIT` on the Postgres role is a hard cap **across every container using it**. Three
+containers sharing one URL can grow to 75 together, so a role capped at 25 refuses the second and
+third with `FATAL: too many connections for role` as soon as load arrives. The role wants the sum
+plus the short-lived `migrate` container and a `psql` session or two — **85** for staging today.
+
+**One extension has to exist before the first migration, and only the master can create it.**
+`20260925120000_the_bank_is_searched_through_an_index` runs `CREATE EXTENSION IF NOT EXISTS
+pg_trgm`, and on RDS that needs `rds_superuser` — which the application role deliberately does not
+have. Run it once as the master user when you create the role:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+```
+
+Then the migration's `IF NOT EXISTS` is a no-op and passes. Skip it and `prisma migrate deploy`
+dies on a permission error — and because the API containers wait on `migrate` exiting zero,
+nothing starts at all.
+
+Where 25 itself comes from: the worker's processors sum to exactly **20** concurrent slots
+(`QUEUE_POLICY` in `apps/api/src/queue/queues.ts` — scoring 8, rollup 2, notifications 4, delivery
+2, and four singletons), so one container has twenty jobs wanting a connection before it serves a
+request. Prisma's default pool is `cpus × 2 + 1`, which is five on a 2-vCPU box.
 
 So the trigger for `db.t4g.small` is the **third** API container, whatever its role. `scale.yml`
 computes this against the live instance class and refuses a scale-up that would exceed 90% of the
@@ -609,10 +643,9 @@ have depended on them is the app's own `/metrics` or an EC2 status check.
 depth and oldest wait, job failures, Redis memory and evictions, live sittings not yet in Postgres,
 database connections. Two of them answer questions nothing else can: `scoring_duration_seconds` is
 submit to EVALUATED on a FIRST evaluation, the one SLA a live event is judged on — queue depth says
-how many are waiting, never how long one takes — and `auth_attempts_total{outcome}` separates a
-student who forgot their PIN from somebody enumerating mobile numbers, which a bare 401 count
-cannot. The sign-in MESSAGE stays identical across `bad_pin` and `no_student`; only the label
-differs, or the metric would become the enumeration oracle it exists to detect.
+how many are waiting, never how long one takes — and `auth_attempts_total{outcome}` counts a wrong
+code apart from a sign-in: `bad_code` rising against one mobile is a code that never arrived, and
+against many it is somebody guessing, which a bare 401 count cannot tell apart.
 
 A 5xx log line carries `bug=<10 hex>`, a hash of the error kind and its top four non-`node_modules`
 frames with line and column dropped, so a refactor that shifts a function does not read as a new
@@ -710,10 +743,15 @@ replaces the port-22 rule (§8) rather than an extra privilege for its own sake.
 **What production refuses to boot without**, each refusal naming its own variable rather than
 surfacing as a mystery 500 an hour into a live test: `connection_limit` on `DATABASE_URL`, a
 non-empty `CORS_ORIGINS`, a `METRICS_TOKEN`, `TRUST_PROXY_HOPS` above zero, a Valkey that cannot
-evict, and any of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` or `PIN_PEPPER` still carrying the
+evict, and either of `JWT_ACCESS_SECRET` or `JWT_REFRESH_SECRET` still carrying the
 `dev_only_` prefix `.env.example` publishes. It additionally **warns** when the heap in
 `NODE_OPTIONS` does not match the container's memory limit, naming the role that is wrong.
 
+- **`examprep.iace.co.in` is NOT free — it is a CNAME to `exam.thinkexam.in`,** the platform this
+  one replaces. So production's student hostname is not a record to add but one to repoint, with
+  students already using it. That makes the cutover a scheduled switch with the incumbent still
+  reachable behind it, not a DNS edit. The staging names are all free, and
+  `api.staging.examprep.iace.co.in` has resolved to Box A's Elastic IP since 4 October 2026.
 - **Route 53**, $0.50 a month: a free ALIAS to CloudFront for the SPAs, and an A record per
   environment to its API box's Elastic IP. **Caddy gets the API certificate itself** (§4), so ACM
   is needed only in us-east-1 for CloudFront, where it is free. The Elastic IP is also the failover
@@ -731,9 +769,12 @@ evict, and any of `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` or `PIN_PEPPER` stil
 Caddy and the same three containers — the same shape as production, at a tester's size, because
 staging exists to rehearse production rather than a smaller thing.
 
-- **Postgres:** its own database on the shared RDS instance, with `CONNECTION LIMIT 10`,
+- **Postgres:** its own database on the shared RDS instance, with `CONNECTION LIMIT 85`,
   `statement_timeout` 30 s and `idle_in_transaction_session_timeout` 60 s on the role, so a staging
-  runaway cannot take production's connections or hold its CPU (§6).
+  runaway cannot take production's connections or hold its CPU (§6). It also needs
+  `REVOKE CONNECT ON DATABASE … FROM PUBLIC` on both databases the day production exists: Postgres
+  grants CONNECT to PUBLIC by default, so without it staging's role can open a connection to
+  production's database and consume a slot there.
 - **Valkey:** its own process on Box B, port 6380, `maxmemory` 256 MB (§7).
 - **`t4g.medium` while you build on the box; `t4g.small` once images come from ECR.** Three
   containers need ~850 MB at rest, but the workspace-wide `pnpm install` wants 2–4 GB (§1).
@@ -798,30 +839,48 @@ worst-case invoice.
 
 ## 14. How a release goes out
 
-**Three workflows, built 2 October 2026, and the split between them is the ordering rule below
-expressed as infrastructure rather than as a habit.**
+**One workflow per environment and the halves they share, so the ordering rule below is
+infrastructure rather than a habit.**
 
-| Workflow              | Trigger                                                                | What it does                                                                                                        |
-| --------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `build-api.yml`       | a merge touching `apps/api`, `packages`, `prisma`                      | Builds both targets natively on `ubuntu-24.04-arm` and pushes to ECR as `<sha>` and `staging`. **Does not deploy.** |
-| `deploy-api.yml`      | `cron` 20:30 UTC (02:00 IST), or Run workflow                          | SSM into Box A: `docker compose pull && up -d`. The dispatch form takes an image tag and a required reason          |
-| `deploy-frontend.yml` | a merge touching only client paths, or after a successful `deploy-api` | Builds both SPAs and publishes them                                                                                 |
+| Workflow            | Trigger                                                                             | What it does                                                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `staging.yml`       | a push to `staging`, or Run workflow with an image tag                              | Finds which halves changed since the last green run, then build → API → SPAs as one chain                                |
+| `production.yml`    | `cron` 20:30 UTC (02:00 IST), or Run workflow with a tag and a reason               | API → SPAs against production. **Disabled in the Actions settings until production exists**                              |
+| `build-api.yml`     | called by `staging.yml`; a push to `main` touching `apps/api`, `packages`, `prisma` | Builds both targets natively on `ubuntu-24.04-arm` and pushes `<sha>` plus the branch's moving tag. **Does not deploy.** |
+| `_deploy-api.yml`   | called                                                                              | SSM into Box A: fast-forward the checkout, then `docker compose pull && up -d`                                           |
+| `_publish-spas.yml` | called                                                                              | Builds both SPAs and publishes them                                                                                      |
 
-**The front end auto-deploys; the API waits for the night.** A SPA release is a file copy — no
-migration, no restart, nothing to drain. An API release runs migrations and recreates containers
-with a gap (§4), so it is a small outage at a moment nobody chose, and 02:00 IST is after the
-backup window and before anyone sits anything. `workflow_dispatch` is the override, and it demands
-a written reason so the run page says why.
+**Staging goes out on every push; production waits for the night.** A SPA release is a file copy —
+no migration, no restart, nothing to drain. An API release runs migrations and recreates containers
+with a gap (§4), so in production it is a small outage at a moment somebody chose, and 02:00 IST is
+after the backup window and before anyone sits anything. `workflow_dispatch` is the override, and
+it demands a written reason so the run page says why.
 
-**`packages/contracts` is deliberately missing from the front end's trigger.** It is the wire
-format both sides share, so a change there is an API release, and the SPAs follow it through the
-`workflow_run` trigger — which is how the ordering rule below is enforced rather than remembered.
+**Staging builds inside the run that deploys, and deploys the sha it built.** As a workflow of its
+own the build raced the deploy, so the box pulled the PREVIOUS push's image and the new bundle went
+out over it — the one order the rule below forbids. For the same reason "what changed" is measured
+from the last GREEN run and not from the push: a run that failed, or that a newer push cancelled
+while it queued behind a build, deployed nothing, and its API change still has to go out before the
+next bundle does.
+
+**The box's checkout is part of the release.** `compose.yml`, the Caddyfile and Alloy's config are
+read from `/opt/examprep`, so the deploy fast-forwards it to the commit first, and restarts Caddy
+and Alloy when their mounted files moved — `up -d` recreates a container whose compose entry
+changed and never one whose mounted file did. `--ff-only`, so a box somebody edited by hand stops
+the release instead of losing the edit.
 
 **No AWS key exists in GitHub.** Each run exchanges its OIDC token for a session on
 `examprep-github-actions`, and the trust policy names exactly two subjects — this repository's
-`main` branch and its `staging` environment. That scoping is not optional on a **public**
+`staging` and `production` environments. That scoping is not optional on a **public**
 repository: a trust condition of `repo:…:*` would let a workflow on any fork's branch assume the
 role.
+
+**The subject is the immutable form, with the ids in it.** This repository issues
+`repo:<org>@<org id>/<repo>@<repo id>:environment:staging`, not `repo:<org>/<repo>:…`, and the
+trust policy matches on the exact string — so the plain form every tutorial shows is refused with
+"Not authorized to perform sts:AssumeRoleWithWebIdentity", which reads like a permissions problem
+and is a spelling one. The prefix to copy is `sub_claim_prefix` from
+`gh api repos/<org>/<repo>/actions/oidc/customization/sub`.
 
 Rolling back is a tag, not a rebuild: Run workflow with the previous commit's sha.
 
@@ -839,7 +898,12 @@ both `image:` and `build:` for exactly that reason.
    containers do not start until it has.
 4. Recreate the API containers. Each is `tini`-led, so SIGTERM closes Nest and the container exits
    (`b2029d4`). **There is no draining on this shape** — `docker compose up -d` recreates with a
-   gap, which is the cost of not having a load balancer.
+   gap, which is the cost of not having a load balancer. What the stopping container does is
+   bounded: from SIGTERM every answer ends its connection, and anything still open after
+   `SHUTDOWN_GRACE_MS` (10s) is cut, so the workers, Prisma and Redis always get to close inside
+   `stop_grace_period`. Without that, one request in flight at SIGTERM held the listener's close for
+   the 65s keep-alive — past the 30s grace, so Docker killed the process before a worker closed —
+   and a client that kept polling held it for good.
 5. Upload the SPAs: hashed assets **first**, with `max-age=31536000, immutable`; then `index.html`,
    `sw.js` and the manifest with `no-cache`. The other order serves a shell pointing at chunks that
    are not there yet. Invalidate those three paths only — `/*` evicts the whole asset cache for
@@ -894,7 +958,11 @@ Never during an event window, and never a migration that moves data without the 
   $0.109/GB, so 23 MB a sitting would be ~$450 a month. The unsigned urls in §10 are what keep the
   edge cache working, so the bill scales with distinct images rather than with students — but the
   number is still unknown. Measure it off a real paper's Network tab; `MAX_WIDTH` and `QUALITY` in
-  `shrink-image.ts` are the knobs if it comes back high.
+  `shrink-image.ts` are the knobs if it comes back high. **That $450 is the ceiling only on
+  pay-as-you-go**: a CloudFront Pro flat-rate plan is $15 a month for 50 TB on one distribution, so
+  if the measurement comes back heavy the answer is a plan on the media distribution alone, not a
+  re-encode. Below ~1.14 TB a month pay-as-you-go stays cheaper, because a plan forfeits the 1 TB
+  free tier and brings a web ACL that cannot be detached while it is attached.
 - **Batching the scoring job.** Measured 25 September 2026: nine round trips per attempt, whose
   statements total ~0.7 ms against 1.99 ms of database CPU — so most of the database's work is
   parse, plan and transaction overhead rather than execution. Scoring N attempts per job collapses

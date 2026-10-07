@@ -18,12 +18,10 @@ const LATENCY_BUCKETS = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
 const PREFIX = 'iace_';
 
-/** Why a sign-in ended. A rising `bad_pin` against many mobiles is enumeration; against one it is a student who forgot. */
+/** Why a sign-in ended. A rising `bad_code` against many mobiles is guessing; against one it is a code that never arrived. */
 export const AUTH_OUTCOMES = {
   OK: 'ok',
-  BAD_PIN: 'bad_pin',
-  NO_STUDENT: 'no_student',
-  LOCKED: 'locked',
+  BAD_CODE: 'bad_code',
   DEACTIVATED: 'deactivated',
 } as const;
 
@@ -196,7 +194,12 @@ export class MetricsService implements OnModuleInit {
   }
 
   countOtpSend(
-    outcome: 'sent' | 'refused_ip_daily' | 'refused_budget' | 'refused_mobile_daily',
+    outcome:
+      | 'sent'
+      | 'refused_ip_daily'
+      | 'refused_budget'
+      | 'refused_signup_budget'
+      | 'refused_mobile_daily',
   ): void {
     this.otpSends.inc({ outcome });
   }

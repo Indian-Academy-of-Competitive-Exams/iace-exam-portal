@@ -8,6 +8,7 @@ import {
   PAPER_SOURCE_LABELS,
   scopedSections,
   instituteDayLabel,
+  todayISO,
   type Assignment,
   type AssignmentRole,
   type BaseConfigDetail,
@@ -63,6 +64,8 @@ import {
 } from '../../lib/constants';
 import { FULLNESS_VARIANT, holderOf, sectionFullness, sectionTally } from './test-paper-view';
 import { SectionThreadButton } from '../../components/section-thread';
+import { DueStandingBadge } from '../../components/due-standing-badge';
+import { TimeSpent } from '../../components/time-spent';
 
 /** Sits beside the paper it staffs: who types and reads each section, before the paper is judged. */
 
@@ -569,7 +572,9 @@ function RoleCell({
         <span className="text-sm text-muted-foreground">
           {assignment.dueAt ? `Due ${instituteDayLabel(assignment.dueAt)}` : 'No due date'}
         </span>
+        <DueStandingBadge standing={assignment.standing} />
         <Badge variant={progress.variant}>{progress.label}</Badge>
+        {assignment.secondsSpent === null ? null : <TimeSpent seconds={assignment.secondsSpent} />}
       </div>
       {earlier.length > 0 ? (
         <TruncatedText className="text-xs text-muted-foreground">
@@ -605,6 +610,8 @@ interface AssignFormValues {
   dueAt: string;
 }
 
+const ASSIGN_FIELDS = ['assigneeId', 'dueAt'] as const;
+
 function AssignDialog({
   testId,
   section,
@@ -628,19 +635,19 @@ function AssignDialog({
   const word = ASSIGNMENT_ROLE_LABELS[role].toLowerCase();
 
   const assign = useMutation({
-    meta: { success: `${section.name} assigned to a ${word}.`, fields: ['assigneeId'] },
+    meta: { success: `${section.name} assigned to a ${word}.`, fields: ASSIGN_FIELDS },
     mutationFn: (values: AssignFormValues) =>
       api.admin.assignments.assign(testId, {
         baseConfigSectionId: section.id,
         assigneeId: values.assigneeId,
         role,
-        dueAt: values.dueAt || null,
+        dueAt: values.dueAt,
       }),
     onSuccess: () => {
       onAssigned();
       onClose();
     },
-    onError: (error) => applyFieldErrors(error, form.setError, ['assigneeId']),
+    onError: (error) => applyFieldErrors(error, form.setError, ASSIGN_FIELDS),
   });
 
   return (
@@ -667,13 +674,16 @@ function AssignDialog({
         isLoading={assignable.isLoading}
       />
 
-      {/* ui-copy-ok: rule */}
-      <Field htmlFor="dueAt" label="Due date" hint="Optional">
+      <Field htmlFor="dueAt" label="Due date" error={form.formState.errors.dueAt?.message}>
         {(control) => (
           <DatePicker
             {...control}
             value={dueAt}
-            onChange={(next) => form.setValue('dueAt', next, { shouldDirty: true })}
+            min={todayISO()}
+            onChange={(next) => {
+              form.clearErrors('dueAt');
+              form.setValue('dueAt', next, { shouldDirty: true });
+            }}
           />
         )}
       </Field>

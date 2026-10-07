@@ -23,8 +23,6 @@ import {
 } from '../../src/notifications/web-push.sender';
 import { type FcmSender } from '../../src/notifications/fcm.sender';
 import { type DeviceContext } from '../../src/auth/auth.types';
-import { StartingPinService } from '../../src/auth/pin/starting-pin.service';
-import { type PinService } from '../../src/auth/pin/pin.service';
 import {
   type DomainEventBus,
   type DomainEventName,
@@ -278,11 +276,6 @@ const DEFAULT_ENV = {
   OTP_MAX_VERIFY_ATTEMPTS: 5,
   OTP_MAX_PER_DAY: 5,
   OTP_SENDER: 'console',
-  PIN_PEPPER: 'pin-pepper-that-is-long-enough-000000',
-  PIN_MAX_ATTEMPTS: 5,
-  PIN_LOCKOUT_STEPS_SEC: [900, 3600, 86400],
-  PIN_LOCKOUT_DECAY_SEC: 86400,
-  PIN_SETUP_TTL_SEC: 600,
 } as const;
 
 export class FakeConfig {
@@ -542,14 +535,6 @@ export class FakeQueue {
   asQueue<T>(): T {
     return this as unknown as T;
   }
-}
-
-/** The REAL service over a fake hash and sender: a starting PIN is a rule worth exercising, not stubbing. */
-export function fakeStartingPins(
-  sender: MessageSender = new FakeMessageSender(),
-  hash: (pin: string) => Promise<string> = (pin) => Promise.resolve(`hash:${pin}`),
-): StartingPinService {
-  return new StartingPinService({ hash } as unknown as PinService, sender);
 }
 
 /** A roster CSV with the demanded columns filled, so a test varies only what it is about. */

@@ -13,6 +13,7 @@ import {
   PERFORMANCE_SCOPES,
   PERFORMANCE_SCOPE_FIELD,
   type CohortCurve,
+  type FieldEffort,
   type PerformanceReport,
   type PerformanceReportQuery,
   type PercentilePoint,
@@ -27,6 +28,7 @@ import { startOfInstituteDay } from '../common/time/institute-day';
 import { scopeRefOf } from '../common/prisma-json';
 import { PrismaService } from '../prisma/prisma.service';
 import { cohortCurveOf } from './cohort-curve';
+import { NO_FIELD, effortIn, fieldEffortOf, type FieldShape } from './field-effort';
 import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { SHEET_ROW_SELECT, hold } from './paper-sheet.service';
 import { requireStudent } from './require-student';
@@ -47,6 +49,9 @@ import {
 
 const NOT_YOURS = 'No such sitting';
 const NOT_MARKED = 'This paper has not been marked yet. Its score card opens the moment it is.';
+
+/** Handed in, marked or not: the two states a paper's effort can be read in. */
+const ENDED = [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED];
 
 /** How many sittings any one report folds in. Beyond this a trajectory is a smear, not a line. */
 const SCOPE_ATTEMPT_CAP = 20;
@@ -137,6 +142,7 @@ type PerformancePaperRow = Prisma.PaperQuestionGetPayload<{
 @Injectable()
 export class PerformanceAnalyticsService {
   private readonly curves = new Map<string, Promise<CohortShape>>();
+  private readonly fields = new Map<string, Promise<FieldShape>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -232,6 +238,51 @@ export class PerformanceAnalyticsService {
       percentile: standing?.percentile ?? null,
       cohortSize: standing?.cohortSize ?? null,
     };
+  }
+
+  /** A handed-in paper beside its cohort in effort alone, so it answers before the marking has run. */
+  async fieldEffort(studentId: string, attemptId: string): Promise<FieldEffort> {
+    const attempt = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId, status: { in: ENDED } },
+      select: { id: true, testId: true, attemptNo: true },
+    });
+    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+
+    const [testStats, previous] = await Promise.all([
+      this.testStats([attempt.testId]),
+      // A first attempt has nothing before it, and a whole hall is on its first.
+      attempt.attemptNo === 1
+        ? null
+        : this.prisma.attempt.findFirst({
+            where: {
+              testId: attempt.testId,
+              studentId,
+              attemptNo: { lt: attempt.attemptNo },
+              status: ATTEMPT_STATUS.EVALUATED,
+            },
+            orderBy: { attemptNo: 'desc' },
+            select: { sectionScores: true },
+          }),
+    ]);
+    const field = await this.fieldOf(attempt.testId, testStats.get(attempt.testId) ?? null);
+
+    return {
+      testId: attempt.testId,
+      attemptNo: attempt.attemptNo,
+      cohortSize: field.cohortSize,
+      average: field.average,
+      // Themselves drawn as the topper would hand them their rank on a page that carries no marks.
+      topper: field.topperStudentId === studentId ? null : field.topper,
+      previous: effortIn(previous?.sectionScores),
+    };
+  }
+
+  /** Held under the rollup's own revision, like the curve: a hall handing in together counts it once. */
+  private fieldOf(testId: string, stat: TestStatRow | null): Promise<FieldShape> {
+    if (stat === null || stat.evaluatedCount === 0) return Promise.resolve(NO_FIELD);
+    return hold(this.fields, `${testId}:${stat.computedAt.getTime()}`, () =>
+      fieldEffortOf(this.prisma, testId),
+    );
   }
 
   /** Only a refusal reads this: the owner is in the WHERE, so another student's sitting is missing. */

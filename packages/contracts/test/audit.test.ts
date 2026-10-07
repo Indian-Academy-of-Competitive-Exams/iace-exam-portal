@@ -132,6 +132,7 @@ describe('audit vocabulary', () => {
       'EVENT',
       'ANNOUNCEMENT',
       'AUDIT_LOG',
+      'REPORT',
     ]);
     assert.deepEqual(Object.keys(AUDIT_ACTION), [
       'CREATE',

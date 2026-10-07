@@ -23,6 +23,7 @@ import {
   SAVE_TIMEOUT_MS,
   seedRevision,
   shouldFlushNow,
+  shouldHeartbeat,
 } from '../autosave-policy';
 import { isWorthAskingAgain } from '../query-client';
 import { type KeyValueStorage } from '../token-store';
@@ -156,6 +157,8 @@ export function useAttemptState(
   const seeded = useRef(false);
   const giveUp = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastSaveFailed = useRef(false);
+  // When the server last answered this screen: the start that mounted it, then every save since.
+  const heardAt = useRef(0);
 
   const commit = useCallback((next: Record<string, LiveAnswer>) => {
     answersNow.current = next;
@@ -212,14 +215,21 @@ export function useAttemptState(
     setHasUnsaved(value);
   }, []);
 
-  const failed = useCallback(
+  // Answering moved to another tab or device: this one stops rather than fighting it.
+  const refused = useCallback(
     (error: unknown) => {
-      unsaved(true);
-      // Answering moved to another tab or device: this one stops rather than fighting it.
       if (isTakenOver(error)) standDown();
       else if (isSetAside(error)) standDown(true);
     },
-    [standDown, unsaved],
+    [standDown],
+  );
+
+  const failed = useCallback(
+    (error: unknown) => {
+      unsaved(true);
+      refused(error);
+    },
+    [refused, unsaved],
   );
 
   const hasUnsent = useCallback(() => queue.anyUnsent(), [queue]);
@@ -239,9 +249,11 @@ export function useAttemptState(
   }, []);
 
   const save = useCallback(async (): Promise<boolean> => {
+    // Nothing to send is the idle tick saying this device is here: not a save the screen reports.
+    const heartbeat = !queue.anyUnsent();
     revision.current += 1;
     const batch = unsentBatch();
-    setIsSaving(true);
+    if (!heartbeat) setIsSaving(true);
     const abandon = new AbortController();
     giveUp.current = setTimeout(() => abandon.abort(), SAVE_TIMEOUT_MS);
     try {
@@ -252,21 +264,23 @@ export function useAttemptState(
         { signal: abandon.signal },
       );
       revision.current = seedRevision(revision.current, saved.revision);
+      heardAt.current = Date.now();
       // Answering is also a clock check: the deadline it answers with is the one that counts.
       setClock({ endsAt: saved.endsAt, serverNow: saved.serverNow, arrivedAt: Date.now() });
       // A batch behind the one the server holds answers 200 too; only `applied` says it landed.
       const applied = saved.applied !== false;
       if (applied) queue.acknowledge(batch);
-      unsaved(!applied);
+      if (!heartbeat) unsaved(!applied);
       return applied;
     } catch (error: unknown) {
-      failed(error);
+      if (heartbeat) refused(error);
+      else failed(error);
       return false;
     } finally {
       clearTimeout(giveUp.current);
       setIsSaving(false);
     }
-  }, [attemptId, failed, queue, unsaved, unsentBatch]);
+  }, [attemptId, failed, queue, refused, unsaved, unsentBatch]);
 
   const flush = useCallback(async (): Promise<boolean> => {
     // Nothing awaited between the last check and the send, so two saves never fly side by side.
@@ -326,16 +340,20 @@ export function useAttemptState(
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const tick = () => {
-      void flush();
+      const idle = !hasUnsent() && !stopped.current && !inFlight.current;
+      // Idle and in touch, the tick still sends: only this device's silence hands the sitting on.
+      if (idle && shouldHeartbeat(heardAt.current, Date.now())) void inAir(save());
+      else void flush();
       timer = setTimeout(tick, autosaveDelayMs());
     };
     timer = setTimeout(tick, autosaveDelayMs());
     return () => clearTimeout(timer);
-  }, [flush]);
+  }, [flush, hasUnsent, inAir, save]);
 
   // The first question is open from the moment the paper is on screen, not from the first click.
   useEffect(() => {
     openedAt.current = Date.now();
+    heardAt.current = Date.now();
     queue.attach();
     // Unmounted, a save still in the air is left to land; only its give-up timer goes.
     return () => {

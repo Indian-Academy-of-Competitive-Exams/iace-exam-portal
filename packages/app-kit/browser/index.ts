@@ -73,6 +73,8 @@ export { useLeaveGuard } from './use-leave-guard';
 export { useMediaQuery, DESKTOP_QUERY } from './app-shell/use-media-query';
 export { useFilterSpec, type FilterSpecState, type ListValues } from './use-filter-spec';
 export { saveBlob } from './save-blob';
+export { printElement, printHtml } from './print-html';
+export { ReportTableView } from './report-table';
 export { useImportScreen, type ImportScreenState, type ImportTemplate } from './use-import-screen';
 export { useListScreen } from './use-list-screen';
 export { useScrollList } from './use-scroll-list';

@@ -79,7 +79,6 @@ interface SeriesSeed {
   eventId?: string;
   programCode?: string;
   branchIds?: string[];
-  isEnabled?: boolean;
 }
 
 const seedSeries = (seed: SeriesSeed) =>
@@ -119,18 +118,6 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     await series.setBranches(created.id, { branchIds: [] });
 
     assert.deepEqual((await seriesRow(created.id)).branchIds, []);
-  });
-
-  /** `isEnabled` has ONE owner, and the branch writer is not it — it always passes nothing. */
-  it('leaves the switch alone when branches change', async () => {
-    const { series, stageId } = await build();
-    const branch = await makeBranch(prisma);
-    const created = await series.create(draft(stageId));
-    await series.update(created.id, { isEnabled: true });
-
-    await series.setBranches(created.id, { branchIds: [branch.id] });
-
-    assert.equal((await seriesRow(created.id)).isEnabled, true, 'the branch writer passes nothing');
   });
 
   /** Answered here so the form marks the field: the CHECK behind it can only leave as a 500. */
@@ -255,13 +242,12 @@ describe('TestSeriesService — branches are the truth about branches', () => {
   });
 
   /** A new series must not appear at every centre in the country the moment it is saved. */
-  it('starts every one of them switched off, reaching nobody', async () => {
+  it('starts a standard series at no branch, reaching nobody', async () => {
     const { series, stageId } = await build();
     await makeBranch(prisma);
 
     const created = await series.create(draft(stageId));
 
-    assert.equal(created.isEnabled, false);
     assert.deepEqual(created.branchIds, []);
     assert.equal(created.enabledBranchCount, 0);
     assert.equal(created.branchCount, 1);
@@ -278,123 +264,6 @@ describe('TestSeriesService — branches are the truth about branches', () => {
 
     assert.equal(detail.enabledBranchCount, 1);
     assert.equal(detail.branchCount, 2);
-  });
-
-  /** The series form owns this outright: what an admin chose must survive what the branches imply. */
-  it('keeps a series off when the admin switched it off, whatever its kind implies', async () => {
-    const { series, stageId } = await build();
-    await makeBranch(prisma);
-    const created = await series.create(draft(stageId, { kind: TEST_SERIES_KIND.FREE }));
-    assert.equal(created.isEnabled, true, 'a free series reaches past every branch');
-
-    await series.update(created.id, { isEnabled: false });
-
-    assert.equal((await seriesRow(created.id)).isEnabled, false);
-  });
-
-  it('switches a standard series on before any branch runs it', async () => {
-    const { series, stageId } = await build();
-    await makeBranch(prisma);
-    const created = await series.create(draft(stageId));
-
-    await series.update(created.id, { isEnabled: true });
-
-    const row = await seriesRow(created.id);
-    assert.equal(row.isEnabled, true);
-    assert.deepEqual(row.branchIds, [], 'the switch is not a branch list');
-  });
-
-  /** The confirm is the only thing allowed to move it, so an unrelated save must not undo one. */
-  it('leaves a switched-on series on when the next save is about something else', async () => {
-    const { series, stageId } = await build();
-    await makeBranch(prisma);
-    const created = await series.create(draft(stageId));
-    await series.update(created.id, { isEnabled: true });
-
-    await series.update(created.id, { name: 'Six papers' });
-
-    assert.equal(
-      (await seriesRow(created.id)).isEnabled,
-      true,
-      'no branch runs it, and nobody asked it off',
-    );
-  });
-
-  it('leaves a switched-off series off when the next save is about something else', async () => {
-    const { series, stageId } = await build();
-    const created = await series.create(draft(stageId, { kind: TEST_SERIES_KIND.FREE }));
-    await series.update(created.id, { isEnabled: false });
-
-    await series.update(created.id, { name: 'Free mocks, renamed' });
-
-    assert.equal(
-      (await seriesRow(created.id)).isEnabled,
-      false,
-      'switching it off was confirmed; renaming was not',
-    );
-  });
-
-  /** Two owners for one column is the defect. The switch stays put whichever way branches move. */
-  it('keeps a series off when a branch is named beneath the switch', async () => {
-    const { series, stageId } = await build();
-    const branch = await makeBranch(prisma);
-    const created = await series.create(draft(stageId));
-    await series.update(created.id, { isEnabled: false });
-
-    await series.setBranches(created.id, { branchIds: [branch.id] });
-
-    const row = await seriesRow(created.id);
-    assert.deepEqual(row.branchIds, [branch.id], 'the write still lands');
-    assert.equal(row.isEnabled, false);
-  });
-
-  /** `isEnabled` sits OUTSIDE the reach OR, so one student's grant cannot publish a parked series. */
-  it('leaves a switched-off free series off when a student is granted it', async () => {
-    const { series, grants, stageId } = await build();
-    const branch = await makeBranch(prisma);
-    const student = await makeStudent(prisma, { currentBranchId: branch.id });
-    const created = await series.create(draft(stageId, { kind: TEST_SERIES_KIND.FREE }));
-    await series.update(created.id, { isEnabled: false });
-
-    await grants.grant(student.id, { testSeriesId: created.id }, ADMIN);
-
-    assert.equal(
-      (await seriesRow(created.id)).isEnabled,
-      false,
-      'switched on, a free series reaches everyone',
-    );
-    assert.equal(
-      await prisma.studentGrant.count(),
-      1,
-      'the grant is still written — it opens once somebody does',
-    );
-  });
-
-  it('leaves a standard series off when a grant is made where no branch runs it', async () => {
-    const { series, grants, stageId } = await build();
-    const branch = await makeBranch(prisma);
-    const student = await makeStudent(prisma, { currentBranchId: branch.id });
-    const created = await series.create(draft(stageId));
-
-    await grants.grant(student.id, { testSeriesId: created.id }, ADMIN);
-
-    assert.equal((await seriesRow(created.id)).isEnabled, false);
-  });
-
-  /** Taking ONE student's grant back is not a decision about the series, so it moves no switch. */
-  it('leaves the switch alone when a grant is revoked', async () => {
-    const { series, grants, stageId } = await build();
-    const branch = await makeBranch(prisma);
-    const student = await makeStudent(prisma, { currentBranchId: branch.id });
-    const created = await series.create(draft(stageId));
-    await series.update(created.id, { isEnabled: true });
-    await grants.grant(student.id, { testSeriesId: created.id }, ADMIN);
-
-    await grants.revoke(student.id, created.id);
-
-    const row = await seriesRow(created.id);
-    assert.equal(row.isEnabled, true, 'the admin switched it on; a revoke is not that');
-    assert.deepEqual(row.branchIds, []);
   });
 });
 
@@ -417,7 +286,10 @@ describe('TestSeriesService — a name belongs to one series', () => {
     const { series, stageId } = await build();
     const created = await series.create(draft(stageId));
 
-    const updated = await series.update(created.id, { name: created.name, isEnabled: true });
+    const updated = await series.update(created.id, {
+      name: created.name,
+      sequentialTests: true,
+    });
 
     assert.equal(updated.name, created.name);
   });
@@ -623,11 +495,7 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
   it('lets the kind change once the branches it named are cleared', async () => {
     const { series, stageId } = await build();
     const [first, second] = [await makeBranch(prisma), await makeBranch(prisma, 'ONLINE')];
-    const held = await seedSeries({
-      examStageId: stageId,
-      branchIds: [first.id, second.id],
-      isEnabled: true,
-    });
+    const held = await seedSeries({ examStageId: stageId, branchIds: [first.id, second.id] });
 
     await series.setBranches(held.id, { branchIds: [] });
     assert.deepEqual((await seriesRow(held.id)).branchIds, []);
@@ -635,8 +503,6 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
     const updated = await series.update(held.id, { kind: TEST_SERIES_KIND.FREE });
 
     assert.equal(updated.kind, TEST_SERIES_KIND.FREE);
-    // Emptying the branches is what clears the refusal; the switch is nobody's business but the form's.
-    assert.equal((await seriesRow(held.id)).isEnabled, true);
   });
 
   it('leaves a standard series that runs at branches alone', async () => {
@@ -838,14 +704,13 @@ describe('StudentGrantsService — the escape hatch', () => {
 
 /** The cached catalog is only ever right because these fire; a silent access write leaves it stale. */
 describe('the access writes that bust the catalog cache', () => {
-  /** A free series is switched on the instant it saves, so a cached catalog already omits it. */
+  /** A free series reaches every student the instant it saves, so a cached catalog already omits it. */
   it('announces a series the moment it is created', async () => {
     const { series, events, stageId } = await build();
     await makeBranch(prisma);
 
     const created = await series.create(draft(stageId, { kind: TEST_SERIES_KIND.FREE }));
 
-    assert.equal(created.isEnabled, true);
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },
     ]);

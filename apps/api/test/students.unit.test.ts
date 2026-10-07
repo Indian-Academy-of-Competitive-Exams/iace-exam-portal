@@ -132,12 +132,12 @@ describe('admin student contracts', () => {
     hasOwnAccess: true,
     isActive: true,
     isTestBlocked: false,
-    hasDefaultPin: false,
     preTestReady: true,
     profileCompleted: false,
     createdAt: new Date().toISOString(),
     programs: [],
     events: [],
+    formerMobiles: [],
     currentBranchId: null,
     updatedAt: new Date().toISOString(),
     profile,
@@ -180,12 +180,6 @@ describe('admin student contracts', () => {
     const parsed = studentDetailSchema.parse(filled);
     assert.equal(parsed.profile?.educationDetails?.[0]?.level, 'Class 12');
     assert.equal(parsed.profile?.pastExamHistory?.[0]?.exam, 'SSC CGL 2024');
-  });
-
-  it('never carries the PIN hash', () => {
-    const parsed = studentSummarySchema.parse({ ...detail, pinHash: '$argon2id$whatever' });
-
-    assert.ok(!('pinHash' in parsed));
   });
 
   it('requires a summary to say what a student is enrolled on', () => {

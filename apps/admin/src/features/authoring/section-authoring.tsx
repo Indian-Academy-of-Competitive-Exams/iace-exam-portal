@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, Send, Trash2, Upload } from 'lucide-react';
+import { CheckCheck, Info, Send, Trash2, Upload } from 'lucide-react';
 import {
   AppException,
   DIFFICULTY_LEVEL,
@@ -9,7 +9,10 @@ import {
   REVIEW_STATES,
   SECTION_SEATS,
   SEND_BACK_REASONS,
+  clockText,
+  instituteDayLabel,
   type Assignment,
+  type QuestionTime,
   type ReviewState,
   type SectionQuestion,
   type SectionWork,
@@ -37,6 +40,9 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   TruncatedText,
   cn,
   type BadgeProps,
@@ -65,6 +71,10 @@ import {
 } from './authoring-workspace';
 import { headerOf, stateOf, toDraft } from './question-scaffold';
 import { FinalizeAssignmentDialog } from './finalize-assignment-dialog';
+import { useWorkClock } from './use-work-clock';
+import { DueStandingBadge } from '../../components/due-standing-badge';
+import { TimeSpent } from '../../components/time-spent';
+import { awaitsViewer, type WorkClock } from './work-clock';
 
 const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.UNCHECKED]: 'neutral',
@@ -72,6 +82,9 @@ const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.SENT_BACK]: 'warning',
   [REVIEW_STATES.FIXED]: 'info',
 };
+
+/** How often a blocked screen asks whether the claim on its section has been given up. */
+const CLAIM_POLL_MS = 10_000;
 
 const REASON_ORDER = [
   SEND_BACK_REASONS.SPELLING,
@@ -94,11 +107,24 @@ export function SectionAuthoringPage() {
   const { testId = '', sectionId = '' } = useParams();
   const [search, setSearch] = useSearchParams();
   const queryClient = useQueryClient();
+  const { identity } = useAuth();
   const work = useQuery({
     queryKey: sectionWorkQueryKey(testId, sectionId),
     queryFn: () => api.admin.sectionWork.one(testId, sectionId),
     retry: false,
+    refetchInterval: (query) =>
+      editingElsewhere(query.state.data, identity?.id) ? CLAIM_POLL_MS : false,
   });
+
+  // The holder's saves landed while this screen was blocked, so its open cards read again before they are typed into.
+  const blocked = editingElsewhere(work.data, identity?.id) !== null;
+  const wasBlocked = useRef(false);
+  useEffect(() => {
+    if (wasBlocked.current && !blocked) {
+      void queryClient.invalidateQueries({ queryKey: sectionWorkQueryKey(testId, sectionId) });
+    }
+    wasBlocked.current = blocked;
+  }, [blocked, queryClient, testId, sectionId]);
 
   // Only the section and the card just written are read again; the queues and duplicate checks wait until next opened.
   const settle = useCallback(
@@ -170,14 +196,43 @@ function SectionWorkspace({
   onSettle: (savedId?: string) => Promise<void>;
 }>) {
   const seat = useMemo(() => seatOf(work), [work]);
+  const { identity } = useAuth();
+  const elsewhere = editingElsewhere(work, identity?.id);
+  // A super admin's save takes the claim over, so they are told and never stopped.
+  const blocked = elsewhere !== null && !identity?.isSuperAdmin;
   const [finishing, setFinishing] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const { testId, baseConfigSectionId: sectionId } = work;
 
+  // Time is counted for whoever holds a seat, while the paper can still change.
+  const counting = !work.seatReplaced && work.seat !== SECTION_SEATS.OWNER && !work.offered;
+  const [inView, setInView] = useState<string | null>(null);
+  // A saved question's clock stands still: only a blank card, or one waiting on the viewer, counts.
+  const owed =
+    inView === NEW_CARD ||
+    work.questions.some(
+      (question) => question.questionId === inView && awaitsViewer(seat, question.review.state),
+    );
+  const clock = useWorkClock(testId, sectionId, counting && owed ? inView : null);
+  const follow = useCallback(
+    (key: string) => {
+      setInView(key);
+      onActive(key);
+    },
+    [onActive],
+  );
+
   const source = useMemo((): WorkspaceSource => {
     return {
       cards: work.questions.map((question, index) =>
-        cardOf(work, question, index, seat, onChanged, onSettle),
+        cardOf(
+          work,
+          question,
+          index,
+          { seat, clock: counting ? clock : null },
+          onChanged,
+          onSettle,
+        ),
       ),
       query: (id) => ({
         queryKey: sectionWorkHeldQueryKey(testId, sectionId, id),
@@ -199,6 +254,7 @@ function SectionWorkspace({
         await onSettle(id);
       },
       subjectLocked: work.sectionSubjectId !== null,
+      blocked,
       checkDuplicates: seat.typing,
       create: seat.typing
         ? {
@@ -209,17 +265,19 @@ function SectionWorkspace({
               tags: '',
             },
             save: async (held) => {
-              await api.admin.sectionWork.create(
+              const created = await api.admin.sectionWork.create(
                 testId,
                 sectionId,
                 toDraft(held.state, held.header),
               );
+              clock.move(NEW_CARD, created.id);
               await onSettle();
             },
+            lead: counting ? <OwnClock clock={clock} id={NEW_CARD} held={0} /> : undefined,
           }
         : undefined,
     };
-  }, [work, seat, testId, sectionId, onChanged, onSettle]);
+  }, [work, seat, blocked, counting, clock, testId, sectionId, onChanged, onSettle]);
 
   const extra = (
     <>
@@ -238,6 +296,7 @@ function SectionWorkspace({
     </>
   );
 
+  const title = <SectionTitle work={work} elsewhere={elsewhere} blocked={blocked} />;
   const empty = source.cards.length === 0 && !source.create;
   const thread = (
     <SectionThreadButton
@@ -253,7 +312,7 @@ function SectionWorkspace({
       {empty ? (
         <>
           <div className="flex flex-none items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2">
-            <SectionTitle work={work} />
+            {title}
             {thread}
           </div>
           <EmptyState title={emptyTitle(work)} />
@@ -262,8 +321,8 @@ function SectionWorkspace({
         <AuthoringWorkspace
           source={source}
           startAt={startAt}
-          onActive={onActive}
-          title={<SectionTitle work={work} />}
+          onActive={follow}
+          title={title}
           saveLabel="Save and next"
           extraActions={
             <>
@@ -298,39 +357,65 @@ function emptyTitle(work: SectionWork): string {
 }
 
 /** Which section of which test, ahead of the question in every card's language bar. */
-function SectionTitle({ work }: Readonly<{ work: SectionWork }>) {
+function SectionTitle({
+  work,
+  elsewhere,
+  blocked,
+}: Readonly<{ work: SectionWork; elsewhere: string | null; blocked: boolean }>) {
+  const own = [work.typist, work.reader].find((row) => row?.id === work.seatAssignmentId);
   return (
     <span className="flex min-w-0 items-center gap-2">
+      {elsewhere ? <EditingElsewhere name={elsewhere} blocked={blocked} /> : null}
       <TruncatedText className="text-sm font-semibold">{work.sectionName}</TruncatedText>
       <TruncatedText className="text-sm text-muted-foreground">
         {work.testTitle ?? 'Untitled test'}
       </TruncatedText>
+      {own?.dueAt ? (
+        <>
+          <span className="flex-none text-sm text-muted-foreground">
+            {`Due ${instituteDayLabel(own.dueAt)}`}
+          </span>
+          <DueStandingBadge standing={own.standing} />
+        </>
+      ) : null}
     </span>
+  );
+}
+
+/** Somebody else holds the section: a glyph in every card's bar says who, and takes no row from the question. */
+function EditingElsewhere({ name, blocked }: Readonly<{ name: string; blocked: boolean }>) {
+  const label = blocked
+    ? `${name} is editing this section. It opens to you when they hand it on.`
+    : `${name} is editing this section. Your save takes it over.`;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        type="button"
+        aria-label={label}
+        className="flex size-6 flex-none animate-pulse items-center justify-center rounded-full bg-warning-subtle text-warning-ink focus-visible:shadow-focus focus-visible:outline-none motion-reduce:animate-none [&_svg]:size-4"
+      >
+        <Info aria-hidden />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
 /** Where the section stands, in the words each seat reads it by — only when there is something to say. */
 function SectionState({ work }: Readonly<{ work: SectionWork }>) {
   const state = contextOf(work);
-  const elsewhere = useEditingElsewhere(work);
-  if (!state && !elsewhere) return null;
+  if (!state) return null;
   return (
     <div className="flex flex-none flex-col gap-2 border-b border-border bg-surface px-4 py-2">
-      {state ? <Alert variant={state.variant}>{state.text}</Alert> : null}
-      {elsewhere ? (
-        <Alert variant="warning">
-          {`${elsewhere} is editing this section. Their changes have to land first.`}
-        </Alert>
-      ) : null}
+      <Alert variant={state.variant}>{state.text}</Alert>
     </div>
   );
 }
 
-/** Who else is in this section right now, read with it so the warning lands before the work. */
-function useEditingElsewhere(work: SectionWork): string | null {
-  const { identity } = useAuth();
-  const { editingBy } = work;
-  if (!editingBy || editingBy.adminId === identity?.id) return null;
+/** Who else holds this section right now, by name; nobody when it is free or the viewer's own. */
+function editingElsewhere(work: SectionWork | undefined, viewerId: string | undefined) {
+  const editingBy = work?.editingBy;
+  if (!editingBy || editingBy.adminId === viewerId) return null;
   return editingBy.fullName ?? 'Another admin';
 }
 
@@ -378,11 +463,11 @@ function cardOf(
   work: SectionWork,
   question: SectionQuestion,
   index: number,
-  seat: ReturnType<typeof seatOf>,
+  { seat, clock }: { seat: ReturnType<typeof seatOf>; clock: WorkClock | null },
   onChanged: (next: SectionWork) => void,
   onSettle: (savedId?: string) => Promise<void>,
 ): WorkspaceCard {
-  const { review } = question;
+  const { review, time } = question;
   return {
     key: question.questionId,
     editable: question.editable,
@@ -392,6 +477,9 @@ function cardOf(
           {`Question ${index + 1} of ${work.questions.length}`}
         </span>
         <Badge variant={REVIEW_BADGE[review.state]}>{REVIEW_STATE_LABELS[review.state]}</Badge>
+        {clock ? <OwnClock clock={clock} id={question.questionId} held={time.own} /> : null}
+        {!clock && work.seat !== SECTION_SEATS.OWNER ? <TimeSpent seconds={time.own} /> : null}
+        <SeatTimes time={time} />
       </>
     ),
     actions: (
@@ -405,6 +493,34 @@ function cardOf(
     ),
     notice: <CardNotice work={work} question={question} />,
   };
+}
+
+/** The viewer's own time on one question, running while it is the one on screen. */
+function OwnClock({ clock, id, held }: Readonly<{ clock: WorkClock; id: string; held: number }>) {
+  const seconds = useSyncExternalStore(clock.subscribe, () => clock.shown(id, held));
+  return <TimeSpent seconds={seconds} label="Time on this question" />;
+}
+
+/** Each seat's time on the question, for the owner and a super admin, who are sent both. */
+function SeatTimes({ time }: Readonly<{ time: QuestionTime }>) {
+  if (time.typist === null || time.reader === null) return null;
+  return (
+    <>
+      <TimeSpent seat="Typist" seconds={time.typist} />
+      <TimeSpent seat="Proof-reader" seconds={time.reader} />
+    </>
+  );
+}
+
+/** A seat's whole time on the section: every seat's for the owner, and their own for whoever holds one. */
+function seatTime(work: SectionWork, seat: 'typist' | 'reader'): number | null {
+  const own = work.seat === (seat === 'typist' ? SECTION_SEATS.TYPIST : SECTION_SEATS.READER);
+  let total: number | null = null;
+  for (const { time } of work.questions) {
+    const seconds = time[seat] ?? (own ? time.own : null);
+    if (seconds !== null) total = (total ?? 0) + seconds;
+  }
+  return total;
 }
 
 /** Why a question came back, in the reader's words, and where else an edit to it would land. */
@@ -663,8 +779,10 @@ function ProgressPanel({
       </TabsList>
       <TabsContent value="typist" className="flex flex-col gap-3 pt-3">
         <Holder holder={work.typist} earlier={earlierOf(work, 'TYPIST')} />
+        <DueStat holder={work.typist} />
         <Stat label="Written" value={`${counts.written} of ${work.questionCount}`} />
         <Stat label="Sent back to fix" value={counts.sentBack} />
+        <TimeStat seconds={seatTime(work, 'typist')} />
         {seat.typing ? (
           <Button asChild size="sm" variant="outline">
             <Link to={ROUTES.AUTHORING_IMPORT(work.testId, work.baseConfigSectionId)}>
@@ -677,9 +795,11 @@ function ProgressPanel({
       </TabsContent>
       <TabsContent value="reader" className="flex flex-col gap-3 pt-3">
         <Holder holder={work.reader} earlier={earlierOf(work, 'PROOFREADER')} />
+        <DueStat holder={work.reader} />
         <Stat label="Checked" value={`${counts.checked} of ${work.questions.length}`} />
         <Stat label="Sent back" value={counts.sentBack} />
         <Stat label="Fixed, to check again" value={counts.fixed} />
+        <TimeStat seconds={seatTime(work, 'reader')} />
         {tiles}
       </TabsContent>
     </Tabs>
@@ -723,6 +843,14 @@ function Holder({
       ) : null}
     </div>
   );
+}
+
+function DueStat({ holder }: Readonly<{ holder: Assignment | null }>) {
+  return holder?.dueAt ? <Stat label="Due" value={instituteDayLabel(holder.dueAt)} /> : null;
+}
+
+function TimeStat({ seconds }: Readonly<{ seconds: number | null }>) {
+  return seconds === null ? null : <Stat label="Time spent" value={clockText(seconds)} />;
 }
 
 function Stat({ label, value }: Readonly<{ label: string; value: string | number }>) {

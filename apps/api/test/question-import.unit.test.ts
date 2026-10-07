@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_IMPORT_MAX_ROWS,
   QUESTION_IMPORT_TAG,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
+  SECTION_IMPORT_MAX_ROWS,
   TAG_SEPARATOR,
   TAGS_MAX,
   type QuestionImportColumnKey,
@@ -15,11 +17,13 @@ import { computeStemHash, emptyTaxonomy } from '../src/questions/question-core';
 import {
   planQuestionImport,
   type ImportDedupContext,
+  type ImportScope,
   type QuestionImportPlanning,
 } from '../src/questions/question-import';
 import { topicKey, type TaxonomyCatalog } from '../src/questions/taxonomy-context';
 import { rowAt } from './support/fakes';
 
+const CODE = QUESTION_VALIDATION_CODE;
 const SUBJECT = 'sub_quant';
 const TOPIC = 'top_arithmetic';
 const ALGEBRA = 'top_algebra';
@@ -91,6 +95,55 @@ const plan = (
   rows: Partial<Record<QuestionImportColumnKey, string>>[],
   dedup: ImportDedupContext = noDedup(),
 ): QuestionImportPlanning => planQuestionImport(table(...rows), catalog(), dedup);
+
+describe('a sheet imported into one section of a test', () => {
+  const QUANT = { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' };
+  const sheetOf = (count: number) =>
+    Array.from({ length: count }, (_, at) => ({
+      ...MCQ_ROW,
+      stem_en: `What is ${at + 1}% of 9731?`,
+    }));
+  const within = (subject: ImportScope['subject'], count = 3) =>
+    planQuestionImport(table(...sheetOf(count)), catalog(), noDedup(), undefined, undefined, {
+      sectionName: 'Quant',
+      subject,
+    });
+  const codes = (planning: QuestionImportPlanning) =>
+    planning.rows.map((row) => row.issues[0]?.code ?? row.action);
+
+  it('skips a row filed under a subject the section does not take', () => {
+    const planning = within({ id: 'sub_english', name: 'ENGLISH' });
+
+    assert.deepEqual(
+      codes(planning),
+      [1, 2, 3].map(() => CODE.SUBJECT_OUTSIDE_SECTION),
+    );
+    assert.match(
+      planning.rows[0]?.issues[0]?.message ?? '',
+      /Only ENGLISH questions go into Quant/,
+    );
+  });
+
+  it('takes any subject where the section names none', () => {
+    assert.deepEqual(codes(within(null)), ['create', 'create', 'create']);
+  });
+
+  /** The failure this prevents: a sheet of hundreds landing on one proof-reader in one go. */
+  it('refuses a sheet past the section’s limit, which is tighter than the bank’s', () => {
+    const over = SECTION_IMPORT_MAX_ROWS + 1;
+
+    assert.equal(within(QUANT, SECTION_IMPORT_MAX_ROWS).fileErrors.length, 0);
+    assert.match(
+      within(QUANT, over).fileErrors[0] ?? '',
+      new RegExp(`${over} rows. Import at most ${SECTION_IMPORT_MAX_ROWS} at a time into Quant`),
+    );
+    assert.equal(plan(sheetOf(over)).fileErrors.length, 0);
+    assert.match(
+      plan(sheetOf(QUESTION_IMPORT_MAX_ROWS + 1)).fileErrors[0] ?? '',
+      new RegExp(`Import at most ${QUESTION_IMPORT_MAX_ROWS} at a time\\.`),
+    );
+  });
+});
 
 describe('the question sheet', () => {
   it('plans a complete row as a create', () => {
@@ -247,8 +300,6 @@ describe('the question sheet — a cell is text', () => {
   it('recognises the question the form wrote as the one the sheet repeats', () => {
     const authored = computeStemHash({
       type: QUESTION_TYPE.SINGLE_MCQ,
-      subjectId: SUBJECT,
-      difficulty: 'MEDIUM',
       stem: { en: '<div><p>What is <em>20%</em> of 150?</p></div>' },
       options: [25, 30, 35, 40].map((text, index) => ({
         position: index + 1,
@@ -256,7 +307,6 @@ describe('the question sheet — a cell is text', () => {
         text: { en: `<div><p>${text}</p></div>` },
       })),
       answerKey: null,
-      tags: [],
     });
 
     const row = plan([MCQ_ROW], {

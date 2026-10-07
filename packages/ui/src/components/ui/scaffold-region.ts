@@ -6,8 +6,8 @@
  */
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, type EditorState, type Transaction } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import { type Node as ProseNode } from '@tiptap/pm/model';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { type Fragment, type Node as ProseNode } from '@tiptap/pm/model';
 
 export const REGION_NODE = 'scaffoldRegion';
 
@@ -60,6 +60,41 @@ const shapeOf = (doc: ProseNode): string => {
   doc.forEach((node) => keys.push(text(node.attrs.key)));
   return keys.join(' ');
 };
+
+/** A slot ends on a line of text, or a figure or a table at its end leaves nowhere beneath it to type. */
+function seated(state: EditorState): Transaction | null {
+  const line = state.schema.nodes.paragraph;
+  if (!line) return null;
+  const { tr } = state;
+
+  state.doc.forEach((region, offset) => {
+    if (region.lastChild?.type === line) return;
+    tr.insert(tr.mapping.map(offset + region.nodeSize - 1), line.create());
+  });
+
+  return tr.docChanged ? tr : null;
+}
+
+/** Tiptap's and ProseMirror's own meta keys, named because a typo in either fails without a word. */
+const TRANSACTION_META = {
+  PREVENT_UPDATE: 'preventUpdate',
+  ADD_TO_HISTORY: 'addToHistory',
+} as const;
+
+/** The first document arrives with no transaction behind it, so this one seats it: unreported, and nothing to undo. */
+export function seatLoadedScaffold(view: EditorView): void {
+  const { PREVENT_UPDATE, ADD_TO_HISTORY } = TRANSACTION_META;
+  view.dispatch(view.state.tr.setMeta(PREVENT_UPDATE, true).setMeta(ADD_TO_HISTORY, false));
+}
+
+/** What the typist wrote in a slot: the empty line it ends on is the caret's seat, not content. */
+export function writtenIn(region: ProseNode): Fragment {
+  const last = region.lastChild;
+  if (!last || last.type !== region.type.schema.nodes.paragraph || last.content.size > 0) {
+    return region.content;
+  }
+  return region.content.cut(0, region.content.size - last.nodeSize);
+}
 
 /** The top node accepts nothing but slots, so a paste can never land text beside the scaffold. */
 export const ScaffoldDocument = Node.create({
@@ -115,6 +150,7 @@ export const ScaffoldRegionNode = Node.create({
         // The content is the typist's, the shape is not: no key of theirs takes a slot away.
         filterTransaction: (tr: Transaction, state) =>
           loading || !tr.docChanged || shapeOf(tr.doc) === shapeOf(state.doc),
+        appendTransaction: (_transactions, _before, state) => seated(state),
         props: { decorations: hints },
       }),
     ];

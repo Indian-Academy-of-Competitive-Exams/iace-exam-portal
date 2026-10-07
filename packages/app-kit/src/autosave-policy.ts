@@ -3,6 +3,7 @@
  * A timer alone makes 5,000 clients save in lockstep; a counter that restarts at 0
  * makes the server drop every batch behind what it already holds.
  */
+import { PRESENT_GRACE_SEC } from '@iace/contracts';
 import { isWorthAskingAgain } from './query-client';
 
 export const AUTOSAVE_EVERY_MS = 25_000;
@@ -24,6 +25,11 @@ export const SUBMIT_TIMEOUT_MS = 10_000;
 
 export function autosaveDelayMs(random: () => number = Math.random): number {
   return AUTOSAVE_EVERY_MS + Math.round((random() * 2 - 1) * AUTOSAVE_JITTER_MS);
+}
+
+/** An idle screen says it is here only while in touch: past the grace, a beat would spend the pause a reload gives back. */
+export function shouldHeartbeat(heardAtMs: number, nowMs: number): boolean {
+  return nowMs - heardAtMs < PRESENT_GRACE_SEC * 1000;
 }
 
 export function shouldFlushNow(pendingCount: number): boolean {

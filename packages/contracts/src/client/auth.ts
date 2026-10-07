@@ -4,15 +4,11 @@ import {
   authIdentitySchema,
   authSessionResponseSchema,
   otpRequestResponseSchema,
-  pinSetupTicketSchema,
   type AuthIdentity,
   type AuthSessionResponse,
   type OtpRequestResponse,
-  type PinSetupTicket,
   type RequestAdminOtpInput,
   type RequestStudentOtpInput,
-  type SetStudentPinInput,
-  type StudentLoginInput,
   type VerifyAdminOtpInput,
   type VerifyStudentOtpInput,
 } from '../auth';
@@ -22,7 +18,7 @@ export function authClient(core: ApiCore) {
   const { request, get, write } = core;
 
   return {
-    /** Student signup or PIN reset, step 1. */
+    /** A student's sign-in, step 1: a code to their mobile. */
     requestStudentOtp: (input: RequestStudentOtpInput): Promise<OtpRequestResponse> =>
       request(AUTH_ROUTES.studentOtpRequest, {
         method: 'POST',
@@ -31,27 +27,9 @@ export function authClient(core: ApiCore) {
         anonymous: true,
       }),
 
-    /** Step 2 — proves the number and returns a ticket, not a session. */
-    verifyStudentOtp: (input: VerifyStudentOtpInput): Promise<PinSetupTicket> =>
+    /** Step 2 — the code back signs them in, as a new account when the number had none. */
+    verifyStudentOtp: (input: VerifyStudentOtpInput): Promise<AuthSessionResponse> =>
       request(AUTH_ROUTES.studentOtpVerify, {
-        method: 'POST',
-        body: input,
-        schema: pinSetupTicketSchema,
-        anonymous: true,
-      }),
-
-    /** Step 3 — redeems the ticket, stores the PIN and signs the student in. */
-    setStudentPin: (input: SetStudentPinInput): Promise<AuthSessionResponse> =>
-      request(AUTH_ROUTES.studentPinSet, {
-        method: 'POST',
-        body: input,
-        schema: authSessionResponseSchema,
-        anonymous: true,
-      }),
-
-    /** The everyday student login: mobile + 4-digit PIN, no OTP. */
-    loginStudent: (input: StudentLoginInput): Promise<AuthSessionResponse> =>
-      request(AUTH_ROUTES.studentLogin, {
         method: 'POST',
         body: input,
         schema: authSessionResponseSchema,

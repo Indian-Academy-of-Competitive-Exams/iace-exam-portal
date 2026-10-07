@@ -4,14 +4,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { AppException, ErrorCodes, STUDENT_TYPE } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
-import {
-  FakeEventsService,
-  FakeMessageSender,
-  FakeProgramsService,
-  fakeStartingPins,
-  FakeStorage,
-  roster,
-} from '../test/support/fakes';
+import { FakeEventsService, FakeProgramsService, FakeStorage, roster } from '../test/support/fakes';
 import { makeStudent, resetDatabase, testPrisma } from './support/database';
 
 /** A sheet fills an EVENT: a number we know only joins it, one we do not becomes a NON_IACE account. */
@@ -25,7 +18,6 @@ function build(events = new FakeEventsService()) {
   const storage = new FakeStorage();
   const service = new ImportsService(
     prisma,
-    fakeStartingPins(new FakeMessageSender()),
     storage as never,
     new AuditService(prisma, new FakeStorage() as never),
     events.asService(),

@@ -66,16 +66,6 @@ describe('RichText', () => {
   });
 
   describe('the equation dialog', () => {
-    it('opens from the toolbar and previews what is typed', () => {
-      show(<RichText value="" onChange={noop} />);
-      fireEvent.click(screen.getByLabelText('Equation'));
-
-      const input = screen.getByLabelText('LaTeX') as HTMLInputElement;
-      fireEvent.change(input, { target: { value: '\\frac{a}{b}' } });
-
-      assert.match(screen.getByLabelText('Preview').innerHTML, /katex/);
-    });
-
     /** Storing an empty formula would leave a node that renders as nothing and cannot be clicked. */
     it('will not insert an empty formula', () => {
       show(<RichText value="" onChange={noop} />);
@@ -84,12 +74,25 @@ describe('RichText', () => {
       assert.ok((screen.getByRole('button', { name: 'Insert' }) as HTMLButtonElement).disabled);
     });
 
-    it('writes the formula into the content as latex, not as rendered markup', () => {
+    /** A slot nobody filled would be stored as a command KaTeX cannot draw. */
+    it('will not insert a formula with an empty slot', async () => {
+      show(<RichText value="" onChange={noop} />);
+      fireEvent.click(screen.getByLabelText('Equation'));
+      fireEvent.change(await screen.findByLabelText('LaTeX'), {
+        target: { value: '\\frac{1}{\\placeholder{}}' },
+      });
+
+      assert.ok((screen.getByRole('button', { name: 'Insert' }) as HTMLButtonElement).disabled);
+      assert.ok(screen.getByText('Fill in every empty box'));
+    });
+
+    /** MathLive draws only in a browser, so under node the dialog is its typed-LaTeX fallback. */
+    it('writes the formula into the content as latex, not as rendered markup', async () => {
       let html = '';
       show(<RichText value="" onChange={(next) => (html = next)} />);
 
       fireEvent.click(screen.getByLabelText('Equation'));
-      fireEvent.change(screen.getByLabelText('LaTeX'), { target: { value: 'x^2' } });
+      fireEvent.change(await screen.findByLabelText('LaTeX'), { target: { value: 'x^2' } });
       fireEvent.click(screen.getByRole('button', { name: 'Insert' }));
 
       assert.match(html, /data-latex="x\^2"/);

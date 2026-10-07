@@ -15,16 +15,15 @@ import { AuditContext } from '../src/audit';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
-import { MESSAGE_KINDS } from '../src/common/messaging';
 import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
+import { type PrismaService } from '../src/prisma/prisma.service';
 import { StudentsService } from '../src/students/students.service';
 import {
   FakeCodeCatalog,
   FakeEventBus,
   FakeMessageSender,
   FakeStorage,
-  fakeStartingPins,
 } from '../test/support/fakes';
 import {
   makeCatalog,
@@ -82,6 +81,26 @@ interface Bench {
   branches?: { id: string; name: string; type: string; isActive?: boolean }[];
   /** The live catalog instead of the fake, for a case that turns on a program being retired. */
   realPrograms?: boolean;
+  /** The real client behind a Proxy, for a case that turns on what lands between a read and a write. */
+  client?: PrismaService;
+}
+
+/** The real database, with `meanwhile` landing after each `student.findFirst` and before its caller acts. */
+function afterEachStudentRead(meanwhile: () => Promise<void>): PrismaService {
+  const students = new Proxy(prisma.student, {
+    get(target, method, receiver) {
+      if (method !== 'findFirst') return Reflect.get(target, method, receiver) as unknown;
+      return async (args: Parameters<typeof target.findFirst>[0]) => {
+        const found = await target.findFirst(args);
+        await meanwhile();
+        return found;
+      };
+    },
+  });
+  return new Proxy(prisma, {
+    get: (target, key, receiver) =>
+      key === 'student' ? students : (Reflect.get(target, key, receiver) as unknown),
+  });
 }
 
 async function serviceWith(over: Bench = {}) {
@@ -104,11 +123,10 @@ async function serviceWith(over: Bench = {}) {
     sender,
     auditContext,
     service: new StudentsService(
-      prisma,
+      over.client ?? prisma,
       new FakeStorage() as unknown as StorageService,
       exams.asService(),
       new BranchesService(prisma, new AuditContext()),
-      fakeStartingPins(sender),
       over.realPrograms ? new ProgramsService(prisma, auditContext) : programs.asService(),
       auditContext,
       events.asService(),
@@ -258,28 +276,6 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     assert.equal(stored.currentBranchId, PHYSICAL.id);
   });
 
-  /** No pinHash meant loginStudent read the null as a wrong PIN, forever; and a PIN nobody was told opens nothing. */
-  it('gives the student a starting PIN not derived from their number, and texts it to them', async () => {
-    const { service, sender } = await serviceWith(noStudentYet);
-
-    const created = await service.create({
-      mobile: '9000000020',
-      studentType: STUDENT_TYPE.OFFLINE,
-    });
-
-    const stored = await onlyStudent();
-    assert.match(stored.pinHash ?? '', /^hash:\d{4}$/);
-    assert.equal(stored.pinIsDefault, true);
-    const pin = (stored.pinHash ?? '').replace('hash:', '');
-    assert.ok(!'9000000020'.startsWith(pin), `${pin} is the first digits of their own number`);
-    assert.equal(sender.lastMessage.kind, MESSAGE_KINDS.PIN);
-    assert.equal(sender.lastMessage.to, '9000000020');
-    assert.equal(`hash:${String(sender.lastMessage.data?.pin)}`, stored.pinHash);
-    // The PIN is the institute's, not theirs, so the roster must still chase them to change it.
-    assert.equal(created.hasDefaultPin, true);
-  });
-
-  /** An online student parked at a centre would silently inherit that centre's schedule and window. */
   it('refuses an online student at a physical centre, and an offline one in the online branch', async () => {
     const { service } = await serviceWith({ ...noStudentYet, branches: [PHYSICAL, ONLINE_BRANCH] });
 
@@ -849,5 +845,104 @@ describe('StudentsService — the seams other modules come through', () => {
     assert.equal(await service.countEnrolledIn('SSC CGL'), 2);
     assert.equal(await service.countEnrolledIn('RRB JE'), 1);
     assert.equal(await service.countEnrolledIn('SSC CHSL'), 0);
+  });
+});
+
+describe('StudentsService.changeMobile — who they sign in as', () => {
+  const OLD = '9876543210';
+  const NEW = '9123456780';
+  const ADMIN = randomUUID();
+  const searchFor = (q: string) => studentListQuerySchema.parse({ q });
+
+  /** The failure this prevents: a number that moved, leaving nobody able to find the student by the old one. */
+  it('moves the number, keeps the old one against who changed it, and asks for every session to end', async () => {
+    const { service, events } = await serviceWith({ student: { mobile: OLD } });
+
+    const detail = await service.changeMobile(STUDENT, NEW, ADMIN);
+
+    assert.equal(detail.mobile, NEW);
+    assert.deepEqual(
+      detail.formerMobiles.map((former) => former.mobile),
+      [OLD],
+    );
+    const kept = await prisma.studentMobileHistory.findFirstOrThrow({
+      where: { studentId: STUDENT },
+    });
+    assert.deepEqual([kept.mobile, kept.changedById], [OLD, ADMIN]);
+    assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_MOBILE_CHANGED), [{ studentId: STUDENT }]);
+  });
+
+  /** Operators recycle numbers: the old one finds its former holder, and never stops a stranger taking it. */
+  it('finds them in the roster by the old number, beside the stranger who signs in with it now', async () => {
+    const { service } = await serviceWith({ student: { mobile: OLD } });
+    await service.changeMobile(STUDENT, NEW, ADMIN);
+    const stranger = await makeStudent(prisma, { mobile: OLD });
+
+    const found = await service.list(searchFor(OLD));
+
+    assert.deepEqual(new Set(found.items.map((item) => item.id)), new Set([STUDENT, stranger.id]));
+  });
+
+  it('lists every number they have moved off, newest first', async () => {
+    const { service } = await serviceWith({ student: { mobile: OLD } });
+    await service.changeMobile(STUDENT, NEW, ADMIN);
+
+    const detail = await service.changeMobile(STUDENT, '9000000001', ADMIN);
+
+    assert.deepEqual(
+      detail.formerMobiles.map((former) => former.mobile),
+      [NEW, OLD],
+    );
+  });
+
+  it('refuses a number a live student signs in with, and their own, and moves nothing', async () => {
+    const { service, events } = await serviceWith({ student: { mobile: OLD } });
+    await makeStudent(prisma, { mobile: NEW });
+
+    await assert.rejects(
+      () => service.changeMobile(STUDENT, NEW, ADMIN),
+      refusedOn('mobile', ErrorCodes.CONFLICT),
+    );
+    await assert.rejects(
+      () => service.changeMobile(STUDENT, OLD, ADMIN),
+      refusedOn('mobile', ErrorCodes.CONFLICT),
+    );
+
+    assert.equal((await row()).mobile, OLD);
+    assert.equal(await prisma.studentMobileHistory.count(), 0);
+    assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_MOBILE_CHANGED), []);
+  });
+
+  /** The failure this prevents: an erasure landing mid-change, and a real number written back onto the erased row. */
+  it('moves nothing when the student was erased while the change was being made', async () => {
+    let erased = false;
+    const eraseOnce = async () => {
+      if (erased) return;
+      erased = true;
+      await prisma.student.update({ where: { id: STUDENT }, data: { deletedAt: new Date() } });
+    };
+    const { service } = await serviceWith({
+      student: { mobile: OLD },
+      client: afterEachStudentRead(eraseOnce),
+    });
+
+    await assert.rejects(
+      () => service.changeMobile(STUDENT, NEW, ADMIN),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT,
+    );
+
+    assert.equal((await row()).mobile, OLD);
+    assert.equal(await prisma.studentMobileHistory.count(), 0);
+  });
+
+  /** An erased row carries a tombstone, not a number: moving it would hand a closed account to somebody. */
+  it('refuses a student who has been erased', async () => {
+    const { service } = await serviceWith({ student: { mobile: OLD, deletedAt: new Date() } });
+
+    await assert.rejects(
+      () => service.changeMobile(STUDENT, NEW, ADMIN),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    );
+    assert.equal((await row()).mobile, OLD);
   });
 });

@@ -69,7 +69,12 @@ export class AttemptsService {
     private readonly sheets: AttemptSheetService,
   ) {}
 
-  async start(studentId: string, testId: string, input: StartAttemptBody): Promise<LiveAttempt> {
+  async start(
+    studentId: string,
+    testId: string,
+    input: StartAttemptBody,
+    session?: string,
+  ): Promise<LiveAttempt> {
     // Independent of each other and wanted on both paths below, so they go in one wave, not two.
     const [sittings, found] = await Promise.all([
       // One read of their sittings serves both the resume below and the slot count after it.
@@ -78,13 +83,15 @@ export class AttemptsService {
         orderBy: { attemptNo: 'desc' },
       }),
       this.findTest(testId),
+      // Whichever test is asked for: a sitting their other sign-in is answering is not set aside.
+      this.state.assertFree(studentId, session),
     ]);
     // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
     const live = sittings.find((row) => row.status === LIVE) ?? null;
     if (live && (input.resume === undefined || live.id === input.resume)) {
       const test = requireFound(found);
       // A lost key is rebuilt from Postgres before reopening, so a resume never blanks the sitting.
-      const endsAt = await this.state.resume(opened(live, test), input.tab);
+      const endsAt = await this.state.resume(opened(live, test, session), input.tab);
       // Durable too, or the sweeper would judge a resumed sitting by the deadline it walked away from.
       if (endsAt.getTime() !== live.endsAt.getTime()) {
         await this.prisma.attempt.update({ where: { id: live.id }, data: { endsAt } });
@@ -104,7 +111,7 @@ export class AttemptsService {
 
     try {
       const started = await this.create(studentId, test, slots, input.languages);
-      await this.state.open(opened(started, test), input.tab);
+      await this.state.open(opened(started, test, session), input.tab);
       return toLiveAttempt(started, test, true);
     } catch (error) {
       // Two starts raced; the unique picked one. Read it back — they asked to sit, not to win.
@@ -113,7 +120,7 @@ export class AttemptsService {
       if (!won) {
         throw new AppException(ErrorCodes.CONFLICT, 'That sitting has just ended. Open it again.');
       }
-      await this.state.open(opened(won, test), input.tab);
+      await this.state.open(opened(won, test, session), input.tab);
       return toLiveAttempt(won, test, false);
     }
   }
@@ -186,10 +193,11 @@ function requireFound(test: SittableTest | null): SittableTest {
 
 type AttemptRow = Prisma.AttemptGetPayload<object>;
 
-function opened(attempt: AttemptRow, test: SittableTest) {
+function opened(attempt: AttemptRow, test: SittableTest, session?: string) {
   const { navigation, shuffleQuestions } = test.baseConfig;
   return {
     ...attempt,
+    session,
     forwardOnly: forwardOrderOf(navigation, attempt.shuffleSeed, shuffleQuestions),
   };
 }

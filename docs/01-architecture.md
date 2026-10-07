@@ -26,24 +26,24 @@ simplify some, upgrade some, discard the rest.
 TypeScript end to end in one monorepo (Turborepo + pnpm workspaces), so an API shape changes once in
 `packages/contracts` and every client sees it.
 
-| Layer                     | Choice                                                                           | Why                                                                                                                        |
-| ------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Backend API**           | NestJS                                                                           | One decoupled API serves both SPAs and the mobile app. Modules, DI, guards and validation keep a small team's code honest. |
-| **Frontends**             | Vite + React SPAs                                                                | Both apps sit behind login, so there is nothing for SSR to do. No Next.js.                                                 |
-| **Server data**           | TanStack Query over the typed client from `packages/contracts`                   | One way to fetch, cache and invalidate.                                                                                    |
-| **Design**                | Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark                      | One source for colour, type, spacing and components — never redefined per screen. Charts are Recharts on `--series-*`.     |
-| **Client state**          | Zustand, only where React Query does not fit                                     | Server data is not client state; keeping the two apart is what stops cache drift.                                          |
-| **Database**              | PostgreSQL via Prisma                                                            | Highly relational. `prisma/schema.prisma` is the target of record.                                                         |
-| **Cache / queue / state** | Redis + BullMQ                                                                   | Live sitting state, OTP, sessions, rate limiting; scoring, flush, sweep and rollup jobs.                                   |
-| **Auth**                  | Self-built JWT + refresh; students mobile-OTP then 4-digit PIN, admins email-OTP | OTP and sessions live in Redis, never the DB.                                                                              |
-| **Outbound messaging**    | SMS for OTP and the roster PIN; everything else in-app, web push and FCM         | Those two are what somebody is WAITING on. The rest cost nothing to deliver, so no other kind buys a paid message.         |
-| **OTP transport**         | `OTP_SENDER` selects console or SMS                                              | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.               |
-| **WhatsApp**              | Interakt only, wired and off — future scope                                      | One vendor, not a switch between two. An empty key leaves the channel unrouted; turning it on is env plus a restart.       |
-| **Storage**               | S3 SDK in every environment, MinIO locally                                       | Exactly one upload path, never branched by environment.                                                                    |
-| **Realtime**              | None — no WebSockets                                                             | A client timer, periodic HTTP autosave and Redis carry the live test. A socket per sitting is the thing that melts.        |
-| **Payments**              | Separate portal, not V1                                                          | The platform reads entitlements later; it never owns money.                                                                |
-| **Mobile**                | React Native + Expo in `apps/mobile`, Android first, in progress                 | Another client on the same types and the same API. Sign-in through sitting a test is built; nothing has shipped.           |
-| **Infra**                 | Docker + env, cloud-agnostic, AWS-leaning                                        | Nothing is tied to one host.                                                                                               |
+| Layer                     | Choice                                                                | Why                                                                                                                        |
+| ------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Backend API**           | NestJS                                                                | One decoupled API serves both SPAs and the mobile app. Modules, DI, guards and validation keep a small team's code honest. |
+| **Frontends**             | Vite + React SPAs                                                     | Both apps sit behind login, so there is nothing for SSR to do. No Next.js.                                                 |
+| **Server data**           | TanStack Query over the typed client from `packages/contracts`        | One way to fetch, cache and invalidate.                                                                                    |
+| **Design**                | Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark           | One source for colour, type, spacing and components — never redefined per screen. Charts are Recharts on `--series-*`.     |
+| **Client state**          | Zustand, only where React Query does not fit                          | Server data is not client state; keeping the two apart is what stops cache drift.                                          |
+| **Database**              | PostgreSQL via Prisma                                                 | Highly relational. `prisma/schema.prisma` is the target of record.                                                         |
+| **Cache / queue / state** | Redis + BullMQ                                                        | Live sitting state, OTP, sessions, rate limiting; scoring, flush, sweep and rollup jobs.                                   |
+| **Auth**                  | Self-built JWT + refresh; students by mobile OTP, admins by email OTP | OTP and sessions live in Redis, never the DB.                                                                              |
+| **Outbound messaging**    | SMS for OTP; everything else in-app, web push and FCM                 | A code is what somebody is WAITING on. The rest cost nothing to deliver, so no other kind buys a paid message.             |
+| **OTP transport**         | `OTP_SENDER` selects console or SMS                                   | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.               |
+| **WhatsApp**              | Interakt only, wired and off — future scope                           | One vendor, not a switch between two. An empty key leaves the channel unrouted; turning it on is env plus a restart.       |
+| **Storage**               | S3 SDK in every environment, MinIO locally                            | Exactly one upload path, never branched by environment.                                                                    |
+| **Realtime**              | None — no WebSockets                                                  | A client timer, periodic HTTP autosave and Redis carry the live test. A socket per sitting is the thing that melts.        |
+| **Payments**              | Separate portal, not V1                                               | The platform reads entitlements later; it never owns money.                                                                |
+| **Mobile**                | React Native + Expo in `apps/mobile`, Android first, in progress      | Another client on the same types and the same API. Sign-in through sitting a test is built; nothing has shipped.           |
+| **Infra**                 | Docker + env, cloud-agnostic, AWS-leaning                             | Nothing is tied to one host.                                                                                               |
 
 Deliberately out, and the schema blocks none of them: deep per-question time and accuracy analytics,
 question types beyond single-answer MCQ, Word/PDF import, live proctoring, discussion, adaptive
@@ -59,6 +59,13 @@ practice, certificates.
   once a session is already missing, so a request that succeeds pays nothing.
 - **Active devices:** both Account screens list the account's sessions and sign another one out
   (`/me/sessions`). "Last active" moves on refresh, never per request.
+- **The number is an admin's to change, never the student's.** It is who they sign in as, so a
+  student moving it would make a paid enrolment something to hand on. The change ends every session
+  they hold, because the device carrying the old number may no longer be theirs; the next sign-in is
+  a code sent to the new one. The old number is kept in `StudentMobileHistory` and the roster search finds them by it,
+  typed in full. It is never a way to sign in: operators recycle numbers, so the next owner of an
+  old one is a stranger who gets an account of their own, and the live-unique index stays on
+  `Student.mobile` alone. An erasure deletes the history with the rest of the person.
 
 **The mobile client** holds four decisions the code cannot state on its own:
 
@@ -86,8 +93,13 @@ practice, certificates.
   per-question toggle) or `DUAL` (both languages, stem _and_ options). It is the base config's.
 - **Single-answer MCQ** only; the schema takes other types without a migration.
 - **Images in questions**, in both the manual editor and the bulk import.
-- **Sign-in:** students sign up with mobile + OTP and then log in with a 4-digit PIN (OTP resets
-  it); admins use email + OTP.
+- **Sign-in:** a student signs in with a code sent to their mobile, every time, and the first time
+  is the signup — one path, with no PIN. Admins use email + OTP. What keeps a code rare is the
+  session rule below: a device asks once and stays signed in. A student whose code does not arrive
+  is read one at the desk: an admin issues it from the student's page, it is good once for five
+  minutes, and it is never sent. Where WhatsApp is set up the code goes there first, because it is
+  billed on delivery, and a student asking again gets it by SMS — one channel a send, never both,
+  and never sooner than the resend interval the server enforces.
 - **Sectional structure with sectional timing.** Marks, negative marking, timing and
   merit/qualifying are per section — one paper may mix them.
 - **Question bank** with Excel/CSV bulk import plus a manual editor.
@@ -98,7 +110,8 @@ practice, certificates.
 - **Instant results:** score, correct/wrong/unattempted, full solutions per question, and cohort
   rank + percentile.
 - **Access:** student → test series → test. There are no groups and no student↔test link. A
-  `StudentGrant` overrides every kind and `isEnabled` gates every path, grant included. `FREE`
+  `StudentGrant` overrides every kind, and a series has no switch of its own: the gate is each
+  test's status, so only an offered (`ACTIVE`) test reaches anybody, grant included. `FREE`
   reaches everyone, `PROGRAM` matches a program, `EVENT` matches its own candidates; none of the
   three looks at a branch. `STANDARD` is the only branch-gated kind: the series' own `branchIds` (a
   GIN-indexed array) must hold the student's current branch _and_ the stage's exam course must be
@@ -199,6 +212,15 @@ synchronous transactions fighting each other — nobody waits on it, but it is n
 §3 measures the drain at a minute or two for a full hall, and that is the figure to watch on the
 day.
 
+**The handed-in page waits on none of it.** It draws the sitting's own effort — questions answered
+and time, section by section — beside the cohort's average, the topper's and the student's last
+attempt, from `GET /me/attempts/:id/field`. That read carries no mark, so it answers a sitting that
+is not marked yet, and a sitting that is the topper is never drawn as one: equal bars would hand
+over a rank on a page with no marks on it. The result is the page's last step. While the student
+reads, the score card is asked for behind the page; a marked paper's reads ask again by themselves
+three times on the client's jittered backoff and then say the marks are not in. That is bounded,
+where the poll `905bae5` removed ran for as long as the drain did.
+
 **Rank and percentile are counted live from Postgres.** A test's cohort is its graded, evaluated,
 scored sittings, ordered by marks, then time taken, then id. The partial index `Attempt_ranking_idx`
 serves a sitting's standing, an index-only count per sitting, and "N sat": on 200 tests of 5,000
@@ -242,7 +264,7 @@ what each piece is for.
 | Route 53                 | DNS                                       | Caddy gets the API's certificate itself; CloudFront brings its own.                              |
 | `deploy/.env` on the box | Every credential the API reads            | Compose hands it to the containers; nothing is fetched at boot. Master copy in SSM (`04` §11).   |
 | Instance role            | S3, SSM, CloudWatch Logs, ECR             | The one credential never written down — no S3 key pair exists in production.                     |
-| SMS provider (external)  | OTP and the roster PIN, and nothing else  | DLT-compliant, which is what India requires for OTP login.                                       |
+| SMS provider (external)  | OTP, and nothing else                     | DLT-compliant, which is what India requires for OTP login.                                       |
 | Web push (external)      | Every other message to a browser          | VAPID direct to the browser's push service. No vendor and no per-message cost.                   |
 | FCM (external)           | The same message to a signed-in phone     | A service account, HTTP v1. Android only until the Firebase iOS SDK is added.                    |
 

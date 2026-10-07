@@ -4,11 +4,18 @@
  * The cohort filter stays literal SQL so the planner can match `Attempt_ranking_idx`, and a sitting
  * with no recorded time ranks as the slowest there is.
  */
-import { LEADERBOARD_NEIGHBOURS, LEADERBOARD_PODIUM } from '@iace/contracts';
+import { ATTEMPT_STATUS, LEADERBOARD_NEIGHBOURS, LEADERBOARD_PODIUM } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 
 /** Unqualified, so it binds to the nearest `Attempt` in scope — the inner one inside the LATERAL. */
 export const IN_COHORT = Prisma.sql`"isGraded" AND "status" = 'EVALUATED' AND "score" IS NOT NULL`;
+
+/** `IN_COHORT` as a Prisma filter, for a read that counts the cohort without ranking it. */
+export const COHORT_WHERE = {
+  isGraded: true,
+  status: ATTEMPT_STATUS.EVALUATED,
+  score: { not: null },
+} as const satisfies Prisma.AttemptWhereInput;
 
 /** The board's order, unqualified like `IN_COHORT`: marks, then less time, then id; no time is slowest. */
 export const RANK_ORDER = Prisma.sql`"score" DESC, "timeTakenSec" ASC NULLS LAST, "id" ASC`;
@@ -167,5 +174,66 @@ export function testResultsSql(testId: string): Prisma.Sql {
     LEFT JOIN ranked r ON r."id" = a."id"
     WHERE a."testId" = ${testId}::uuid
     ORDER BY r.rank ASC NULLS LAST, a."id" ASC
+  `;
+}
+
+/** A ranked sitting among every one on the tests asked for, with who sat it. */
+export interface CohortSittingRow extends StandingRow {
+  student_id: string;
+}
+
+/** When a sitting has to have been handed in to be returned; the ranking is still over every sitting. */
+export interface HandedIn {
+  gte: Date;
+  lte: Date;
+}
+
+/** `testResultsSql` over several tests at once: one window pass a test, never a count per sitting. */
+export function cohortStandingsSql(testIds: readonly string[], within?: HandedIn): Prisma.Sql {
+  // Narrowed AFTER the ranking: a sitting's place is among its whole cohort, whenever the rest sat.
+  const narrowed = within
+    ? Prisma.sql`WHERE r."submittedAt" BETWEEN ${within.gte} AND ${within.lte}`
+    : Prisma.empty;
+  return Prisma.sql`
+    WITH ranked AS (
+      SELECT a."id" AS attempt_id,
+             a."testId" AS test_id,
+             a."studentId" AS student_id,
+             a."submittedAt",
+             (ROW_NUMBER() OVER (PARTITION BY a."testId" ORDER BY ${RANK_ORDER}))::int AS rank,
+             sitting_percentile(
+               RANK() OVER (PARTITION BY a."testId" ORDER BY a."score" ASC) - 1,
+               COUNT(*) OVER (PARTITION BY a."testId", a."score"),
+               COUNT(*) OVER (PARTITION BY a."testId")
+             )::float8 AS percentile,
+             (COUNT(*) OVER (PARTITION BY a."testId"))::int AS cohort_size
+      FROM "Attempt" a
+      WHERE a."testId" = ANY(${[...testIds]}::uuid[]) AND ${IN_COHORT}
+    )
+    SELECT r.attempt_id, r.test_id, r.student_id, r.rank, r.percentile, r.cohort_size
+    FROM ranked r
+    ${narrowed}
+  `;
+}
+
+/** One test's cohort in four figures; `topper_id` is whoever `RANK_ORDER` puts first. */
+export interface CohortFiguresRow {
+  test_id: string;
+  cohort_size: number;
+  mean: number;
+  highest: number;
+  topper_id: string;
+}
+
+export function cohortFiguresSql(testIds: readonly string[]): Prisma.Sql {
+  return Prisma.sql`
+    SELECT a."testId" AS test_id,
+           COUNT(*)::int AS cohort_size,
+           ROUND(AVG(a."score"), 2)::float8 AS mean,
+           MAX(a."score")::float8 AS highest,
+           (ARRAY_AGG(a."studentId" ORDER BY ${RANK_ORDER}))[1] AS topper_id
+    FROM "Attempt" a
+    WHERE a."testId" = ANY(${[...testIds]}::uuid[]) AND ${IN_COHORT}
+    GROUP BY a."testId"
   `;
 }

@@ -2,7 +2,7 @@ import { TEST_STATUS, type TestStatus } from '@iace/contracts';
 import { Badge } from '@iace/ui';
 import { TEST_STATUS_LABELS } from '../lib/constants';
 
-/** Frozen and offered are two facts: a retired test still carries the frozen paper it went out with. */
+/** Frozen and offered are two facts: an inactive test still carries the frozen paper it went out with. */
 export function TestStatusBadges({
   status,
   finalizedAt,

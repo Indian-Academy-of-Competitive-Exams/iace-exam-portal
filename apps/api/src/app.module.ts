@@ -29,11 +29,13 @@ import { TestsModule } from './tests';
 import { AttemptsModule } from './attempts';
 import { SavedModule } from './saved';
 import { DashboardModule } from './dashboard';
+import { ReportsModule } from './reports';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
 import { FeaturePermissionGuard } from './auth/guards/feature-permission.guard';
 import { SuperAdminGuard } from './auth/guards/super-admin.guard';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { HttpDrain } from './common/http-drain';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { RequestObserverMiddleware } from './common/metrics/request-observer.middleware';
 import { RequestBudgetInterceptor } from './common/request-budget';
@@ -66,11 +68,13 @@ import { RequestIdMiddleware } from './common/request-id';
     AttemptsModule,
     SavedModule,
     DashboardModule,
+    ReportsModule,
     HealthModule,
     ThrottlingModule,
     MetricsModule,
   ],
   providers: [
+    HttpDrain,
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     // First, so the budget bounds the interceptors below it too, not the handler alone.
     { provide: APP_INTERCEPTOR, useClass: RequestBudgetInterceptor },

@@ -8,7 +8,7 @@ import { NotificationsService } from '../src/notifications/notifications.service
 import { ExamsService } from '../src/configs/exams.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
 import { StudentsService } from '../src/students';
-import { FakeEventBus, fakeStartingPins } from '../test/support/fakes';
+import { FakeEventBus } from '../test/support/fakes';
 import { BANK, makeQuestionBank, resetDatabase, testPrisma } from './support/database';
 
 const prisma = testPrisma();
@@ -36,7 +36,6 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
       null as never,
       null as never,
       null as never,
-      fakeStartingPins(),
       null as never,
       new AuditContext(),
       new FakeEventBus().asService(),

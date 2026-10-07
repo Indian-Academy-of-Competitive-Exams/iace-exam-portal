@@ -48,9 +48,9 @@ SI/Constable), replacing ThinkExam.
 Vite + React SPAs, PostgreSQL via Prisma, Redis + BullMQ, S3, self-built JWT auth, no WebSockets.
 It is the only copy; nothing here restates it.
 
-One auth rule no table can carry: a student's **4-digit PIN is not unique across students**, and is
-only ever checked against the one student a mobile resolves to. A `@unique` on it would cap the
-platform at 10,000 students.
+One auth rule no table can carry: **a student has no password and no PIN.** They sign in with a
+code sent to their mobile every time, and the first time is the signup. An old mobile number is
+never a way to sign in — operators recycle numbers.
 
 <scaling-rules>
 
@@ -70,7 +70,7 @@ Do not break these — they are why the live test holds at 6–8K:
   boundary, the service diagram, live-test scaling, the deployment topology.
 - `docs/02-domain-rules.md` — the rules the schema cannot state: the catalog and the blueprint,
   building and finalizing a test, lock on first attempt, access, scheduling, the sitting, results
-  and ranking, rollups, render modes and skins, the question bank, question import.
+  and ranking, rollups, render modes and skins, the question bank, question import, reports.
 - `docs/03-conventions.md` — where code goes: packaging, module boundaries, the table-ownership map,
   the event catalog, service tiers, and what CI mechanically enforces. Its section numbers are an
   interface that source comments cite, so renumbering is a breaking change.

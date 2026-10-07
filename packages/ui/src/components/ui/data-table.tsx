@@ -4,6 +4,7 @@ import { cn, FILLS } from '../../lib/utils';
 import { nearTheEnd } from '../../lib/scroll';
 import { Checkbox } from './checkbox';
 import { useInTableFrame } from './table-frame';
+import { useOnCard } from './card';
 import { Spinner } from './spinner';
 import { EMPTY_STATE_KINDS, type EmptyMessage, type EmptyStateKind } from './empty-state';
 import { Table, TableBody, TableCell, TableHead, TableRow, TableState } from './table';
@@ -15,6 +16,8 @@ export interface DataTableColumn<TRow> {
   header?: React.ReactNode;
   /** Right-aligned tabular figures, for counts and amounts. */
   numeric?: boolean;
+  /** Held at the left edge of a table wider than its frame. One column a table. */
+  pinned?: boolean;
   cell: (row: TRow) => React.ReactNode;
   className?: string;
 }
@@ -44,7 +47,29 @@ export interface DataTableProps<TRow> {
   scroll?: DataTableScroll;
   /** Marks a row apart from its neighbours — the reader's own line, a row a filter landed on. */
   rowClassName?: (row: TRow) => string | undefined;
+  /** Below `sm` a row is a block of labelled values under its first column, so nothing scrolls sideways. */
+  stacks?: boolean;
 }
+
+/** Figures are short, so they sit two to a line; a row on the page is a card, one on a card is ruled off. */
+const STACKED = {
+  table: 'max-sm:block',
+  head: 'max-sm:hidden',
+  body: 'max-sm:flex max-sm:flex-col',
+  row: 'max-sm:relative max-sm:grid max-sm:grid-cols-2 max-sm:gap-x-6 max-sm:gap-y-1.5',
+  rowOnPage: 'max-sm:rounded-xl max-sm:border max-sm:border-border max-sm:bg-card max-sm:p-4',
+  rowOnCard: 'max-sm:border-b max-sm:border-border max-sm:py-3 max-sm:last:border-b-0',
+  cell: [
+    'max-sm:static max-sm:flex max-sm:w-auto max-sm:max-w-none max-sm:items-baseline max-sm:gap-3',
+    'max-sm:border-b-0 max-sm:bg-transparent max-sm:p-0 max-sm:text-left max-sm:before:hidden',
+    'max-sm:[&_.truncate]:whitespace-normal',
+  ].join(' '),
+  wide: 'max-sm:col-span-2',
+  title: 'max-sm:col-span-2 max-sm:text-base max-sm:font-semibold',
+  toggle: 'max-sm:absolute max-sm:right-0 max-sm:top-2',
+  label: 'shrink-0 text-xs font-normal text-muted-foreground sm:hidden',
+  value: 'min-w-0 max-sm:ml-auto max-sm:text-right sm:contents',
+} as const;
 
 /** A capped, scrolling panel. Omit the paging pair for a list already holding everything. */
 export interface DataTableScroll {
@@ -115,6 +140,31 @@ interface DataTableRowProps<TRow> {
   tickDisabled?: boolean;
   tickLabel?: string;
   onTick: (id: string, on: boolean) => void;
+  stacks?: boolean;
+  onCard: boolean;
+}
+
+/** The first column names the row, so it is the block's heading and wears no label. */
+function StackedCell<TRow>({
+  column,
+  row,
+  heads,
+}: Readonly<{ column: DataTableColumn<TRow>; row: TRow; heads: boolean }>) {
+  return (
+    <TableCell
+      numeric={column.numeric}
+      pinned={column.pinned}
+      className={cn(
+        column.className,
+        STACKED.cell,
+        heads && STACKED.title,
+        !heads && !column.numeric && STACKED.wide,
+      )}
+    >
+      {!heads && column.header ? <span className={STACKED.label}>{column.header}</span> : null}
+      <div className={heads ? 'min-w-0 sm:contents' : STACKED.value}>{column.cell(row)}</div>
+    </TableCell>
+  );
 }
 
 function Row<TRow>({
@@ -130,12 +180,16 @@ function Row<TRow>({
   tickDisabled,
   tickLabel,
   onTick,
+  stacks,
+  onCard,
 }: Readonly<DataTableRowProps<TRow>>) {
+  const stacked = stacks && cn(STACKED.row, onCard ? STACKED.rowOnCard : STACKED.rowOnPage);
+
   return (
     <>
-      <TableRow className={className}>
+      <TableRow className={cn(stacked, className)}>
         {expand ? (
-          <TableCell>
+          <TableCell className={cn(stacks && STACKED.cell, stacks && STACKED.toggle)}>
             <button
               type="button"
               aria-label={expand.label(row)}
@@ -164,17 +218,26 @@ function Row<TRow>({
             />
           </TableCell>
         )}
-        {columns.map((column) => (
-          <TableCell key={column.key} numeric={column.numeric} className={column.className}>
-            {column.cell(row)}
-          </TableCell>
-        ))}
+        {columns.map((column, at) =>
+          stacks ? (
+            <StackedCell key={column.key} column={column} row={row} heads={at === 0} />
+          ) : (
+            <TableCell
+              key={column.key}
+              numeric={column.numeric}
+              pinned={column.pinned}
+              className={column.className}
+            >
+              {column.cell(row)}
+            </TableCell>
+          ),
+        )}
       </TableRow>
 
       {expand && isOpen ? (
-        <TableRow>
+        <TableRow className={cn(stacks && 'max-sm:block')}>
           {/* Capped and scrolling: a long child list must not push the parent rows off screen. */}
-          <TableCell colSpan={span} className="bg-surface-2 p-0">
+          <TableCell colSpan={span} className={cn('bg-surface-2 p-0', stacks && 'max-sm:block')}>
             <div className="relative max-h-[26rem] overflow-y-auto px-4 py-3">
               {expand.render(row)}
             </div>
@@ -205,7 +268,9 @@ export function DataTable<TRow>({
   expand,
   scroll,
   rowClassName,
+  stacks,
 }: Readonly<DataTableProps<TRow>>) {
+  const onCard = useOnCard();
   const [open, setOpen] = React.useState<ReadonlySet<string>>(new Set());
 
   // Stable, both of them: a row is memoized, and a fresh handler each render would defeat it.
@@ -237,8 +302,8 @@ export function DataTable<TRow>({
 
   const body = (
     <>
-      <Table scroll={scroll ? { onScroll } : undefined}>
-        <thead>
+      <Table scroll={scroll ? { onScroll } : undefined} className={cn(stacks && STACKED.table)}>
+        <thead className={cn(stacks && STACKED.head)}>
           <TableRow>
             {selection ? (
               <TableHead className="w-10">
@@ -252,13 +317,13 @@ export function DataTable<TRow>({
             ) : null}
             {expand ? <TableHead className="w-10" /> : null}
             {columns.map((column) => (
-              <TableHead key={column.key} numeric={column.numeric}>
+              <TableHead key={column.key} numeric={column.numeric} pinned={column.pinned}>
                 {column.header}
               </TableHead>
             ))}
           </TableRow>
         </thead>
-        <TableBody>
+        <TableBody className={cn(stacks && STACKED.body, stacks && !onCard && 'max-sm:gap-3')}>
           <TableState
             isLoading={isLoading}
             isEmpty={rows.length === 0}
@@ -269,6 +334,7 @@ export function DataTable<TRow>({
             error={error}
             onRetry={onRetry}
             skeletonRows={skeletonRows}
+            stacks={stacks}
           >
             {keyed.map(({ row, id }) => (
               <DataTableRow
@@ -285,6 +351,8 @@ export function DataTable<TRow>({
                 tickDisabled={selection ? !reachable.has(id) : undefined}
                 tickLabel={selection ? (selection.rowLabel?.(id) ?? `Select row ${id}`) : undefined}
                 onTick={toggleOne}
+                stacks={stacks}
+                onCard={onCard}
               />
             ))}
           </TableState>

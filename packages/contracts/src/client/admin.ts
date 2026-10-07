@@ -35,7 +35,23 @@ import {
   type PermissionChanges,
   type UpdateAdminBody,
 } from '../admins';
+import {
+  printablePaperSchema,
+  type PrintablePaper,
+  type PrintablePaperQueryInput,
+} from '../attempts';
 import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from '../dashboard';
+import {
+  ADMIN_REPORT_ROUTES,
+  reportChoiceSchema,
+  reportDocumentSchema,
+  type ReportChoice,
+  type ReportChoiceParam,
+  type ReportChoicesQueryInput,
+  type ReportDocument,
+  type ReportKey,
+  type ReportQueryInput,
+} from '../reports';
 import { erasureReceiptSchema, type ErasureReceipt } from '../me';
 import {
   ADMIN_BRANCH_ROUTES,
@@ -162,9 +178,12 @@ import {
 } from '../exams';
 import {
   ADMIN_STUDENT_ROUTES,
+  studentDeskCodeSchema,
   studentDetailSchema,
   studentSummarySchema,
   type CreateStudentInput,
+  type ChangeStudentMobileInput,
+  type StudentDeskCode,
   type SetStudentTestBlockedBody,
   type StudentDetail,
   type StudentExportQueryInput,
@@ -258,6 +277,9 @@ import {
   sectionWorkSchema,
   type SectionWork,
   type SendBackInput,
+  type WorkTimeInput,
+  type WorkTimeTotal,
+  workTimeTotalSchema,
 } from '../section-work';
 import { queryString, type ApiCore } from './core';
 
@@ -330,6 +352,13 @@ export function adminClient(core: ApiCore) {
 
       setTestBlocked: (id: string, input: SetStudentTestBlockedBody): Promise<StudentDetail> =>
         write('PATCH', ADMIN_STUDENT_ROUTES.setTestBlocked(id), studentDetailSchema, input),
+
+      changeMobile: (id: string, input: ChangeStudentMobileInput): Promise<StudentDetail> =>
+        write('PATCH', ADMIN_STUDENT_ROUTES.changeMobile(id), studentDetailSchema, input),
+
+      /** A code to read out to them. Each call makes a new one and retires the last. */
+      issueDeskCode: (id: string): Promise<StudentDeskCode> =>
+        write('POST', ADMIN_STUDENT_ROUTES.deskCode(id), studentDeskCodeSchema),
 
       /** Their evaluated sittings, paged. The share picker's own list is capped; a report's is not. */
       sittings: (id: string, query: StudentSittingsQueryInput): Promise<Paginated<ReportSitting>> =>
@@ -560,6 +589,13 @@ export function adminClient(core: ApiCore) {
       readPaper: (id: string): Promise<TestPaper> =>
         get(ADMIN_TEST_PAPER_ROUTES.read(id), testPaperSchema),
 
+      /** The whole paper in full, to print; its key travels only when asked for, and only to a super admin. */
+      printablePaper: (id: string, query: PrintablePaperQueryInput = {}): Promise<PrintablePaper> =>
+        get(
+          `${ADMIN_TEST_PAPER_ROUTES.print(id)}${queryString({ ...query })}`,
+          printablePaperSchema,
+        ),
+
       /** Several at once, in the next free places its section has. */
       addPaperQuestions: (id: string, input: AddPaperQuestionInput): Promise<TestPaper> =>
         write('POST', ADMIN_TEST_PAPER_ROUTES.addQuestion(id), testPaperSchema, input),
@@ -748,6 +784,20 @@ export function adminClient(core: ApiCore) {
           'POST',
           ADMIN_SECTION_WORK_ROUTES.sendBack(testId, sectionId, questionId),
           sectionWorkSchema,
+          input,
+        ),
+
+      /** Seconds this question has just been on screen, added to the caller's own total. */
+      spend: (
+        testId: string,
+        sectionId: string,
+        questionId: string,
+        input: WorkTimeInput,
+      ): Promise<WorkTimeTotal> =>
+        write(
+          'POST',
+          ADMIN_SECTION_WORK_ROUTES.time(testId, sectionId, questionId),
+          workTimeTotalSchema,
           input,
         ),
 
@@ -978,6 +1028,22 @@ export function adminClient(core: ApiCore) {
     /** The landing screen. One payload, carrying only the bands the caller may see. */
     dashboard: {
       get: (): Promise<Dashboard> => get(ADMIN_DASHBOARD_ROUTES.get, dashboardSchema),
+    },
+
+    /** One document a report: the screen previews it, the printer takes it whole. */
+    reports: {
+      read: (key: ReportKey, query: ReportQueryInput): Promise<ReportDocument> =>
+        get(`${ADMIN_REPORT_ROUTES.read(key)}${queryString({ ...query })}`, reportDocumentSchema),
+
+      export: (key: ReportKey, query: ReportQueryInput): Promise<Blob> =>
+        requestBlob(ADMIN_REPORT_ROUTES.export(key), { ...query }),
+
+      /** What a report's picker offers, behind the same key as the report it is asking for. */
+      choices: (
+        param: ReportChoiceParam,
+        query: ReportChoicesQueryInput = {},
+      ): Promise<Paginated<ReportChoice>> =>
+        list(ADMIN_REPORT_ROUTES.choices(param), query, reportChoiceSchema),
     },
 
     audit: {

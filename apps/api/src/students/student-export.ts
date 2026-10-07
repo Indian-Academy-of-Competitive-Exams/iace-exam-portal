@@ -20,7 +20,7 @@ import {
 } from '../common/exporting';
 import { fromDateColumn } from '../common/time/institute-day';
 import { type PrismaService } from '../prisma/prisma.service';
-import { studentOrderBy, studentWhere } from './student-query';
+import { formerHoldersOf, studentOrderBy, studentWhere } from './student-query';
 
 /** Written as the importer splits a list cell back apart. */
 const LIST_SEPARATOR = ', ';
@@ -70,7 +70,10 @@ export async function buildStudentExport(
   query: StudentExportQuery,
 ): Promise<StudentExport> {
   // The list's filters with no page: every matching row, not the one page the screen showed.
-  const where = studentWhere({ ...query, page: 1, pageSize: 1 });
+  const where = studentWhere(
+    { ...query, page: 1, pageSize: 1 },
+    await formerHoldersOf(prisma, query.q),
+  );
   assertExportable(await prisma.student.count({ where }));
   const students = await prisma.student.findMany({
     where,

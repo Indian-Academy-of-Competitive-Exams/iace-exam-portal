@@ -133,13 +133,16 @@ export class PaperSheetService {
 
   /** The same paper for every candidate, so it is read once. */
   servedOf(testId: string): Promise<ServedPaperRow[]> {
-    return hold(this.served, testId, () =>
-      this.prisma.paperQuestion.findMany({
-        where: { testId },
-        orderBy: { order: 'asc' },
-        select: SERVED_ROW_SELECT,
-      }),
-    );
+    return hold(this.served, testId, () => this.servedNow(testId));
+  }
+
+  /** The same rows read fresh and never held, for a reader that is not a sitting: an unsat paper can still change. */
+  servedNow(testId: string): Promise<ServedPaperRow[]> {
+    return this.prisma.paperQuestion.findMany({
+      where: { testId },
+      orderBy: { order: 'asc' },
+      select: SERVED_ROW_SELECT,
+    });
   }
 
   /** Every reader of one paper's review gets the same rows, so a results storm reads it once. */
@@ -153,9 +156,14 @@ export class PaperSheetService {
     );
   }
 
-  /** The answer key rides here: scoring is the only caller. A drop bumps the revision, so a stale copy is unreachable. */
+  /** The answer key rides here, held: scoring is the only caller. A drop bumps the revision, so a stale copy is unreachable. */
   termsOf(testId: string, paperRevision: number): Promise<PaperTerm[]> {
     return hold(this.terms, `${testId}:${paperRevision}`, () => this.readTerms(testId));
+  }
+
+  /** The same terms read fresh and never held, for a reader that is not the scorer: an unsat paper can still change. */
+  termsNow(testId: string): Promise<PaperTerm[]> {
+    return this.readTerms(testId);
   }
 
   private async readTerms(testId: string): Promise<PaperTerm[]> {

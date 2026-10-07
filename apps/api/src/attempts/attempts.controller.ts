@@ -68,7 +68,7 @@ export class AttemptsController {
     @Body(new ZodBody(startAttemptSchema)) body: StartAttemptBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StartedAttempt> {
-    const attempt = await this.attempts.start(user.id, testId, body);
+    const attempt = await this.attempts.start(user.id, testId, body, user.sessionId);
     // A screen holding the paper already would throw this copy away; one that cannot build it asks again.
     const paper = body.holdsPaper
       ? null

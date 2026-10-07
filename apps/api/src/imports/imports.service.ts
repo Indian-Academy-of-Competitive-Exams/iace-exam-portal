@@ -17,7 +17,6 @@ import {
   STUDENT_TYPE,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { StartingPinService, type StartingPin } from '../auth';
 import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
@@ -50,7 +49,6 @@ export class ImportsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly startingPins: StartingPinService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
     private readonly events: EventsService,
@@ -74,44 +72,22 @@ export class ImportsService {
     const context = await this.contextFor(table);
     // Re-judged against the scope on COMMIT too: a preview is not a permission check.
     const plan = planStudentImport(table, context);
-    // Only rows that were actually written: a PIN texted for a row that failed opens nothing.
-    const issued: StartingPin[] = [];
-
     const run = await this.withRun(
       file,
       plan,
       actorId,
       { skipped: plan.summary.invalid },
       async (outcome) => {
-        // Hashed up front and in parallel: argon2 is ~13ms a go, which inside the loop idled a whole roster.
-        const minted = byMobile(
-          await this.startingPins.mint(
-            plan.rows.flatMap((row) =>
-              row.willReceiveDefaultPin && row.mobile !== null ? [row.mobile] : [],
-            ),
-          ),
-        );
-
         for (const row of plan.rows) {
           if (row.action === 'skip' || !row.mobile) continue;
 
-          // A starting PIN, marked as ours not theirs — nobody has chosen one yet.
-          const startingPin = row.willReceiveDefaultPin
-            ? { pinHash: minted.get(row.mobile)?.hash, pinIsDefault: true }
-            : {};
-
-          const done = await this.writeRow(row, startingPin);
+          const done = await this.writeRow(row);
           if (done.action === AUDIT_ACTION.CREATE) outcome.counts.created += 1;
           else outcome.counts.updated += 1;
           outcome.rowActions.push(done);
-
-          const pin = row.willReceiveDefaultPin ? minted.get(row.mobile) : undefined;
-          if (pin) issued.push(pin);
         }
       },
     );
-
-    await this.startingPins.announce(issued);
 
     const { created, updated } = run.counts;
     return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
@@ -138,7 +114,6 @@ export class ImportsService {
     await this.events.detail(eventId);
     const plan = await this.planCandidates(await readUploadedTable(file));
     const studentIds: string[] = [];
-    const issued: StartingPin[] = [];
 
     const run = await this.withRun(
       file,
@@ -146,14 +121,6 @@ export class ImportsService {
       actorId,
       { skipped: plan.summary.invalid },
       async (outcome) => {
-        const minted = byMobile(
-          await this.startingPins.mint(
-            plan.rows.flatMap((row) =>
-              row.action === 'create' && row.mobile !== null ? [row.mobile] : [],
-            ),
-          ),
-        );
-
         for (const row of plan.rows) {
           if (row.action === 'skip' || !row.mobile) continue;
 
@@ -167,18 +134,14 @@ export class ImportsService {
             continue;
           }
 
-          const pin = minted.get(row.mobile);
           const student = await this.prisma.student.create({
             data: {
               mobile: row.mobile,
               fullName: row.fullName,
               // Outside the institute and at no centre of ours: the event is the whole of their access.
               studentType: STUDENT_TYPE.NON_IACE,
-              pinHash: pin?.hash,
-              pinIsDefault: true,
             },
           });
-          if (pin) issued.push(pin);
           outcome.counts.created += 1;
           studentIds.push(student.id);
           outcome.rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
@@ -188,8 +151,6 @@ export class ImportsService {
         await this.events.addCandidates(eventId, studentIds);
       },
     );
-
-    await this.startingPins.announce(issued);
 
     return {
       ...plan.summary,
@@ -246,7 +207,6 @@ export class ImportsService {
   /** One row's write, and what the audit trail should call it. */
   private async writeRow(
     row: StudentImportRow,
-    startingPin: { pinHash?: string; pinIsDefault?: boolean },
   ): Promise<{ entityId: string; action: AuditAction }> {
     const { mobile, studentType } = row;
     if (mobile === null || studentType === null) {
@@ -266,7 +226,6 @@ export class ImportsService {
           // The branch follows the sheet, and only a NON_IACE row reaches here without one.
           ...(row.currentBranchId === null ? { currentBranch: { disconnect: true } } : {}),
           ...(profile ? { profile: { upsert: { create: profile, update: profile } } } : {}),
-          ...startingPin,
         },
       });
       return { entityId: row.existingStudentId, action: AUDIT_ACTION.UPDATE };
@@ -278,7 +237,6 @@ export class ImportsService {
         fullName: row.fullName,
         ...access,
         ...(profile ? { profile: { create: profile } } : {}),
-        ...startingPin,
       },
     });
     return { entityId: student.id, action: AUDIT_ACTION.CREATE };
@@ -351,7 +309,6 @@ export class ImportsService {
               id: true,
               mobile: true,
               fullName: true,
-              pinHash: true,
               currentBranchId: true,
               enrolledCourses: true,
               enrolledExams: true,
@@ -367,7 +324,6 @@ export class ImportsService {
           {
             id: student.id,
             fullName: student.fullName,
-            hasPin: student.pinHash !== null,
             currentBranchId: student.currentBranchId,
             enrolledCourses: student.enrolledCourses,
             enrolledExams: student.enrolledExams,
@@ -512,9 +468,4 @@ function profileData(row: StudentImportRow) {
     ...(p.address === null ? {} : { address: p.address }),
   };
   return Object.keys(data).length === 0 ? null : data;
-}
-
-/** The importer decides row by row, so the minted PINs are indexed by the number they belong to. */
-function byMobile(issued: readonly StartingPin[]): Map<string, StartingPin> {
-  return new Map(issued.map((pin) => [pin.mobile, pin]));
 }

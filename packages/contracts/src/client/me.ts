@@ -1,16 +1,10 @@
 import { noContentSchema, type NoContent, type Paginated } from '../envelope';
 import { type LanguageCode } from '../exams';
-import {
-  authSessionResponseSchema,
-  deviceSessionSchema,
-  type AuthSessionResponse,
-  type DeviceSession,
-} from '../auth';
+import { deviceSessionSchema, type DeviceSession } from '../auth';
 import {
   DOCUMENT_FILE_FIELD,
   ME_ROUTES,
   meSchema,
-  type ChangePinInput,
   type DocumentKind,
   type Me,
   type UpdateMeInput,
@@ -31,6 +25,7 @@ import {
   ME_ATTEMPT_ROUTES,
   examBriefSchema,
   examPaperSchema,
+  fieldEffortSchema,
   performanceTrendSchema,
   solutionReportSchema,
   attemptSaveAckSchema,
@@ -41,6 +36,7 @@ import {
   type AttemptSaveAck,
   type ExamBrief,
   type ExamPaper,
+  type FieldEffort,
   type SharedPaper,
   type StartedAttempt,
   type PerformanceTrend,
@@ -52,6 +48,13 @@ import {
   type SubmittedAttempt,
   type LiveAttemptState,
 } from '../attempts';
+import {
+  ME_REPORT_ROUTES,
+  reportDocumentSchema,
+  type ReportDocument,
+  type ReportQueryInput,
+  type StudentReportKey,
+} from '../reports';
 import {
   OVERVIEW_ROUTES,
   questionReportSchema,
@@ -86,7 +89,7 @@ import { queryString, type ApiCore } from './core';
 
 /** The signed-in student's own account. No ids — the token is the subject. */
 export function meClient(core: ApiCore) {
-  const { get, write, list } = core;
+  const { get, write, list, requestBlob } = core;
 
   return {
     profile: (): Promise<Me> => get(ME_ROUTES.profile, meSchema),
@@ -100,10 +103,6 @@ export function meClient(core: ApiCore) {
       form.append(DOCUMENT_FILE_FIELD, file);
       return write('POST', ME_ROUTES.document(kind), meSchema, form);
     },
-
-    /** Returns a FRESH session — the caller must store these tokens. */
-    changePin: (input: ChangePinInput): Promise<AuthSessionResponse> =>
-      write('POST', ME_ROUTES.changePin, authSessionResponseSchema, input),
 
     /** Where this account is signed in, newest activity first; the asking device is marked. */
     sessions: (): Promise<DeviceSession[]> => get(ME_ROUTES.sessions, deviceSessionSchema.array()),
@@ -180,6 +179,10 @@ export function meClient(core: ApiCore) {
     scoreCard: (attemptId: string): Promise<ScoreCard> =>
       get(ME_ATTEMPT_ROUTES.scoreCard(attemptId), scoreCardSchema),
 
+    /** The cohort's effort beside a handed-in paper. Answers before the paper is marked. */
+    fieldEffort: (attemptId: string): Promise<FieldEffort> =>
+      get(ME_ATTEMPT_ROUTES.field(attemptId), fieldEffortSchema),
+
     /** One section's worked solutions, or one question's. Refused until the paper has been marked. */
     solutions: (attemptId: string, query: SolutionsQuery = {}): Promise<SolutionReport> =>
       get(
@@ -200,6 +203,14 @@ export function meClient(core: ApiCore) {
 
     /** Their whole career off the two rollup tables: standing, disposition and subjects. */
     overview: (): Promise<StudentOverview> => get(OVERVIEW_ROUTES.me, studentOverviewSchema),
+
+    /** One of their own reports, as the document a screen previews and a printer takes. */
+    report: (key: StudentReportKey, query: ReportQueryInput = {}): Promise<ReportDocument> =>
+      get(`${ME_REPORT_ROUTES.read(key)}${queryString({ ...query })}`, reportDocumentSchema),
+
+    /** The same report as a spreadsheet, every row of it. */
+    reportExport: (key: StudentReportKey, query: ReportQueryInput = {}): Promise<Blob> =>
+      requestBlob(ME_REPORT_ROUTES.export(key), { ...query }),
 
     /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
     leaderboard: (query: LeaderboardQuery): Promise<Leaderboard> =>

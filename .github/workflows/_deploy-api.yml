@@ -1,5 +1,6 @@
-# The API half of a release, shared by both environments so they cannot drift. Pulls an image
-# that already exists in ECR and recreates the containers; it never builds.
+# The API half of a release, shared by both environments so they cannot drift. Brings the box's
+# checkout to this commit, pulls an image that already exists in ECR and recreates the containers;
+# it never builds.
 name: _deploy-api
 
 on:
@@ -21,6 +22,7 @@ permissions:
 
 env:
   REGISTRY: 598927569098.dkr.ecr.ap-south-1.amazonaws.com
+  COMPOSE: docker compose -f deploy/compose.yml --env-file deploy/.env
 
 jobs:
   deploy:
@@ -48,7 +50,16 @@ jobs:
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
       # No ssh, no key, no inbound rule: the agent dials out and runs this as root.
-      - name: Pull and recreate
+      #
+      # compose.yml, the Caddyfile and Alloy's config are read from the box's checkout, so the
+      # checkout moves first — without it a release changed the image and nothing else. git runs
+      # as whoever owns the checkout, because as root it refuses a directory it does not own.
+      # --ff-only so a box somebody edited by hand stops the release instead of losing the edit.
+      #
+      # The restart is for the two mounted configs alone: `up -d` recreates a container whose
+      # compose entry changed, never one whose mounted file did, and a running container holds
+      # the file it started with. A \$ is the box's variable; a bare $ is expanded here.
+      - name: Sync, pull and recreate
         id: send
         run: |
           CMD=$(aws ssm send-command --instance-ids "${{ steps.box.outputs.id }}" \
@@ -56,11 +67,16 @@ jobs:
             --parameters commands="[
               \"set -euo pipefail\",
               \"cd /opt/examprep\",
+              \"OWNER=\$(stat -c %U .git)\",
+              \"OLD=\$(sudo -u \$OWNER git rev-parse HEAD)\",
+              \"sudo -u \$OWNER git fetch --quiet origin ${{ github.sha }}\",
+              \"sudo -u \$OWNER git merge --quiet --ff-only ${{ github.sha }}\",
               \"aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REGISTRY\",
               \"export API_IMAGE=$REGISTRY/examprep/api MIGRATE_IMAGE=$REGISTRY/examprep/api-migrate API_TAG=${{ inputs.image_tag }}\",
-              \"docker compose -f deploy/compose.yml --env-file deploy/.env pull\",
-              \"docker compose -f deploy/compose.yml --env-file deploy/.env up -d\",
-              \"docker compose -f deploy/compose.yml --env-file deploy/.env ps\",
+              \"$COMPOSE pull\",
+              \"$COMPOSE up -d\",
+              \"sudo -u \$OWNER git diff --quiet \$OLD HEAD -- deploy/Caddyfile deploy/alloy || $COMPOSE restart caddy alloy\",
+              \"$COMPOSE ps\",
               \"./deploy/prune-disk.sh\"
             ]" --query 'Command.CommandId' --output text)
           echo "cmd=$CMD" >> "$GITHUB_OUTPUT"

@@ -354,3 +354,99 @@ describe("OtpService — the platform's daily budget", () => {
     assert.equal(sender.sent.length, 3);
   });
 });
+
+describe('OtpService — a stranger cannot spend a student’s sign-in', () => {
+  const budgeted = {
+    OTP_MAX_PER_DAY: 1000,
+    OTP_MAX_PER_DAY_PER_IP: 1000,
+    OTP_RESEND_COOLDOWN_SEC: 0,
+    NOTIFICATION_COST_SMS_PAISE: 100,
+    OTP_GLOBAL_DAILY_BUDGET_PAISE: 200,
+    OTP_SIGNUP_DAILY_BUDGET_PAISE: 100,
+  };
+  const NO_ACCOUNT = { holdsAccount: false };
+
+  /** The failure this prevents: codes asked for unknown numbers pausing every student's sign-in for the day. */
+  it('refuses numbers with no account once their own budget is spent, and still sends to students', async () => {
+    const { otp, metrics } = build(budgeted);
+    await otp.request(ActorTypes.STUDENT, '9000000001', IP, NO_ACCOUNT);
+
+    await assert.rejects(
+      () => otp.request(ActorTypes.STUDENT, '9000000002', IP, NO_ACCOUNT),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.RATE_LIMITED,
+    );
+    await otp.request(ActorTypes.STUDENT, '9000000003', IP);
+    await otp.request(ActorTypes.STUDENT, '9000000004', IP);
+
+    assert.deepEqual(metrics.otpSends, ['sent', 'refused_signup_budget', 'sent', 'sent']);
+  });
+
+  it('does not count a student’s code against the numbers with no account', async () => {
+    const { otp, sender } = build(budgeted);
+    await otp.request(ActorTypes.STUDENT, '9000000001', IP);
+    await otp.request(ActorTypes.STUDENT, '9000000002', IP);
+
+    await otp.request(ActorTypes.STUDENT, '9000000003', IP, NO_ACCOUNT);
+
+    assert.equal(sender.sent.length, 3);
+  });
+});
+
+describe('OtpService — WhatsApp or SMS, one at a time', () => {
+  const both = { OTP_SENDER: 'whatsapp', OTP_RESEND_COOLDOWN_SEC: 0 };
+  const channelsSent = (sender: FakeMessageSender) => sender.sent.map((message) => message.channel);
+
+  it('sends on the first choice, and names the one a student may ask for instead', async () => {
+    const { otp, sender } = build(both);
+
+    const challenge = await otp.request(ActorTypes.STUDENT, MOBILE, IP);
+
+    assert.deepEqual(channelsSent(sender), ['whatsapp']);
+    assert.deepEqual([challenge.channel, challenge.otherChannel], ['WHATSAPP', 'SMS']);
+  });
+
+  /** The failure this prevents: a resend paying for two messages, or going back out the way that just failed. */
+  it('sends on the channel asked for, and on that one alone', async () => {
+    const { otp, sender } = build(both);
+
+    const challenge = await otp.request(ActorTypes.STUDENT, MOBILE, IP, { channel: 'SMS' });
+
+    assert.deepEqual(channelsSent(sender), ['sms']);
+    assert.deepEqual([challenge.channel, challenge.otherChannel], ['SMS', 'WHATSAPP']);
+  });
+
+  it('has only SMS where WhatsApp is not set up, whatever is asked for', async () => {
+    const { otp, sender } = build({ OTP_SENDER: 'sms' });
+
+    const challenge = await otp.request(ActorTypes.STUDENT, MOBILE, IP, { channel: 'WHATSAPP' });
+
+    assert.deepEqual(channelsSent(sender), ['sms']);
+    assert.deepEqual([challenge.channel, challenge.otherChannel], ['SMS', undefined]);
+  });
+
+  /** A student is waiting: a WhatsApp send that fails must still put a code in their hand, and say where. */
+  it('goes by SMS when WhatsApp refuses the send, and says so', async () => {
+    const redis = new FakeRedis();
+    const sender = new FakeMessageSender(['whatsapp']);
+    const otp = new OtpService(
+      redis.asService(),
+      new FakeConfig(both).asService(),
+      sender,
+      new FakeMetrics().asService(),
+    );
+
+    const challenge = await otp.request(ActorTypes.STUDENT, MOBILE, IP);
+
+    assert.deepEqual(channelsSent(sender), ['sms']);
+    assert.equal(challenge.channel, 'SMS');
+  });
+
+  it('names no channel for an admin, whose code is emailed', async () => {
+    const { otp, sender } = build(both);
+
+    const challenge = await otp.request(ActorTypes.ADMIN, 'admin@iace.co.in');
+
+    assert.deepEqual(channelsSent(sender), ['email']);
+    assert.equal(challenge.channel, undefined);
+  });
+});

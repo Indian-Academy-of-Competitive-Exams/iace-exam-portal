@@ -67,7 +67,6 @@ export interface StudentOverrides {
   currentBranchId?: string | null;
   programs?: string[];
   enrolledCourses?: ExamCourse[];
-  pinHash?: string;
   isActive?: boolean;
   isTestBlocked?: boolean;
   deletedAt?: Date | null;

@@ -33,7 +33,7 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
   return (
     <Card
       className={cn(
-        'flex flex-col items-center gap-1 p-4 text-center',
+        'flex items-center gap-3 p-3 sm:flex-col sm:gap-1 sm:p-4 sm:text-center',
         PODIUM_ORDER[row.rank],
         top && 'border-warning sm:p-5',
         row.isYou && 'border-primary bg-primary-subtle',
@@ -44,27 +44,31 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
         size={top ? 'md' : 'sm'}
         className={cn(top && 'bg-warning-subtle text-warning-ink')}
       />
-      <span className="w-full text-sm font-semibold">
-        <TruncatedText>{row.name}</TruncatedText>
+      <span className="flex min-w-0 flex-1 flex-col sm:w-full sm:flex-none sm:gap-1">
+        <span className="text-sm font-semibold">
+          <TruncatedText>{row.name}</TruncatedText>
+        </span>
+        <span className="text-2xs text-muted-foreground">
+          <TruncatedText>{row.branch}</TruncatedText>
+        </span>
       </span>
-      <span className="w-full text-2xs text-muted-foreground">
-        <TruncatedText>{row.branch}</TruncatedText>
-      </span>
-      <span
-        className={cn(
-          'text-2xl font-semibold tabular-nums tracking-tight',
-          top ? 'text-warning-ink' : 'text-foreground',
-        )}
-      >
-        {row.score}
-      </span>
-      <span
-        className={cn(
-          'text-2xs font-semibold uppercase tracking-wide',
-          top ? 'text-warning-ink' : 'text-muted-foreground',
-        )}
-      >
-        {PODIUM_LABELS[row.rank]}
+      <span className="flex flex-col items-end sm:items-center sm:gap-1">
+        <span
+          className={cn(
+            'text-2xl font-semibold tabular-nums tracking-tight',
+            top ? 'text-warning-ink' : 'text-foreground',
+          )}
+        >
+          {row.score}
+        </span>
+        <span
+          className={cn(
+            'text-2xs font-semibold uppercase tracking-wide',
+            top ? 'text-warning-ink' : 'text-muted-foreground',
+          )}
+        >
+          {PODIUM_LABELS[row.rank]}
+        </span>
       </span>
     </Card>
   );
@@ -96,7 +100,7 @@ const STANDING_COLUMNS: DataTableColumn<LeaderboardRow>[] = [
   {
     key: 'student',
     header: 'Student',
-    className: 'max-w-[18rem]',
+    className: 'max-w-[18rem] max-sm:w-full max-sm:max-w-0',
     cell: (row) => <StudentCell row={row} />,
   },
   {

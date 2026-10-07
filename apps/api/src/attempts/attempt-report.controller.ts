@@ -3,6 +3,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
   ActorTypes,
   solutionsQuerySchema,
+  type FieldEffort,
   type PerformanceTrend,
   type ScoreCard,
   type SolutionReport,
@@ -25,6 +26,15 @@ export class MeAttemptReportController {
   @Get('attempts/:id/scorecard')
   scoreCard(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ScoreCard> {
     return this.analytics.scoreCard(user.id, id);
+  }
+
+  /** The cohort's effort beside a handed-in paper. No mark is in it, so it answers before marking has run. */
+  @Get('attempts/:id/field')
+  fieldEffort(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<FieldEffort> {
+    return this.analytics.fieldEffort(user.id, id);
   }
 
   /** The answer key, and the ONLY endpoint carrying it. One section at a time, refused until the gate opens. */

@@ -125,6 +125,7 @@ function SavedList() {
       rowKey={(row) => row.id}
       empty="No saved questions yet"
       emptyFiltered="Nothing matches"
+      stacks
       banner={
         <>
           {/* ui-copy-ok: rule */}

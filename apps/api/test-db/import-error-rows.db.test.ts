@@ -27,20 +27,13 @@ import { ImportsController } from '../src/imports/imports.controller';
 import { ImportsService } from '../src/imports/imports.service';
 import { QuestionImportController } from '../src/questions/question-import.controller';
 import { QuestionImportService } from '../src/questions/question-import.service';
-import {
-  FakeEventsService,
-  FakeProgramsService,
-  fakeStartingPins,
-  FakeStorage,
-  roster,
-} from '../test/support/fakes';
+import { FakeEventsService, FakeProgramsService, FakeStorage, roster } from '../test/support/fakes';
 import { makeAdmin, makeQuestionBank, resetDatabase, testPrisma, uid } from './support/database';
 
 const prisma = testPrisma();
 const audit = new AuditService(prisma, new FakeStorage() as never);
 const imports = new ImportsService(
   prisma,
-  fakeStartingPins(),
   new FakeStorage() as never,
   audit,
   new FakeEventsService().asService(),

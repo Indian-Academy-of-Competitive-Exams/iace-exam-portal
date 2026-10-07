@@ -183,6 +183,36 @@ balancer. To avoid it, scale a role to two and recreate them one at a time: Cadd
 docker compose -f deploy/compose.yml --env-file deploy/.env up -d --scale exam=2
 ```
 
+## Two Docker plugins Amazon Linux does not ship
+
+`dnf install docker` gives you neither Compose v2 nor buildx, and the box needs both: Compose to
+read `compose.yml`, and buildx because `apps/api/Dockerfile` uses `RUN --mount=type=cache`, which
+is BuildKit-only — so `DOCKER_BUILDKIT=0` fails on the Dockerfile rather than working around it.
+
+```bash
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -sSL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+V=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+sudo curl -sSL "https://github.com/docker/buildx/releases/download/$V/buildx-$V.linux-arm64" -o /usr/local/lib/docker/cli-plugins/docker-buildx
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-*
+docker compose version && docker buildx version
+```
+
+`aarch64`/`arm64` — these are Graviton boxes, and the x86 binary downloads fine then fails with
+"cannot execute binary file". Box B runs no build, so it needs Compose alone.
+
+## Before the first release: one extension
+
+`prisma migrate deploy` creates `pg_trgm`, and on RDS that needs `rds_superuser`, which the
+application role does not have. Create it once as the master user, before the stack ever comes up:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+```
+
+Afterwards the migration's `IF NOT EXISTS` is a no-op. Without it, `migrate` fails on a permission
+error and the API containers never start, because they wait on it exiting zero.
+
 ## When it does not come up
 
 - `docker compose ... logs api` — the API refuses to boot on an unsized pool, an empty CORS list, a
@@ -190,6 +220,10 @@ docker compose -f deploy/compose.yml --env-file deploy/.env up -d --scale exam=2
   also **warns** if a container's heap is wrong for its memory limit, naming the role.
 - `docker compose ... logs caddy` — a certificate that will not issue is almost always DNS that has
   not propagated, or port 80 closed.
+- `git` run over SSM says **"detected dubious ownership"** and prints nothing useful. SSM runs
+  commands as root and the checkout belongs to `ssm-user`, so git refuses — to stderr, which makes
+  it look like an empty repository rather than a refusal. Use
+  `sudo -u ssm-user git -C /opt/examprep …`, and read stderr before believing a blank answer.
 - Exit **143** is a clean shutdown. Exit **137** is SIGKILL: either the grace period expired or the
   OOM killer, and `docker inspect`'s `OOMKilled` flag tells them apart.
 

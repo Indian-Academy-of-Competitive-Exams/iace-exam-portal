@@ -1,10 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ActorTypes } from '@iace/contracts';
-import { DOMAIN_EVENTS, type StudentDeactivatedEvent } from '../common/events/event-catalog';
+import {
+  DOMAIN_EVENTS,
+  type StudentDeactivatedEvent,
+  type StudentMobileChangedEvent,
+} from '../common/events/event-catalog';
 import { SessionService } from './session.service';
 
-/** Deactivation must not wait out the access token: the flag lands, the sessions go. */
+/** Neither a deactivation nor a new number waits out the access token: the write lands, the sessions go. */
 @Injectable()
 export class StudentSessionsListener {
   private readonly logger = new Logger(StudentSessionsListener.name);
@@ -12,12 +16,21 @@ export class StudentSessionsListener {
   constructor(private readonly sessions: SessionService) {}
 
   @OnEvent(DOMAIN_EVENTS.STUDENT_DEACTIVATED)
-  async onStudentDeactivated(event: StudentDeactivatedEvent): Promise<void> {
+  onStudentDeactivated(event: StudentDeactivatedEvent): Promise<void> {
+    return this.signOut(event.studentId);
+  }
+
+  @OnEvent(DOMAIN_EVENTS.STUDENT_MOBILE_CHANGED)
+  onStudentMobileChanged(event: StudentMobileChangedEvent): Promise<void> {
+    return this.signOut(event.studentId);
+  }
+
+  private async signOut(studentId: string): Promise<void> {
     try {
-      await this.sessions.revokeAll(ActorTypes.STUDENT, event.studentId);
+      await this.sessions.revokeAll(ActorTypes.STUDENT, studentId);
     } catch (error) {
-      // The flag is already saved and refresh re-reads it; losing the revocation must not fail the request.
-      this.logger.error(`Session revocation failed for student ${event.studentId}`, error);
+      // The write is already saved; losing the revocation must not fail the request that made it.
+      this.logger.error(`Session revocation failed for student ${studentId}`, error);
     }
   }
 }

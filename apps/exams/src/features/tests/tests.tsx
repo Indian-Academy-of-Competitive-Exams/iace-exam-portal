@@ -1,6 +1,7 @@
 /**
  * The student's tests. A DELIBERATE deviation from the list-screen convention: this is discovery
- * rather than an admin data table, so it is a shelf per series, not a ListView.
+ * rather than an admin data table, so it is a shelf per series, not a ListView. A shelf is a
+ * sample: the tiles that fit one row, and the series' own screen for the rest.
  */
 import { useQuery } from '@tanstack/react-query';
 import { PageCrumbs, useFilterSpec, usePageTour } from '@iace/app-kit/browser';

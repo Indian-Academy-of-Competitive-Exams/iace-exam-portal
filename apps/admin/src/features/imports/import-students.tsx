@@ -82,10 +82,6 @@ export function ImportStudentsPage() {
               { label: 'New students', value: plan.summary.willCreate },
               { label: 'Existing students updated', value: plan.summary.willUpdate },
               { label: 'Skipped (have errors)', value: plan.summary.invalid },
-              {
-                label: 'Given a starting PIN',
-                value: plan.rows.filter((row) => row.willReceiveDefaultPin).length,
-              },
             ]
           : undefined
       }
@@ -151,12 +147,9 @@ function ImportRow({ row }: Readonly<{ row: StudentImportRow }>) {
       </TableCell>
       <TableCell>
         {row.action !== 'skip' ? (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <Badge variant={row.action === 'create' ? 'success' : 'info'}>
-              {row.action === 'create' ? 'Create' : 'Update'}
-            </Badge>
-            {row.willReceiveDefaultPin ? <Badge variant="neutral">+ starting PIN</Badge> : null}
-          </span>
+          <Badge variant={row.action === 'create' ? 'success' : 'info'}>
+            {row.action === 'create' ? 'Create' : 'Update'}
+          </Badge>
         ) : (
           <span className="flex flex-wrap items-center gap-1.5">
             <Badge variant="danger">Skip</Badge>

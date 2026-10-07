@@ -50,7 +50,7 @@ export interface SubjectView {
 /** Time, pace and accuracy, summed off every subject row. */
 export function MeasureTiles({ measure }: Readonly<{ measure: SubjectMeasure }>) {
   return (
-    <div className="flex items-start gap-6">
+    <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
       <Metric size="sm" label="Time on questions" value={spent(measure.sumTimeSec)} />
       <Metric
         size="sm"

@@ -65,8 +65,6 @@ function planRow(
     mobile,
     fullName,
     existingStudentId: existing?.id ?? null,
-    // A student who already chose a PIN keeps it; a new candidate is handed one.
-    willReceiveDefaultPin: action === 'create',
     action,
     errors,
   };

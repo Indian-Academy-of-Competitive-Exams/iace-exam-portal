@@ -554,7 +554,7 @@ export type SeriesTestRow = z.infer<typeof seriesTestRowSchema>;
 
 /** The whole Offer step in one save: when the test opens, which programs open it early, and whether students get it. */
 export const saveOfferingSchema = z.object({
-  /** The same instant for every branch; null opens it with the series. */
+  /** The same instant for every branch; null opens it the moment it is active. */
   opensAt: z.iso.datetime().nullable(),
   /** Every program opening the test keeps; one left out is taken away. */
   programOpenings: z.array(
@@ -615,6 +615,8 @@ export type AddPaperQuestionBody = z.infer<typeof addPaperQuestionSchema>;
 
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
+  /** The whole paper in full, to print. Served by the attempts module, which shapes a paper for a candidate. */
+  print: (id: string) => `/admin/tests/${id}/paper/print`,
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   removeQuestions: (id: string) => `/admin/tests/${id}/paper/questions`,
   /** Draws the rest of one section from its own spec, around the rows already on it. */

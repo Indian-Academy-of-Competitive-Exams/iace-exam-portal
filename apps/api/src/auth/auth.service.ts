@@ -11,27 +11,20 @@ import {
   type AuthSessionResponse,
   type AuthTokens,
   type DeviceSession,
+  type OtpChannel,
   type OtpRequestResponse,
-  type PinSetupTicket,
   type StudentIdentity,
 } from '@iace/contracts';
-import { type Prisma, type Student } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminsService } from '../admins';
 import { OtpService } from './otp/otp.service';
-import { PinService } from './pin/pin.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { type AuthenticatedUser } from '../common/security';
-import {
-  DOMAIN_EVENTS,
-  DomainEventBus,
-  PIN_RESET_REASONS,
-  type PinResetReason,
-} from '../common/events';
+import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
 import { AUTH_OUTCOMES, MetricsService } from '../common/metrics/metrics.service';
 import { type DeviceContext } from './auth.types';
-import { isRecordNotFound } from '../common/prisma-errors';
 
 /** Owns no table (docs/03 §5): it READS `Student` for credentials, which the students module owns. */
 const DEACTIVATED_MESSAGE = 'This account has been deactivated';
@@ -48,7 +41,6 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
-    private readonly pin: PinService,
     private readonly tokens: TokenService,
     private readonly sessions: SessionService,
     private readonly events: DomainEventBus,
@@ -57,162 +49,64 @@ export class AuthService {
   ) {}
 
   // ==========================================================================
-  // Students — OTP once at signup, a 4-digit PIN every day after An SMS per login was the vendor's
-  // habit and the students' complaint: it is slow, it costs money, and it fails exactly when the
-  // hall is full and the network is not.
+  // Students — a code on every sign-in, and the first one is the signup. Kept rare by what
+  // surrounds it: one long-lived session per app, so a device asks once and not each morning.
   // ==========================================================================
 
-  /** Serves both signup and PIN reset. */
-  async requestStudentOtp(mobile: string, ip = 'unknown'): Promise<OtpRequestResponse> {
-    return this.otp.request(ActorTypes.STUDENT, mobile, ip);
-  }
-
-  /** Proves the number and hands back a short-lived ticket. */
-  async verifyStudentOtp(mobile: string, code: string): Promise<PinSetupTicket> {
-    await this.otp.verify(ActorTypes.STUDENT, mobile, code);
-
-    const student = await this.prisma.student.findFirst({
-      where: { mobile, deletedAt: null },
-      select: { pinHash: true, isActive: true },
-    });
-    if (student && !student.isActive) {
-      throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
-    }
-
-    return {
-      ...(await this.pin.issueSetupToken(mobile)),
-      pinAlreadySet: student?.pinHash != null,
-    };
-  }
-
-  /** Redeems the ticket. One code path for both cases — signup creates the student, a reset overwrites the hash — because they differ only in whether the row already exists. */
-  async setStudentPin(
+  /** One answer whoever asks; only which day's budget pays differs, by whether the number holds an account. */
+  async requestStudentOtp(
     mobile: string,
-    setupToken: string,
-    pin: string,
-    device: DeviceContext,
-  ): Promise<AuthSessionResponse> {
-    await this.pin.consumeSetupToken(mobile, setupToken);
-
-    // Not an upsert: `mobile` is unique only among live rows, which is a partial index Prisma cannot address. The same index still refuses a second row if two signups race here.
-    const existing = await this.prisma.student.findFirst({
+    ip = 'unknown',
+    channel?: OtpChannel,
+  ): Promise<OtpRequestResponse> {
+    const holder = await this.prisma.student.findFirst({
       where: { mobile, deletedAt: null },
       select: { id: true },
     });
-
-    const pinHash = await this.pin.hash(pin);
-    // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or replacing the one an import gave them.
-    const student = existing
-      ? await this.replaceStudentPin(existing.id, pinHash)
-      : await this.prisma.student.create({
-          data: {
-            mobile,
-            pinHash,
-            pinIsDefault: false,
-            // Signed themselves up, so they are outside the institute: ONLINE is a branch of ours.
-            studentType: STUDENT_TYPE.NON_IACE,
-          },
-          include: IDENTITY_INCLUDE,
-        });
-
-    // A new PIN ends every session opened with the old one — that is most of the point of a reset — and clears any lockout the student hit first.
-    await this.sessions.revokeAll(ActorTypes.STUDENT, student.id);
-    await this.pin.clearFailures(mobile);
-    if (!existing) this.events.emit(DOMAIN_EVENTS.STUDENT_SIGNED_UP, { studentId: student.id });
-    this.announcePinReset(student.id, mobile, PIN_RESET_REASONS.OTP_RESET);
-
-    const identity = this.studentIdentity(student);
-    return { tokens: await this.issue(identity, device), identity };
-  }
-
-  /** Proves the PIN a session alone does not: one left open on a shared machine must not be enough by itself. Wrong attempts climb the same ladder as sign-in. */
-  private async verifyCurrentPin(
-    student: Pick<Student, 'mobile' | 'pinHash'>,
-    currentPin: string,
-  ): Promise<void> {
-    await this.pin.assertNotLocked(student.mobile);
-
-    // Burns the same time when there is no PIN to check against, so the clock never says whether one is set.
-    const ok = student.pinHash
-      ? await this.pin.verify(student.pinHash, currentPin)
-      : await this.pin.burnVerifyTime().then(() => false);
-
-    if (!ok) {
-      await this.pin.registerFailure(student.mobile);
-      throw new AppException(ErrorCodes.PIN_INVALID, 'That is not your current PIN', {
-        fieldErrors: { currentPin: ['That is not your current PIN'] },
-      });
-    }
-
-    await this.pin.clearFailures(student.mobile);
-  }
-
-  /** Replacing a PIN the student already knows. The current one is checked despite the session: one left open on a shared machine would otherwise lock the owner out. Wrong attempts climb the same ladder, and the response is a FRESH session. */
-  async changeStudentPin(
-    studentId: string,
-    currentPin: string,
-    newPin: string,
-    device: DeviceContext,
-  ): Promise<AuthSessionResponse> {
-    const student = await this.prisma.student.findUnique({ where: { id: studentId } });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-
-    await this.verifyCurrentPin(student, currentPin);
-
-    const updated = await this.prisma.student.update({
-      where: { id: studentId },
-      data: {
-        pinHash: await this.pin.hash(newPin),
-        // Theirs now, whatever it was before. This is what stops an imported student being asked to change a PIN they have just chosen.
-        pinIsDefault: false,
-      },
-      include: IDENTITY_INCLUDE,
+    return this.otp.request(ActorTypes.STUDENT, mobile, ip, {
+      holdsAccount: holder !== null,
+      channel,
     });
-
-    await this.sessions.revokeAll(ActorTypes.STUDENT, studentId);
-    this.announcePinReset(studentId, student.mobile, PIN_RESET_REASONS.SELF_CHANGE);
-
-    const identity = this.studentIdentity(updated);
-    return { tokens: await this.issue(identity, device), identity };
   }
 
-  /** The everyday login. Unknown number, no PIN set and wrong PIN are one answer and one duration, so neither the message nor the clock says whether the number is registered. */
-  async loginStudent(
+  /** Signs in whoever proved the number, and makes their account if the number had none: signup and sign-in are one path. */
+  async verifyStudentOtp(
     mobile: string,
-    pin: string,
+    code: string,
     device: DeviceContext,
   ): Promise<AuthSessionResponse> {
     try {
-      await this.pin.assertNotLocked(mobile);
+      await this.otp.verify(ActorTypes.STUDENT, mobile, code);
     } catch (error) {
-      this.metrics.countAuthAttempt(AUTH_OUTCOMES.LOCKED);
+      this.metrics.countAuthAttempt(AUTH_OUTCOMES.BAD_CODE);
       throw error;
     }
 
-    const student = await this.prisma.student.findFirst({
+    const existing = await this.prisma.student.findFirst({
       where: { mobile, deletedAt: null },
       include: IDENTITY_INCLUDE,
     });
-    const ok = student?.pinHash
-      ? await this.pin.verify(student.pinHash, pin)
-      : await this.pin.burnVerifyTime().then(() => false);
-
-    if (!ok || !student) {
-      // Separated for the metric only: the message stays identical, or it tells a stranger which mobiles exist.
-      this.metrics.countAuthAttempt(student ? AUTH_OUTCOMES.BAD_PIN : AUTH_OUTCOMES.NO_STUDENT);
-      await this.pin.registerFailure(mobile);
-      throw new AppException(ErrorCodes.PIN_INVALID, 'Incorrect mobile number or PIN');
-    }
-    if (!student.isActive) {
+    if (existing && !existing.isActive) {
       this.metrics.countAuthAttempt(AUTH_OUTCOMES.DEACTIVATED);
       throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
     }
 
+    const student = existing ?? (await this.signUp(mobile));
     this.metrics.countAuthAttempt(AUTH_OUTCOMES.OK);
-    await this.pin.clearFailures(mobile);
 
     const identity = this.studentIdentity(student);
     return { tokens: await this.issue(identity, device), identity };
+  }
+
+  /** For a student standing at the desk whose code did not arrive: read out, never sent, and good once. */
+  async issueStudentDeskCode(studentId: string): Promise<{ code: string; expiresInSec: number }> {
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, deletedAt: null },
+      select: { mobile: true, isActive: true },
+    });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    if (!student.isActive) throw new AppException(ErrorCodes.CONFLICT, DEACTIVATED_MESSAGE);
+    return this.otp.issueDeskCode(student.mobile);
   }
 
   // ==========================================================================
@@ -305,24 +199,14 @@ export class AuthService {
   // Internals
   // ==========================================================================
 
-  /** Announces a PIN change, AFTER the sessions are already revoked. */
-  /** Written only while still active: an admin deactivating them mid-reset must win, not be overwritten. */
-  private async replaceStudentPin(id: string, pinHash: string): Promise<IdentityRow> {
-    try {
-      return await this.prisma.student.update({
-        where: { id, isActive: true },
-        data: { pinHash, pinIsDefault: false },
-        include: IDENTITY_INCLUDE,
-      });
-    } catch (error) {
-      if (isRecordNotFound(error))
-        throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
-      throw error;
-    }
-  }
-
-  private announcePinReset(studentId: string, mobile: string, reason: PinResetReason): void {
-    this.events.emit(DOMAIN_EVENTS.STUDENT_PIN_RESET, { studentId, mobile, reason });
+  /** Signed themselves up, so they are outside the institute: ONLINE is a branch of ours. */
+  private async signUp(mobile: string): Promise<IdentityRow> {
+    const student = await this.prisma.student.create({
+      data: { mobile, studentType: STUDENT_TYPE.NON_IACE },
+      include: IDENTITY_INCLUDE,
+    });
+    this.events.emit(DOMAIN_EVENTS.STUDENT_SIGNED_UP, { studentId: student.id });
+    return student;
   }
 
   private async issue(identity: AuthIdentity, device: DeviceContext): Promise<AuthTokens> {
@@ -359,7 +243,6 @@ export class AuthService {
       mobile: student.mobile,
       fullName: student.fullName,
       ...readinessOf(student.profile),
-      hasDefaultPin: student.pinIsDefault,
       isTestBlocked: student.isTestBlocked,
     };
   }

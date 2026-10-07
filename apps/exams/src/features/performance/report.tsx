@@ -53,7 +53,7 @@ export function ReportShell() {
           title="Report"
           meta={current === null ? undefined : marksOf(current)}
           action={
-            <span data-tour={TOUR_TARGETS.REPORT_PICKER} className="inline-flex">
+            <span data-tour={TOUR_TARGETS.REPORT_PICKER} className="flex w-full sm:w-auto">
               <Combobox
                 value={attemptId}
                 onChange={(next) => navigate(ROUTES.REPORT_TAB(next, tab))}

@@ -1,7 +1,16 @@
 /** Rank and percentile, counted live from Postgres on every read. Nothing is saved. */
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { cohortSizeSql, standingsSql, type StandingRow } from './ranking-sql';
+import {
+  cohortFiguresSql,
+  cohortSizeSql,
+  cohortStandingsSql,
+  standingsSql,
+  type CohortFiguresRow,
+  type CohortSittingRow,
+  type HandedIn,
+  type StandingRow,
+} from './ranking-sql';
 
 /** One sitting's place in its cohort, as of this read. */
 export interface Standing {
@@ -14,6 +23,19 @@ export interface Standing {
 export interface SittingStanding extends Standing {
   attemptId: string;
   testId: string;
+}
+
+/** A ranked sitting as a report over many tests reads it: its standing, and who sat it. */
+export interface CohortSitting extends SittingStanding {
+  studentId: string;
+}
+
+/** A test's cohort in four figures. A test nobody is ranked on has no entry. */
+export interface CohortFigures {
+  size: number;
+  mean: number;
+  highest: number;
+  topperId: string;
 }
 
 @Injectable()
@@ -41,6 +63,40 @@ export class LeaderboardService {
   ): Promise<ReadonlyMap<string, SittingStanding>> {
     const rows = await this.prisma.$queryRaw<StandingRow[]>(standingsSql({ studentId }, newest));
     return sittingsOf(rows);
+  }
+
+  /** The ranked sittings on these tests, keyed by sitting; `within` returns only those handed in then, still ranked among all. */
+  async standingsOfTests(
+    testIds: readonly string[],
+    within?: HandedIn,
+  ): Promise<ReadonlyMap<string, CohortSitting>> {
+    if (testIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<CohortSittingRow[]>(
+      cohortStandingsSql(testIds, within),
+    );
+    return new Map(
+      rows.map((row) => [
+        row.attempt_id,
+        {
+          attemptId: row.attempt_id,
+          testId: row.test_id,
+          studentId: row.student_id,
+          ...standingOf(row),
+        },
+      ]),
+    );
+  }
+
+  /** Each test's cohort summed up, keyed by test. */
+  async cohortsOf(testIds: readonly string[]): Promise<ReadonlyMap<string, CohortFigures>> {
+    if (testIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<CohortFiguresRow[]>(cohortFiguresSql(testIds));
+    return new Map(
+      rows.map((row) => [
+        row.test_id,
+        { size: row.cohort_size, mean: row.mean, highest: row.highest, topperId: row.topper_id },
+      ]),
+    );
   }
 
   /** Only the named sittings, each against its own test's cohort — a report's bounded plot. */

@@ -34,7 +34,7 @@ import {
 import { useAuth } from '../../providers/auth';
 import { ExamMultiPicker, ExamStageMultiPicker } from '../../components/exam-picker';
 
-type FilterKey = 'q' | 'examId' | 'examStageId' | 'kind' | 'isEnabled';
+type FilterKey = 'q' | 'examId' | 'examStageId' | 'kind';
 
 /** Every kind, plus the row that means the reader has not chosen one. */
 const KIND_FILTER_ITEMS = [
@@ -81,16 +81,6 @@ function seriesColumns(
           {TEST_SERIES_KIND_LABELS[series.kind]}
         </Badge>
       ),
-    },
-    {
-      key: 'isEnabled',
-      header: 'Enabled',
-      cell: (series) =>
-        series.isEnabled ? (
-          <Badge variant="success">On</Badge>
-        ) : (
-          <Badge variant="warning">Off</Badge>
-        ),
     },
     { key: 'tests', header: 'Tests', numeric: true, cell: (series) => series.testCount },
     { key: 'branches', header: 'Branches', cell: (series) => <BranchReach series={series} /> },
@@ -150,16 +140,6 @@ export function SeriesList() {
       ),
     },
     { key: 'kind', kind: 'choice', label: 'Filter by kind', items: KIND_FILTER_ITEMS },
-    {
-      key: 'isEnabled',
-      kind: 'choice',
-      label: 'Filter by the series switch',
-      items: [
-        { value: '', label: 'On or off' },
-        { value: 'true', label: 'Switched on' },
-        { value: 'false', label: 'Switched off' },
-      ],
-    },
   ] as const;
 
   const series = useListScreen({
@@ -169,7 +149,6 @@ export function SeriesList() {
       q: values.q || undefined,
       examStageId: values.examStageId,
       kind: (values.kind || undefined) as TestSeriesKind | undefined,
-      isEnabled: (values.isEnabled || undefined) as 'true' | 'false' | undefined,
     }),
     fetchPage: (params) => api.admin.testSeries.list(params),
   });

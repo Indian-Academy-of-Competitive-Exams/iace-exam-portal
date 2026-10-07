@@ -138,12 +138,18 @@ public rollout unchanged.
   never unlinked: the catalog walks series → tests, so a test in no series reaches nobody — a state
   with no valid ending rather than a test waiting to be placed. Once anybody has sat it, it stops
   moving: it is part of the record of everyone who did, in the series they sat it in.
-- `TestSeries.isEnabled` gates every path. A series nobody switched on reaches nobody.
+- **A series has no switch of its own; the test's status is the one gate.** Only an `ACTIVE` test
+  reaches anybody, by any route. Taking one out of service is making that test inactive (unticking
+  "Offered to students", or the same action on the series' test list); it leaves every student's
+  list at once, its sittings and results are kept, and a sitting in progress is not stopped. Taking
+  a whole series out of service is doing that to each of its tests. In an in-order series the
+  tests behind an inactive one stop waiting on it, since the order is read over active tests alone.
 - **The kind decides who reaches it.** `FREE` reaches every student. `STANDARD` reaches a student
   whose current branch is on the series' `branchIds` and whose enrolled courses include the course of
   the series' stage. `PROGRAM` reaches only students carrying its program code. `EVENT` reaches only
   the candidates on its `Event`.
-- A `StudentGrant` overrides every kind. It does not override the enable switch.
+- A `StudentGrant` overrides every kind. It does not override a test's status: a granted student
+  reaches the series' offered tests and no others.
 - **The branch gate is `STANDARD`'s alone.** A student with no branch is still reached by a free
   series, a program, an event and a grant.
 - **Four CHECK constraints hold a series to its kind**, and they are CHECKs precisely because Prisma
@@ -231,6 +237,19 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   device since; the fix is a per-question version the server's save checks. A sitting held by nobody, because
   its key was rebuilt from Postgres, is adopted by the first tab back. A reclaim names its attempt
   and never starts a new one: once that sitting has ended, it is refused with `SITTING_ENDED`.
+- **A sitting stays with the sign-in answering it.** Web and the app are two sign-ins. A second tab
+  of the SAME sign-in takes the sitting at once, as above — that is a crashed browser coming back.
+  The OTHER sign-in is refused with `SITTING_HELD_ELSEWHERE` until the holder has been silent for
+  `PRESENT_GRACE_SEC`, and takes it as above once it has — whichever test it asks for, so it can
+  neither lift that sitting nor set it aside by opening another. Two sign-ins opening one sitting
+  together resolve to the first to land; two opening DIFFERENT tests together both start, and the
+  later stands the earlier down as above. Silence has to mean absence for that to hold, so an idle screen
+  still saves on its autosave tick: an empty batch that moves `lastSeenAt` and flushes nothing. The
+  same heartbeat is what stops a quiet reader banking pause credit on a reload. It only CONTINUES
+  a presence, never restores one: a screen the server has not answered for `PRESENT_GRACE_SEC`
+  stops beating until the student answers or reloads, so a laptop waking from sleep does not spend
+  the pause its reload would be given back. Known limits: a sign-in that was replaced still holds
+  for the window, and a key rebuilt from Postgres is held by nobody until its next open.
 - **A pause is credited, not stopped.** Falling silent longer than the reload grace
   (`PRESENT_GRACE_SEC`) moves the deadline, and every open section's clock, out by the gap — a
   laptop sleeping, a dropped network or a genuine multi-hour pause costs the student nothing. That
@@ -446,6 +465,27 @@ and needs no mapping at all.
   spelling mistake, a data correction, or no suitable option as the answer — and an optional note.
   Only the sent-back questions go back; the rest stay with the reader. The typist fixes one and
   marks it fixed, and it returns to be checked again. A minor fix the reader makes directly.
+- **Time on a question is kept per person and per seat** (`QuestionWorkTime`): a running total in
+  seconds for one question of one test, counted by the authoring page while that question is the
+  one on screen in a visible tab and waits on whoever is looking — typing or not — and added in
+  batches of at most an hour. It waits on a typist as a blank card, and again from a send-back
+  until it is marked fixed; on a reader until it is checked or sent back, and again once it is
+  fixed. A saved question's clock stands still however long it is looked at. A blank card's time
+  goes to the question its save creates. Only whoever holds a seat is counted, and not once the
+  test is offered; an owner looking in is not. Each seat reads its own time; the test's owner and
+  a super admin read both seats', per question and in total. A discarded draft takes its time
+  with it.
+- **A section is handed out with the day it is wanted by.** `QuestionAssignment.dueAt` is required
+  on a new assignment and kept as that day's last instant at the institute; it gates nothing. A row
+  from before the date was required has none, and is judged neither way. Where a row stands is
+  derived, never stored (`dueStanding`), in institute days: on time when finished on or before the
+  day, late when after it, overdue while still open past it. Nothing is owed on a role that has
+  passed on, on a section still open when its test was offered, or by a typist on a picked paper,
+  who has no Done to give. A holder's whole time on a
+  section is the sum of their `QuestionWorkTime` in that seat, and travels with the assignment
+  under the same rule as a question's time: each seat its own, the owner and a super admin both.
+  The dashboard gives whoever holds the authoring or the proof-reading key their own standing per
+  role — assigned, completed, completed on time, overdue, time spent — and the sections still owed.
 - **Releasing a section needs every question on its paper checked** and none still with the
   typist. It sets the reader's `finalizedAt` and ends their authority over it. A question added,
   drawn or swapped onto the paper after the release that the reader has not checked sends the
@@ -474,7 +514,11 @@ and needs no mapping at all.
 - **Subject and topic settle when something DEPENDS on the question, not when it is published.**
   Taxonomy is what a section draws on, so moving it afterwards would change what a finalized paper
   was built from — and a `PaperQuestion` records no subject of its own, so a moved question would be
-  served inside a section it no longer belongs to and counted there.
+  served inside a section it no longer belongs to and counted there. **A topic the question never
+  had is the exception: it may be given one at any time.** That fills in what was never said rather
+  than moving anything — nothing drew it by a topic it did not have — and it is how a proof-reader
+  files what a typist could not. Once it has one, the topic settles like the subject. Tags and
+  difficulty never settle; a difficulty changed after the paper was drawn leaves the paper as drawn.
 - **Option ids carry over by position.** A sitting stores the id it was shown, so a position that
   already had an id keeps it and only a genuinely new position gets a new one — editing an option's
   wording can never orphan an answer.
@@ -532,8 +576,18 @@ letter-based answer key are why real uploads were rejected wholesale.
 - **A row can be left out, and brought back.** Leaving one out is held on the same `ImportRowEdit`,
   so a corrected row brought back keeps its correction. A row left out writes nothing and claims
   neither its stem nor its code, so a later copy of it in the same file imports as Create.
+- **A sheet imported into one section of a test is held to that section's subject.** A row filed
+  under a subject the section does not take is skipped with that reason, and correcting its subject
+  in the review window brings it back; a section that names no subject takes any. The count is not
+  held: a typist may bring in more than the section takes and choose between them at Done, exactly
+  as with questions typed by hand.
+- **A sheet is bounded by where it lands**: `QUESTION_IMPORT_MAX_ROWS` (100) into the bank and
+  `SECTION_IMPORT_MAX_ROWS` (50) into a section of a test, where every row is read again by a
+  proof-reader. A longer file is refused whole, before any row is judged.
+- **A row repeating an earlier line of the same file is told apart from one already in the bank.**
+  Both are skipped as duplicates, but `duplicateOf` names the line for the first and a question id
+  for the second (`repeatedLineOf`), and the preview says which.
 - Every imported question carries the `imported` tag, so one filter finds what an upload brought in.
-- An upload is bounded so it stays a single synchronous request.
 
 Two intake paths: this sheet for bulk MCQs, pictures included, and the rich manual editor for
 typed equations, tables and for placing a picture the sheet could only put after the text.
@@ -552,3 +606,63 @@ another — Tier 2 has a different structure, different negative marking and sec
 is a separate blueprint rather than a setting on this one. And **the totals are a display cache**: a
 config's question count and total marks are the sums of its sections, and a seed test asserts they
 agree.
+
+## 14. Reports
+
+A report is a page somebody carries out of the building, so its rules are about what a printed
+number means a week later.
+
+- **A sitting belongs to the institute day it was handed in.** A period is two civil dates, both
+  inclusive, bounded at IST midnight; a sitting handed in at half past midnight on Monday is
+  Monday's. Nothing files a sitting by when it was started or marked.
+- **A test's own figures are its cohort's to date.** A test opens and never shuts, so "how did Mock
+  3 go" has no end to wait for. A period report says both things: the sittings handed in during the
+  period, and the ranking as it stands now.
+- **A percentile is always against the whole test.** A branch's average is the average of each
+  sitting's place in its own test's cohort. Ranking a branch among itself would make every branch
+  average fifty.
+- **Rank and percentile are live, so a report is true as of when it was built.** Every document
+  carries `asOf` and every printed page says it. Two printings of one report a day apart can
+  differ, and that is the ranking moving, not a bug.
+- **A test that opened and that nobody sat is a row.** A weekly report built only from sittings
+  would leave out the one line a superior most needs.
+- **"Reached" is today's audience.** Who a series reaches is resolved now, from each student's
+  current branch, programs and grants; there is no history of it. A report about last month files
+  a student who has since moved under the branch they are in today.
+- **A student carrying two of a thing counts under both.** Two programs, two exams: the rows of a
+  by-program report do not sum to the headcount, and the report gives the headcount beside them.
+- **Improvement compares only students ranked in both periods.** A newcomer has nothing to have
+  moved from, and counting them as a gain from nothing would put every new joiner at the top.
+- **Staff output counts stamped rows, never hours.** Time on a question is a running total with no
+  history, so a week of it cannot be told from a month.
+- **The answer key is for a super admin.** It is read fresh from the terms the scorer marks
+  against, never through the scorer's own held copy, since a paper nobody has sat can still change.
+- **The question paper prints from the test's own paper screen, not from Reports.** It is the
+  paper a candidate is served — paper order, unshuffled, no solution — behind `TEST_MANAGEMENT`,
+  the key that opens the paper, because `REPORTS` is a grant a branch office holds and an unsat
+  paper is the most sensitive thing on the platform. It too is read fresh, so a draft prints as it
+  stands; its key goes with it only for a super admin; and each read is logged as an export of
+  the test, since that is the moment the paper leaves the building.
+
+Who may read what: `REPORTS` READ opens every report and its pickers; the spreadsheet also needs
+`DATA_EXPORT`. The answer key, admin activity and the permissions matrix are a super admin's. The
+audit trail shows an admin their own rows, as its screen does. A student reads five reports, all
+of them their own — the score card, the weekly and monthly report, every test, and topic-wise
+accuracy — on the page, printed, or as a spreadsheet, and whatever the request names, the student
+is whoever holds the token. Their spreadsheet asks for no `DATA_EXPORT` and writes no audit row:
+that permission and that row are about an admin carrying other people's records out, and this is
+the student's own.
+
+Every printed page — a report or a question paper — carries the institute's logo at its head and in a
+footer of its own beside the page of how many, and the logo's letters, level and faint, behind its
+content — the letters alone, because a plate that size lays a tinted slab under every figure. It is a
+drawing rather than a styled word, because a printer drops a background colour unless somebody
+ticks "Background graphics", and paper has no brand face to set the letters in. The footer is not
+decoration. A page that declares its own margin boxes is one the browser adds no date, title or
+address line to, so nobody has to untick "Headers and footers" before a page goes to a parent.
+
+A table on a page carries at most `REPORT_MAX_ROWS`; the spreadsheet carries every row. A period
+wide enough to hold more sittings than one spreadsheet does is refused, not read into memory.
+
+Not reported, because the platform does not hold it: sign-in history (sessions live in Redis),
+class attendance and fees, a student's past branches, and item discrimination.

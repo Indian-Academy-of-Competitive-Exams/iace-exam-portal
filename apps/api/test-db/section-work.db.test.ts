@@ -11,6 +11,7 @@ import {
   PAPER_SOURCES,
   PERMISSION_LEVELS,
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_VALIDATION_CODE,
   REVIEW_STATES,
   SECTION_SEATS,
   SEND_BACK_REASONS,
@@ -450,23 +451,27 @@ describe('SectionWorkService.remove', () => {
   });
 });
 
-/** One good row, written out as CSV: the section import reads the bank's own sheet. */
-function oneRowSheet(stem = 'What is 30% of 150?'): Buffer {
-  const row: Partial<Record<QuestionImportColumnKey, string>> = {
-    subject: 'Quantitative Aptitude',
-    difficulty: 'medium',
-    stem_en: stem,
-    option1_en: '25',
-    option2_en: '45',
-    option3_en: '35',
-    option4_en: '40',
-    correct_option: '2',
-  };
+/** Good rows written out as CSV, one per stem: the section import reads the bank's own sheet. */
+function sheetOf(...rows: { stem: string; subject?: string }[]): Buffer {
   const cells = (pick: (column: (typeof QUESTION_IMPORT_COLUMNS)[number]) => string) =>
     QUESTION_IMPORT_COLUMNS.map(pick).join(',');
-  const line = cells((column) => row[column.key as QuestionImportColumnKey] ?? '');
-  return Buffer.from([cells((column) => column.header), line].join('\n'));
+  const lines = rows.map(({ stem, subject = 'Quantitative Aptitude' }) => {
+    const row: Partial<Record<QuestionImportColumnKey, string>> = {
+      subject,
+      difficulty: 'medium',
+      stem_en: stem,
+      option1_en: '25',
+      option2_en: '45',
+      option3_en: '35',
+      option4_en: '40',
+      correct_option: '2',
+    };
+    return cells((column) => row[column.key as QuestionImportColumnKey] ?? '');
+  });
+  return Buffer.from([cells((column) => column.header), ...lines].join('\n'));
 }
+
+const oneRowSheet = (stem = 'What is 30% of 150?'): Buffer => sheetOf({ stem });
 
 describe('SectionWorkService — writes taken under the seat the caller holds', () => {
   /** The failure this prevents: a question landing in a section under somebody else's typing job. */
@@ -599,6 +604,29 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
     assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 1);
   });
 
+  /** The failure this prevents: a sheet filling a section with another subject's questions. */
+  it('imports only the rows filed under the section’s subject', async () => {
+    const { work } = await build();
+    const { pair, typing } = await aSection();
+    await prisma.baseConfigSection.update({
+      where: { id: pair.baseConfigSectionId },
+      data: { subjectId: BANK.QUANT },
+    });
+    const sheet = sheetOf(
+      { stem: 'Who founded the Maurya empire?', subject: 'General Awareness' },
+      { stem: 'What is 10% of 150?' },
+      { stem: 'What is 40% of 150?' },
+    );
+
+    const plan = await work.previewImport(pair, sheet, viewer(TYPIST));
+
+    const why = plan.rows.map((row) => row.issues[0]?.code ?? row.action);
+    assert.deepEqual(why, [QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION, 'create', 'create']);
+    const result = await work.commitImport(pair, plan.importLogId, viewer(TYPIST));
+    assert.equal(result.created, 2);
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 2);
+  });
+
   /** The failure this prevents: a run previewed for one importer landing through another. */
   it('imports a run only through the importer it was previewed in', async () => {
     const { imports, work } = await build();
@@ -717,6 +745,120 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
     await work.create(pair, draft(), viewer(TYPIST));
 
     assert.equal((await work.one(pair, viewer(READER))).editingBy?.adminId, TYPIST);
+  });
+
+  it('gives the typing claim up once the section is handed over, whoever marks it done', async () => {
+    const { work } = await build();
+    const { pair } = await aSection();
+    await work.create(pair, draft(), viewer(TYPIST));
+
+    const handed = await work.handedOver(pair, viewer(CHIEF, {}, true));
+
+    assert.equal(handed.editingBy, null);
+  });
+
+  it('gives a claim up at a check, a send back and a fix, and only the caller’s own', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typistDone } = await aSection();
+    const first = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    const second = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(first);
+    await onPaper(second);
+    await typistDone();
+    const holder = async () => (await work.one(pair, viewer(READER))).editingBy?.adminId ?? null;
+    let stems = 0;
+    const edit = (questionId: string, who: string) =>
+      work.edit(pair, questionId, draft({ stem: { en: `Stem ${++stems}` } }), viewer(who));
+
+    await edit(first.id, READER);
+    assert.equal(await holder(), READER);
+    assert.equal((await work.check(pair, first.id, viewer(READER))).editingBy, null);
+
+    await edit(second.id, READER);
+    await work.sendBack(pair, second.id, { reason: SEND_BACK_REASONS.SPELLING }, viewer(READER));
+    assert.equal(await holder(), null);
+
+    await edit(second.id, TYPIST);
+    await work.check(pair, first.id, viewer(READER));
+    assert.equal(await holder(), TYPIST);
+    assert.equal((await work.fixed(pair, second.id, viewer(TYPIST))).editingBy, null);
+  });
+});
+
+describe('SectionWorkService — what a reader files a question under', () => {
+  /** The failure this prevents: a typist who did not know them leaves a paper question unfiled for good. */
+  it('lets the reader give a paper question its topic, its tags and its difficulty', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typistDone } = await aSection();
+    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(question);
+    await typistDone();
+
+    const filed = await work.edit(
+      pair,
+      question.id,
+      draft({ topicId: BANK.ARITHMETIC, tags: ['percentages'], difficulty: DIFFICULTY_LEVEL.HIGH }),
+      viewer(READER),
+    );
+
+    assert.equal(filed.topic?.id, BANK.ARITHMETIC);
+    assert.deepEqual(filed.tags, ['percentages']);
+    assert.equal(filed.difficulty, DIFFICULTY_LEVEL.HIGH);
+  });
+});
+
+describe('SectionWorkService — time on a question', () => {
+  it('adds a seat holder’s seconds to their own total, report after report', async () => {
+    const { work } = await build();
+    const { pair, typed } = await aSection();
+    const question = await typed();
+
+    await work.spend(pair, question.id, 30, viewer(TYPIST));
+    const total = await work.spend(pair, question.id, 45, viewer(TYPIST));
+
+    assert.equal(total.seconds, 75);
+    const seen = (await work.one(pair, viewer(TYPIST))).questions[0]?.time;
+    assert.deepEqual(seen, { own: 75, typist: null, reader: null });
+  });
+
+  /** The failure this prevents: a typist reading how long their reader took, or the two seats' time merging. */
+  it('keeps each seat’s time apart, and shows both only to the owner', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typed, typistDone } = await aSection();
+    const question = await typed();
+    await work.spend(pair, question.id, 60, viewer(TYPIST));
+    await onPaper({ id: question.id, versionId: question.versionId });
+    await typistDone();
+    await work.spend(pair, question.id, 20, viewer(READER));
+    const timeFor = async (who: SectionViewer) =>
+      (await work.one(pair, who)).questions.find((row) => row.questionId === question.id)?.time;
+
+    assert.deepEqual(await timeFor(viewer(READER)), { own: 20, typist: null, reader: null });
+    assert.deepEqual(await timeFor(viewer(OWNER, OWNS)), { own: 0, typist: 60, reader: 20 });
+
+    const wholeFor = async (who: SectionViewer) => {
+      const seen = await work.one(pair, who);
+      return [seen.typist?.secondsSpent, seen.reader?.secondsSpent];
+    };
+    assert.deepEqual(await wholeFor(viewer(READER)), [null, 20]);
+    assert.deepEqual(await wholeFor(viewer(OWNER, OWNS)), [60, 20]);
+  });
+
+  it('counts nobody without a seat, and nothing outside the section', async () => {
+    const { work } = await build();
+    const { pair, typed } = await aSection();
+    const question = await typed();
+    const elsewhere = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+
+    await assert.rejects(
+      () => work.spend(pair, question.id, 30, viewer(OWNER, OWNS)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    await assert.rejects(
+      () => work.spend(pair, elsewhere.id, 30, viewer(TYPIST)),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+    assert.equal(await prisma.questionWorkTime.count(), 0);
   });
 });
 

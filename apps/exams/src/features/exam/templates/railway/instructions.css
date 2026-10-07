@@ -159,3 +159,14 @@
   font-weight: bold;
   font-size: 15px;
 }
+
+/* A phone has no room for the candidate's column, and the instructions are what must be read. */
+@media (max-width: 767px) {
+  [data-exam-template='ssc_railways'] .ri-student {
+    display: none;
+  }
+
+  [data-exam-template='ssc_railways'] .ri-body {
+    padding: 12px 14px;
+  }
+}

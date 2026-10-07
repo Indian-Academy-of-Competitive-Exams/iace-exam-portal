@@ -9,18 +9,14 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { type Request } from 'express';
 import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
   ActorTypes,
-  type AuthSessionResponse,
-  type ChangePinBody,
   DOCUMENT_FILE_FIELD,
   DOCUMENT_MAX_BYTES,
   type DeviceSession,
@@ -36,7 +32,6 @@ import {
   type PushSubscriptionBody,
   type StudentCatalog,
   type UpdateMeBody,
-  changePinSchema,
   documentKindSchema,
   dropPushDeviceSchema,
   dropPushSubscriptionSchema,
@@ -48,7 +43,7 @@ import {
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
-import { AuthService, deviceFrom } from '../auth';
+import { AuthService } from '../auth';
 import { NotificationsService, PushService } from '../notifications';
 import { MeService } from './me.service';
 
@@ -163,17 +158,6 @@ export class MeController {
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<Me> {
     return this.me.saveDocument(user.id, kind, file);
-  }
-
-  /** Ends every OTHER session and returns a fresh one for this device — see AuthService.changeStudentPin. */
-  @Post('pin')
-  @HttpCode(HttpStatus.OK)
-  changePin(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodBody(changePinSchema)) body: ChangePinBody,
-    @Req() request: Request,
-  ): Promise<AuthSessionResponse> {
-    return this.auth.changeStudentPin(user.id, body.currentPin, body.newPin, deviceFrom(request));
   }
 
   /** Where this account is signed in, newest activity first, with the asking device marked. */

@@ -1,23 +1,22 @@
 import { z } from 'zod';
 import { adminPermissionsSchema } from './admins';
-import {
-  ActorTypes,
-  actorTypeSchema,
-  emailSchema,
-  mobileSchema,
-  newPinSchema,
-  otpCodeSchema,
-  pinSchema,
-} from './common';
+import { ActorTypes, actorTypeSchema, emailSchema, mobileSchema, otpCodeSchema } from './common';
 
 // ============================================================================
-// OTP request. Students meet one twice — signup, and a forgotten PIN. Admins,
-// every time. Ordinary student login is mobile + 4-digit PIN.
+// OTP request. Everybody signs in with one: a student by mobile, an admin by
+// email. A student's first is their signup — there is no second path.
 // ============================================================================
 
-/** One endpoint serves both student OTP cases (signup and reset): the response is identical whether or not the number is registered, so it can't be used to find who has an account. */
+/** How a student's code reaches them. One at a time: asking again may take the other, never both. */
+export const OTP_CHANNELS = { SMS: 'SMS', WHATSAPP: 'WHATSAPP' } as const;
+export const otpChannelSchema = z.enum(OTP_CHANNELS);
+export type OtpChannel = z.infer<typeof otpChannelSchema>;
+
+/** Signup and sign-in ask alike: the response is identical whether or not the number is registered, so it can't be used to find who has an account. */
 export const requestStudentOtpSchema = z.object({
   mobile: mobileSchema,
+  /** Which one to use this time. Absent, or one that is not set up, is the server's first choice. */
+  channel: otpChannelSchema.optional(),
 });
 export type RequestStudentOtpInput = z.input<typeof requestStudentOtpSchema>;
 export type RequestStudentOtpBody = z.infer<typeof requestStudentOtpSchema>;
@@ -36,6 +35,10 @@ export const otpRequestResponseSchema = z.object({
   resendAfterSec: z.number().int(),
   /** How many digits the code has. The server decides, and the screen draws one box per digit. */
   codeLength: z.number().int().min(4).max(8),
+  /** Where a student's code went. Absent for an admin, whose code is always emailed. */
+  channel: otpChannelSchema.optional(),
+  /** The one a student may ask for instead. Absent where only one is set up. */
+  otherChannel: otpChannelSchema.optional(),
   /** Dev-only echo of the code — present only when the console sender is active. */
   devCode: z.string().optional(),
 });
@@ -56,22 +59,14 @@ export const CLIENT_HEADERS = { KIND: 'x-client', DEVICE_NAME: 'x-device-name' }
 /** Optional client-supplied device label, so a session listing names the phone rather than its user agent. */
 const deviceInfoSchema = z.object({ deviceName: z.string().max(128).optional() }).optional();
 
-/** Verifying a student OTP does not sign anyone in — it proves the number and hands back a short-lived ticket to set a PIN; the session is created when the PIN is set. */
+/** Verifying signs the student in, as a new account when the number had none. */
 export const verifyStudentOtpSchema = z.object({
   mobile: mobileSchema,
   code: otpCodeSchema,
+  device: deviceInfoSchema,
 });
 export type VerifyStudentOtpInput = z.input<typeof verifyStudentOtpSchema>;
 export type VerifyStudentOtpBody = z.infer<typeof verifyStudentOtpSchema>;
-
-/** The ticket. Single-use, Redis-resident, and bound to the verified mobile. */
-export const pinSetupTicketSchema = z.object({
-  setupToken: z.string(),
-  expiresInSec: z.number().int(),
-  /** true = a PIN reset, false = a fresh signup; safe to disclose since the caller just proved they hold the number — only drives the wording. */
-  pinAlreadySet: z.boolean(),
-});
-export type PinSetupTicket = z.infer<typeof pinSetupTicketSchema>;
 
 export const verifyAdminOtpSchema = z.object({
   email: emailSchema,
@@ -81,39 +76,8 @@ export const verifyAdminOtpSchema = z.object({
 export type VerifyAdminOtpInput = z.input<typeof verifyAdminOtpSchema>;
 export type VerifyAdminOtpBody = z.infer<typeof verifyAdminOtpSchema>;
 
-// ============================================================================
-// Student PIN — set (signup + reset) and login
-// ============================================================================
-
-/** Redeems the ticket: creates the student on signup, replaces the PIN on reset, and signs them in either way. */
-export const setStudentPinSchema = z.object({
-  mobile: mobileSchema,
-  setupToken: z.string().min(1),
-  pin: newPinSchema,
-  device: deviceInfoSchema,
-});
-export type SetStudentPinInput = z.input<typeof setStudentPinSchema>;
-export type SetStudentPinBody = z.infer<typeof setStudentPinSchema>;
-
-/** The everyday path: no SMS, no waiting. Attempts are capped in Redis. */
-export const studentLoginSchema = z.object({
-  mobile: mobileSchema,
-  pin: pinSchema,
-  device: deviceInfoSchema,
-});
-export type StudentLoginInput = z.input<typeof studentLoginSchema>;
-export type StudentLoginBody = z.infer<typeof studentLoginSchema>;
-
 /** The code step of a student's OTP flow, as both student clients validate it before sending. */
 export const otpCodeFormSchema = z.object({ code: otpCodeSchema });
-
-/** Choosing a PIN: typed twice, and the second must match before anything is sent. */
-export const setPinFormSchema = z
-  .object({ pin: newPinSchema, confirmPin: pinSchema })
-  .refine((values) => values.pin === values.confirmPin, {
-    message: 'Both PINs must match',
-    path: ['confirmPin'],
-  });
 
 // ============================================================================
 // Tokens & identity
@@ -134,8 +98,6 @@ const studentIdentitySchema = z.object({
   fullName: z.string().nullable(),
   /** The minimal pre-test details are on file: mother's name, father's name, DOB; when false the test player prompts for them — never a hard block. */
   preTestReady: z.boolean(),
-  /** Still on the PIN an import gave them, which anyone holding the roster can work out; on the identity because the app must decide on the first render after sign-in. */
-  hasDefaultPin: z.boolean(),
   /** The FULL optional profile (photo, gender, Aadhaar, PAN, address, education); drives a gentle nudge only — it never gates anything. */
   profileCompleted: z.boolean(),
   /** Locked out of STARTING a test, not the account: they sign in, results and history stay readable — login is `isActive`, a different question this never answers. */
@@ -202,12 +164,9 @@ export type AccessTokenClaims = z.infer<typeof accessTokenClaimsSchema>;
 
 /** Every auth path, split by identity table — students and admins never share a route, because they never share a login method. */
 export const AUTH_ROUTES = {
-  /** Student signup + PIN reset (OTP), then the PIN itself. */
+  /** Student sign-in, and signup with it: a code to the mobile, then the code back. */
   studentOtpRequest: '/auth/student/otp/request',
   studentOtpVerify: '/auth/student/otp/verify',
-  studentPinSet: '/auth/student/pin/set',
-  /** Student everyday login: mobile + PIN. */
-  studentLogin: '/auth/student/login',
   adminOtpRequest: '/auth/admin/otp/request',
   adminOtpVerify: '/auth/admin/otp/verify',
   refresh: '/auth/refresh',

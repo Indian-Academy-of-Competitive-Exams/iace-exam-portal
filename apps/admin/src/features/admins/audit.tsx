@@ -86,13 +86,6 @@ function auditColumns(): DataTableColumn<RowAction>[] {
         <Badge variant={ACTION_BADGE_VARIANT[row.action]}>{AUDIT_ACTION_LABELS[row.action]}</Badge>
       ),
     },
-    {
-      key: 'entity',
-      header: 'Entity',
-      cell: (row) => (
-        <span className="font-mono text-xs text-muted-foreground">{row.entityId}</span>
-      ),
-    },
     { key: 'changed', header: 'Changed', cell: (row) => <ChangedCell row={row} /> },
   ];
 }
