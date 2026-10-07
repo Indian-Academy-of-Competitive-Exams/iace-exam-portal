@@ -47,7 +47,7 @@ export function Hero({
         {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
         {figure}
       </div>
-      {aside ? <div className="flex shrink-0 flex-wrap items-end gap-8">{aside}</div> : null}
+      {aside ? <div className="flex max-w-full flex-wrap items-end gap-8">{aside}</div> : null}
     </div>
   );
 }

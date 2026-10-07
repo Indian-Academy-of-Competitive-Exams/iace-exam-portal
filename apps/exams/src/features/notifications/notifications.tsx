@@ -180,8 +180,8 @@ function NotificationRow({ notification }: Readonly<{ notification: Notification
       ref={setNode}
       className="flex flex-wrap items-start gap-x-4 gap-y-3 rounded-md p-4 transition-colors hover:bg-muted/50"
     >
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex items-center gap-2">
+      <span className="flex min-w-0 flex-1 flex-col gap-1 max-sm:basis-full">
+        <span className="flex flex-wrap items-center gap-2">
           {unread ? <span aria-hidden className="size-2 shrink-0 rounded-full bg-primary" /> : null}
           <span className="font-medium">{notification.title}</span>
           <Badge variant={unread ? 'primary' : 'neutral'}>{TYPE_LABEL[notification.type]}</Badge>

@@ -5,6 +5,7 @@ import {
   ReferenceDot,
   ReferenceLine,
   Tooltip,
+  useChartWidth,
   XAxis,
   YAxis,
   type BarShapeProps,
@@ -52,6 +53,8 @@ const FOOT_GAP = 16;
 const LABEL_GAP = 8;
 const BELOW: SeriesSlot = 4;
 const ABOVE: SeriesSlot = 1;
+/** Narrower than this the plot is a sliver, and a name hung off its middle runs out of the chart. */
+const EDGE_LABELS_BELOW = 420;
 
 /** Hoisted, like chart-theme's own: a fresh object on every render sends Recharts round again. */
 const MARGIN = { top: TOP, right: VALUE_GUTTER, bottom: FOOT, left: 0 } as const;
@@ -180,18 +183,30 @@ type DirectionLabelsProps = Pick<LabelProps, 'viewBox'> & { below?: string; abov
 
 function DirectionLabels({ below, above, viewBox }: Readonly<DirectionLabelsProps>) {
   const span = viewBox as CartesianViewBox | undefined;
+  const width = useChartWidth() ?? 0;
   if (span?.x === undefined) return null;
   const foot = (span.y ?? 0) + (span.height ?? 0) + FOOT_GAP;
+  const edges = width < EDGE_LABELS_BELOW;
 
   return (
     <g>
       {below === undefined ? null : (
-        <PlotText tone="axis" x={span.x - LABEL_GAP} y={foot} textAnchor="end">
+        <PlotText
+          tone="axis"
+          x={edges ? 0 : span.x - LABEL_GAP}
+          y={foot}
+          textAnchor={edges ? 'start' : 'end'}
+        >
           {below}
         </PlotText>
       )}
       {above === undefined ? null : (
-        <PlotText tone="axis" x={span.x + LABEL_GAP} y={foot}>
+        <PlotText
+          tone="axis"
+          x={edges ? width : span.x + LABEL_GAP}
+          y={foot}
+          textAnchor={edges ? 'end' : 'start'}
+        >
           {above}
         </PlotText>
       )}

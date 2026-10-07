@@ -207,7 +207,7 @@ function Report({ document }: Readonly<{ document: ReportDocument }>) {
       {document.tables.map((table) => (
         <Section key={table.title} title={table.title} meta={plural(table.total, 'row')}>
           <Card className="flex flex-col gap-3 p-4">
-            <ReportTableView table={table} carriesAll="Print carries every one." />
+            <ReportTableView table={table} carriesAll="Print carries every one." stacks />
           </Card>
         </Section>
       ))}

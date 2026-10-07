@@ -83,7 +83,7 @@ export function OverviewPage() {
           action={
             <span
               data-tour={TOUR_TARGETS.PERFORMANCE_PICKERS}
-              className="flex flex-wrap items-center gap-3"
+              className="flex w-full flex-wrap items-center gap-3 sm:w-auto"
             >
               {scopes.length > 1 ? (
                 <Combobox

@@ -147,16 +147,26 @@ TableCell.displayName = 'TableCell';
 /** What a table shows instead of a bare header when there is nothing to list. */
 function TableEmpty({
   colSpan,
+  stacks,
   children,
-}: Readonly<{ colSpan: number; children: React.ReactNode }>) {
+}: Readonly<{ colSpan: number; stacks?: boolean; children: React.ReactNode }>) {
   return (
-    <tr>
-      <td colSpan={colSpan} className="px-3 py-10 text-center text-sm text-muted-foreground">
+    <tr className={cn(stacks && STACKED_ROW)}>
+      <td
+        colSpan={colSpan}
+        className={cn(
+          'px-3 py-10 text-center text-sm text-muted-foreground',
+          stacks && 'max-sm:block',
+        )}
+      >
         {children}
       </td>
     </tr>
   );
 }
+
+/** A stacked table's body is a column of blocks, where a bare row would shrink to its content. */
+const STACKED_ROW = 'max-sm:block';
 
 export { Table, TableBody, TableRow, TableHead, TableCell };
 
@@ -164,13 +174,20 @@ export { Table, TableBody, TableRow, TableHead, TableCell };
 const PLACEHOLDER_KEYS = Array.from({ length: 12 }, (_, index) => `placeholder-${index}`);
 
 /** Rows shaped like the rows coming, so the header and column widths hold still. */
-function TableSkeleton({ rows, columns }: Readonly<{ rows: number; columns: number }>) {
+function TableSkeleton({
+  rows,
+  columns,
+  stacks,
+}: Readonly<{ rows: number; columns: number; stacks?: boolean }>) {
   return (
     <>
       {PLACEHOLDER_KEYS.slice(0, rows).map((rowKey) => (
-        <TableRow key={rowKey}>
+        <TableRow
+          key={rowKey}
+          className={cn(stacks && STACKED_ROW, stacks && 'max-sm:[&>td:nth-child(n+3)]:hidden')}
+        >
           {PLACEHOLDER_KEYS.slice(0, columns).map((cellKey) => (
-            <TableCell key={cellKey}>
+            <TableCell key={cellKey} className={cn(stacks && 'max-sm:block max-sm:border-b-0')}>
               <Skeleton variant="text" />
             </TableCell>
           ))}
@@ -187,9 +204,10 @@ function TableFailure({
   colSpan,
   error,
   onRetry,
-}: Readonly<{ colSpan: number; error?: EmptyMessage; onRetry?: () => void }>) {
+  stacks,
+}: Readonly<{ colSpan: number; error?: EmptyMessage; onRetry?: () => void; stacks?: boolean }>) {
   return (
-    <TableEmpty colSpan={colSpan}>
+    <TableEmpty colSpan={colSpan} stacks={stacks}>
       <EmptyState
         size="sm"
         kind={EMPTY_STATE_KINDS.FAILURE}
@@ -211,6 +229,7 @@ export function TableState({
   error,
   onRetry,
   skeletonRows = 5,
+  stacks,
   children,
 }: Readonly<{
   isLoading: boolean;
@@ -224,14 +243,18 @@ export function TableState({
   onRetry?: () => void;
   /** Roughly what the list usually holds — enough to fill the fold, not more. */
   skeletonRows?: number;
+  /** The table is a column of blocks below `sm`, so these rows are drawn as blocks too. */
+  stacks?: boolean;
   children: React.ReactNode;
 }>) {
-  if (isLoading) return <TableSkeleton rows={skeletonRows} columns={colSpan} />;
+  if (isLoading) return <TableSkeleton rows={skeletonRows} columns={colSpan} stacks={stacks} />;
 
-  if (isError && isEmpty) return <TableFailure colSpan={colSpan} error={error} onRetry={onRetry} />;
+  if (isError && isEmpty) {
+    return <TableFailure colSpan={colSpan} error={error} onRetry={onRetry} stacks={stacks} />;
+  }
   if (isEmpty) {
     return (
-      <TableEmpty colSpan={colSpan}>
+      <TableEmpty colSpan={colSpan} stacks={stacks}>
         <EmptyState size="sm" kind={emptyKind} {...emptyCopy(empty)} />
       </TableEmpty>
     );

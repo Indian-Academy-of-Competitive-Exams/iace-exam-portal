@@ -116,6 +116,8 @@ export interface ListViewProps<TRow> {
   skeletonRows?: number;
   selection?: DataTableSelection;
   expand?: DataTableExpand<TRow>;
+  /** Passed to the table: below `sm` its rows are blocks of labelled values. */
+  stacks?: boolean;
 }
 
 const isSet = (value: ListFilterValue | undefined): boolean =>
@@ -355,6 +357,7 @@ export function ListView<TRow>({
   skeletonRows,
   selection,
   expand,
+  stacks,
 }: Readonly<ListViewProps<TRow>>) {
   const fills = useInTableFrame();
   const spec = filters ?? [];
@@ -384,6 +387,7 @@ export function ListView<TRow>({
       skeletonRows={skeletonRows}
       selection={selection}
       expand={expand}
+      stacks={stacks}
       scroll={list.scroll}
       isError={list.isError}
       error={error}

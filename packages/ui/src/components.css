@@ -58,6 +58,26 @@
 }
 
 /* ============================================================================
+   TOUCH — global, because a finger is not a component
+
+   iOS zooms the page when a field under 16px takes focus and leaves it zoomed,
+   which is the first thing that makes a web app feel like a web page. The
+   selector carries `:not()` for its specificity: a bare `input` would lose to
+   the `text-sm` every field wears. The grey flash on tap goes too — every
+   control already draws its own pressed and focused states.
+   ========================================================================== */
+
+@media (pointer: coarse) {
+  :is(input, textarea, select):not([type='checkbox'], [type='radio']) {
+    font-size: var(--text-md);
+  }
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ============================================================================
    HEADINGS — global, because an orphan belongs to the text, not to a component
 
    A heading that wraps leaves its last word alone on a line; `balance` evens the

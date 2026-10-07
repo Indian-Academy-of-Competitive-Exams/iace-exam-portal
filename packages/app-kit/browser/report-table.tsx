@@ -26,7 +26,8 @@ function namingColumn(table: ReportTable): number {
 export function ReportTableView({
   table,
   carriesAll,
-}: Readonly<{ table: ReportTable; carriesAll: string }>) {
+  stacks,
+}: Readonly<{ table: ReportTable; carriesAll: string; stacks?: boolean }>) {
   const rows = useMemo(
     () => table.rows.slice(0, PREVIEW_ROWS).map((cells, at) => ({ id: String(at), cells })),
     [table.rows],
@@ -58,6 +59,7 @@ export function ReportTableView({
         rowKey={(row) => row.id}
         isLoading={false}
         empty="No rows"
+        stacks={stacks}
       />
     </>
   );

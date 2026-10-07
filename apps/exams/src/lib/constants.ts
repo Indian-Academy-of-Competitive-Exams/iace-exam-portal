@@ -66,7 +66,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
 ];
 
 /** A header picker is sized to its own label; left to itself a Combobox takes the whole header. */
-export const PICKER_WIDTH = { REPORT: 'w-[26rem]', SCOPE: 'w-44' } as const;
+export const PICKER_WIDTH = { REPORT: 'w-full sm:w-[26rem]', SCOPE: 'w-44' } as const;
 
 /** What the worker posts on a push; its twin is PUSH_RECEIVED in public/sw.js, which cannot import. */
 export const PUSH_RECEIVED = 'push-received';
