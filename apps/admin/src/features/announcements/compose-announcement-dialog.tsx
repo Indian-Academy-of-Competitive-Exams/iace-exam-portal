@@ -13,6 +13,8 @@ import {
 import { applyFieldErrors } from '@iace/app-kit';
 import {
   Alert,
+  EMPTY_STATE_KINDS,
+  EmptyState,
   FormDialog,
   FormField,
   Input,
@@ -160,7 +162,7 @@ export function ComposeAnnouncementDialog({
         )}
       </FormField>
 
-      <Reach preview={preview.data} loading={preview.isLoading} />
+      <Reach preview={preview.data} failed={preview.isError} onRetry={preview.refetch} />
     </FormDialog>
   );
 }
@@ -168,9 +170,21 @@ export function ComposeAnnouncementDialog({
 /** The consequence that is invisible until too late: how many students this reaches. */
 function Reach({
   preview,
-  loading,
-}: Readonly<{ preview?: AnnouncementPreview; loading: boolean }>) {
-  if (loading || !preview) return <Skeleton variant="row" className="h-12" />;
+  failed,
+  onRetry,
+}: Readonly<{ preview?: AnnouncementPreview; failed: boolean; onRetry: () => void }>) {
+  if (!preview && failed) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        size="sm"
+        level={3}
+        title="Could not count the students this reaches"
+        onRetry={onRetry}
+      />
+    );
+  }
+  if (!preview) return <Skeleton variant="row" className="h-12" />;
 
   /* ui-copy-ok: consequence */
   if (preview.overCap) return <Alert variant="danger">{overCap(preview)}</Alert>;

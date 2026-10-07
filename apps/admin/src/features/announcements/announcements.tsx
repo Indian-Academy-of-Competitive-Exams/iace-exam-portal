@@ -5,6 +5,7 @@ import {
   EXPORT_KINDS,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  type AnnouncementStats,
   type AnnouncementSummary,
 } from '@iace/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +16,8 @@ import {
   BadgeList,
   Button,
   DropdownMenuItem,
+  EMPTY_STATE_KINDS,
+  EmptyState,
   ListView,
   Metric,
   MetricGroup,
@@ -187,17 +190,7 @@ function AnnouncementPanel({ announcement }: Readonly<{ announcement: Announceme
         </Alert>
       ) : null}
 
-      {detail.data ? (
-        <MetricGroup>
-          <Metric label="Sent" value={detail.data.stats.sent} />
-          <Metric label="Failed" value={detail.data.stats.failed} />
-          <Metric label="Read" value={detail.data.stats.readCount} />
-          {/* Paid sends the grace window made unnecessary — an email, SMS or WhatsApp not spent. */}
-          <Metric label="Paid sends saved" value={detail.data.stats.savedByRead} />
-        </MetricGroup>
-      ) : (
-        <Skeleton variant="row" className="h-16" />
-      )}
+      <DeliveryCounts stats={detail.data?.stats} failed={detail.isError} onRetry={detail.refetch} />
 
       <div>
         <ExportButton
@@ -208,4 +201,34 @@ function AnnouncementPanel({ announcement }: Readonly<{ announcement: Announceme
       </div>
     </div>
   );
+}
+
+function DeliveryCounts({
+  stats,
+  failed,
+  onRetry,
+}: Readonly<{ stats?: AnnouncementStats; failed: boolean; onRetry: () => void }>) {
+  if (stats) {
+    return (
+      <MetricGroup>
+        <Metric label="Sent" value={stats.sent} />
+        <Metric label="Failed" value={stats.failed} />
+        <Metric label="Read" value={stats.readCount} />
+        {/* Paid sends the grace window made unnecessary — an email, SMS or WhatsApp not spent. */}
+        <Metric label="Paid sends saved" value={stats.savedByRead} />
+      </MetricGroup>
+    );
+  }
+  if (failed) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        size="sm"
+        level={3}
+        title="Could not load the delivery counts"
+        onRetry={onRetry}
+      />
+    );
+  }
+  return <Skeleton variant="row" className="h-16" />;
 }
