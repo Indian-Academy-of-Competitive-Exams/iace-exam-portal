@@ -62,9 +62,13 @@ export class AuthService {
   // hall is full and the network is not.
   // ==========================================================================
 
-  /** Serves both signup and PIN reset. */
+  /** One answer whoever asks; only which day's budget pays differs, by whether the number holds an account. */
   async requestStudentOtp(mobile: string, ip = 'unknown'): Promise<OtpRequestResponse> {
-    return this.otp.request(ActorTypes.STUDENT, mobile, ip);
+    const holder = await this.prisma.student.findFirst({
+      where: { mobile, deletedAt: null },
+      select: { id: true },
+    });
+    return this.otp.request(ActorTypes.STUDENT, mobile, ip, holder !== null);
   }
 
   /** Proves the number and hands back a short-lived ticket. */

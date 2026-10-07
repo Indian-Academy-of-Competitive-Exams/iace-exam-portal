@@ -354,3 +354,40 @@ describe("OtpService — the platform's daily budget", () => {
     assert.equal(sender.sent.length, 3);
   });
 });
+
+describe('OtpService — a stranger cannot spend a student’s sign-in', () => {
+  const budgeted = {
+    OTP_MAX_PER_DAY: 1000,
+    OTP_MAX_PER_DAY_PER_IP: 1000,
+    OTP_RESEND_COOLDOWN_SEC: 0,
+    NOTIFICATION_COST_SMS_PAISE: 100,
+    OTP_GLOBAL_DAILY_BUDGET_PAISE: 200,
+    OTP_SIGNUP_DAILY_BUDGET_PAISE: 100,
+  };
+  const NO_ACCOUNT = false;
+
+  /** The failure this prevents: codes asked for unknown numbers pausing every student's sign-in for the day. */
+  it('refuses numbers with no account once their own budget is spent, and still sends to students', async () => {
+    const { otp, metrics } = build(budgeted);
+    await otp.request(ActorTypes.STUDENT, '9000000001', IP, NO_ACCOUNT);
+
+    await assert.rejects(
+      () => otp.request(ActorTypes.STUDENT, '9000000002', IP, NO_ACCOUNT),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.RATE_LIMITED,
+    );
+    await otp.request(ActorTypes.STUDENT, '9000000003', IP);
+    await otp.request(ActorTypes.STUDENT, '9000000004', IP);
+
+    assert.deepEqual(metrics.otpSends, ['sent', 'refused_signup_budget', 'sent', 'sent']);
+  });
+
+  it('does not count a student’s code against the numbers with no account', async () => {
+    const { otp, sender } = build(budgeted);
+    await otp.request(ActorTypes.STUDENT, '9000000001', IP);
+    await otp.request(ActorTypes.STUDENT, '9000000002', IP);
+
+    await otp.request(ActorTypes.STUDENT, '9000000003', IP, NO_ACCOUNT);
+
+    assert.equal(sender.sent.length, 3);
+  });
+});

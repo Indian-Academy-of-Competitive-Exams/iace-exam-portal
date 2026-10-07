@@ -111,11 +111,13 @@ export const envSchema = z.object({
   OTP_TTL_SEC: z.coerce.number().int().positive().default(300),
   OTP_RESEND_COOLDOWN_SEC: z.coerce.number().int().nonnegative().default(45),
   OTP_MAX_VERIFY_ATTEMPTS: z.coerce.number().int().positive().default(5),
-  OTP_MAX_PER_DAY: z.coerce.number().int().positive().default(5),
+  OTP_MAX_PER_DAY: z.coerce.number().int().positive().default(10),
   // The address-wide twin of OTP_MAX_PER_DAY: a mobile's cap alone does not stop one address minting new numbers.
-  OTP_MAX_PER_DAY_PER_IP: z.coerce.number().int().positive().default(500),
+  OTP_MAX_PER_DAY_PER_IP: z.coerce.number().int().positive().default(3000),
   // The platform-wide kill switch on OTP spend, in paise — checked against NOTIFICATION_COST_SMS_PAISE.
   OTP_GLOBAL_DAILY_BUDGET_PAISE: z.coerce.number().int().positive().default(300_000),
+  // What numbers with no account may spend in a day, apart from the above: a stranger cannot spend a student's sign-in.
+  OTP_SIGNUP_DAILY_BUDGET_PAISE: z.coerce.number().int().positive().default(50_000),
   OTP_SENDER: z.enum(OTP_SENDERS).default(OTP_SENDERS.CONSOLE),
 
   // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the attempt counters and the setup ticket live in Redis.
@@ -130,8 +132,8 @@ export const envSchema = z.object({
   // Rate limits per minute, generous because a branch of two hundred shares one address (.env.example).
   RATE_LIMIT_DEFAULT_PER_MIN: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().positive().default(120),
-  // Tighter than the shared auth bucket: the one route that pays for an SMS or WhatsApp send.
-  RATE_LIMIT_OTP_REQUEST_PER_MIN: z.coerce.number().int().positive().default(15),
+  // As wide as the shared auth bucket: every sign-in asks here, and a hall asks from one address.
+  RATE_LIMIT_OTP_REQUEST_PER_MIN: z.coerce.number().int().positive().default(120),
   RATE_LIMIT_SITTING_PER_MIN: z.coerce.number().int().positive().default(60),
 
   // Proxies in front. 0 trusts nothing; behind a load balancer this MUST be its hop count.

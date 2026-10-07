@@ -196,7 +196,12 @@ export class MetricsService implements OnModuleInit {
   }
 
   countOtpSend(
-    outcome: 'sent' | 'refused_ip_daily' | 'refused_budget' | 'refused_mobile_daily',
+    outcome:
+      | 'sent'
+      | 'refused_ip_daily'
+      | 'refused_budget'
+      | 'refused_signup_budget'
+      | 'refused_mobile_daily',
   ): void {
     this.otpSends.inc({ outcome });
   }

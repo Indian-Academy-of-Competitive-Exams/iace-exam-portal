@@ -17,6 +17,8 @@ export const redisKeys = {
 
   /** Every OTP sent platform-wide today — the one number the daily SMS/WhatsApp bill is checked against. */
   otpDailyGlobal: 'otp:daily:global',
+  /** The same count for numbers with no account, so they are paid for out of a budget of their own. */
+  otpDailySignup: 'otp:daily:signup',
 
   /** Wrong guesses against one pending OTP, INCR'd atomically so a concurrent burst cannot advance it once for the whole wave. */
   otpAttempts: (actor: ActorType, identifier: string) =>

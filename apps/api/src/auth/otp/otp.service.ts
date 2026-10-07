@@ -24,6 +24,26 @@ import { type StoredOtp } from '../auth.types';
 
 const DAY_SEC = 24 * 60 * 60;
 
+/** One day's spend on codes, counted and refused on its own. */
+interface DailyBudget {
+  counter: string;
+  setting: 'OTP_GLOBAL_DAILY_BUDGET_PAISE' | 'OTP_SIGNUP_DAILY_BUDGET_PAISE';
+  refusal: 'refused_budget' | 'refused_signup_budget';
+}
+
+const STUDENT_BUDGET: DailyBudget = {
+  counter: redisKeys.otpDailyGlobal,
+  setting: 'OTP_GLOBAL_DAILY_BUDGET_PAISE',
+  refusal: 'refused_budget',
+};
+
+/** Apart from the students': every sign-in is a code now, so a stranger spending theirs would lock them all out. */
+const SIGNUP_BUDGET: DailyBudget = {
+  counter: redisKeys.otpDailySignup,
+  setting: 'OTP_SIGNUP_DAILY_BUDGET_PAISE',
+  refusal: 'refused_signup_budget',
+};
+
 /** OTP lifecycle. */
 @Injectable()
 export class OtpService {
@@ -36,7 +56,12 @@ export class OtpService {
     private readonly metrics: MetricsService,
   ) {}
 
-  async request(actor: ActorType, identifier: string, ip = 'unknown'): Promise<OtpRequestResponse> {
+  async request(
+    actor: ActorType,
+    identifier: string,
+    ip = 'unknown',
+    holdsAccount = true,
+  ): Promise<OtpRequestResponse> {
     const cooldownKey = redisKeys.otpCooldown(actor, identifier);
     const remaining = await this.redis.ttl(cooldownKey);
     if (remaining > 0) {
@@ -50,7 +75,7 @@ export class OtpService {
     if (actor === ActorTypes.STUDENT) {
       await this.countTowardsDay(identifier);
       await this.assertIpDailyBudget(ip);
-      await this.assertGlobalDailyBudget();
+      await this.assertDailyBudget(holdsAccount ? STUDENT_BUDGET : SIGNUP_BUDGET);
     }
 
     const ttlSec = this.config.get('OTP_TTL_SEC');
@@ -121,15 +146,15 @@ export class OtpService {
     }
   }
 
-  /** The platform-wide kill switch: once today's spend would cross the budget, every student waits for tomorrow rather than the bill growing unbounded. */
-  private async assertGlobalDailyBudget(): Promise<void> {
-    const sent = await this.incrementDailyCounter(redisKeys.otpDailyGlobal);
+  /** The kill switch on the bill: past a day's budget its callers wait for tomorrow, and only its callers. */
+  private async assertDailyBudget(budget: DailyBudget): Promise<void> {
+    const sent = await this.incrementDailyCounter(budget.counter);
 
-    const budgetPaise = this.config.get('OTP_GLOBAL_DAILY_BUDGET_PAISE');
+    const budgetPaise = this.config.get(budget.setting);
     const maxSends = Math.floor(budgetPaise / this.config.get('NOTIFICATION_COST_SMS_PAISE'));
     if (sent > maxSends) {
-      this.metrics.countOtpSend('refused_budget');
-      this.logger.error(`OTP daily budget of ${budgetPaise}p exhausted: ${sent} sends today`);
+      this.metrics.countOtpSend(budget.refusal);
+      this.logger.error(`${budget.setting} of ${budgetPaise}p exhausted: ${sent} sends today`);
       throw new AppException(
         ErrorCodes.RATE_LIMITED,
         'Verification codes are paused for today. Please try again tomorrow or contact your branch',
