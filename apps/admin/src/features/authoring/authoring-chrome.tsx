@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
-import { Kbd } from '@iace/ui';
+import { EmptyState, EMPTY_STATE_KINDS, Kbd } from '@iace/ui';
 import { KEY_NAMES } from '../../lib/constants';
 import { TOUR_TARGETS } from '../../lib/tours';
 
@@ -53,6 +54,26 @@ function Shortcut({
       ))}
       <span>{children}</span>
     </span>
+  );
+}
+
+/** In place of a question that was not read: refused where the server says it is not theirs, else a failure to retry. */
+export function QuestionNotLoaded({
+  error,
+  onRetry,
+}: Readonly<{ error: unknown; onRetry: () => void }>) {
+  const refused =
+    AppException.is(error) &&
+    (error.code === ErrorCodes.FORBIDDEN || error.code === ErrorCodes.NOT_FOUND);
+  if (refused) {
+    return <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This question is not open to you" />;
+  }
+  return (
+    <EmptyState
+      kind={EMPTY_STATE_KINDS.FAILURE}
+      title="Could not load this question"
+      onRetry={onRetry}
+    />
   );
 }
 

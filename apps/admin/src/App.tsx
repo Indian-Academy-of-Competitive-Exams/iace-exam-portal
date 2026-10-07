@@ -2,13 +2,13 @@ import * as React from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { ASSIGNMENT_ROLES } from '@iace/contracts';
 import { ProtectedRoute } from '@iace/app-kit/browser';
-import { PageErrorBoundary } from '@iace/ui';
+import { EmptyState, EMPTY_STATE_KINDS, PageErrorBoundary, PageFrame } from '@iace/ui';
 import { useAuth } from './providers/auth';
 import { AppShell } from './components/app-shell';
 import { PageSkeleton } from './components/page-skeleton';
 import { LoginPage } from './features/auth/login';
 import { NotFoundPage } from './components/not-found';
-import { ROUTES } from './lib/constants';
+import { ROUTES, opensRoute } from './lib/constants';
 
 const DashboardPage = React.lazy(() =>
   import('./features/dashboard/dashboard').then((module) => ({ default: module.DashboardPage })),
@@ -159,6 +159,27 @@ const whileLoading = (page: React.ReactNode) => (
   </PageErrorBoundary>
 );
 
+/** The page, or the refusal its own endpoints would answer with; not the security boundary, which is the API's guard. */
+function Gated({ path, children }: Readonly<{ path: string; children: React.ReactNode }>) {
+  const { can } = useAuth();
+
+  if (opensRoute(path, can)) return <>{children}</>;
+  return (
+    <PageFrame>
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.REFUSED}
+        title="This screen is not open to you"
+        hint="Ask a super admin for access."
+      />
+    </PageFrame>
+  );
+}
+
+/** One address and its page, so no route can be mounted without its gate. */
+const screen = (path: string, page: React.ReactNode) => (
+  <Route key={path} path={path} element={whileLoading(<Gated path={path}>{page}</Gated>)} />
+);
+
 /** ProtectedRoute is the outer gate; AppShell is the layout inside it. */
 export function App() {
   const { identity, isLoading } = useAuth();
@@ -176,93 +197,67 @@ export function App() {
         }
       >
         <Route element={<AppShell />}>
-          <Route path={ROUTES.HOME} element={whileLoading(<DashboardPage />)} />
-          <Route path={ROUTES.STUDENTS} element={whileLoading(<StudentsPage />)} />
+          {screen(ROUTES.HOME, <DashboardPage />)}
+          {screen(ROUTES.STUDENTS, <StudentsPage />)}
           {/* Before the :id route, or "import" would be read as a student id. */}
-          <Route path={ROUTES.IMPORT_STUDENTS} element={whileLoading(<ImportStudentsPage />)} />
-          <Route path={ROUTES.STUDENT_PATTERN} element={whileLoading(<StudentDetailPage />)} />
-          <Route
-            path={ROUTES.STUDENT_PERFORMANCE_PATTERN}
-            element={whileLoading(<StudentPerformancePage />)}
-          />
-          <Route path={ROUTES.BRANCHES} element={whileLoading(<BranchesPage />)} />
-          <Route path={ROUTES.EXAMS} element={whileLoading(<ExamsPage />)} />
-          <Route path={ROUTES.COHORTS} element={whileLoading(<CohortsPage />)} />
-          <Route path={ROUTES.QUESTIONS} element={whileLoading(<QuestionsPage />)} />
+          {screen(ROUTES.IMPORT_STUDENTS, <ImportStudentsPage />)}
+          {screen(ROUTES.STUDENT_PATTERN, <StudentDetailPage />)}
+          {screen(ROUTES.STUDENT_PERFORMANCE_PATTERN, <StudentPerformancePage />)}
+          {screen(ROUTES.BRANCHES, <BranchesPage />)}
+          {screen(ROUTES.EXAMS, <ExamsPage />)}
+          {screen(ROUTES.COHORTS, <CohortsPage />)}
+          {screen(ROUTES.QUESTIONS, <QuestionsPage />)}
           {/* Before the :id route, or "new", "import" and "taxonomy" would be read as a question id. */}
-          <Route path={ROUTES.QUESTION_NEW} element={whileLoading(<BankQuestionPage />)} />
-          <Route path={ROUTES.IMPORT_QUESTIONS} element={whileLoading(<ImportQuestionsPage />)} />
-          <Route path={ROUTES.TAXONOMY} element={whileLoading(<TaxonomyPage />)} />
-          <Route
-            path={ROUTES.QUESTION_PATTERN}
-            element={whileLoading(<BankQuestionPage readOnly />)}
-          />
-          <Route path={ROUTES.QUESTION_EDIT_PATTERN} element={whileLoading(<BankQuestionPage />)} />
+          {screen(ROUTES.QUESTION_NEW, <BankQuestionPage />)}
+          {screen(ROUTES.IMPORT_QUESTIONS, <ImportQuestionsPage />)}
+          {screen(ROUTES.TAXONOMY, <TaxonomyPage />)}
+          {screen(ROUTES.QUESTION_PATTERN, <BankQuestionPage readOnly />)}
+          {screen(ROUTES.QUESTION_EDIT_PATTERN, <BankQuestionPage />)}
           {[
             ROUTES.TYPING_SECTION_PATTERN,
             ROUTES.READING_SECTION_PATTERN,
             ROUTES.TEST_SECTION_PATTERN,
-          ].map((path) => (
-            <Route key={path} path={path} element={whileLoading(<SectionAuthoringPage />)} />
-          ))}
-          <Route
-            path={ROUTES.PROOFREADING_ASSIGNMENTS}
-            element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.PROOFREADER} />)}
-          />
-          <Route path={ROUTES.AUTHORING_EDITOR} element={whileLoading(<AuthoringEditorPage />)} />
+          ].map((path) => screen(path, <SectionAuthoringPage />))}
+          {screen(
+            ROUTES.PROOFREADING_ASSIGNMENTS,
+            <AssignmentQueuePage role={ASSIGNMENT_ROLES.PROOFREADER} />,
+          )}
+          {screen(ROUTES.AUTHORING_EDITOR, <AuthoringEditorPage />)}
           {/* Before the :id route, or "history" would be read as a question id. */}
-          <Route path={ROUTES.AUTHORING_HISTORY} element={whileLoading(<AuthoringHistoryPage />)} />
-          <Route
-            path={ROUTES.AUTHORING_ASSIGNMENTS}
-            element={whileLoading(<AssignmentQueuePage role={ASSIGNMENT_ROLES.TYPIST} />)}
-          />
-          <Route
-            path={ROUTES.AUTHORING_IMPORT_PATTERN}
-            element={whileLoading(<ImportQuestionsPage />)}
-          />
-          <Route
-            path={ROUTES.AUTHORING_EDITOR_PATTERN}
-            element={whileLoading(<AuthoringEditorPage />)}
-          />
-          <Route path={ROUTES.BASE_CONFIGS} element={whileLoading(<BaseConfigsPage />)} />
+          {screen(ROUTES.AUTHORING_HISTORY, <AuthoringHistoryPage />)}
+          {screen(
+            ROUTES.AUTHORING_ASSIGNMENTS,
+            <AssignmentQueuePage role={ASSIGNMENT_ROLES.TYPIST} />,
+          )}
+          {screen(ROUTES.AUTHORING_IMPORT_PATTERN, <ImportQuestionsPage />)}
+          {screen(ROUTES.AUTHORING_EDITOR_PATTERN, <AuthoringEditorPage />)}
+          {screen(ROUTES.BASE_CONFIGS, <BaseConfigsPage />)}
           {/* Before the :id route, or "new" would be read as a config id. */}
-          <Route path={ROUTES.BASE_CONFIG_NEW} element={whileLoading(<BaseConfigFormPage />)} />
-          <Route path={ROUTES.BASE_CONFIG_PATTERN} element={whileLoading(<BaseConfigFormPage />)} />
+          {screen(ROUTES.BASE_CONFIG_NEW, <BaseConfigFormPage />)}
+          {screen(ROUTES.BASE_CONFIG_PATTERN, <BaseConfigFormPage />)}
           {/* Before the :id route, or "new" would be read as a series id. */}
-          <Route path={ROUTES.TEST_SERIES_NEW} element={whileLoading(<TestSeriesFormPage />)} />
-          <Route path={ROUTES.TEST_SERIES_PATTERN} element={whileLoading(<TestSeriesFormPage />)} />
+          {screen(ROUTES.TEST_SERIES_NEW, <TestSeriesFormPage />)}
+          {screen(ROUTES.TEST_SERIES_PATTERN, <TestSeriesFormPage />)}
 
-          <Route
-            path={ROUTES.EVENT_IMPORT_PATTERN}
-            element={whileLoading(<ImportEventCandidatesPage />)}
-          />
-          <Route
-            path={ROUTES.PROGRAM_IMPORT_PATTERN}
-            element={whileLoading(<ImportProgramStudentsPage />)}
-          />
-          <Route path={ROUTES.SECTION_PROGRESS} element={whileLoading(<SectionProgressPage />)} />
-          <Route path={ROUTES.TESTS} element={whileLoading(<TestsAndSeriesPage />)} />
+          {screen(ROUTES.EVENT_IMPORT_PATTERN, <ImportEventCandidatesPage />)}
+          {screen(ROUTES.PROGRAM_IMPORT_PATTERN, <ImportProgramStudentsPage />)}
+          {screen(ROUTES.SECTION_PROGRESS, <SectionProgressPage />)}
+          {screen(ROUTES.TESTS, <TestsAndSeriesPage />)}
           {/* Ranked by specificity, not order: "configs", "series" and "new" outrank ":id". */}
-          <Route path={ROUTES.TEST_NEW} element={whileLoading(<TestBuilderPage />)} />
-          <Route path={ROUTES.TEST_PATTERN} element={whileLoading(<TestBuilderPage />)} />
-          <Route path={ROUTES.TEST_PAPER_PATTERN} element={whileLoading(<TestPaperPage />)} />
-          <Route
-            path={ROUTES.TEST_PAPER_PRINT_PATTERN}
-            element={whileLoading(<TestPaperPrintPage />)}
-          />
-          <Route
-            path={ROUTES.TEST_ANALYTICS_PATTERN}
-            element={whileLoading(<TestAnalyticsPage />)}
-          />
-          <Route path={ROUTES.LIVE_OPS} element={whileLoading(<LiveOpsPage />)} />
+          {screen(ROUTES.TEST_NEW, <TestBuilderPage />)}
+          {screen(ROUTES.TEST_PATTERN, <TestBuilderPage />)}
+          {screen(ROUTES.TEST_PAPER_PATTERN, <TestPaperPage />)}
+          {screen(ROUTES.TEST_PAPER_PRINT_PATTERN, <TestPaperPrintPage />)}
+          {screen(ROUTES.TEST_ANALYTICS_PATTERN, <TestAnalyticsPage />)}
+          {screen(ROUTES.LIVE_OPS, <LiveOpsPage />)}
           {/* Super-admin screens. The route exists for everyone; the page itself refuses. */}
-          <Route path={ROUTES.ADMINS} element={whileLoading(<AdminsPage />)} />
-          <Route path={ROUTES.PERMISSIONS} element={whileLoading(<PermissionsPage />)} />
-          <Route path={ROUTES.ANNOUNCEMENTS} element={whileLoading(<AnnouncementsPage />)} />
-          <Route path={ROUTES.REPORTS} element={whileLoading(<ReportsPage />)} />
-          <Route path={ROUTES.REPORT_PATTERN} element={whileLoading(<ReportPage />)} />
-          <Route path={ROUTES.AUDIT} element={whileLoading(<AuditActivityPage />)} />
-          <Route path={ROUTES.AUDIT_IMPORTS} element={whileLoading(<AuditImportsPage />)} />
+          {screen(ROUTES.ADMINS, <AdminsPage />)}
+          {screen(ROUTES.PERMISSIONS, <PermissionsPage />)}
+          {screen(ROUTES.ANNOUNCEMENTS, <AnnouncementsPage />)}
+          {screen(ROUTES.REPORTS, <ReportsPage />)}
+          {screen(ROUTES.REPORT_PATTERN, <ReportPage />)}
+          {screen(ROUTES.AUDIT, <AuditActivityPage />)}
+          {screen(ROUTES.AUDIT_IMPORTS, <AuditImportsPage />)}
         </Route>
       </Route>
       <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />

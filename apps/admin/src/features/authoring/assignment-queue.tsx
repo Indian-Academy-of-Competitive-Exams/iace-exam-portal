@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ASSIGNMENT_ROLES,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
   clockText,
   instituteDayLabel,
   type AssignmentRole,
@@ -24,6 +26,7 @@ import {
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES, myAssignmentsQueryKey } from '../../lib/constants';
+import { useAuth } from '../../providers/auth';
 import { useTestSectionFilters } from './use-test-section-filters';
 import { TypistDoneDialog } from './typist-done-dialog';
 import { FinalizeAssignmentDialog } from './finalize-assignment-dialog';
@@ -54,9 +57,10 @@ function SectionProgress({ row }: Readonly<{ row: AssignmentWithTest }>) {
   );
 }
 
+/** A move is absent below WRITE on its own key, where the server would refuse it. */
 interface RowMoves {
-  onDone: (row: AssignmentWithTest) => void;
-  onRead: (row: AssignmentWithTest) => void;
+  onDone?: (row: AssignmentWithTest) => void;
+  onRead?: (row: AssignmentWithTest) => void;
 }
 
 /** Where the section stands for this row's holder, in the words each role uses. */
@@ -80,15 +84,13 @@ function StateBadge({ row }: Readonly<{ row: AssignmentWithTest }>) {
 }
 
 function RowMenu({ row, moves }: Readonly<{ row: AssignmentWithTest; moves: RowMoves }>) {
-  if (!row.canMarkDone && !row.canRelease) return null;
+  const onDone = row.canMarkDone ? moves.onDone : undefined;
+  const onRead = row.canRelease ? moves.onRead : undefined;
+  if (!onDone && !onRead) return null;
   return (
     <RowActions label={`Actions for ${row.sectionName}`}>
-      {row.canMarkDone ? (
-        <DropdownMenuItem onSelect={() => moves.onDone(row)}>Mark done</DropdownMenuItem>
-      ) : null}
-      {row.canRelease ? (
-        <DropdownMenuItem onSelect={() => moves.onRead(row)}>Mark read</DropdownMenuItem>
-      ) : null}
+      {onDone ? <DropdownMenuItem onSelect={() => onDone(row)}>Mark done</DropdownMenuItem> : null}
+      {onRead ? <DropdownMenuItem onSelect={() => onRead(row)}>Mark read</DropdownMenuItem> : null}
     </RowActions>
   );
 }
@@ -156,6 +158,9 @@ function columnsOf(moves: RowMoves): DataTableColumn<AssignmentWithTest>[] {
 /** One role's own queue: the typist's under Authoring, the reader's under Proof-reading. */
 export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>) {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
+  const canType = can(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE);
+  const canRelease = can(FEATURE_KEYS.QUESTION_PROOFREAD, PERMISSION_LEVELS.WRITE);
   const [finishing, setFinishing] = useState<AssignmentWithTest | null>(null);
   const [reading, setReading] = useState<AssignmentWithTest | null>(null);
 
@@ -191,7 +196,14 @@ export function AssignmentQueuePage({ role }: Readonly<{ role: AssignmentRole }>
     fetchPage: (params) => api.admin.assignments.mine(params),
   });
 
-  const columns = useMemo(() => columnsOf({ onDone: setFinishing, onRead: setReading }), []);
+  const columns = useMemo(
+    () =>
+      columnsOf({
+        onDone: canType ? setFinishing : undefined,
+        onRead: canRelease ? setReading : undefined,
+      }),
+    [canType, canRelease],
+  );
   // No card holds a section's read here, so its whole prefix can go: the section page must not show it unreleased.
   const settle = () => {
     for (const queryKey of [QUERY_KEYS.ASSIGNMENTS, QUERY_KEYS.PROOFREADING]) {

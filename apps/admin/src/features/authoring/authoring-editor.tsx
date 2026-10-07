@@ -5,8 +5,10 @@ import { Keyboard, Maximize2, Minimize2, Save } from 'lucide-react';
 import {
   DEFAULT_LANGUAGE,
   DIFFICULTY_LEVEL,
+  FEATURE_KEYS,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
+  PERMISSION_LEVELS,
   hasText,
   type AuthoringSaveResult,
   type QuestionDetail,
@@ -21,7 +23,7 @@ import { AUTHORING_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { QUERY_KEYS, STORAGE_KEYS, authoringQuestionQueryKey } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import { AuthoringHeaderBar } from './authoring-header-bar';
-import { Legend, useFocusMode } from './authoring-chrome';
+import { Legend, QuestionNotLoaded, useFocusMode } from './authoring-chrome';
 import { QuestionPanes } from './question-panes';
 import { useChecked, useDuplicate } from './use-question-checks';
 import {
@@ -45,7 +47,9 @@ interface Saved {
 
 export function AuthoringEditorPage() {
   const { id } = useParams<{ id?: string }>();
-  const { identity } = useAuth();
+  const { identity, can } = useAuth();
+  // Below WRITE the question is its author's to read, and the box takes nothing.
+  const canWrite = can(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE);
   const storageKey = `${STORAGE_KEYS.AUTHORING_DRAFT}.${identity?.id ?? ''}`;
 
   const restored = useMemo(() => restore(storageKey), [storageKey]);
@@ -92,7 +96,10 @@ export function AuthoringEditorPage() {
     rebuildBox();
   });
 
-  const canSave = issues.length === 0 && duplicate === null && !save.isPending;
+  // A question that was not read leaves the box blank on its id, and a save from there would overwrite it.
+  const loaded = editingId === '' || editing.data !== undefined;
+  const typing = canWrite && loaded;
+  const canSave = typing && issues.length === 0 && duplicate === null && !save.isPending;
 
   const cycleLanguage = useCallback(() => {
     setLanguage((current) => {
@@ -121,6 +128,7 @@ export function AuthoringEditorPage() {
         header={header}
         state={state}
         subjectLocked={false}
+        disabled={!typing}
         onHeaderChange={setHeader}
         onStateChange={(next) => {
           setState(next);
@@ -139,15 +147,14 @@ export function AuthoringEditorPage() {
 
       <div data-tour={TOUR_TARGETS.AUTHORING_CARD} className="flex min-h-0 flex-1 bg-muted/40 p-4">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-          {editing.isPending && editingId !== '' ? (
-            <LoadingState>Loading the question</LoadingState>
-          ) : (
+          {loaded ? (
             <QuestionPanes
               questionId={editingId}
               state={state}
               language={language}
               romanised={romanised}
               canSave={canSave}
+              readOnly={!canWrite}
               boxVersion={boxVersion}
               checks={checks}
               onRegions={onRegions}
@@ -155,20 +162,30 @@ export function AuthoringEditorPage() {
               onLanguageChange={switchLanguage}
               onSave={() => save.mutate()}
             />
+          ) : (
+            <Unread error={editing.error} onRetry={() => void editing.refetch()} />
           )}
         </div>
       </div>
 
       <Legend
         actions={
-          <Button type="button" size="sm" disabled={!canSave} onClick={() => save.mutate()}>
-            <Save aria-hidden />
-            {id ? 'Save' : 'Save and next'}
-          </Button>
+          typing ? (
+            <Button type="button" size="sm" disabled={!canSave} onClick={() => save.mutate()}>
+              <Save aria-hidden />
+              {id ? 'Save' : 'Save and next'}
+            </Button>
+          ) : undefined
         }
       />
     </div>
   );
+}
+
+/** In the box's place until its question is read: still loading, or the reason it did not come. */
+function Unread({ error, onRetry }: Readonly<{ error: unknown; onRetry: () => void }>) {
+  if (error === null) return <LoadingState>Loading the question</LoadingState>;
+  return <QuestionNotLoaded error={error} onRetry={onRetry} />;
 }
 
 /** The header's right-hand end. Its own component, so the page reads as a page. */

@@ -10,7 +10,7 @@ import {
 import { NAV_ITEMS, ROUTES, STORAGE_KEYS, filterAdminNav } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
-// can goes to the shell, which reads featureKey; superAdminOnly is stripped here since it isn't one.
+// can goes to the shell, which reads featureKey; superAdminOnly and a route's own guard are neither, so both are applied here.
 export function AppShell() {
   const { identity: admin, signOut, can } = useAuth();
 
@@ -20,8 +20,8 @@ export function AppShell() {
 
   // A deactivated admin keeps their session but loses the nav.
   const nav = useMemo(
-    () => (isDeactivated ? [] : filterAdminNav(NAV_ITEMS, { isSuperAdmin })),
-    [isDeactivated, isSuperAdmin],
+    () => (isDeactivated ? [] : filterAdminNav(NAV_ITEMS, { isSuperAdmin, can })),
+    [isDeactivated, isSuperAdmin, can],
   );
 
   return (

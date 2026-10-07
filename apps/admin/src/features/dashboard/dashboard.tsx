@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import {
   DIFFICULTY_LEVEL,
+  FEATURE_KEYS,
   QUESTION_STATUSES,
   TEST_STATUSES,
   clockText,
@@ -37,6 +38,7 @@ import {
   TruncatedText,
   cn,
   linkVariants,
+  plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { ACTION_BADGE_VARIANT } from '../../lib/audit-vocabulary';
@@ -184,6 +186,7 @@ function Tile({
 // ---------------------------------------------------------------------------
 
 function BankFigure({ bank }: Readonly<{ bank: DashboardBank }>) {
+  const { can } = useAuth();
   const drawn = bank.coverage.filter((subject) => subject.active > 0);
   const ceiling = Math.max(...drawn.map((subject) => subject.active), 1);
 
@@ -191,16 +194,21 @@ function BankFigure({ bank }: Readonly<{ bank: DashboardBank }>) {
     <ChartFigure
       className="lg:col-span-2"
       title="Coverage"
-      meta={`${drawn.length} subjects`}
+      meta={plural(drawn.length, 'subject')}
       figure={
         bank.openAssignments === undefined ? null : (
           <Metric
             size="md"
             label="Open assignments"
+            // The band also reaches a bank or typing admin, who has no reader's queue to follow it to.
             value={
-              <Link to={ROUTES.PROOFREADING_ASSIGNMENTS} className={linkVariants()}>
-                {bank.openAssignments}
-              </Link>
+              can(FEATURE_KEYS.QUESTION_PROOFREAD) ? (
+                <Link to={ROUTES.PROOFREADING_ASSIGNMENTS} className={linkVariants()}>
+                  {bank.openAssignments}
+                </Link>
+              ) : (
+                bank.openAssignments
+              )
             }
           />
         )
@@ -238,7 +246,7 @@ function SittingsFigure({ sittings }: Readonly<{ sittings: readonly DashboardSit
     <ChartFigure
       className="lg:col-span-2"
       title="Sittings"
-      meta={`${sittings.length} tests`}
+      meta={plural(sittings.length, 'test')}
       figure={<Metric size="md" label="Ranked sittings" value={ranked} />}
     >
       {ranked === 0 ? (
@@ -318,6 +326,8 @@ function WindowList({
   title,
   rows,
 }: Readonly<{ title: string; rows: readonly DashboardWindow[] }>) {
+  // A branch-access admin sees the windows without the tests behind them, so for them a title is text.
+  const opensTests = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT);
   if (rows.length === 0) return null;
 
   return (
@@ -326,9 +336,13 @@ function WindowList({
       <ul className="flex flex-col gap-2">
         {rows.map((row) => (
           <li key={row.testId} className="flex min-w-0 flex-col gap-0.5 text-sm">
-            <Link to={ROUTES.TEST(row.testId)} className={linkVariants()}>
+            {opensTests ? (
+              <Link to={ROUTES.TEST(row.testId)} className={linkVariants()}>
+                <TruncatedText>{row.title ?? UNTITLED}</TruncatedText>
+              </Link>
+            ) : (
               <TruncatedText>{row.title ?? UNTITLED}</TruncatedText>
-            </Link>
+            )}
             <span className="text-xs text-muted-foreground">
               {`${row.series} · ${opensLabel(row.opensAt)}`}
             </span>

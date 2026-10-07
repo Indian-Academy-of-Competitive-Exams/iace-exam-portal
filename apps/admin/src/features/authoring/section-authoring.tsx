@@ -6,12 +6,16 @@ import {
   AppException,
   DIFFICULTY_LEVEL,
   ErrorCodes,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
   REVIEW_STATES,
   SECTION_SEATS,
   SEND_BACK_REASONS,
   clockText,
   instituteDayLabel,
   type Assignment,
+  type FeatureKey,
+  type PermissionLevel,
   type QuestionTime,
   type ReviewState,
   type SectionQuestion,
@@ -52,6 +56,7 @@ import {
   QUERY_KEYS,
   REVIEW_STATE_LABELS,
   ROUTES,
+  SECTION_KEYS,
   SECTION_QUESTION_PARAM,
   SEND_BACK_REASON_LABELS,
   sectionWorkHeldQueryKey,
@@ -92,13 +97,19 @@ const REASON_ORDER = [
   SEND_BACK_REASONS.ANSWER_OPTION,
 ] as const;
 
-/** What the viewer can do right now, read off the section once for the page and every card. */
-function seatOf(work: SectionWork) {
+/** What the viewer can do right now, read off the section and the levels they hold, once for the page and every card. */
+function seatOf(work: SectionWork, can: (key: FeatureKey, level: PermissionLevel) => boolean) {
   const own = work.seatReplaced ? null : work.seat;
+  const { WRITE } = PERMISSION_LEVELS;
+  // A section write answers any of its three keys at WRITE; typing and releasing each ask for their own.
+  const writes = SECTION_KEYS.some((key) => can(key, WRITE));
+  const types = can(FEATURE_KEYS.QUESTION_AUTHORING, WRITE);
   return {
-    reading: own === SECTION_SEATS.READER && Boolean(work.reader?.canMarkRead),
-    typing: own === SECTION_SEATS.TYPIST && Boolean(work.typist?.canMarkDone),
-    fixing: own === SECTION_SEATS.TYPIST && !work.offered,
+    writes,
+    reading: writes && own === SECTION_SEATS.READER && Boolean(work.reader?.canMarkRead),
+    typing: types && own === SECTION_SEATS.TYPIST && Boolean(work.typist?.canMarkDone),
+    fixing: writes && own === SECTION_SEATS.TYPIST && !work.offered,
+    releasing: work.canRelease && can(FEATURE_KEYS.QUESTION_PROOFREAD, WRITE),
   };
 }
 
@@ -195,8 +206,8 @@ function SectionWorkspace({
   onChanged: (next: SectionWork) => void;
   onSettle: (savedId?: string) => Promise<void>;
 }>) {
-  const seat = useMemo(() => seatOf(work), [work]);
-  const { identity } = useAuth();
+  const { identity, can } = useAuth();
+  const seat = useMemo(() => seatOf(work, can), [work, can]);
   const elsewhere = editingElsewhere(work, identity?.id);
   // A super admin's save takes the claim over, so they are told and never stopped.
   const blocked = elsewhere !== null && !identity?.isSuperAdmin;
@@ -205,7 +216,8 @@ function SectionWorkspace({
   const { testId, baseConfigSectionId: sectionId } = work;
 
   // Time is counted for whoever holds a seat, while the paper can still change.
-  const counting = !work.seatReplaced && work.seat !== SECTION_SEATS.OWNER && !work.offered;
+  const seated = seat.writes && !work.seatReplaced && work.seat !== SECTION_SEATS.OWNER;
+  const counting = seated && !work.offered;
   const [inView, setInView] = useState<string | null>(null);
   // A saved question's clock stands still: only a blank card, or one waiting on the viewer, counts.
   const owed =
@@ -287,7 +299,7 @@ function SectionWorkspace({
           Mark done
         </Button>
       ) : null}
-      {work.canRelease ? (
+      {seat.releasing ? (
         <Button type="button" size="sm" variant="outline" onClick={() => setReleasing(true)}>
           <Send aria-hidden />
           Release
@@ -298,13 +310,7 @@ function SectionWorkspace({
 
   const title = <SectionTitle work={work} elsewhere={elsewhere} blocked={blocked} />;
   const empty = source.cards.length === 0 && !source.create;
-  const thread = (
-    <SectionThreadButton
-      testId={testId}
-      sectionId={sectionId}
-      canWrite={!work.seatReplaced && work.seat !== SECTION_SEATS.OWNER}
-    />
-  );
+  const thread = <SectionThreadButton testId={testId} sectionId={sectionId} canWrite={seated} />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -332,7 +338,7 @@ function SectionWorkspace({
           }
           panel={{
             label: 'Section progress',
-            render: (position) => <ProgressPanel work={work} {...position} />,
+            render: (position) => <ProgressPanel work={work} seat={seat} {...position} />,
           }}
         />
       )}
@@ -470,7 +476,7 @@ function cardOf(
   const { review, time } = question;
   return {
     key: question.questionId,
-    editable: question.editable,
+    editable: question.editable && seat.writes,
     lead: (
       <>
         <span className="text-sm font-semibold tabular-nums">
@@ -626,7 +632,7 @@ function CardActions({
       </Button>
     );
   }
-  if (question.deletable) {
+  if (question.deletable && seat.writes) {
     return <DeleteQuestion work={work} question={question} onSettle={onSettle} />;
   }
   return null;
@@ -743,10 +749,15 @@ function SendBackDialog({
 /** The section's progress, one tab per role: who holds it, what is pending, and a tile per question. */
 function ProgressPanel({
   work,
+  seat,
   activeKey,
   jump,
-}: Readonly<{ work: SectionWork; activeKey: string; jump: (key: string) => void }>) {
-  const seat = seatOf(work);
+}: Readonly<{
+  work: SectionWork;
+  seat: ReturnType<typeof seatOf>;
+  activeKey: string;
+  jump: (key: string) => void;
+}>) {
   const counts = countsOf(work);
   const tiles = (
     <ol className="grid grid-cols-5 gap-1.5">

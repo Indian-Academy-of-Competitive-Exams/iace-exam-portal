@@ -36,8 +36,9 @@ describe('the Authoring section', () => {
 
   /** The failure this prevents: authoring folded into the bank, so a typist gets the whole bank. */
   it('is the only section a typist reaches, beside the audit log every admin has', () => {
-    const forTypist = filterAdminNav(NAV_ITEMS, { isSuperAdmin: false });
-    const shown = filterNavByPermission(forTypist, holding(FEATURE_KEYS.QUESTION_AUTHORING));
+    const can = holding(FEATURE_KEYS.QUESTION_AUTHORING);
+    const forTypist = filterAdminNav(NAV_ITEMS, { isSuperAdmin: false, can });
+    const shown = filterNavByPermission(forTypist, can);
 
     assert.deepEqual(
       shown.map((item) => item.label),

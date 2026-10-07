@@ -6,8 +6,10 @@ import {
   ASSIGNMENT_ROLES,
   DIFFICULTY_LABELS,
   DIFFICULTY_LEVELS,
+  FEATURE_KEYS,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
+  PERMISSION_LEVELS,
   QUESTION_STATUSES,
   QUESTION_TYPES,
   todayISO,
@@ -52,6 +54,7 @@ import {
   authoringHistoryQueryKey,
   authoringStatsQueryKey,
 } from '../../lib/constants';
+import { useAuth } from '../../providers/auth';
 import { useDeleteQuestion } from './use-delete-question';
 import { SubjectMultiPicker } from '../../components/taxonomy-picker';
 import { AssignmentMultiPicker } from './assignment-picker';
@@ -161,6 +164,7 @@ function historyColumns(): DataTableColumn<QuestionSummary>[] {
 
 /** A section's question is deleted on its section page; here only what was typed straight into the bank. */
 function HistoryActions({ question }: Readonly<{ question: QuestionSummary }>) {
+  const { can } = useAuth();
   const queryClient = useQueryClient();
   const deleting = useDeleteQuestion({
     consequence: `“${question.stemPreview}” is removed from the bank for good.`,
@@ -169,6 +173,8 @@ function HistoryActions({ question }: Readonly<{ question: QuestionSummary }>) {
   });
   const deletable = !question.inUse && question.writtenFor === null;
 
+  // Reading is the stem's own link; below WRITE there is nothing left for the menu to offer.
+  if (!can(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE)) return null;
   return (
     <>
       <RowActions label="Actions for this question">

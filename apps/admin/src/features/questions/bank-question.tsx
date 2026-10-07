@@ -2,10 +2,16 @@ import { useCallback, useMemo, useState } from 'react';
 import { BookOpen, Pencil } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DIFFICULTY_LABELS, DIFFICULTY_LEVEL } from '@iace/contracts';
+import {
+  DIFFICULTY_LABELS,
+  DIFFICULTY_LEVEL,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+} from '@iace/contracts';
 import { Button, ConfirmDialog } from '@iace/ui';
 import { api } from '../../lib/api';
 import { QUERY_KEYS, ROUTES, heldQuestionQueryKey, questionQueryKey } from '../../lib/constants';
+import { useAuth } from '../../providers/auth';
 import {
   AuthoringWorkspace,
   type Held,
@@ -18,6 +24,7 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const canWrite = useAuth().can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -101,7 +108,7 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
         saveLabel={id ? 'Save' : 'Save and next'}
         onDirtyChange={setDirty}
         extraActions={
-          id ? (
+          id && canWrite ? (
             <Button
               asChild={readOnly}
               variant="outline"

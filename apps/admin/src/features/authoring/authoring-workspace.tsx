@@ -23,7 +23,7 @@ import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { usePageTour } from '@iace/app-kit/browser';
 import { AUTHORING_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { AuthoringHeaderBar } from './authoring-header-bar';
-import { Legend, useFocusMode } from './authoring-chrome';
+import { Legend, QuestionNotLoaded, useFocusMode } from './authoring-chrome';
 import { QuestionPanes } from './question-panes';
 import {
   SCRIPT_OF,
@@ -179,6 +179,8 @@ export function AuthoringWorkspace({
     !source.blocked &&
     (key === NEW_CARD || Boolean(source.cards.find((card) => card.key === key)?.editable));
   const editable = editableCard(active);
+  // A card that was not read has nothing to save; with others beside it the button still moves on.
+  const typing = editable && !(activeBase.isError && !activeBase.data);
 
   const held = useRef(active);
   useEffect(() => {
@@ -399,7 +401,7 @@ export function AuthoringWorkspace({
         actions={
           <>
             {extraActions}
-            {editable || keys.length > 1 ? (
+            {typing || keys.length > 1 ? (
               <Button
                 type="button"
                 size="sm"
@@ -408,7 +410,7 @@ export function AuthoringWorkspace({
                 onClick={saveAndNext}
               >
                 <Save aria-hidden />
-                {editable ? saveLabel : 'Next'}
+                {typing ? saveLabel : 'Next'}
               </Button>
             ) : null}
           </>
@@ -549,10 +551,14 @@ function CardBody({
     return (
       <>
         <div className={BAR}>{lead}</div>
-        <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
-        </div>
+        {base.isError ? (
+          <QuestionNotLoaded error={base.error} onRetry={() => void base.refetch()} />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-64" />
+          </div>
+        )}
       </>
     );
   }
