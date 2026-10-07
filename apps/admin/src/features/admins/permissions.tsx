@@ -166,6 +166,8 @@ function AdminPanel({
   const [draft, setDraft] = useState<Draft>(() => new Map<FeatureKey, Level>());
   const [confirming, setConfirming] = useState(false);
   const [pendingRole, setPendingRole] = useState<AdminRole | null>(null);
+  // Counted when the role is picked and kept, so the dialog reads the same on its way out.
+  const [discarding, setDiscarding] = useState(0);
 
   const changes = useMemo<Change[]>(
     () =>
@@ -250,9 +252,11 @@ function AdminPanel({
                 clearable={false}
                 items={ROLE_ITEMS}
                 disabled={setRole.isPending || save.isPending}
-                onChange={(next) =>
-                  next && next !== admin.role && setPendingRole(next as AdminRole)
-                }
+                onChange={(next) => {
+                  if (!next || next === admin.role) return;
+                  setDiscarding(changes.length);
+                  setPendingRole(next as AdminRole);
+                }}
               />
             )}
           </Field>
@@ -263,7 +267,7 @@ function AdminPanel({
             destructive={pruned.length > 0}
             loading={setRole.isPending}
             title={`Change ${admin.email} to ${ADMIN_ROLE_LABELS[nextRole]}?`}
-            description={roleChangeWarning(nextRole, pruned.length)}
+            description={roleChangeWarning(nextRole, pruned.length, discarding)}
             confirmLabel="Change role"
             onConfirm={() => pendingRole && setRole.mutate(pendingRole)}
           >
@@ -284,6 +288,7 @@ function AdminPanel({
             admin={admin}
             features={features}
             draft={draft}
+            changes={changes}
             disabled={save.isPending}
             onSetLevel={setLevel}
           />
@@ -353,21 +358,28 @@ function prunedBy(admin: Admin, role: AdminRole, features: readonly Feature[]): 
     .map((feature) => ({ feature, from: admin.permissions[feature.key] ?? null, to: null }));
 }
 
-function roleChangeWarning(role: AdminRole, prunedCount: number): string {
+function roleChangeWarning(role: AdminRole, prunedCount: number, unsavedCount: number): string {
+  // The preset replaces the panel's draft, so the ticks it overwrites are named before it does.
+  const discarded =
+    unsavedCount === 0
+      ? ''
+      : `${plural(unsavedCount, 'unsaved change')} on this panel will be discarded. `;
   if (role === ADMIN_ROLES.SUPER_ADMIN) {
-    return 'They bypass every feature check from their next request, so nothing is removed and their grants are left as they are. Super admin cannot be taken back from this portal.';
+    return `${discarded}They bypass every feature check from their next request, so nothing is removed and their grants are left as they are. Super admin cannot be taken back from this portal.`;
   }
   const loss =
     prunedCount === 0
       ? 'They hold no grant the new role drops, so nothing is removed.'
       : `${plural(prunedCount, 'grant')} the new role does not carry will be removed, and they lose that access on their next request — no signing out and in again.`;
-  return `${loss} Grants the new role still carries are kept, and nothing new is granted until you save the permissions below.`;
+  return `${discarded}${loss} Grants the new role still carries are kept, and nothing new is granted until you save the permissions below.`;
 }
 
 /** Every registered key the role's preset names, as a draft against what is already stored. */
 function presetDraft(admin: Admin, features: readonly Feature[]): Draft {
   const preset = ROLE_PERMISSION_PRESET[admin.role];
   const draft = new Map<FeatureKey, Level>();
+  // A super admin's grants lie dormant and their panel has no Save, so there is nothing to draft.
+  if (admin.isSuperAdmin) return draft;
   for (const feature of features) {
     const next = preset[feature.key] ?? null;
     if ((admin.permissions[feature.key] ?? null) !== next) draft.set(feature.key, next);
@@ -375,7 +387,7 @@ function presetDraft(admin: Admin, features: readonly Feature[]): Draft {
   return draft;
 }
 
-/** Unsaved work wins the slot: this row is all that is visible once the panel is shut. */
+/** Unsaved work wins the slot where it can be saved: this row is all that is visible once the panel is shut. */
 function PanelMeta({
   admin,
   features,
@@ -387,10 +399,6 @@ function PanelMeta({
   changes: readonly Change[];
   heldCount: number;
 }>) {
-  if (changes.length > 0) {
-    return <Badge variant="warning">{plural(changes.length, 'unsaved change')}</Badge>;
-  }
-
   if (admin.isSuperAdmin) {
     return (
       <Badge variant="primary">
@@ -398,6 +406,10 @@ function PanelMeta({
         Super admin
       </Badge>
     );
+  }
+
+  if (changes.length > 0) {
+    return <Badge variant="warning">{plural(changes.length, 'unsaved change')}</Badge>;
   }
 
   return (
@@ -411,12 +423,15 @@ function FeatureGrid({
   admin,
   features,
   draft,
+  changes,
   disabled,
   onSetLevel,
 }: Readonly<{
   admin: Admin;
   features: readonly Feature[];
   draft: Draft;
+  /** What Save would send, so a row is marked exactly when it is counted. */
+  changes: readonly Change[];
   disabled: boolean;
   onSetLevel: (key: FeatureKey, next: Level) => void;
 }>) {
@@ -436,7 +451,7 @@ function FeatureGrid({
           admin={admin}
           feature={feature}
           level={levelFor(admin, draft, feature.key)}
-          edited={draft.has(feature.key)}
+          edited={changes.some((change) => change.feature.key === feature.key)}
           disabled={disabled}
           onSetLevel={onSetLevel}
         />
