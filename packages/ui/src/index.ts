@@ -92,6 +92,7 @@ export {
   TableFrame,
   PageFrame,
   PanelFrame,
+  SplitFrame,
   PAGE_CONTENT_CLASS,
   type TableFrameTab,
 } from './components/ui/table-frame';

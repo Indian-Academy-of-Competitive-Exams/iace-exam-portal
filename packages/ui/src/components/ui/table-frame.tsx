@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Card } from './card';
-import { FilterRow, type FilterState, type ListFilter } from './list-view';
+import { FormSection } from './form-panel';
+import { FilterColumn, FilterRow, type FilterState, type ListFilter } from './list-view';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 import { cn, FILLS, TOUR_ANCHORS } from '../../lib/utils';
 
@@ -265,8 +266,6 @@ export interface TableFrameTabs {
 export interface TableFrameProps {
   /** Pinned above the card — usually a `PageHeader`. */
   header?: React.ReactNode;
-  /** What a table that is NOT a list is asked by, pinned under the header; a list's bar is its `ListView`'s. */
-  filters?: FrameFilters;
   /** Pinned inside the card, above the table — a context banner a `ListView` does not own. */
   toolbar?: React.ReactNode;
   /** Sub-features close enough to be one idea. The strip sits inside the card, above the tab. */
@@ -275,16 +274,10 @@ export interface TableFrameProps {
 }
 
 /** A list screen: header and filters held still, the table body the only scroller. */
-export function TableFrame({
-  header,
-  filters,
-  toolbar,
-  tabs,
-  children,
-}: Readonly<TableFrameProps>) {
+export function TableFrame({ header, toolbar, tabs, children }: Readonly<TableFrameProps>) {
   const frame = (
     <div data-page-frame className={cn(FILLS, FRAME_COLUMN)}>
-      <FrameTop header={header} filters={filters} beside={false} stacksFilters />
+      {header ? <div className={HEADER_BLOCK}>{header}</div> : null}
       <Card className={cn(FILLS, 'gap-4 p-4')}>
         {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
         {tabs ? <FrameTabs tabs={tabs} scroller={FILLS} bleed /> : children}
@@ -293,4 +286,67 @@ export function TableFrame({
   );
 
   return withTabsRoot(tabs, true, frame);
+}
+
+export interface SplitFrameProps {
+  /** Pinned above both cards — usually a `PageHeader`. */
+  header?: React.ReactNode;
+  /** What the body is asked by, stacked at the head of the side card. */
+  filters?: FrameFilters;
+  /** The side card's own sections: the controls that change the body, or what it comes to. */
+  side?: React.ReactNode;
+  /** Views of one record, their strip inside the body's card. */
+  tabs?: TableFrameTabs;
+  /** Hands the body's scrolling to its children — a table that scrolls, not the card around it. */
+  fills?: boolean;
+  /** Tour stops, for a screen the tour walks. */
+  anchors?: { body?: string; side?: string };
+  children?: React.ReactNode;
+}
+
+/** Below `lg` the two stack and the page scrolls, so neither card is held to a height there. */
+const SPLIT_PANE = 'relative flex flex-col p-4 lg:min-h-0';
+
+/** A body beside the card it is read through: two cards, each its own scroller from `lg` up. */
+export function SplitFrame({
+  header,
+  filters,
+  side,
+  tabs,
+  fills = false,
+  anchors,
+  children,
+}: Readonly<SplitFrameProps>) {
+  const asked = filters && (filters.spec.length > 0 || filters.leading);
+
+  const frame = (
+    <PageFrame className="lg:overflow-hidden" header={header}>
+      <div className="grid gap-5 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[minmax(0,1fr)]">
+        <Card
+          data-tour={anchors?.body}
+          className={cn(SPLIT_PANE, 'order-2 gap-4 lg:order-1', !fills && 'lg:overflow-y-auto')}
+        >
+          {tabs ? <FrameTabs tabs={tabs} scroller={FILLS} bleed /> : children}
+        </Card>
+        {/* First on a phone: what the body is asked by is chosen before there is a body to read. */}
+        <Card
+          data-tour={anchors?.side}
+          className={cn(SPLIT_PANE, 'order-1 gap-6 lg:order-2 lg:overflow-y-auto')}
+        >
+          {asked ? (
+            <FormSection title="Filters">
+              <FilterColumn
+                state={filters.state}
+                filters={filters.spec}
+                leading={filters.leading}
+              />
+            </FormSection>
+          ) : null}
+          {side}
+        </Card>
+      </div>
+    </PageFrame>
+  );
+
+  return withTabsRoot(tabs, fills, frame);
 }

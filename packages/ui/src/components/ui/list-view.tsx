@@ -208,6 +208,44 @@ function FilterControl({
   return <Combobox {...control} clearable={false} items={filter.items} />;
 }
 
+/** Shown only when it would do something — a permanently greyed Clear teaches nobody. */
+function ClearFilters({ count, onClear }: Readonly<{ count: number; onClear: () => void }>) {
+  if (count === 0) return null;
+  return (
+    <Button variant="ghost" className="self-start" onClick={onClear}>
+      <X aria-hidden />
+      Clear filters
+      <Badge variant="neutral">{count}</Badge>
+    </Button>
+  );
+}
+
+/** A spec as a column, each control named above itself: for a bar that sits BESIDE its rows, not over them. */
+export function FilterColumn({
+  state,
+  filters,
+  leading,
+}: Readonly<{ state: FilterState; filters: readonly ListFilter[]; leading?: React.ReactNode }>) {
+  return (
+    <div data-tour={TOUR_ANCHORS.FILTERS} className="flex flex-col gap-3">
+      {leading}
+      {filters.map((filter) => (
+        <Field key={filter.key} htmlFor={`filter-${filter.key}`} label={filter.label}>
+          {(described) => (
+            <FilterControl
+              filter={filter}
+              naming={described}
+              value={state.values[filter.key]}
+              onChange={(next) => state.setFilter(filter.key, next)}
+            />
+          )}
+        </Field>
+      ))}
+      <ClearFilters count={activeFilterCount(state.values, filters)} onClear={state.clearFilters} />
+    </div>
+  );
+}
+
 /** A spec as a bar: primary controls inline, the rest folded, and what Clear drops. */
 export function FilterRow({
   state,
@@ -282,14 +320,7 @@ export function FilterRow({
           </RadioGroup>
         ) : null}
 
-        {/* Shown only when it would do something — a permanently greyed Clear teaches nobody. */}
-        {activeCount > 0 ? (
-          <Button variant="ghost" onClick={state.clearFilters}>
-            <X aria-hidden />
-            Clear filters
-            <Badge variant="neutral">{activeCount}</Badge>
-          </Button>
-        ) : null}
+        <ClearFilters count={activeCount} onClear={state.clearFilters} />
 
         {trailing ? <div className="ml-auto">{trailing}</div> : null}
       </div>

@@ -54,8 +54,6 @@ const picked =
       key: field,
       kind: 'custom',
       label: REPORT_PARAM_LABELS[param],
-      primary: true,
-      width: 'w-80',
       render: (control: ListFilterControl) => (
         <ReportChoicePicker
           {...control}
@@ -78,8 +76,6 @@ const PARAM_FILTERS: Record<ReportParam, Drawn> = {
       key: 'studentId',
       kind: 'custom',
       label: REPORT_PARAM_LABELS[REPORT_PARAMS.STUDENT],
-      primary: true,
-      width: 'w-80',
       render: (control: ListFilterControl) => (
         <ReportChoicePicker
           {...control}
@@ -96,8 +92,6 @@ const PARAM_FILTERS: Record<ReportParam, Drawn> = {
       key: 'attemptId',
       kind: 'custom',
       label: REPORT_PARAM_LABELS[REPORT_PARAMS.ATTEMPT],
-      primary: true,
-      width: 'w-80',
       render: (control: ListFilterControl) => (
         <ReportChoicePicker
           {...control}
@@ -114,8 +108,6 @@ const PARAM_FILTERS: Record<ReportParam, Drawn> = {
       key: 'period',
       kind: 'custom',
       label: REPORT_PARAM_LABELS[REPORT_PARAMS.PERIOD],
-      primary: true,
-      width: 'w-44',
       render: (control: ListFilterControl) => (
         <Combobox
           {...control}
@@ -127,15 +119,14 @@ const PARAM_FILTERS: Record<ReportParam, Drawn> = {
         />
       ),
     },
-    { key: 'from', kind: 'date', label: 'From', primary: true, max: fields.to },
-    { key: 'to', kind: 'date', label: 'To', primary: true, min: fields.from },
+    { key: 'from', kind: 'date', label: 'From', max: fields.to },
+    { key: 'to', kind: 'date', label: 'To', min: fields.from },
   ],
   [REPORT_PARAMS.TOP]: () => [
     {
       key: 'top',
       kind: 'choice',
       label: REPORT_PARAM_LABELS[REPORT_PARAMS.TOP],
-      primary: true,
       items: [
         { value: '', label: `Top ${REPORT_TOP_DEFAULT}` },
         ...TOP_CHOICES.map((top) => ({ value: String(top), label: `Top ${top}` })),
@@ -147,7 +138,6 @@ const PARAM_FILTERS: Record<ReportParam, Drawn> = {
       key: 'days',
       kind: 'choice',
       label: REPORT_PARAM_LABELS[REPORT_PARAMS.DAYS],
-      primary: true,
       items: [
         { value: '', label: `${REPORT_INACTIVE_DAYS_DEFAULT} days` },
         ...DAYS_CHOICES.map((days) => ({ value: String(days), label: `${days} days` })),
@@ -156,7 +146,7 @@ const PARAM_FILTERS: Record<ReportParam, Drawn> = {
   ],
 };
 
-/** The bar a report is asked through, read off its catalogue row: what it needs, then what narrows it. */
+/** What a report is asked through, read off its catalogue row: what it needs, then what narrows it. */
 export function reportFilters(spec: ReportSpec, context: FilterContext): ListFilter[] {
   const drawn = (params: readonly ReportParam[], needed: boolean) =>
     params.flatMap((param) => PARAM_FILTERS[param]({ ...context, needed }));

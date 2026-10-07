@@ -34,14 +34,13 @@ import {
   Button,
   DataTable,
   EmptyState,
-  Metric,
-  MetricGroup,
+  FormSection,
   PageFrame,
   PageHeader,
   Skeleton,
   SkeletonParagraph,
+  SplitFrame,
   StatRow,
-  TableFrame,
   TruncatedText,
   cn,
   type DataTableColumn,
@@ -107,7 +106,7 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
     fields,
     set: (changes) => url.set(changes),
   });
-  // What a report is asked by is not narrowed any-or-all, so the bar is handed no match toggle.
+  // What a report is asked by is not narrowed any-or-all, so the filters are handed no match toggle.
   const { values, setFilter, clearFilters } = useFilterSpec(filters);
   const shown = { ...values, ...fields };
 
@@ -120,62 +119,67 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
   }
 
   const document = report.data;
-  const frame = {
-    header: (
-      <PageHeader
-        breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: spec.title }]} />}
-        title={spec.title}
-        meta={document ? `As of ${instituteDateTimeLabel(document.asOf)}` : undefined}
-        action={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              icon={<Printer aria-hidden />}
-              disabled={!document}
-              onClick={() => document && printHtml(reportHtml(document))}
-            >
-              Print
-            </Button>
-            <ExportButton
-              kind={reportKey}
-              disabled={!ready}
-              download={() => api.admin.reports.export(reportKey, query)}
-            />
-          </div>
-        }
-      />
-    ),
-    filters: { spec: filters, state: { values: shown, setFilter, clearFilters } },
-  };
-
-  if (!ready || report.isError || !document) {
-    return (
-      <TableFrame {...frame}>
-        <Absent lacking={lacking} ready={ready} failed={report.isError} retry={report.refetch} />
-      </TableFrame>
-    );
-  }
-
-  const panes = panesOf(document);
+  const panes = document ? panesOf(document) : [];
   const open = panes.find((pane) => pane.value === url.get(OPEN_PANE)) ?? panes[0];
-  const summary = <Summary about={document.about} figures={document.figures} />;
 
   // Several tables of one report are views of one record, so they are its tabs; one needs no strip.
-  return panes.length > 1 && open ? (
-    <TableFrame
-      {...frame}
-      toolbar={summary}
-      tabs={{
-        value: open.value,
-        onValueChange: (pane) => url.set({ [OPEN_PANE]: pane }),
-        items: panes,
-      }}
-    />
-  ) : (
-    <TableFrame {...frame} toolbar={summary}>
-      {panes[0]?.content ?? <Centred>{<EmptyState title="No rows" />}</Centred>}
-    </TableFrame>
+  return (
+    <SplitFrame
+      fills
+      header={
+        <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: spec.title }]} />}
+          title={spec.title}
+          meta={document ? `As of ${instituteDateTimeLabel(document.asOf)}` : undefined}
+          action={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Printer aria-hidden />}
+                disabled={!document}
+                onClick={() => document && printHtml(reportHtml(document))}
+              >
+                Print
+              </Button>
+              <ExportButton
+                kind={reportKey}
+                disabled={!ready}
+                download={() => api.admin.reports.export(reportKey, query)}
+              />
+            </div>
+          }
+        />
+      }
+      filters={{ spec: filters, state: { values: shown, setFilter, clearFilters } }}
+      side={
+        document ? (
+          <>
+            <Facts title="Details" facts={document.about} />
+            <Facts title="Summary" facts={document.figures} />
+          </>
+        ) : null
+      }
+      tabs={
+        panes.length > 1 && open
+          ? {
+              value: open.value,
+              onValueChange: (pane) => url.set({ [OPEN_PANE]: pane }),
+              items: panes,
+            }
+          : undefined
+      }
+    >
+      {open?.content ?? (
+        <Absent
+          lacking={lacking}
+          ready={ready}
+          failed={report.isError}
+          loaded={Boolean(document)}
+          retry={report.refetch}
+        />
+      )}
+    </SplitFrame>
   );
 }
 
@@ -218,11 +222,13 @@ function Absent({
   lacking,
   ready,
   failed,
+  loaded,
   retry,
 }: Readonly<{
   lacking: ReportParam | undefined;
   ready: boolean;
   failed: boolean;
+  loaded: boolean;
   retry: () => void;
 }>) {
   if (!ready) {
@@ -244,6 +250,13 @@ function Absent({
       </Centred>
     );
   }
+  if (loaded) {
+    return (
+      <Centred>
+        <EmptyState title="No rows" />
+      </Centred>
+    );
+  }
   return (
     <div className="flex flex-col gap-5">
       <Skeleton variant="title" />
@@ -252,53 +265,22 @@ function Absent({
   );
 }
 
-/** A headline holds four figures; past that a report's figures are a table, and are set as one. */
-const HEADLINE_FIGURES = 4;
-
-/** What the report covers beside what it comes to, ruled off from the rows it was summed from. */
-function Summary({
-  about,
-  figures,
-}: Readonly<{ about: readonly ReportFact[]; figures: readonly ReportFact[] }>) {
-  if (about.length + figures.length === 0) return null;
+/** One group of the report's own facts, in the card beside the rows they were summed from. */
+function Facts({ title, facts }: Readonly<{ title: string; facts: readonly ReportFact[] }>) {
+  if (facts.length === 0) return null;
   return (
-    <div
-      className={cn(
-        '-mx-4 gap-x-10 gap-y-4 border-b border-border px-4 pb-4',
-        'lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]',
-        // On a phone the bar above already names what it covers, and the rows need the height.
-        figures.length === 0 ? 'hidden' : 'grid',
-      )}
-    >
-      <div className="hidden flex-col gap-1.5 lg:flex">
-        {about.map((fact) => (
-          <StatRow key={fact.label} label={fact.label} value={fact.value ?? DASH} />
+    <FormSection title={title}>
+      <div className="flex flex-col gap-2">
+        {facts.map((fact) => (
+          <StatRow
+            key={fact.label}
+            className="items-start"
+            label={fact.label}
+            value={<span className="block text-right">{fact.value ?? DASH}</span>}
+          />
         ))}
       </div>
-      <div className="lg:border-l lg:border-border lg:pl-10">
-        <Figures figures={figures} />
-      </div>
-    </div>
-  );
-}
-
-function Figures({ figures }: Readonly<{ figures: readonly ReportFact[] }>) {
-  if (figures.length === 0) return null;
-  if (figures.length > HEADLINE_FIGURES) {
-    return (
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 lg:gap-x-10">
-        {figures.map((figure) => (
-          <StatRow key={figure.label} label={figure.label} value={figure.value ?? DASH} />
-        ))}
-      </div>
-    );
-  }
-  return (
-    <MetricGroup>
-      {figures.map((figure) => (
-        <Metric key={figure.label} size="sm" label={figure.label} value={figure.value ?? DASH} />
-      ))}
-    </MetricGroup>
+    </FormSection>
   );
 }
 
