@@ -7,6 +7,7 @@ export const {
   fieldEffortQuery,
   overviewQuery,
   performanceQuery,
+  ownReportQuery,
   questionReportQuery,
   scoreCardAheadQuery,
   scoreCardQuery,

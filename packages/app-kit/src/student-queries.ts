@@ -4,6 +4,7 @@ import { type LanguageCode } from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { isBriefRefused } from './catalog';
 import { isMarkingPending, retryWhileMarking } from './marking';
+import { type DownloadAsk } from './report-downloads';
 
 /** The signed-in student's identity. */
 export const ME_QUERY_KEY = ['auth', 'me'] as const;
@@ -143,6 +144,11 @@ export function createStudentQueries(api: AppApiClient) {
         queryKey: [...solutionsQueryKey(attemptId), 'question', questionId] as const,
         queryFn: () => api.me.solutions(attemptId, { questionId }),
         ...AWAITS_MARKING,
+      }),
+    ownReportQuery: (ask: DownloadAsk) =>
+      queryOptions({
+        queryKey: [ME, 'report', ask.key, ask.query] as const,
+        queryFn: () => api.me.report(ask.key, ask.query),
       }),
     questionReportQuery: (attemptId: string) =>
       queryOptions({
