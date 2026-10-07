@@ -9,6 +9,7 @@ import {
   SECTION_IMPORT_MAX_ROWS,
   TAG_SEPARATOR,
   TAGS_MAX,
+  type QuestionDraft,
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { type CsvTable, normaliseHeader } from '../src/common/importing';
@@ -605,5 +606,42 @@ describe('the question sheet — a row left out', () => {
 
     assert.equal(result.rows[1]?.action, 'create');
     assert.deepEqual(result.rows[1]?.issues, []);
+  });
+});
+
+describe('the question sheet — a row corrected in the review window', () => {
+  /** The first row as the window opened it, saved back with something changed. */
+  const corrected = (over: Partial<QuestionDraft>) => {
+    const asRead = plan([MCQ_ROW]).rows[0]?.editable;
+    assert.ok(asRead);
+    const edits = new Map([[2, { ...asRead, ...over }]]);
+    return planQuestionImport(table(MCQ_ROW), catalog(), noDedup(), edits).rows[0];
+  };
+  const tags = (count: number) => Array.from({ length: count }, (_, index) => `tag${index}`);
+
+  /** The failure this prevents: the mark put back on top of a full set, and eleven tags written. */
+  it('refuses a correction whose own tags leave no room for the mark', () => {
+    const row = corrected({ tags: tags(TAGS_MAX) });
+
+    assert.equal(row?.action, 'skip');
+    assert.deepEqual(
+      row?.issues.map((issue) => issue.code),
+      [CODE.TAG_INVALID],
+    );
+    assert.match(row?.issues[0]?.message ?? '', new RegExp(`at most ${TAGS_MAX} tags`));
+  });
+
+  it('puts the mark back on a correction that left room for it', () => {
+    const row = corrected({ tags: tags(TAGS_MAX - 1) });
+
+    assert.equal(row?.action, 'create');
+    assert.deepEqual(row?.draft?.tags, [QUESTION_IMPORT_TAG, ...tags(TAGS_MAX - 1)]);
+  });
+
+  it('refuses a correction whose stem is only what the sanitiser takes away', () => {
+    const row = corrected({ stem: { en: '<p><img src="https://elsewhere.test/q.png"></p>' } });
+
+    assert.equal(row?.action, 'skip');
+    assert.equal(row?.issues[0]?.code, CODE.ENGLISH_STEM_REQUIRED);
   });
 });

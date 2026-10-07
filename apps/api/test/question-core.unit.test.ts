@@ -306,6 +306,16 @@ describe('validateQuestion — empty markup', () => {
     assert.deepEqual(codes(emptied), [QUESTION_VALIDATION_CODE.OPTION_TEXT_REQUIRED]);
   });
 
+  /** The failure this prevents: a stem that reads as content until it is sanitised, stored empty. */
+  it('refuses a stem that is only what the sanitiser takes away', () => {
+    for (const stem of ['<p><img src="https://elsewhere.test/q.png"></p>', '<script>x</script>']) {
+      const issue = validateQuestion(mcq({ stem: { en: stem } }), taxonomy())[0];
+
+      assert.equal(issue?.code, QUESTION_VALIDATION_CODE.ENGLISH_STEM_REQUIRED, stem);
+      assert.equal(issue?.field, 'stem.en', stem);
+    }
+  });
+
   /** A figure is the whole question in a reasoning paper — markup with no words is still content. */
   it('accepts a stem that is only a figure', () => {
     const figure = mcq({ stem: { en: '<div><img data-key="questions/images/a.png"></div>' } });

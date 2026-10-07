@@ -313,11 +313,9 @@ function readRow(
   warnings: ImportWarning[],
 ): ReadRow {
   if (edit) {
-    return {
-      content: rowContent(row, [], []),
-      names: namesOf(edit, catalog),
-      draft: withImportTag(edit),
-    };
+    const draft = withImportTag(edit);
+    if (draft.tags.length > TAGS_MAX) issues.push(TOO_MANY_TAGS);
+    return { content: rowContent(row, [], []), names: namesOf(edit, catalog), draft };
   }
 
   const content = rowContent(row, issues, warnings);
@@ -596,7 +594,14 @@ function readAnswerKey(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['a
   return { mode, answers, tolerance };
 }
 
-/** The mark takes one of the ten, so a sheet naming all ten is over the cap and the row is refused. */
+/** The mark takes one of the ten, so a row naming all ten is over the cap and is refused. */
+const TOO_MANY_TAGS: ValidationIssue = {
+  code: CODE.TAG_INVALID,
+  message: `A question can carry at most ${TAGS_MAX} tags, and an imported one already carries "${QUESTION_IMPORT_TAG}"`,
+  field: 'tags',
+  column: 'tags',
+};
+
 function readTags(row: CsvRow, issues: ValidationIssue[]): string[] {
   const tags: string[] = [QUESTION_IMPORT_TAG];
 
@@ -617,12 +622,7 @@ function readTags(row: CsvRow, issues: ValidationIssue[]): string[] {
   }
 
   if (tags.length > TAGS_MAX) {
-    issues.push({
-      code: CODE.TAG_INVALID,
-      message: `A question can carry at most ${TAGS_MAX} tags, and an imported one already carries "${QUESTION_IMPORT_TAG}"`,
-      field: 'tags',
-      column: 'tags',
-    });
+    issues.push(TOO_MANY_TAGS);
     return tags.slice(0, TAGS_MAX);
   }
 

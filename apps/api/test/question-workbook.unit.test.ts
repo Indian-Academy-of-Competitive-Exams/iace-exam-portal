@@ -4,13 +4,17 @@ import ExcelJS from 'exceljs';
 import { QUESTION_IMPORT_COLUMNS, QUESTION_IMPORT_SHEETS } from '@iace/contracts';
 import { readUploadedTable } from '../src/common/importing';
 import { emptyTaxonomy } from '../src/questions/question-core';
+import { NO_DEDUP, planQuestionImport } from '../src/questions/question-import';
 import { buildQuestionTemplate, topicRangeName } from '../src/questions/question-workbook';
-import { type TaxonomyCatalog } from '../src/questions/taxonomy-context';
+import { topicKey, type TaxonomyCatalog } from '../src/questions/taxonomy-context';
 
 /** Two subjects, and a topic name that appears under BOTH — the collision case. */
 function catalog(): TaxonomyCatalog {
+  const context = emptyTaxonomy();
+  context.subjects.set('s1', { id: 's1', name: 'QUANTITATIVE APTITUDE' });
+  context.topics.set('t1', { id: 't1', name: 'ARITHMETIC', subjectId: 's1' });
   return {
-    context: emptyTaxonomy(),
+    context,
     subjects: [
       {
         id: 's1',
@@ -26,8 +30,8 @@ function catalog(): TaxonomyCatalog {
         topics: [{ id: 't3', name: 'ARITHMETIC' }],
       },
     ],
-    subjectIdByName: new Map(),
-    topicIdBySubjectAndName: new Map(),
+    subjectIdByName: new Map([['QUANTITATIVE APTITUDE', 's1']]),
+    topicIdBySubjectAndName: new Map([[topicKey('s1', 'ARITHMETIC'), 't1']]),
   };
 }
 
@@ -74,6 +78,24 @@ describe('the question import template', () => {
     assert.equal(table.rows.length, 2);
     assert.ok(table.headers.includes('question(english)'));
     assert.match(String(table.rows[0]?.values['question(english)']), /20% of 150/);
+  });
+
+  /** The failure this prevents: the shipped example failing the importer's own rule. */
+  it('previews its own two example rows as creates, untouched', async () => {
+    const table = await readUploadedTable(await buildQuestionTemplate(catalog()), {
+      preferSheet: QUESTION_IMPORT_SHEETS.QUESTIONS,
+    });
+
+    const { rows } = planQuestionImport(table, catalog(), NO_DEDUP);
+
+    assert.deepEqual(
+      rows.map((row) => row.issues.map((issue) => issue.message)),
+      [[], []],
+    );
+    assert.deepEqual(
+      rows.map((row) => row.action),
+      ['create', 'create'],
+    );
   });
 
   it('names a topic range per subject, so a repeated topic cannot collide', async () => {

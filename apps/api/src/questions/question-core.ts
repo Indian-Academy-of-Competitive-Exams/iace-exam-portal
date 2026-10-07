@@ -114,7 +114,14 @@ export function validateQuestion(
   draft: QuestionDraft,
   taxonomy: TaxonomyContext,
 ): ValidationIssue[] {
-  return validateAgainstRules(draft, taxonomy, mathErrorIn);
+  return validateAgainstRules(asStored(draft), taxonomy, mathErrorIn);
+}
+
+/** A lone foreign image or a script reads as a stem until it is sanitised, so it is judged as the empty one stored. */
+function asStored(draft: QuestionDraft): QuestionDraft {
+  const stem = draft.stem[DEFAULT_LANGUAGE];
+  if (blank(stem) || textNode(stem).length > 0) return draft;
+  return { ...draft, stem: { ...draft.stem, [DEFAULT_LANGUAGE]: '' } };
 }
 
 /** Bumped whenever canonicalStemKey's fold changes; the worker rehashes every row below it. */
