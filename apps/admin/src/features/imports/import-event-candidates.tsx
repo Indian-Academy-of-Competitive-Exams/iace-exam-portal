@@ -17,6 +17,7 @@ import {
   TableRow,
   TableState,
   TruncatedText,
+  plural,
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
@@ -73,7 +74,7 @@ export function ImportEventCandidatesPage() {
       }}
       previewing={intake.isPreviewing}
       action={{
-        label: plan ? `Import ${intake.writes} candidates` : 'Import',
+        label: plan ? `Import ${plural(intake.writes, 'candidate')}` : 'Import',
         loading: intake.isCommitting,
         disabled: !intake.canCommit,
         onClick: intake.commit,

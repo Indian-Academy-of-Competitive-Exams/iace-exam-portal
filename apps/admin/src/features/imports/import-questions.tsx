@@ -32,6 +32,7 @@ import {
   TruncatedText,
   cn,
   linkVariants,
+  plural,
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen, usePageTour } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
@@ -186,7 +187,7 @@ export function ImportQuestionsPage() {
               onClick={intake.commit}
             >
               <Upload aria-hidden />
-              {`Import ${intake.writes} questions`}
+              {`Import ${plural(intake.writes, 'question')}`}
             </Button>
           </>
         }
@@ -228,7 +229,7 @@ export function ImportQuestionsPage() {
       }}
       previewing={intake.isPreviewing}
       action={{
-        label: plan ? `Import ${intake.writes} questions` : 'Import',
+        label: plan ? `Import ${plural(intake.writes, 'question')}` : 'Import',
         loading: intake.isCommitting,
         disabled: !intake.canCommit,
         onClick: intake.commit,
