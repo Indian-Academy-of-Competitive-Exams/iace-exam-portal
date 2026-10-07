@@ -50,6 +50,13 @@ const BUILDERS: ReportBuilders = {
   ...DIGEST_REPORTS,
 };
 
+/** A student reads as nobody's admin: no report a super admin alone may open is theirs to ask for. */
+const asThemselves = (studentId: string): ReportViewer => ({
+  id: studentId,
+  isSuperAdmin: false,
+  isActive: true,
+});
+
 /** The read model behind every report. It writes nothing, and owns no table (docs/03 §4). */
 @Injectable()
 export class ReportsService {
@@ -88,11 +95,13 @@ export class ReportsService {
 
   /** A student's own report: whatever the query says, the student is the caller. */
   own(studentId: string, key: StudentReportKey, query: ReportQuery): Promise<ReportDocument> {
-    return this.document(
-      key,
-      { ...query, studentId },
-      { id: studentId, isSuperAdmin: false, isActive: true },
-    );
+    return this.document(key, { ...query, studentId }, asThemselves(studentId));
+  }
+
+  /** The same report as a spreadsheet, and as much the caller's own. */
+  async ownWorkbook(studentId: string, key: StudentReportKey, query: ReportQuery): Promise<Buffer> {
+    const file = await this.workbook(key, { ...query, studentId }, asThemselves(studentId));
+    return file.workbook;
   }
 
   async workbook(

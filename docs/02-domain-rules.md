@@ -645,7 +645,10 @@ Who may read what: `REPORTS` READ opens every report and its pickers; the spread
 `DATA_EXPORT`. The answer key, admin activity and the permissions matrix are a super admin's. The
 audit trail shows an admin their own rows, as its screen does. A student reads five reports, all
 of them their own — the score card, the weekly and monthly report, every test, and topic-wise
-accuracy — and whatever the request names, the student is whoever holds the token.
+accuracy — on the page, printed, or as a spreadsheet, and whatever the request names, the student
+is whoever holds the token. Their spreadsheet asks for no `DATA_EXPORT` and writes no audit row:
+that permission and that row are about an admin carrying other people's records out, and this is
+the student's own.
 
 Every printed page — a report or a question paper — carries the institute's logo at its head and in a
 footer of its own beside the page of how many, and the logo's letters, level and faint, behind its

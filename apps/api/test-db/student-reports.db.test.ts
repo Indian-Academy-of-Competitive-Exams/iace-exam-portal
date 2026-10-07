@@ -30,6 +30,7 @@ import {
   type SitInput,
 } from './support/database';
 import { figureOf, reportsOver, tableOf } from './support/reports';
+import { sheetRows } from './support/workbook';
 
 const WRONG = 'o3';
 
@@ -259,6 +260,32 @@ describe('a student’s own reports', () => {
     const document = await reports.own(ana, REPORT_KEYS.STUDENT_CUMULATIVE, { studentId: bala });
 
     assert.deepEqual(document.about[0], { label: 'Student', value: 'Ana' });
+  });
+
+  it('hands the caller their own report as a spreadsheet, whoever the query names', async () => {
+    const paper = await twoSections('Mock 2');
+    const ana = await student('Ana');
+    const bala = await student('Bala');
+    await sit(paper, ana, [RIGHT_OPTION, WRONG], IN_WEEK);
+    await sit(paper, bala, [RIGHT_OPTION, RIGHT_OPTION], IN_WEEK);
+
+    const file = await reports.ownWorkbook(ana, REPORT_KEYS.STUDENT_CUMULATIVE, {
+      studentId: bala,
+    });
+
+    const about = await sheetRows(file);
+    assert.equal(about.find((row) => row.Figure === 'Student')?.Value, 'Ana');
+  });
+
+  it('refuses the spreadsheet of a sitting that is somebody else’s', async () => {
+    const paper = await twoSections('Mock 2');
+    const ana = await student('Ana');
+    const balas = await sit(paper, await student('Bala'), [RIGHT_OPTION, WRONG], IN_WEEK);
+
+    await assert.rejects(
+      reports.ownWorkbook(ana, REPORT_KEYS.STUDENT_SCORE_CARD, { attemptId: balas }),
+      refusal(ErrorCodes.NOT_FOUND),
+    );
   });
 
   it('refuses the score card of a sitting that is somebody else’s', async () => {

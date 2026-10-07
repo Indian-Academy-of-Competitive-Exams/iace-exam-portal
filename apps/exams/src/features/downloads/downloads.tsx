@@ -1,7 +1,12 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Printer } from 'lucide-react';
-import { instituteDateTimeLabel, type ReportDocument, type SatSitting } from '@iace/contracts';
+import { Download, Printer } from 'lucide-react';
+import {
+  exportFilename,
+  instituteDateTimeLabel,
+  type ReportDocument,
+  type SatSitting,
+} from '@iace/contracts';
 import {
   DOWNLOAD_CHOICE_LABELS,
   DOWNLOAD_KINDS,
@@ -18,6 +23,7 @@ import {
   PageCrumbs,
   ReportTableView,
   printHtml,
+  saveBlob,
   useFilterSpec,
   useFilters,
 } from '@iace/app-kit/browser';
@@ -34,6 +40,7 @@ import {
   type ListFilterControl,
 } from '@iace/ui';
 import { Hero, PageBody, ReportSkeleton, Section, StatTile, TileGrid } from '../../components/ui';
+import { api } from '../../lib/api';
 import { NAV_ITEMS } from '../../lib/constants';
 import { ownReportQuery, performanceQuery } from '../../lib/queries';
 
@@ -78,7 +85,7 @@ function downloadFilters(
   ];
 }
 
-/** A student's own reports: chosen, read on the page, then printed or saved as a PDF from the browser's dialog. */
+/** A student's own reports: chosen, read on the page, then printed, saved as a PDF or taken as a spreadsheet. */
 export function DownloadsPage() {
   const url = useFilters<DownloadField>();
   const kind = downloadKindOf(url.get('report'));
@@ -97,6 +104,10 @@ export function DownloadsPage() {
     mutationFn: (asked: DownloadAsk) => client.ensureQueryData(ownReportQuery(asked)),
     onSuccess: (document) => printHtml(reportHtml(document)),
   });
+  const exporting = useMutation({
+    mutationFn: (asked: DownloadAsk) => api.me.reportExport(asked.key, asked.query),
+    onSuccess: (file, asked) => saveBlob(file, exportFilename(asked.key)),
+  });
 
   return (
     <PageFrame
@@ -105,15 +116,27 @@ export function DownloadsPage() {
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title="Downloads"
           action={
-            <Button
-              size="sm"
-              icon={<Printer aria-hidden />}
-              disabled={ask === null}
-              loading={print.isPending}
-              onClick={() => ask && print.mutate(ask)}
-            >
-              Print or save
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Download aria-hidden />}
+                disabled={ask === null}
+                loading={exporting.isPending}
+                onClick={() => ask && exporting.mutate(ask)}
+              >
+                Export
+              </Button>
+              <Button
+                size="sm"
+                icon={<Printer aria-hidden />}
+                disabled={ask === null}
+                loading={print.isPending}
+                onClick={() => ask && print.mutate(ask)}
+              >
+                Print or save
+              </Button>
+            </div>
           }
         />
       }

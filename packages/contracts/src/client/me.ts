@@ -89,7 +89,7 @@ import { queryString, type ApiCore } from './core';
 
 /** The signed-in student's own account. No ids — the token is the subject. */
 export function meClient(core: ApiCore) {
-  const { get, write, list } = core;
+  const { get, write, list, requestBlob } = core;
 
   return {
     profile: (): Promise<Me> => get(ME_ROUTES.profile, meSchema),
@@ -207,6 +207,10 @@ export function meClient(core: ApiCore) {
     /** One of their own reports, as the document a screen previews and a printer takes. */
     report: (key: StudentReportKey, query: ReportQueryInput = {}): Promise<ReportDocument> =>
       get(`${ME_REPORT_ROUTES.read(key)}${queryString({ ...query })}`, reportDocumentSchema),
+
+    /** The same report as a spreadsheet, every row of it. */
+    reportExport: (key: StudentReportKey, query: ReportQueryInput = {}): Promise<Blob> =>
+      requestBlob(ME_REPORT_ROUTES.export(key), { ...query }),
 
     /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
     leaderboard: (query: LeaderboardQuery): Promise<Leaderboard> =>

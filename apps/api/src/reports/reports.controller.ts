@@ -95,4 +95,15 @@ export class MeReportsController {
   ): Promise<ReportDocument> {
     return this.reports.own(user.id, key, query);
   }
+
+  /** Their own record, so it asks for no export permission and writes no audit row. */
+  @Get(':key/export')
+  async export(
+    @Param('key', new ZodParam(studentReportKeySchema)) key: StudentReportKey,
+    @Query(new ZodQuery(reportQuerySchema)) query: ReportQuery,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    sendWorkbook(response, key, await this.reports.ownWorkbook(user.id, key, query));
+  }
 }

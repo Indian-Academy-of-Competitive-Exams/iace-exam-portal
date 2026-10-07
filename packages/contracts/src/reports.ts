@@ -484,6 +484,7 @@ export type StudentReportKey = z.infer<typeof studentReportKeySchema>;
 
 export const ME_REPORT_ROUTES = {
   read: (key: StudentReportKey) => `/me/reports/${key}`,
+  export: (key: StudentReportKey) => `/me/reports/${key}/export`,
 } as const;
 
 export const ADMIN_REPORT_ROUTES = {
