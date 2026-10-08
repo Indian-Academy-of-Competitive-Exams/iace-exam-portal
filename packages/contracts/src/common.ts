@@ -138,6 +138,13 @@ export function normaliseMobile(raw: string): string {
   return compact;
 }
 
+/** A mobile box while it is typed: digits only, with room for a prefix until the ten after it are in. */
+export function typedMobile(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  const prefix = MOBILE_PREFIXES.find((candidate) => digits.startsWith(candidate)) ?? '';
+  return normaliseMobile(digits.slice(0, prefix.length + MOBILE_DIGITS));
+}
+
 /** 10 digits, leading 6-9. Accepts the usual prefixes and separators; stores bare digits. */
 export const mobileSchema = z
   .string()
@@ -209,6 +216,9 @@ export const matchModeQuery = () => z.enum(MATCH_MODES).optional().default(MATCH
 /** The free-text box every list carries. Blank is absent, not a search for "". */
 export const SEARCH_QUERY_MAX = 64;
 
+/** LIKE reads these as patterns, and every search ends in a `contains`, which is a LIKE. */
+const LIKE_WILDCARDS = /[\\%_]/g;
+
 /** A long paste is not a bad request: bound what it costs and search with what fits. */
 export const searchQuery = () =>
   z
@@ -217,7 +227,7 @@ export const searchQuery = () =>
     .optional()
     .transform((v) => {
       const held = v?.slice(0, SEARCH_QUERY_MAX) ?? '';
-      return held === '' ? undefined : held;
+      return held === '' ? undefined : held.replace(LIKE_WILDCARDS, String.raw`\$&`);
     });
 
 // The failure shape lives in ./envelope — one response envelope for the whole API; NestJS's default error body is not it.

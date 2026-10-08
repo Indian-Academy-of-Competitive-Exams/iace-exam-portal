@@ -68,6 +68,13 @@ describe('personNameSchema', () => {
     }
   });
 
+  /** Word and Excel type the curly mark by default, and the import template prints it. */
+  it('takes a curly apostrophe and stores the straight one, so a name has one spelling', () => {
+    assert.equal(personNameSchema.parse('D’Souza'), "D'Souza");
+    assert.equal(personNameSchema.parse('O‘Brien'), "O'Brien");
+    assert.equal(personNameSchema.safeParse('’Asha').success, false);
+  });
+
   it('REFUSES a comma — the spreadsheet artefact that prompted this', () => {
     const parsed = personNameSchema.safeParse('Kumari, Asha');
     assert.equal(parsed.success, false);

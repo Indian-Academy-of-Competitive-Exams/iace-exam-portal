@@ -5,10 +5,9 @@ import { useMutation } from '@tanstack/react-query';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Info } from 'lucide-react';
 import {
-  MOBILE_DIGITS,
-  normaliseMobile,
   otpCodeFormSchema,
   requestStudentOtpSchema,
+  typedMobile,
   type AuthSessionResponse,
   type OtpRequestResponse,
 } from '@iace/contracts';
@@ -22,7 +21,6 @@ import {
   NumericInput,
   PinField,
   ThemeToggle,
-  digitsOnly,
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { ROUTES } from '../../lib/constants';
@@ -230,10 +228,8 @@ function MobileField<TValues extends FieldValues>({
           {...control}
           autoFocus={autoFocus}
           autoComplete="tel"
-          // Room for a +91 paste; a flat cap of 10 would keep the wrong ten digits.
-          maxLength={15}
-          // Digits first, then normalise: the other order lets letters through on paste.
-          sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
+          // No maxLength: the browser would cut a pasted "(+91) 98765 43210" before it is cleaned.
+          sanitize={typedMobile}
           placeholder="98765 43210"
           prefix="+91"
           invalid={Boolean(control['aria-invalid'])}

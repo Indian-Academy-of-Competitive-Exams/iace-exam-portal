@@ -4,6 +4,8 @@ import {
   ADMIN_STUDENT_ROUTES,
   STUDENT_TYPE,
   createStudentSchema,
+  educationEntrySchema,
+  pastExamEntrySchema,
   setStudentTestBlockedSchema,
   studentDetailSchema,
   studentListQuerySchema,
@@ -181,5 +183,43 @@ describe('setStudentTestBlockedSchema', () => {
     );
     assert.equal(setStudentTestBlockedSchema.parse({ isTestBlocked: true }).isTestBlocked, true);
     assert.equal(setStudentTestBlockedSchema.safeParse({}).success, false);
+  });
+});
+
+describe('a history row says what is wrong with its numbers in words', () => {
+  const said = (schema: typeof educationEntrySchema | typeof pastExamEntrySchema, row: object) =>
+    schema.safeParse(row).error?.issues.map((issue) => issue.message);
+
+  /** Left to zod, a student read "Too small: expected number to be >=1900" under the box. */
+  it('names the years a row may carry, whichever way the year is wrong', () => {
+    for (const year of ['1800', '2200', '2019.5', 'abc']) {
+      assert.deepEqual(
+        said(educationEntrySchema, { level: 'B.Tech', year }),
+        ['Enter a year between 1900 and 2100'],
+        year,
+      );
+      assert.deepEqual(
+        said(pastExamEntrySchema, { exam: 'SSC CGL', year }),
+        ['Enter a year between 1900 and 2100'],
+        year,
+      );
+    }
+  });
+
+  it('names the range a percentage sits in', () => {
+    for (const percentage of ['-1', '101', 'abc']) {
+      assert.deepEqual(
+        said(educationEntrySchema, { level: 'B.Tech', percentage }),
+        ['Enter a percentage between 0 and 100'],
+        percentage,
+      );
+    }
+  });
+
+  it('still takes a typed number, a stored one and an empty box', () => {
+    const row = educationEntrySchema.parse({ level: 'B.Tech', year: '2019', percentage: 81.5 });
+
+    assert.deepEqual([row.year, row.percentage], [2019, 81.5]);
+    assert.equal(pastExamEntrySchema.parse({ exam: 'SSC CGL', year: '' }).year, undefined);
   });
 });

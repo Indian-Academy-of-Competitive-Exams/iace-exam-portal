@@ -1067,6 +1067,22 @@ describe('QuestionsService — finding a question again', () => {
     );
   });
 
+  /** LIKE reads both as patterns, so an unescaped "%" lists the whole bank. */
+  it('reads a typed % or _ as that character, not as a wildcard', async () => {
+    const { questions } = await build();
+    for (const stem of ['Half is 50% of it', 'Fill the gap in a_b', 'Speed of a train']) {
+      await questions.create(
+        draft({ stem: { en: `<p>${stem}</p>`, hi: `<p>${stem}</p>` } }),
+        ADMIN,
+      );
+    }
+
+    const percent = await questions.list(listQuery({ q: '%' }));
+    const underscore = await questions.list(listQuery({ q: '_' }));
+
+    assert.deepEqual([percent.items.length, underscore.items.length], [1, 1]);
+  });
+
   /** THE failure the fan-out prevents: searchText is a COPY, so an edit nothing re-derives goes stale. */
   it('finds a reworded question by its new words, and no longer by its old ones', async () => {
     const { questions } = await build();

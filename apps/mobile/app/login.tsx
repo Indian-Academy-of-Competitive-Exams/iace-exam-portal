@@ -4,10 +4,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import {
-  MOBILE_DIGITS,
-  normaliseMobile,
   otpCodeFormSchema,
   requestStudentOtpSchema,
+  typedMobile,
   type AuthSessionResponse,
   type OtpRequestResponse,
   type RequestStudentOtpBody,
@@ -28,9 +27,6 @@ import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
 import { PinField } from '../src/components/ui/pin-field';
 import { TextField } from '../src/components/ui/text-field';
-
-const sanitizeMobile = (raw: string) =>
-  normaliseMobile(raw.replace(/\D/g, '')).slice(0, MOBILE_DIGITS);
 
 export default function LoginScreen() {
   const { signIn, signedOutReason } = useAuth();
@@ -106,8 +102,7 @@ function MobileStep({
         label="Mobile number"
         keyboardType="number-pad"
         autoComplete="tel"
-        maxLength={15}
-        sanitize={sanitizeMobile}
+        sanitize={typedMobile}
         autoFocus
       />
 

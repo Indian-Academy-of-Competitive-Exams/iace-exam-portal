@@ -8,6 +8,7 @@ import {
   mobileSchema,
   searchQuery,
   SEARCH_QUERY_MAX,
+  typedMobile,
 } from '../src/index';
 
 const parse = (
@@ -52,6 +53,33 @@ describe('mobileSchema', () => {
     for (const bad of ['123456789', '12345678901', '5876543210', '', 'abcdefghij', '98765 4321']) {
       assert.equal(parse(mobileSchema, bad), null, `expected ${bad} to be rejected`);
     }
+  });
+});
+
+describe('typedMobile — the box as it is being typed', () => {
+  /** Typed one key at a time, as a phone delivers it: each value is the last one plus a digit. */
+  const keyed = (digits: string) =>
+    [...digits].reduce((held, digit) => typedMobile(held + digit), '');
+
+  it('leaves ten plain digits as they are, and takes no eleventh', () => {
+    assert.equal(keyed('9876543210'), '9876543210');
+    assert.equal(keyed('98765432109'), '9876543210');
+  });
+
+  /** The bug: cut to ten on every key, the 91 never grew long enough to be dropped. */
+  it('drops a country or trunk prefix once the ten digits after it are in', () => {
+    assert.equal(keyed('919876543210'), '9876543210');
+    assert.equal(keyed('09876543210'), '9876543210');
+    assert.equal(keyed('00919876543210'), '9876543210');
+  });
+
+  it('cleans a pasted number before it is cut to length', () => {
+    assert.equal(typedMobile('(+91) 98765 43210'), '9876543210');
+    assert.equal(typedMobile('+91-98765-43210 and more 99'), '9876543210');
+  });
+
+  it('keeps a number that only BEGINS with 91', () => {
+    assert.equal(keyed('9123456789'), '9123456789');
   });
 });
 
@@ -120,6 +148,13 @@ describe('searchQuery', () => {
 
     assert.ok(pasted.length > SEARCH_QUERY_MAX);
     assert.equal(parse(pasted), pasted.slice(0, SEARCH_QUERY_MAX));
+  });
+
+  /** Every q ends in a `contains`, which is a LIKE: unescaped, "%" matches every row. */
+  it('escapes the LIKE wildcards, so each is searched for as the character typed', () => {
+    assert.equal(parse('50%'), String.raw`50\%`);
+    assert.equal(parse('a_b'), String.raw`a\_b`);
+    assert.equal(parse(String.raw`a\b`), String.raw`a\\b`);
   });
 
   it('reads a blank box as no search at all, never a search for nothing', () => {

@@ -83,7 +83,6 @@ export function PinField<TValues extends FieldValues>({
                   field.onBlur();
                 }}
                 keyboardType="number-pad"
-                maxLength={length}
                 autoFocus={autoFocus}
                 caretHidden
                 // Concealment is drawn, not native: secureTextEntry would fight the number pad.

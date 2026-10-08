@@ -58,6 +58,8 @@ export function todayISO(): string {
 export const personNameSchema = z
   .string()
   .trim()
+  // Word and Excel type the curly mark; folded, a name has one spelling however it was keyed.
+  .overwrite((name) => name.replace(/[‘’]/g, "'"))
   .min(2, 'A name needs at least two letters')
   .max(120)
   .regex(/^\p{L}[\p{L}\p{M}\s.'-]*$/u, 'Use letters only: no digits, commas or other characters');
@@ -131,28 +133,36 @@ export const studentSummarySchema = z.object({
 });
 export type StudentSummary = z.infer<typeof studentSummarySchema>;
 
+/** A number box: empty is no number, and every other way it can be wrong reads as the one sentence. */
+const numberBox = (holds: (value: number) => boolean, message: string) =>
+  z
+    .union([z.literal(''), z.coerce.number().refine(holds, message)], message)
+    .optional()
+    .transform((v) => (v === '' ? undefined : v));
+
+const LATEST_HISTORY_YEAR = 2100;
+
+const historyYearSchema = numberBox(
+  (year) => Number.isInteger(year) && year >= EARLIEST_BIRTH_YEAR && year <= LATEST_HISTORY_YEAR,
+  `Enter a year between ${EARLIEST_BIRTH_YEAR} and ${LATEST_HISTORY_YEAR}`,
+);
+
 /** Schooling so far. JSON: the shape varies by board, and none of it is ever queried. */
 export const educationEntrySchema = z.object({
   level: z.string().trim().min(1, 'Which qualification?').max(60),
   board: z.string().trim().max(80).optional(),
   institution: z.string().trim().max(120).optional(),
-  year: z
-    .union([z.literal(''), z.coerce.number().int().min(EARLIEST_BIRTH_YEAR).max(2100)])
-    .optional()
-    .transform((v) => (v === '' ? undefined : v)),
-  percentage: z
-    .union([z.literal(''), z.coerce.number().min(0).max(100)])
-    .optional()
-    .transform((v) => (v === '' ? undefined : v)),
+  year: historyYearSchema,
+  percentage: numberBox(
+    (share) => share >= 0 && share <= 100,
+    'Enter a percentage between 0 and 100',
+  ),
 });
 
 /** Exams sat ELSEWHERE, not attempts here. Self-reported, so nothing may depend on it. */
 export const pastExamEntrySchema = z.object({
   exam: z.string().trim().min(1, 'Which exam?').max(80),
-  year: z
-    .union([z.literal(''), z.coerce.number().int().min(EARLIEST_BIRTH_YEAR).max(2100)])
-    .optional()
-    .transform((v) => (v === '' ? undefined : v)),
+  year: historyYearSchema,
   result: z.string().trim().max(80).optional(),
 });
 
@@ -266,7 +276,7 @@ export type StudentExportQueryInput = z.input<typeof studentExportQuerySchema>;
 const isBlank = (value: unknown) => typeof value === 'string' && value.trim() === '';
 
 /** Blank or absent → absent. Used where an empty box means "not known yet". */
-function blankIsAbsent<S extends z.ZodType<unknown, string>>(schema: S) {
+export function blankIsAbsent<S extends z.ZodType<unknown, string>>(schema: S) {
   return z
     .string()
     .optional()
@@ -325,6 +335,8 @@ export const updateStudentSchema = z.object({
   programs: programCodesSchema.optional(),
   currentBranchId: blankClears(z.string().min(1)),
   profile: updateStudentProfileSchema.optional(),
+  /** The `updatedAt` the form read. A save that does not match it is refused, not merged. */
+  expectedUpdatedAt: z.string().optional(),
 });
 export type UpdateStudentInput = z.input<typeof updateStudentSchema>;
 export type UpdateStudentBody = z.infer<typeof updateStudentSchema>;
