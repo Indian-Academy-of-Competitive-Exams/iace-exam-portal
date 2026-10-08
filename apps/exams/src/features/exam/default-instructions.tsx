@@ -1,15 +1,12 @@
 /** The default skin's read-before-you-begin: the rules, then the paper, over two screens. */
 import {
   contentLanguageOf,
-  isStateShown,
+  EXAM_TEMPLATE,
   LANGUAGE_LABELS,
-  type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
-import { ANSWER_STATE_LABELS } from '@iace/app-kit';
 import {
   Alert,
-  Badge,
   Button,
   Checkbox,
   Combobox,
@@ -21,7 +18,6 @@ import {
   cn,
   plural,
 } from '@iace/ui';
-import { PALETTE_LEGEND } from '../../lib/constants';
 import {
   DividedList,
   DividedRow,
@@ -30,6 +26,7 @@ import {
   StatBand,
   SurfaceCard,
 } from '../../components/ui';
+import { PaletteLegend } from './question-palette';
 import { SystemCheck } from './system-check';
 import { type InstructionsView } from './use-instructions';
 
@@ -50,6 +47,16 @@ const SECTIONAL = {
   says: 'Each section has a clock of its own, and a section whose time ends locks — its questions cannot be opened again.',
 };
 
+const NEXT = { term: 'Next', says: 'Moves on and leaves the question as it stands.' };
+const FREE_PALETTE = {
+  term: 'The palette',
+  says: 'Opens any question directly. The question you leave keeps its answer.',
+};
+const FORWARD_PALETTE = {
+  term: 'The palette',
+  says: 'Shows where you are. A question you have left cannot be opened again, and there is no marking one for review.',
+};
+
 type Rule = { term: string; says: string };
 
 const FREE_RULES: readonly Rule[] = [
@@ -59,27 +66,62 @@ const FREE_RULES: readonly Rule[] = [
     says: 'Keeps your answer and flags the question. A flagged answer is still marked.',
   },
   CLEAR,
-  {
-    term: 'The palette',
-    says: 'Opens any question directly. The question you leave keeps its answer.',
-  },
+  FREE_PALETTE,
   SUBMIT,
 ];
 
 const FORWARD_RULES: readonly Rule[] = [
   { term: 'Save & next', says: 'Keeps your answer and moves on. It is the only way forward.' },
   CLEAR,
-  {
-    term: 'The palette',
-    says: 'Shows where you are. A question you have left cannot be opened again, and there is no marking one for review.',
-  },
+  FORWARD_PALETTE,
   SUBMIT,
 ];
 
-/** A paper whose sections carry their own clock teaches one more rule than one that does not. */
-function rulesFor(brief: ExamBrief, forwardOnly: boolean): readonly Rule[] {
-  const sectional = brief.sections.some((section) => section.durationSec !== null);
-  return [CLOCK, ...(sectional ? [SECTIONAL] : []), ...(forwardOnly ? FORWARD_RULES : FREE_RULES)];
+/** A bubble sheet has no Save, Mark or Clear to teach: the ink carries all three. */
+const OMR_FREE_RULES: readonly Rule[] = [
+  {
+    term: 'The bubble',
+    says: 'Hold a bubble to fill it. A full bubble is your answer for good and moves you on. A part-filled one keeps the answer and flags the question for review, and can still be changed.',
+  },
+  NEXT,
+  FREE_PALETTE,
+  SUBMIT,
+];
+
+const OMR_FORWARD_RULES: readonly Rule[] = [
+  {
+    term: 'The bubble',
+    says: 'Hold a bubble to fill it. Once the ink takes that is your answer for good, and a full bubble moves you on.',
+  },
+  NEXT,
+  FORWARD_PALETTE,
+  SUBMIT,
+];
+
+interface PaperTraits {
+  forwardOnly: boolean;
+  sectional: boolean;
+  omr: boolean;
+}
+
+function rulesFor({ forwardOnly, sectional, omr }: PaperTraits): readonly Rule[] {
+  const cbt = forwardOnly ? FORWARD_RULES : FREE_RULES;
+  const bubbled = forwardOnly ? OMR_FORWARD_RULES : OMR_FREE_RULES;
+  return [CLOCK, ...(sectional ? [SECTIONAL] : []), ...(omr ? bubbled : cbt)];
+}
+
+/** One list, read before the paper opens and again from inside it, so the two cannot disagree. */
+export function PaperRules(traits: Readonly<PaperTraits>) {
+  return (
+    <dl className="flex flex-col gap-3 text-sm leading-relaxed">
+      {rulesFor(traits).map((rule) => (
+        <div key={rule.term}>
+          <dt className="font-medium text-foreground">{rule.term}</dt>
+          <dd className="text-muted-foreground">{rule.says}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 export function DefaultInstructions({
@@ -95,14 +137,14 @@ export function DefaultInstructions({
           <PageHeader
             size="display"
             title={brief.title ?? 'Instructions'}
-            meta={`${plural(brief.totalQuestions, 'question')} · ${Math.round(brief.durationSec / 60)} minutes`}
+            meta={`${plural(brief.totalQuestions, 'question')} · ${plural(Math.round(brief.durationSec / 60), 'minute')}`}
           />
         }
         footer={<Walk view={view} />}
       >
         <PageBody className="pb-6">
           {view.step === 'GENERAL' ? (
-            <GeneralStep brief={brief} forwardOnly={view.forwardOnly} />
+            <GeneralStep forwardOnly={view.forwardOnly} sectional={view.sectional} />
           ) : (
             <PaperStep view={view} fullscreenSupported={fullscreenSupported} />
           )}
@@ -132,7 +174,10 @@ function Walk({ view }: Readonly<{ view: InstructionsView }>) {
   );
 }
 
-function GeneralStep({ brief, forwardOnly }: Readonly<{ brief: ExamBrief; forwardOnly: boolean }>) {
+function GeneralStep({
+  forwardOnly,
+  sectional,
+}: Readonly<Pick<PaperTraits, 'forwardOnly' | 'sectional'>>) {
   return (
     <>
       {forwardOnly ? (
@@ -143,23 +188,14 @@ function GeneralStep({ brief, forwardOnly }: Readonly<{ brief: ExamBrief; forwar
       ) : null}
 
       <SurfaceCard title="How the paper works">
-        <dl className="flex flex-col gap-3 text-sm leading-relaxed">
-          {rulesFor(brief, forwardOnly).map((rule) => (
-            <div key={rule.term}>
-              <dt className="font-medium text-foreground">{rule.term}</dt>
-              <dd className="text-muted-foreground">{rule.says}</dd>
-            </div>
-          ))}
-        </dl>
+        {/* The brief carries no render mode, so a bubble sheet is taught as a CBT until the paper opens. */}
+        <PaperRules forwardOnly={forwardOnly} sectional={sectional} omr={false} />
       </SurfaceCard>
 
       <SurfaceCard title="Palette">
-        <div className="flex flex-wrap gap-2">
-          {PALETTE_LEGEND.filter((entry) => isStateShown(entry.state, forwardOnly)).map((entry) => (
-            <Badge key={entry.state} variant={entry.variant}>
-              {ANSWER_STATE_LABELS[entry.state]}
-            </Badge>
-          ))}
+        {/* Outside the sitting's shell, so the card names the skin itself or its swatches have no colour. */}
+        <div data-exam-template={EXAM_TEMPLATE.DEFAULT.toLowerCase()}>
+          <PaletteLegend forwardOnly={forwardOnly} />
         </div>
       </SurfaceCard>
 

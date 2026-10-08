@@ -107,7 +107,7 @@ const whileLoading = (page: React.ReactNode, fallback: React.ReactNode) => (
 
 /** Phase 0 routing: a login screen and one authed shell. */
 export function App() {
-  const { identity, isLoading } = useAuth();
+  const { identity, isLoading, isUnreachable, retry } = useAuth();
 
   return (
     <Routes>
@@ -126,6 +126,8 @@ export function App() {
           <ProtectedRoute
             isAuthenticated={identity !== null}
             isLoading={isLoading}
+            isUnreachable={isUnreachable}
+            onRetry={retry}
             loginPath={ROUTES.LOGIN}
           />
         }
@@ -134,7 +136,7 @@ export function App() {
           path={ROUTES.TEST_INSTRUCTIONS_PATTERN}
           element={whileLoading(
             <TestInstructionsPage />,
-            <LoadingState>Opening your paper</LoadingState>,
+            <LoadingState>Opening your instructions</LoadingState>,
           )}
         />
         <Route

@@ -12,6 +12,10 @@ import { ROUTES } from '../../lib/constants';
 const INSTRUCTION_STEPS = ['GENERAL', 'PAPER'] as const;
 export type InstructionStep = (typeof INSTRUCTION_STEPS)[number];
 
+/** A paper whose sections carry their own clock teaches one more rule than one that does not. */
+export const isSectional = (sections: readonly { durationSec: number | null }[]): boolean =>
+  sections.some((section) => section.durationSec !== null);
+
 export interface InstructionsView {
   brief: ExamBrief;
   step: InstructionStep;
@@ -23,6 +27,7 @@ export interface InstructionsView {
   dual: boolean;
   /** A seat left is closed for good, so the rules a candidate is taught here are different ones. */
   forwardOnly: boolean;
+  sectional: boolean;
   language: LanguageCode | '';
   chooseLanguage: (code: LanguageCode) => void;
   declared: boolean;
@@ -45,6 +50,7 @@ export function useInstructions(
   return {
     brief,
     forwardOnly: brief.navigation === NAVIGATION_POLICY.FORWARD_ONLY,
+    sectional: isSectional(brief.sections),
     step: INSTRUCTION_STEPS[stepIndex] ?? 'GENERAL',
     stepIndex,
     next: () => setStepIndex((at) => Math.min(at + 1, INSTRUCTION_STEPS.length - 1)),

@@ -20,12 +20,19 @@ export function SystemCheck() {
     staleTime: 0,
   });
 
+  const supported = browserIsSupported();
   const checks = [
-    { label: 'Your browser is supported', ok: browserIsSupported() },
+    { label: 'Your browser is supported', ok: supported },
     { label: 'You are signed in', ok: reachable.isSuccess },
     { label: 'The exam server is reachable', ok: reachable.isSuccess },
   ];
-  const failed = checks.filter((check) => !check.ok);
+  // One sentence per cause, not per row: the last two rows are one request.
+  const risks = [
+    ...(supported ? [] : ['Sitting a test on a browser we cannot support risks losing answers.']),
+    ...(reachable.isSuccess
+      ? []
+      : ['The exam server could not be reached, and an answer that cannot reach it is not saved.']),
+  ];
 
   return (
     <div className="flex flex-col gap-3">
@@ -48,10 +55,9 @@ export function SystemCheck() {
         </ul>
       )}
 
-      {failed.length > 0 && !reachable.isLoading ? (
+      {risks.length > 0 && !reachable.isLoading ? (
         <Alert variant="warning">
-          Fix this before you begin. Sitting a test on a browser we cannot support risks losing
-          answers, and the clock does not stop while you sort it out.
+          {`Fix this before you begin. ${risks.join(' ')} The clock does not stop while you sort it out.`}
         </Alert>
       ) : null}
     </div>
