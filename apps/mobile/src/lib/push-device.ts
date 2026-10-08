@@ -6,6 +6,7 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { DEVICE_PLATFORM } from '@iace/contracts';
+import { settledWithin, SIGN_OUT_WAIT_MS } from '@iace/app-kit';
 import { api } from './api';
 import { IN_EXPO_GO, loadNotifications } from './notifications';
 
@@ -49,11 +50,8 @@ export async function dropPushDevice(): Promise<void> {
   registered = null;
   if (token === null) return;
 
-  try {
-    await api.me.dropPushDevice({ token });
-  } catch {
-    // The row survives, and the next student to sign in on this phone takes the token over.
-  }
+  // Refused or never answered, the row survives, and the next student to sign in on this phone takes the token over.
+  await settledWithin(api.me.dropPushDevice({ token }), SIGN_OUT_WAIT_MS);
 }
 
 async function fcmToken(): Promise<string | null> {

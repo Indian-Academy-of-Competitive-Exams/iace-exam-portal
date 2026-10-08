@@ -24,6 +24,7 @@ export default function AccountScreen() {
   const { identity, signOut } = useAuth();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const chevron = useTokenColor('--muted-foreground');
 
   const unread = useQuery({
@@ -71,8 +72,10 @@ export default function AccountScreen() {
         title="Sign out of this phone?"
         description="You will need a code sent to your mobile number to sign in again."
         confirmLabel="Sign out"
+        loading={signingOut}
+        // Left open and spinning: signing out takes this screen away with it.
         onConfirm={() => {
-          setConfirming(false);
+          setSigningOut(true);
           void dropPushDevice().then(() => signOut());
         }}
         onCancel={() => setConfirming(false)}
