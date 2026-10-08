@@ -128,6 +128,13 @@ export function movesThePaper(changed: readonly TestField[]): boolean {
   return changed.some((key) => !neutral.has(key));
 }
 
+/** What a paper change goes by in a test's audit row, beside the columns the test's own diff covers. */
+export const PAPER_AUDIT_FIELDS = {
+  SECTION: 'section',
+  ADDED: 'questionsAdded',
+  REMOVED: 'questionsRemoved',
+} as const;
+
 export const NO_PAPER_MESSAGE =
   'This test has no paper yet. Draw or choose its questions before offering it.';
 

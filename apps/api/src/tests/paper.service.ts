@@ -13,6 +13,7 @@ import {
   quotaWithPicks,
   sectionQuota,
   type DrawSpec,
+  type FieldDiff,
   type SectionDrawSpec,
   type SectionQuota,
   type AddPaperQuestionBody,
@@ -35,7 +36,7 @@ import {
   type DrawnQuestion,
   type DrawSection,
 } from './draw-engine';
-import { SAT_TEST_MESSAGE } from './test-rules';
+import { PAPER_AUDIT_FIELDS, SAT_TEST_MESSAGE } from './test-rules';
 import {
   assertSourceChosen,
   beginDraftPaperEdit,
@@ -43,6 +44,7 @@ import {
   OFFERED_TEST_MESSAGE,
 } from '../common/paper-edit';
 import { takeTestEditLock, type Editor } from './edit-lock';
+import { releaseSectionEditLock } from '../common/edit-lock';
 import { drawableFor, QuestionsService, stemPreviewOf } from '../questions';
 import { doneOpen, reopenReadingIfUnchecked } from '../assignments';
 import { AuditContext } from '../audit';
@@ -91,6 +93,16 @@ const HELD_SELECT = {
 
 type HeldRow = Prisma.PaperQuestionGetPayload<{ select: typeof HELD_SELECT }>;
 
+type BankClient = Pick<Prisma.TransactionClient, 'question'>;
+
+/** An Offer step opened before a paper write must be refused, so each one moves the test's version with it. */
+const paperMoved = (tx: Prisma.TransactionClient, testId: string) =>
+  tx.test.update({
+    where: { id: testId },
+    data: { version: { increment: 1 } },
+    select: { id: true },
+  });
+
 const PAPER_INCLUDE = {
   question: {
     select: {
@@ -99,10 +111,10 @@ const PAPER_INCLUDE = {
       difficulty: true,
       subjectId: true,
       topicId: true,
-      // The stem, so the paper reads like the bank beside it rather than like a list of codes.
-      currentVersion: { select: { content: true } },
     },
   },
+  // The stem of the version the ROW pins: what the paper serves, whatever the bank says since.
+  questionVersion: { select: { content: true } },
 } as const satisfies Prisma.PaperQuestionInclude;
 
 /** A test's paper: read, or built a question or a section at a time until the freeze. */
@@ -145,14 +157,50 @@ export class PaperService {
 
     // Four reads for the whole request, not four a question: the checks below are all set lookups.
     const drawable = await this.drawableContext(testId, input.questionIds, section.id);
-    const onPaper = new Set(
-      (
-        await this.prisma.paperQuestion.findMany({
-          where: { testId, questionId: { in: input.questionIds } },
-          select: { questionId: true },
-        })
-      ).map((row) => row.questionId),
-    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await beginDraftPaperEdit(tx, testId);
+      const { questions, highest } = await this.picksFor(tx, test, section, drawable, input);
+      await tx.paperQuestion.createMany({
+        data: questions.map((question, index) => ({
+          testId,
+          baseConfigId: test.baseConfigId,
+          baseConfigSectionId: section.id,
+          questionId: question.id,
+          questionVersionId: question.currentVersionId,
+          order: highest + index + 1,
+          marks: section.marksPerQuestion,
+          negativeMarks: section.negativeMarks,
+        })),
+      });
+      await paperMoved(tx, testId);
+      await reopenReadingIfUnchecked(tx, testId, section.id);
+    }, TX_LIMITS.SHORT);
+
+    this.recordMove(section.name, {
+      [PAPER_AUDIT_FIELDS.ADDED]: { from: null, to: input.questionIds.length },
+    });
+    return this.paperOf(test, this.scopedOf(test, config));
+  }
+
+  /** The picks judged against the paper as the Test lock holds it: each new to it, room in the section, inside its split. */
+  private async picksFor(
+    tx: Prisma.TransactionClient,
+    test: { id: string; questionPoolFilter: Prisma.JsonValue },
+    section: BaseConfigDetail['sections'][number],
+    drawable: DrawableContext,
+    input: AddPaperQuestionBody,
+  ): Promise<{ questions: (DrawableQuestion & { currentVersionId: string })[]; highest: number }> {
+    const rows = await tx.paperQuestion.findMany({
+      where: { testId: test.id },
+      select: {
+        order: true,
+        baseConfigSectionId: true,
+        questionId: true,
+        question: { select: { difficulty: true } },
+      },
+    });
+    const onPaper = new Set(rows.map((row) => row.questionId));
 
     const questions = input.questionIds.map((questionId) => {
       const question = assertDrawableIn(drawable, questionId);
@@ -164,14 +212,6 @@ export class PaperService {
       return question;
     });
 
-    const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId },
-      select: {
-        order: true,
-        baseConfigSectionId: true,
-        question: { select: { difficulty: true } },
-      },
-    });
     const inSection = rows.filter((row) => row.baseConfigSectionId === section.id);
     if (inSection.length + questions.length > section.questionCount) {
       const full = `${section.name} already holds the ${section.questionCount} it needs. Take one off first.`;
@@ -191,25 +231,7 @@ export class PaperService {
       'questionIds',
     );
 
-    const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
-    await this.prisma.$transaction(async (tx) => {
-      await beginDraftPaperEdit(tx, testId);
-      await tx.paperQuestion.createMany({
-        data: questions.map((question, index) => ({
-          testId,
-          baseConfigId: test.baseConfigId,
-          baseConfigSectionId: section.id,
-          questionId: question.id,
-          questionVersionId: question.currentVersionId,
-          order: highest + index + 1,
-          marks: section.marksPerQuestion,
-          negativeMarks: section.negativeMarks,
-        })),
-      });
-      await reopenReadingIfUnchecked(tx, testId, section.id);
-    }, TX_LIMITS.SHORT);
-
-    return this.paperOf(test, this.scopedOf(test, config));
+    return { questions, highest: rows.reduce((max, row) => Math.max(max, row.order), 0) };
   }
 
   /** Tops a hand-picked section up to its count from its own spec: the draw only ever ADDS. */
@@ -229,19 +251,17 @@ export class PaperService {
     this.assertNotTyped(test, editor);
     await this.assertWithOwner(testId, [section.id], editor);
 
-    const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId },
-      select: HELD_SELECT,
-    });
     const spec = (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id];
-    const added = await this.drawRemainder(testId, section, spec, rows, test.paperSource);
-    if (added.length === 0) return this.paperOf(test, this.scopedOf(test, config));
-
-    const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
-    await this.prisma.$transaction(async (tx) => {
+    const added = await this.prisma.$transaction(async (tx) => {
       await beginDraftPaperEdit(tx, testId);
+      // Read under the lock: a fill that waited its turn tops up what the one before it left.
+      const rows = await tx.paperQuestion.findMany({ where: { testId }, select: HELD_SELECT });
+      const drawn = await this.drawRemainder(tx, testId, section, spec, rows, test.paperSource);
+      if (drawn.length === 0) return 0;
+
+      const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
       await tx.paperQuestion.createMany({
-        data: added.map((row, index) => ({
+        data: drawn.map((row, index) => ({
           ...row,
           testId,
           baseConfigId: test.baseConfigId,
@@ -249,14 +269,20 @@ export class PaperService {
           order: highest + index + 1,
         })),
       });
+      await paperMoved(tx, testId);
       await reopenReadingIfUnchecked(tx, testId, section.id);
+      return drawn.length;
     }, TX_LIMITS.SHORT);
 
+    if (added > 0) {
+      this.recordMove(section.name, { [PAPER_AUDIT_FIELDS.ADDED]: { from: null, to: added } });
+    }
     return this.paperOf(test, this.scopedOf(test, config));
   }
 
   /** What the section still lacks. The engine hands the pins back, so only the new rows survive. */
   private async drawRemainder(
+    db: BankClient,
     testId: string,
     section: BaseConfigDetail['sections'][number],
     spec: SectionDrawSpec | undefined,
@@ -266,11 +292,11 @@ export class PaperService {
     const held = rows.filter((row) => row.baseConfigSectionId === section.id);
     // One question sits on a paper once, so every row already on it is out of this draw's reach.
     const onPaper = new Set(rows.map((row) => row.questionId));
-    const pool = (await this.poolFor(testId, section, spec, source)).filter(
+    const pool = (await this.poolFor(db, testId, section, spec, source)).filter(
       (candidate) => !onPaper.has(candidate.id),
     );
 
-    const pins = await this.pinsOf(held);
+    const pins = await this.pinsOf(db, held);
     // Judged on the pins alone, so what the bank happens to stock cannot change the verdict.
     assertWithinSplit(
       section.name,
@@ -301,9 +327,9 @@ export class PaperService {
   }
 
   /** The section's own rows as the draw reads them, pinned so the fill can only add around them. */
-  private async pinsOf(held: readonly HeldRow[]): Promise<DrawCandidate[]> {
+  private async pinsOf(db: BankClient, held: readonly HeldRow[]): Promise<DrawCandidate[]> {
     if (held.length === 0) return [];
-    const rows = await this.prisma.question.findMany({
+    const rows = await db.question.findMany({
       where: { id: { in: held.map((row) => row.questionId) } },
       select: CANDIDATE_SELECT,
     });
@@ -340,10 +366,15 @@ export class PaperService {
         where: { id: rowId },
         data: { questionId: question.id, questionVersionId: question.currentVersionId },
       });
+      await paperMoved(tx, testId);
       await reopenReadingIfUnchecked(tx, testId, row.baseConfigSectionId);
     }, TX_LIMITS.SHORT);
 
-    return this.paperOf(test, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
+    const sections = this.scopedOf(test, await this.configs.detail(test.baseConfigId));
+    this.recordMove(namesOf(sections, new Set([row.baseConfigSectionId])), {
+      questionId: { from: row.questionId, to: question.id },
+    });
+    return this.paperOf(test, sections);
   }
 
   /** A typist's one hand-over: exactly the section's count, inside its mix, becomes its paper. */
@@ -377,8 +408,7 @@ export class PaperService {
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
 
     const pair = { testId, baseConfigSectionId: section.id };
-    const typed = (await this.typedFor(pair)).map((question) => question.id);
-    const selected = await this.assertTypedSelection(testId, typed, section, body, test);
+    const drawable = await this.drawableContext(testId, body.selected, section.id);
     const chosen = new Set([...body.selected, ...body.discard]);
 
     await this.prisma.$transaction(async (tx) => {
@@ -388,7 +418,11 @@ export class PaperService {
         data: { finalizedAt: new Date() },
       });
       if (done.count === 0) throw new AppException(ErrorCodes.CONFLICT, ALREADY_DONE_MESSAGE);
+      // Read under the lock: a question typed while this Done waited its turn is settled with the rest.
+      const typed = (await this.typedFor(tx, pair)).map((question) => question.id);
+      const selected = this.assertTypedSelection(drawable, typed, section, body, test);
       await this.placeTyped(tx, test, section, selected);
+      await paperMoved(tx, testId);
       // The same fact from the reader's side: the section has reached them.
       await tx.questionAssignment.updateMany({
         where: { ...pair, ...ACTIVE_READER, handedAt: null },
@@ -437,14 +471,14 @@ export class PaperService {
     });
   }
 
-  /** Every refusal before any write: the choice is the typist's own, whole, drawable and inside the mix. */
-  private async assertTypedSelection(
-    testId: string,
+  /** Every refusal before the paper moves: the choice is the typist's own, whole, drawable and inside the mix. */
+  private assertTypedSelection(
+    drawable: DrawableContext,
     typed: readonly string[],
     section: BaseConfigDetail['sections'][number],
     { selected, discard }: TypistDoneBody,
     test: { questionPoolFilter: Prisma.JsonValue },
-  ): Promise<(DrawableQuestion & { currentVersionId: string })[]> {
+  ): (DrawableQuestion & { currentVersionId: string })[] {
     this.assertNoRepeats(selected);
     if (selected.length !== section.questionCount) {
       throw selectionRefused(
@@ -458,7 +492,6 @@ export class PaperService {
       throw selectionRefused(NOT_WRITTEN_HERE_MESSAGE);
     }
 
-    const drawable = await this.drawableContext(testId, selected, section.id);
     const questions = selected.map((id) => assertDrawableIn(drawable, id));
     const mix = (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id]?.mix;
     const quota = sectionQuota(
@@ -479,8 +512,8 @@ export class PaperService {
   }
 
   /** Whatever any typist of the section wrote for it: the role's work, not one person's. */
-  private typedFor(pair: { testId: string; baseConfigSectionId: string }) {
-    return this.prisma.question.findMany({
+  private typedFor(db: BankClient, pair: { testId: string; baseConfigSectionId: string }) {
+    return db.question.findMany({
       where: { assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST } },
       select: { id: true },
     });
@@ -509,11 +542,14 @@ export class PaperService {
     ]);
     const gap = handOverGap(test, section, held, reader);
     if (gap) throw formRefusal(ErrorCodes.CONFLICT, gap);
+    const handedAt = new Date();
     const handed = await this.prisma.questionAssignment.updateMany({
       where: { ...pair, ...ACTIVE_READER, handedAt: null },
-      data: { handedAt: new Date() },
+      data: { handedAt },
     });
     if (handed.count === 0) throw formRefusal(ErrorCodes.CONFLICT, ALREADY_HANDED_MESSAGE);
+    await releaseSectionEditLock(this.redis, pair);
+    this.recordMove(section.name, { handedAt: { from: null, to: handedAt } });
     return this.paperOf(test, this.scopedOf(test, config));
   }
 
@@ -542,9 +578,14 @@ export class PaperService {
     await this.prisma.$transaction(async (tx) => {
       await beginDraftPaperEdit(tx, testId);
       await tx.paperQuestion.deleteMany({ where: { testId, id: { in: [...rowIds] } } });
+      await paperMoved(tx, testId);
     }, TX_LIMITS.SHORT);
 
-    return this.paperOf(test, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
+    const sections = this.scopedOf(test, await this.configs.detail(test.baseConfigId));
+    this.recordMove(namesOf(sections, sectionIds), {
+      [PAPER_AUDIT_FIELDS.REMOVED]: { from: null, to: rows.length },
+    });
+    return this.paperOf(test, sections);
   }
 
   /** The only change an OFFERED paper allows; before that a question is edited, never withdrawn. */
@@ -585,6 +626,14 @@ export class PaperService {
       );
     }
     return this.paperOf(test, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
+  }
+
+  /** Filed on the test's audit row: the section a paper write moved, and what moved in it. */
+  private recordMove(section: string, moved: FieldDiff): void {
+    this.auditContext.setChanged({
+      [PAPER_AUDIT_FIELDS.SECTION]: { from: null, to: section },
+      ...moved,
+    });
   }
 
   private async requireRow(testId: string, rowId: string) {
@@ -670,12 +719,13 @@ export class PaperService {
 
   /** Anything not archived, unflagged and carrying a current version: a paper pins a version, so there must be one. */
   private async poolFor(
+    db: BankClient,
     testId: string,
     section: DrawSection,
     spec: SectionDrawSpec | undefined,
     source: PaperSource | null,
   ): Promise<DrawCandidate[]> {
-    const rows = await this.prisma.question.findMany({
+    const rows = await db.question.findMany({
       where: {
         ...drawableFor(testId),
         ...(source === PAPER_SOURCES.FRAMED
@@ -777,9 +827,7 @@ export class PaperService {
               difficulty: row.question.difficulty,
               subjectId: row.question.subjectId,
               topicId: row.question.topicId,
-              stemPreview: stemPreviewOf(
-                (row.question.currentVersion?.content as LocalizedContent | undefined) ?? {},
-              ),
+              stemPreview: stemPreviewOf(row.questionVersion.content as LocalizedContent),
             },
           })),
         };
@@ -836,6 +884,13 @@ function handOverGap(
   if (reader.handedAt) return ALREADY_HANDED_MESSAGE;
   return null;
 }
+
+/** The sections a write touched, by name and in the paper's order, as its audit row reads them. */
+const namesOf = (sections: BaseConfigDetail['sections'], ids: ReadonlySet<string>): string =>
+  sections
+    .filter((section) => ids.has(section.id))
+    .map((section) => section.name)
+    .join(', ');
 
 function hasVersion(row: CandidateRow): row is CandidateRow & { currentVersionId: string } {
   return row.currentVersionId !== null;

@@ -16,14 +16,19 @@ import { AuditContext } from '../src/audit';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { QuestionsService } from '../src/questions/questions.service';
+import { FinalizeService } from '../src/tests/finalize.service';
+import { OfferingService } from '../src/tests/offering.service';
 import { PaperService } from '../src/tests/paper.service';
 import { type Editor } from '../src/tests/edit-lock';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import type { RedisService } from '../src/redis/redis.service';
 import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
+import { sectionEditingBy, takeSectionEditLock } from '../src/common/edit-lock';
 import { OFFERED_TEST_MESSAGE } from '../src/common/paper-edit';
 import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BUILDER,
+  fourOptions,
   makeAdmin,
   makeBankQuestion,
   makeBuilder,
@@ -97,6 +102,8 @@ interface Bench {
   test?: Partial<Prisma.TestUncheckedCreateInput>;
   sections?: BuilderSection[];
   client?: PrismaService;
+  audit?: AuditContext;
+  redis?: RedisService;
 }
 
 /** A draft test on a five-question config, over the bank given. */
@@ -121,8 +128,8 @@ async function serviceWith(over: Bench = {}): Promise<PaperService> {
       ...over.test,
     },
   });
-  const audit = new AuditContext();
-  const redis = new FakeRedis().asService();
+  const audit = over.audit ?? new AuditContext();
+  const redis = over.redis ?? new FakeRedis().asService();
   return new PaperService(
     over.client ?? prisma,
     new BaseConfigsService(
@@ -147,6 +154,9 @@ const rows = () =>
   prisma.paperQuestion.findMany({ where: { testId: TEST }, orderBy: { order: 'asc' } });
 
 const heldIds = async () => (await rows()).map((row) => row.questionId);
+
+const versionOf = async () =>
+  (await prisma.test.findUniqueOrThrow({ where: { id: TEST } })).version;
 
 /** Somebody has started sitting it, which is what shuts a paper to editing. */
 const sat = async () =>
@@ -182,6 +192,21 @@ function failingDetach(): PrismaService {
             }),
           ),
         );
+    },
+  });
+}
+
+/** The real client, whose next transaction opens only once `first.run` has landed: the other call won the race. */
+function landingFirst(first: { run?: () => Promise<unknown> }): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return async (...args: Parameters<PrismaService['$transaction']>) => {
+        const { run } = first;
+        first.run = undefined;
+        await run?.();
+        return target.$transaction(...args);
+      };
     },
   });
 }
@@ -886,6 +911,16 @@ describe("PaperService — a typed section is placed by its typist's Done", () =
     assert.equal(leftover.assignmentId, null, 'an unticked question is an ordinary bank question');
   });
 
+  /** The failure this prevents: an Offer step opened before a Done freezing a paper its owner never saw. */
+  it('moves the test’s version, as every paper edit does', async () => {
+    const { done } = await typed(['q1', 'q2']);
+    const opened = await versionOf();
+
+    await done(['q1', 'q2']);
+
+    assert.ok((await versionOf()) > opened);
+  });
+
   /** The failure this prevents: a Done that dies part-way leaving the leftovers on a finished section. */
   it('leaves nothing half-applied when a write after the paper fails', async () => {
     const { done, typingDone } = await typed(['q1', 'q2', 'q3', 'q4'], {}, failingDetach());
@@ -897,6 +932,22 @@ describe("PaperService — a typed section is placed by its typist's Done", () =
     assert.equal(await prisma.question.count({ where: { id: idFor('q3') } }), 1);
     const leftover = await prisma.question.findUniqueOrThrow({ where: { id: idFor('q4') } });
     assert.notEqual(leftover.assignmentId, null);
+  });
+
+  /** The failure this prevents: a question typed while a Done was in flight left on the done section for good. */
+  it('sends a question typed after the Done began to the bank with the rest', async () => {
+    const first: { run?: () => Promise<unknown> } = {};
+    const { assignment, done } = await typed(['q1', 'q2'], {}, landingFirst(first));
+    first.run = () =>
+      prisma.question.update({
+        where: { id: idFor('q3') },
+        data: { assignmentId: assignment.id },
+      });
+
+    await done(['q1', 'q2']);
+
+    const late = await prisma.question.findUniqueOrThrow({ where: { id: idFor('q3') } });
+    assert.equal(late.assignmentId, null);
   });
 
   /** The failure this prevents: a reader handed a section short of its count. */
@@ -1041,6 +1092,30 @@ describe('PaperService — a section reaches its proof-reader', () => {
       ErrorCodes.CONFLICT,
       'the owner does not move a paper its reader is reading',
     );
+  });
+
+  /** The failure this prevents: a reader handed a section its last editor's claim keeps shut for fifteen minutes. */
+  it('gives up the section’s edit claim at the hand-over, and not at one it refuses', async () => {
+    const redis = new FakeRedis().asService();
+    const service = await serviceWith({ redis });
+    await reader();
+    const pair = { testId: TEST, baseConfigSectionId: idFor('sec_2') };
+    const pick = (label: string) =>
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_2'),
+        questionIds: [idFor(label)],
+      });
+    const editing = async () => (await sectionEditingBy(redis, prisma, pair))?.adminId ?? null;
+    const owner = await makeAdmin(prisma, { fullName: 'Asha' });
+    await takeSectionEditLock(redis, prisma, pair, owner);
+    await pick('q1');
+
+    await refused(service.handOver(TEST, idFor('sec_2')));
+    assert.equal(await editing(), owner.id);
+
+    await pick('q2');
+    await service.handOver(TEST, idFor('sec_2'));
+    assert.equal(await editing(), null);
   });
 
   /** The failure this prevents: a Hand over action the server then refuses, or none where it would be taken. */
@@ -1285,6 +1360,168 @@ describe('PaperService — one lock order, Test before its paper', () => {
     });
 
     assert.deepEqual(order, [LOCK_ORDER.TEST, LOCK_ORDER.PAPER]);
+  });
+});
+
+describe('PaperService — every paper edit moves the test’s version', () => {
+  it('moves it on an add, a replace, a fill and a remove', async () => {
+    const service = await serviceWith();
+    const first = async () => (await rows())[0]?.id ?? '';
+    const edits = [
+      () =>
+        service.addQuestions(TEST, {
+          baseConfigSectionId: idFor('sec_1'),
+          questionIds: [idFor('r1')],
+        }),
+      async () => service.replaceQuestion(TEST, await first(), { questionId: idFor('r2') }),
+      () => service.fillSection(TEST, idFor('sec_1')),
+      async () => service.removeQuestions(TEST, [await first()]),
+    ];
+
+    for (const edit of edits) {
+      const opened = await versionOf();
+      await edit();
+      assert.ok((await versionOf()) > opened);
+    }
+  });
+
+  /** The failure this prevents: a paper swapped question for question after the Offer step opened, frozen unseen. */
+  it('refuses an Offer step opened before a question was swapped, and freezes nothing', async () => {
+    const service = await serviceWith();
+    await pickWholePaper(service);
+    const opened = await versionOf();
+    const [row] = await rows();
+    await service.replaceQuestion(TEST, row?.id ?? '', { questionId: idFor('r4') });
+    const offering = new OfferingService(
+      prisma,
+      new FakeEventBus().asService(),
+      new AuditContext(),
+      new FinalizeService(),
+    );
+
+    const error = await refused(
+      offering.saveOffering(
+        TEST,
+        { opensAt: null, programOpenings: [], offered: true, expectedVersion: opened },
+        false,
+      ),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /changed after you opened its Offer step/);
+    const test = await prisma.test.findUniqueOrThrow({ where: { id: TEST } });
+    assert.equal(test.finalizedAt, null);
+  });
+});
+
+describe('PaperService — two writes to one paper at once', () => {
+  const add = (service: PaperService, sectionId: string, questions: readonly string[]) =>
+    service.addQuestions(TEST, {
+      baseConfigSectionId: sectionId,
+      questionIds: questions.map(idFor),
+    });
+
+  /** The failure this prevents: both reading one highest order, and the loser dying on the unique index. */
+  it('lands two adds in places of their own when the section has room', async () => {
+    const service = await serviceWith();
+
+    await Promise.all([add(service, idFor('sec_1'), ['r1']), add(service, idFor('sec_1'), ['r2'])]);
+
+    assert.deepEqual(
+      (await rows()).map((row) => row.order),
+      [1, 2],
+    );
+    assert.deepEqual((await heldIds()).sort(), [idFor('r1'), idFor('r2')].sort());
+  });
+
+  it('tells the add that found the section full so, and never past its count', async () => {
+    const service = await serviceWith();
+
+    const settled = await Promise.allSettled([
+      add(service, idFor('sec_2'), ['q1', 'q2']),
+      add(service, idFor('sec_2'), ['q3']),
+    ]);
+
+    const errors = settled.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason as unknown] : [],
+    );
+    assert.equal(errors.length, 1);
+    const [error] = errors;
+    assert.ok(AppException.is(error));
+    assert.match(error.message, /Quant already holds the 2 it needs/);
+    assert.ok((await rows()).length <= 2);
+  });
+
+  it('leaves a section exactly at its count after two fills', async () => {
+    const service = await serviceWith();
+
+    await Promise.all([
+      service.fillSection(TEST, idFor('sec_1')),
+      service.fillSection(TEST, idFor('sec_1')),
+    ]);
+
+    assert.equal((await rows()).length, 3);
+  });
+});
+
+describe('PaperService — a paper change says what it moved', () => {
+  /** The failure this prevents: every add, fill, swap and removal filed as the same bare "Updated". */
+  it('files an add, a fill, a swap and a removal with the section and what moved in it', async () => {
+    const audit = new AuditContext();
+    const service = await serviceWith({ audit });
+    const changedBy = (edit: () => Promise<unknown>) =>
+      audit.run(async () => {
+        await edit();
+        return audit.current()?.changed;
+      });
+    const section = { from: null, to: 'Reasoning' };
+
+    const added = await changedBy(() =>
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor('sec_1'),
+        questionIds: [idFor('r1')],
+      }),
+    );
+    const [row] = await rows();
+    const swapped = await changedBy(() =>
+      service.replaceQuestion(TEST, row?.id ?? '', { questionId: idFor('r2') }),
+    );
+    const filled = await changedBy(() => service.fillSection(TEST, idFor('sec_1')));
+    const removed = await changedBy(() => service.removeQuestions(TEST, [row?.id ?? '']));
+
+    assert.deepEqual(added, { section, questionsAdded: { from: null, to: 1 } });
+    assert.deepEqual(swapped, { section, questionId: { from: idFor('r1'), to: idFor('r2') } });
+    assert.deepEqual(filled, { section, questionsAdded: { from: null, to: 2 } });
+    assert.deepEqual(removed, { section, questionsRemoved: { from: null, to: 1 } });
+  });
+});
+
+describe('PaperService — the paper reads as it is served', () => {
+  /** The failure this prevents: the screen showing words the paper does not serve once the bank moved on. */
+  it('previews the version each row pins, not the one the question now carries', async () => {
+    const service = await serviceWith();
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_1'),
+      questionIds: [idFor('r1')],
+    });
+    const reworded = await prisma.questionVersion.create({
+      data: {
+        id: randomUUID(),
+        questionId: idFor('r1'),
+        version: 2,
+        content: { en: { stem: [{ type: 'TEXT', text: '<p>Reworded since</p>' }] } },
+        options: fourOptions(),
+      },
+    });
+    await prisma.question.update({
+      where: { id: idFor('r1') },
+      data: { currentVersionId: reworded.id },
+    });
+
+    const paper = await service.read(TEST);
+
+    const [row] = paper.sections[0]?.questions ?? [];
+    assert.equal(row?.question.stemPreview, idFor('r1'));
   });
 });
 
