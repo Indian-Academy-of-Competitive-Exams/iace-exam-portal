@@ -6,7 +6,7 @@ import Download from 'lucide-react-native/icons/download';
 import House from 'lucide-react-native/icons/house';
 import User from 'lucide-react-native/icons/user';
 import { type LanguageCode } from '@iace/contracts';
-import { EXAM_LANGUAGES_PARAM } from './constants';
+import { EXAM_LANGUAGES_PARAM, EXAM_RESUME_PARAM } from './constants';
 
 /** Route paths for the tab shell — the tab layout's screen names and Home's CTA both read from here. */
 export const ROUTES = {
@@ -45,14 +45,19 @@ export const ACCOUNT_ROUTES = {
 /** What a path starts with while a paper is being sat: nothing pushed over the tabs may refetch behind it. */
 export const EXAM_PATH = '/exam/';
 
+/** The sitting a Resume names, carried to the hall; nothing for a fresh start. */
+const resuming = (lead: '?' | '&', attemptId?: string | null) =>
+  attemptId ? `${lead}${EXAM_RESUME_PARAM}=${attemptId}` : '';
+
 /** Pushed over the tab shell, outside `(tabs)` — a series and a test each get their own stack screen. */
 export const DETAIL_ROUTES = {
   SERIES: (seriesId: string) => `/series/${seriesId}` as const,
   TEST: (testId: string) => `/test/${testId}` as const,
-  TEST_INSTRUCTIONS: (testId: string) => `/test/${testId}/instructions` as const,
+  TEST_INSTRUCTIONS: (testId: string, resume?: string | null) =>
+    `/test/${testId}/instructions${resuming('?', resume)}` as const,
   /** Keyed by TEST: no attempt exists until this screen starts one on arrival. */
-  EXAM: (testId: string, languages: readonly LanguageCode[]) =>
-    `${EXAM_PATH}${testId}?${EXAM_LANGUAGES_PARAM}=${languages.join(',')}` as const,
+  EXAM: (testId: string, languages: readonly LanguageCode[], resume?: string | null) =>
+    `${EXAM_PATH}${testId}?${EXAM_LANGUAGES_PARAM}=${languages.join(',')}${resuming('&', resume)}` as const,
   /** The web's own path, so the two apps name one sitting the same way. */
   SUBMITTED: (attemptId: string) => `/attempts/${attemptId}/submitted` as const,
   REPORT: (attemptId: string) => `/attempts/${attemptId}/report` as const,

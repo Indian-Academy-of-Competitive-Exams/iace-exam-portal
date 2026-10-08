@@ -9,9 +9,11 @@ import {
   LANGUAGE_LABELS,
   LANGUAGE_MODE,
   round2,
+  TIMER_TEMPLATE,
   type ExamBrief,
   type LanguageCode,
   type PerformancePoint,
+  type TimerTemplate,
 } from '@iace/contracts';
 
 const DASH = '—';
@@ -44,14 +46,34 @@ export const languagesOf = (brief: ExamBrief): string => {
   return brief.languageMode === LANGUAGE_MODE.DUAL ? `${named} (side by side)` : named;
 };
 
-export const sectionalOf = (brief: ExamBrief): string =>
-  brief.sections.some((section) => section.durationSec !== null) ? 'Yes' : 'No';
+/** Sections lock on their own clocks only under a sectional timer; an older server names none, so its durations answer. */
+export const isSectionalPaper = (brief: {
+  timerTemplate?: TimerTemplate;
+  sections: readonly { durationSec: number | null }[];
+}): boolean =>
+  brief.timerTemplate === undefined
+    ? brief.sections.some((section) => section.durationSec !== null)
+    : brief.timerTemplate !== TIMER_TEMPLATE.COMPOSITE_FREE;
+
+export const sectionalOf = (brief: ExamBrief): string => (isSectionalPaper(brief) ? 'Yes' : 'No');
+
+const ORDINAL_SUFFIX = ['th', 'st', 'nd', 'rd'] as const;
+
+/** st, nd, rd or th: the teens are the exception every naive rule gets wrong, and a fraction is always th. */
+export function ordinalSuffix(value: number): string {
+  const tens = value % 100;
+  if (!Number.isInteger(value) || (tens >= 11 && tens <= 13)) return ORDINAL_SUFFIX[0];
+  return ORDINAL_SUFFIX[value % 10] ?? ORDINAL_SUFFIX[0];
+}
+
+/** 1st, 22nd, 113th, 82.5th — a rank or a percentile as it is read. */
+export const ordinal = (value: number): string => `${value}${ordinalSuffix(value)}`;
 
 /** What a result reads as under a test's name: the marks, where it placed, and the day it was sat. */
 export const resultLine = (point: PerformancePoint): string =>
   [
     `${point.score} of ${point.maxMarks} marks`,
-    point.percentile === null ? null : `${point.percentile}th percentile`,
+    point.percentile === null ? null : `${ordinal(point.percentile)} percentile`,
     point.rank === null ? null : `rank ${point.rank}`,
     point.submittedAt === null ? null : `sat ${instituteDayLabel(point.submittedAt)}`,
   ]

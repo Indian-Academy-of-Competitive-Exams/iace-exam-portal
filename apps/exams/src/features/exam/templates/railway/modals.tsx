@@ -1,8 +1,7 @@
 /** The two panels the utility bar opens. Both overlay the paper; neither stops the clock. */
 import { contentLanguageOf } from '@iace/contracts';
-import { htmlOf, shownLanguages, type ExamView } from '@iace/app-kit';
+import { htmlOf, shownLanguages, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { RichContent } from '@iace/ui';
-import { isSectional } from '../../use-instructions';
 import { GeneralScreen } from './instructions';
 import { ScrollPane } from './scroll-pane';
 
@@ -56,7 +55,10 @@ export function InstructionsModal({
     <Panel title="Instructions" onClose={onClose}>
       <h2 className="rw-rules-title text-center text-base font-bold">Instructions</h2>
       <div className="flex flex-col gap-3 text-sm leading-relaxed">
-        <GeneralScreen forwardOnly={view.forwardOnly} sectional={isSectional(view.sections)} />
+        <GeneralScreen
+          forwardOnly={view.forwardOnly}
+          sectional={view.timer.kind === TIMER_KIND.SECTION}
+        />
       </div>
     </Panel>
   );

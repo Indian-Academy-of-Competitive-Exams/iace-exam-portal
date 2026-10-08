@@ -23,6 +23,7 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-
 import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
 import { SystemCheck } from '../../../src/components/tests/system-check';
+import { EXAM_RESUME_PARAM } from '../../../src/lib/constants';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { plural } from '../../../src/lib/plural';
@@ -43,7 +44,10 @@ function phaseOf(brief: {
 }
 
 export default function TestInstructionsScreen() {
-  const { id: testId } = useLocalSearchParams<{ id: string }>();
+  const { id: testId, [EXAM_RESUME_PARAM]: resume } = useLocalSearchParams<{
+    id: string;
+    [EXAM_RESUME_PARAM]?: string;
+  }>();
   const router = useRouter();
   const [declared, setDeclared] = useState(false);
   const [language, setLanguage] = useState<LanguageCode | ''>('');
@@ -73,7 +77,7 @@ export default function TestInstructionsScreen() {
           onDeclaredChange={setDeclared}
           language={language}
           onLanguageChange={setLanguage}
-          onBegin={(languages) => router.push(DETAIL_ROUTES.EXAM(testId, languages))}
+          onBegin={(languages) => router.push(DETAIL_ROUTES.EXAM(testId, languages, resume))}
         />
       </ScrollView>
     </Fragment>

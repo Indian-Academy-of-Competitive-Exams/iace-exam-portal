@@ -144,7 +144,7 @@ export function DefaultInstructions({
       >
         <PageBody className="pb-6">
           {view.step === 'GENERAL' ? (
-            <GeneralStep forwardOnly={view.forwardOnly} sectional={view.sectional} />
+            <GeneralStep forwardOnly={view.forwardOnly} sectional={view.sectional} omr={view.omr} />
           ) : (
             <PaperStep view={view} fullscreenSupported={fullscreenSupported} />
           )}
@@ -174,10 +174,7 @@ function Walk({ view }: Readonly<{ view: InstructionsView }>) {
   );
 }
 
-function GeneralStep({
-  forwardOnly,
-  sectional,
-}: Readonly<Pick<PaperTraits, 'forwardOnly' | 'sectional'>>) {
+function GeneralStep({ forwardOnly, sectional, omr }: Readonly<PaperTraits>) {
   return (
     <>
       {forwardOnly ? (
@@ -188,8 +185,7 @@ function GeneralStep({
       ) : null}
 
       <SurfaceCard title="How the paper works">
-        {/* The brief carries no render mode, so a bubble sheet is taught as a CBT until the paper opens. */}
-        <PaperRules forwardOnly={forwardOnly} sectional={sectional} omr={false} />
+        <PaperRules forwardOnly={forwardOnly} sectional={sectional} omr={omr} />
       </SurfaceCard>
 
       <SurfaceCard title="Palette">

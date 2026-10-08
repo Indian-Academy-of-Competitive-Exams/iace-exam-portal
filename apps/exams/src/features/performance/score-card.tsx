@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { EmptyState, EMPTY_STATE_KINDS, Metric, cn } from '@iace/ui';
 import { CohortFigure, MarksFigure, TimeFigure, type Benchmark } from '@iace/app-kit/browser';
-import { isMarkingPending, isSittingVoided, minutes } from '@iace/app-kit';
+import { isMarkingPending, isSittingVoided, minutes, ordinalSuffix } from '@iace/app-kit';
 import {
   paperCounts,
   type CohortCurve,
@@ -107,7 +107,13 @@ function Headline({ card }: Readonly<{ card: ScoreCard }>) {
   if (card.percentile === null) {
     return <HeroFigure value={card.score} unit={`/ ${card.maxMarks}`} caption="marks" />;
   }
-  return <HeroFigure value={card.percentile} unit="th" caption={beaten(card)} />;
+  return (
+    <HeroFigure
+      value={card.percentile}
+      unit={ordinalSuffix(card.percentile)}
+      caption={beaten(card)}
+    />
+  );
 }
 
 /** Never the figure twice: what leads the hero is dropped from what stands beside it. */

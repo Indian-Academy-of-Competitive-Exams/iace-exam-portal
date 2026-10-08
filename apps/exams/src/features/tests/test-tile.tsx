@@ -6,10 +6,11 @@ import {
   instituteDayLabel,
   ATTEMPT_STATUS,
   TEST_BUCKET,
+  TEST_SHUT,
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
-import { type Sittable, type TestResult } from '@iace/app-kit';
+import { ordinal, shutOf, shutReason, type Sittable, type TestResult } from '@iace/app-kit';
 import { StartSitting } from '../exam/start-sitting';
 import { TOUR_TARGETS } from '../../lib/tours';
 
@@ -39,7 +40,8 @@ export function TestTile({
   now,
   result,
 }: Readonly<{ row: Sittable; now: Date; result?: TestResult }>) {
-  const state = STATES[stateOf(row)];
+  const stands = stateOf(row);
+  const state = STATES[stands];
   const opens = opensOn(row.test, now);
 
   return (
@@ -49,7 +51,7 @@ export function TestTile({
           data-tour={TOUR_TARGETS.TEST_STATE}
           className={cn('w-fit rounded-full px-2 py-0.5 text-xs font-semibold', state.pill)}
         >
-          {pillOf(state.label, result)}
+          {pillOf(stands === 'SHUT' ? shutLabel(row.test, now) : state.label, result)}
         </span>
 
         <Link to={ROUTES.TEST_ABOUT(row.test.id)} className="flex min-w-0 flex-col gap-1">
@@ -76,9 +78,9 @@ export function TestTile({
   );
 }
 
-/** A sat paper shows what it scored; anything else shows the one thing there is to press. */
+/** A sat paper shows what it scored, unless a retake of it is running; anything else shows the one thing to press. */
 function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult }>) {
-  if (result) {
+  if (result && row.action !== 'RESUME') {
     return (
       <div className="flex items-center justify-between gap-2">
         <span className="text-lg font-semibold tabular-nums text-foreground">
@@ -101,7 +103,12 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
 
   if (row.action) {
     return (
-      <StartSitting testId={row.test.id} size="sm" className="w-full">
+      <StartSitting
+        testId={row.test.id}
+        resume={row.test.liveAttemptId}
+        size="sm"
+        className="w-full"
+      >
         {row.action === 'RESUME' ? 'Resume' : 'Start test'}
       </StartSitting>
     );
@@ -120,9 +127,13 @@ function stateOf(row: Sittable): keyof typeof STATES {
   return row.bucket === TEST_BUCKET.OPEN ? 'LIVE' : 'SHUT';
 }
 
+/** Scheduled is only true of an opening still ahead; a hold or a turn is named for what it is. */
+const shutLabel = (test: StudentCatalogTest, now: Date): string =>
+  shutOf(test, now) === TEST_SHUT.NOT_OPEN ? STATES.SHUT.label : shutReason(test, now);
+
 /** A finished paper's pill carries its percentile, which is the fact the reader came for. */
 function pillOf(label: string, result?: TestResult): string {
-  if (result?.percentile != null) return `${label} · ${result.percentile}th`;
+  if (result?.percentile != null) return `${label} · ${ordinal(result.percentile)}`;
   return label;
 }
 

@@ -321,7 +321,11 @@ function TestExit({ row, small }: Readonly<{ row: Sittable; small?: boolean }>) 
   if (row.action === null) return null;
 
   return (
-    <StartSitting testId={row.test.id} size={small ? 'sm' : 'default'}>
+    <StartSitting
+      testId={row.test.id}
+      resume={row.test.liveAttemptId}
+      size={small ? 'sm' : 'default'}
+    >
       {row.action === 'RESUME' ? 'Resume' : 'Start test'}
     </StartSitting>
   );

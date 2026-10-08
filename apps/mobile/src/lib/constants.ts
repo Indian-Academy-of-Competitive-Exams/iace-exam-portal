@@ -35,6 +35,9 @@ export {
 /** The search param carrying the language choice to `/exam/[testId]`. */
 export const EXAM_LANGUAGES_PARAM = 'languages' as const;
 
+/** The web's own param: the sitting a Resume names, so one handed in since is never begun afresh. */
+export const EXAM_RESUME_PARAM = 'resume' as const;
+
 /** What a sitting knew about itself as it ended. Put in the cache by the exam, never fetched. */
 export const endedSittingQueryKey = (attemptId: string) =>
   ['me', 'attempts', attemptId, 'ended'] as const;

@@ -1,7 +1,7 @@
 /// <reference types="nativewind/types" />
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { isMarkingPending, minutes } from '@iace/app-kit';
+import { isMarkingPending, minutes, ordinalSuffix } from '@iace/app-kit';
 import { type MarkComposition, type ScoreCard } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { scoreCardQuery } from '../../lib/queries';
@@ -74,13 +74,14 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
 
 /** An unranked sitting has no percentile to lead with, so its marks take the headline instead. */
 function Headline({ card }: Readonly<{ card: ScoreCard }>) {
-  const ranked = card.percentile !== null;
+  const { percentile } = card;
+  const ranked = percentile !== null;
 
   return (
     <Hero eyebrow="Your result">
       <HeroFigure
-        value={ranked ? (card.percentile ?? 0) : card.score}
-        unit={ranked ? 'th' : `/ ${card.maxMarks}`}
+        value={ranked ? percentile : card.score}
+        unit={ranked ? ordinalSuffix(percentile) : `/ ${card.maxMarks}`}
         caption={ranked ? beaten(card) : 'marks'}
       />
     </Hero>

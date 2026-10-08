@@ -21,7 +21,12 @@ import {
   type ExamView,
 } from '@iace/app-kit';
 import { api } from '../../src/lib/api';
-import { CATALOG_QUERY_KEY, EXAM_LANGUAGES_PARAM, STORAGE_KEYS } from '../../src/lib/constants';
+import {
+  CATALOG_QUERY_KEY,
+  EXAM_LANGUAGES_PARAM,
+  EXAM_RESUME_PARAM,
+  STORAGE_KEYS,
+} from '../../src/lib/constants';
 import { examLanguagesFrom } from '../../src/lib/exam-routes';
 import { deviceTab, sittingStorage } from '../../src/lib/sitting-store';
 import { DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
@@ -36,9 +41,14 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-sta
 const NO_QUESTIONS: readonly ExamQuestion[] = [];
 
 export default function ExamScreen() {
-  const { testId = '', [EXAM_LANGUAGES_PARAM]: languagesParam } = useLocalSearchParams<{
+  const {
+    testId = '',
+    [EXAM_LANGUAGES_PARAM]: languagesParam,
+    [EXAM_RESUME_PARAM]: resumeParam,
+  } = useLocalSearchParams<{
     testId: string;
     [EXAM_LANGUAGES_PARAM]?: string;
+    [EXAM_RESUME_PARAM]?: string;
   }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -48,8 +58,8 @@ export default function ExamScreen() {
   const [tab] = useState(deviceTab);
   // Bumped by Continue here, so the engine mounts fresh: a new queue read, and saving no longer stopped.
   const [reclaims, setReclaims] = useState(0);
-  // The sitting Continue here names, so one handed in elsewhere is never restarted as a fresh paper.
-  const [resume, setResume] = useState<string>();
+  // The sitting a Resume or Continue here names, so one handed in elsewhere is never restarted as a fresh paper.
+  const [resume, setResume] = useState(resumeParam || undefined);
 
   const languages = examLanguagesFrom(languagesParam);
   const { attempt, paper, forget } = useStartedSitting(api, testId, {

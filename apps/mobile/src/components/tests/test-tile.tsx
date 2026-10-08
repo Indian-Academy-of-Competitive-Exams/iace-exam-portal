@@ -7,7 +7,7 @@ import {
   instituteDayLabel,
   type StudentCatalogTest,
 } from '@iace/contracts';
-import { shutReason, type Sittable, type TestResult } from '@iace/app-kit';
+import { ordinal, shutReason, type Sittable, type TestResult } from '@iace/app-kit';
 import { Text } from '../ui/text';
 import { Alert } from '../ui/alert';
 import { Card } from '../ui/card';
@@ -68,9 +68,9 @@ export function TestTile({ row, now, result, fullWidth = false }: Readonly<TestT
   );
 }
 
-/** A sat paper shows what it scored; anything else shows the one thing this card leads to. */
+/** A sat paper shows what it scored, unless a retake of it is running; anything else shows what this card leads to. */
 function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult }>) {
-  if (result) {
+  if (result && row.action !== 'RESUME') {
     return (
       <Text className="text-lg font-semibold tabular-nums text-foreground">
         {result.score}
@@ -104,7 +104,7 @@ function stateOf(row: Sittable): keyof typeof STATES {
 
 /** A finished paper's pill carries its percentile, which is the fact the reader came for. */
 function pillOf(label: string, result?: TestResult): string {
-  if (result?.percentile != null) return `${label} · ${result.percentile}th`;
+  if (result?.percentile != null) return `${label} · ${ordinal(result.percentile)}`;
   return label;
 }
 

@@ -10,7 +10,7 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
-import { everySitting } from '@iace/app-kit';
+import { everySitting, ordinal } from '@iace/app-kit';
 import { PageCrumbs, useFilterSpec, usePageTour } from '@iace/app-kit/browser';
 import { testsSat, type Leaderboard, type SatTest } from '@iace/contracts';
 import { api } from '../../lib/api';
@@ -151,16 +151,6 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
       </Section>
     </div>
   );
-}
-
-const ORDINAL_SUFFIX = ['th', 'st', 'nd', 'rd'] as const;
-
-/** 1st, 22nd, 113th — the teens are the exception every naive rule gets wrong. */
-function ordinal(rank: number): string {
-  const tens = rank % 100;
-  const units = rank % 10;
-  const suffix = tens >= 11 && tens <= 13 ? ORDINAL_SUFFIX[0] : (ORDINAL_SUFFIX[units] ?? 'th');
-  return `${rank}${suffix}`;
 }
 
 /** The reader's own seat is the headline; the cohort alone is what a board without them shows. */

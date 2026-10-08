@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { everySitting, minutes, newestFirst, sittingHint } from '@iace/app-kit';
+import { everySitting, minutes, newestFirst, ordinalSuffix, sittingHint } from '@iace/app-kit';
 import {
   RECENT_STANDINGS,
   dispositionRates,
@@ -121,7 +121,7 @@ function Standing({ overview }: Readonly<{ overview: StudentOverview }>) {
     >
       <HeroFigure
         value={avgPercentile ?? DASH}
-        unit={avgPercentile === null ? undefined : 'th'}
+        unit={avgPercentile === null ? undefined : ordinalSuffix(avgPercentile)}
         caption={bestPercentile === null ? 'nothing marked yet' : `best ${bestPercentile}`}
       />
     </Hero>

@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, LockKeyhole } from 'lucide-react';
 import {
   Alert,
   Button,
@@ -24,12 +24,15 @@ import {
   negativeOf,
   sectionalOf,
   sectionMarksOf,
+  SHUT_SAYS,
+  shutOf,
   shutReason,
   totalMarksOf,
 } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
   TEST_BUCKET,
+  TEST_SHUT,
   testAction,
   testBucket,
   type ExamBrief,
@@ -129,7 +132,7 @@ export function TestAboutPage() {
 
         {brief.data ? (
           <>
-            {listed ? <Shut test={listed} /> : null}
+            {listed ? <Shut test={listed} now={now} /> : null}
 
             <StatBand tour={TOUR_TARGETS.ABOUT_BAND}>
               <Metric label="Questions" value={brief.data.totalQuestions} size="sm" />
@@ -219,17 +222,18 @@ function Window({ test }: Readonly<{ test: StudentCatalogTest }>) {
   );
 }
 
-/** Not open YET is a consequence, so it is an Alert — nothing else can keep a paper shut. */
-function Shut({ test }: Readonly<{ test: StudentCatalogTest }>) {
+/** What keeps a paper shut is a consequence, so it is an Alert: a hold is already wrong, an opening or a turn only a fact. */
+function Shut({ test, now }: Readonly<{ test: StudentCatalogTest; now: Date }>) {
   const bucket = testBucket(test);
   if (bucket === TEST_BUCKET.OPEN || bucket === TEST_BUCKET.DONE) return null;
+  const shut = shutOf(test, now);
 
   return (
     /* ui-copy-ok: consequence */
-    <Alert variant="info">
+    <Alert variant={shut === TEST_SHUT.HOLD ? 'danger' : 'info'}>
       <span className="flex items-center gap-2">
-        <CalendarClock aria-hidden />
-        This paper has not opened yet. Nothing can be started until it does.
+        {shut === TEST_SHUT.NOT_OPEN ? <CalendarClock aria-hidden /> : <LockKeyhole aria-hidden />}
+        {SHUT_SAYS[shut].notice}
       </span>
     </Alert>
   );
@@ -249,7 +253,7 @@ function Exits({
   return (
     <div data-tour={TOUR_TARGETS.ABOUT_EXIT} className="flex flex-wrap items-center gap-3">
       {action ? (
-        <StartSitting testId={testId}>
+        <StartSitting testId={testId} resume={listed?.liveAttemptId}>
           {action === 'RESUME' ? 'Resume test' : 'Proceed to test'}
         </StartSitting>
       ) : (

@@ -5,16 +5,12 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NAVIGATION_POLICY, type ExamBrief, type LanguageCode } from '@iace/contracts';
-import { beginChoice } from '@iace/app-kit';
+import { NAVIGATION_POLICY, TEST_UI, type ExamBrief, type LanguageCode } from '@iace/contracts';
+import { beginChoice, isSectionalPaper } from '@iace/app-kit';
 import { ROUTES } from '../../lib/constants';
 
 const INSTRUCTION_STEPS = ['GENERAL', 'PAPER'] as const;
 export type InstructionStep = (typeof INSTRUCTION_STEPS)[number];
-
-/** A paper whose sections carry their own clock teaches one more rule than one that does not. */
-export const isSectional = (sections: readonly { durationSec: number | null }[]): boolean =>
-  sections.some((section) => section.durationSec !== null);
 
 export interface InstructionsView {
   brief: ExamBrief;
@@ -28,6 +24,8 @@ export interface InstructionsView {
   /** A seat left is closed for good, so the rules a candidate is taught here are different ones. */
   forwardOnly: boolean;
   sectional: boolean;
+  /** A bubble sheet is answered by filling, so it is taught none of the CBT's buttons. */
+  omr: boolean;
   language: LanguageCode | '';
   chooseLanguage: (code: LanguageCode) => void;
   declared: boolean;
@@ -50,7 +48,8 @@ export function useInstructions(
   return {
     brief,
     forwardOnly: brief.navigation === NAVIGATION_POLICY.FORWARD_ONLY,
-    sectional: isSectional(brief.sections),
+    sectional: isSectionalPaper(brief),
+    omr: brief.testUi === TEST_UI.OMR,
     step: INSTRUCTION_STEPS[stepIndex] ?? 'GENERAL',
     stepIndex,
     next: () => setStepIndex((at) => Math.min(at + 1, INSTRUCTION_STEPS.length - 1)),

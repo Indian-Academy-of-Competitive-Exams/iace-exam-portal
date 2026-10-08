@@ -1,18 +1,20 @@
 import { useEffect } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import { languagesFor } from '@iace/contracts';
 import { isBriefRefused } from '@iace/app-kit';
 import { useFullscreen } from '@iace/app-kit/browser';
 import { briefQuery, testPaperQuery } from '../../lib/queries';
-import { ROUTES } from '../../lib/constants';
+import { RESUME_PARAM, ROUTES } from '../../lib/constants';
 import { InstructionsShell } from './instructions-shell';
+import { resumeSearch } from './use-sitting-address';
 
 /** What a student reads before the clock starts. Nothing here starts it — the last button does. */
 
 export function TestInstructionsPage() {
   const { testId = '' } = useParams();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
   const fullscreen = useFullscreen();
   const queryClient = useQueryClient();
@@ -81,7 +83,11 @@ export function TestInstructionsPage() {
       onBegin={(languages) => {
         // Asked for again HERE because the walk up may have been refused, and this click is a gesture.
         void fullscreen.enter();
-        navigate(ROUTES.EXAM(testId), { state: { languages } });
+        // The sitting a Resume named rides on to the hall, which refuses it once ended instead of starting another.
+        navigate(
+          { pathname: ROUTES.EXAM(testId), search: resumeSearch(params.get(RESUME_PARAM)) },
+          { state: { languages } },
+        );
       }}
     />
   );

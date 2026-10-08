@@ -3,6 +3,7 @@ import {
   ATTEMPT_STATUS,
   ErrorCodes,
   TEST_BUCKET,
+  TEST_SHUT,
   instituteDayLabel,
   isSat,
   testAction,
@@ -13,6 +14,7 @@ import {
   type StudentCatalogSeries,
   type StudentCatalogTest,
   type TestBucket,
+  type TestShut,
 } from '@iace/contracts';
 
 /** NOT_FOUND or FORBIDDEN is the server refusing this student; offline or a 5xx can be retried. */
@@ -136,10 +138,40 @@ export function resultsByTest(
   return held;
 }
 
+/** What shuts a test, as a button's few words and as the sentence a details page has room for. */
+export const SHUT_SAYS: Readonly<Record<TestShut, { label: string; notice: string }>> = {
+  [TEST_SHUT.HOLD]: {
+    label: 'Test access on hold',
+    notice: 'Your test access is on hold. Nothing here can be started until your branch lifts it.',
+  },
+  [TEST_SHUT.NOT_OPEN]: {
+    label: 'Not open yet',
+    notice: 'This paper has not opened yet. Nothing can be started until it does.',
+  },
+  [TEST_SHUT.TURN]: {
+    label: 'Waiting its turn',
+    notice: 'This paper is waiting its turn. Finish the test before it to reach this one.',
+  },
+};
+
+/** Which fact shuts a test that cannot be started; `now` only guesses for a server older than `shut`. */
+export function shutOf(test: StudentCatalogTest, now: Date): TestShut {
+  if (test.shut) return test.shut;
+  return testIsOpen(test.opensAt, now) ? TEST_SHUT.TURN : TEST_SHUT.NOT_OPEN;
+}
+
 /** Why there is no button. "Waiting its turn" is not an error and must not read like one. */
-export function shutReason(test: StudentCatalogTest, now: Date): string {
-  if (!testIsOpen(test.opensAt, now)) return 'Not open yet';
-  return 'Waiting its turn';
+export const shutReason = (test: StudentCatalogTest, now: Date): string =>
+  SHUT_SAYS[shutOf(test, now)].label;
+
+/** Reaching nothing and searching for nothing are different facts, and they read differently. */
+export const EMPTINESS = { NONE: 'NONE', FILTERED: 'FILTERED' } as const;
+export type Emptiness = (typeof EMPTINESS)[keyof typeof EMPTINESS] | null;
+
+/** Counted in TESTS: a series holding none is reached, and still leaves nothing a filter could have hidden. */
+export function emptyReason(reaches: readonly StudentCatalogSeries[], showing: number): Emptiness {
+  if (reaches.every((series) => series.tests.length === 0)) return EMPTINESS.NONE;
+  return showing === 0 ? EMPTINESS.FILTERED : null;
 }
 
 /** Which sitting of the paper this was, and the day it was sat — in the institute's own zone. */

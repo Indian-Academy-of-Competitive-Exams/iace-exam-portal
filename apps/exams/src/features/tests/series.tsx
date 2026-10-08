@@ -201,7 +201,7 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
         const action = testAction(row);
         if (action) {
           return (
-            <StartSitting testId={row.id} size="sm">
+            <StartSitting testId={row.id} resume={row.liveAttemptId} size="sm">
               {action === 'RESUME' ? 'Resume' : 'Start'}
             </StartSitting>
           );

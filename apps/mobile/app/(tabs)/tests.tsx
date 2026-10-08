@@ -3,15 +3,19 @@ import { FlatList, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
   ANY_CHOICE,
+  EMPTINESS,
+  SHUT_SAYS,
+  emptyReason,
   everySitting,
   matching,
   resultsByTest,
   sittablesOf,
   testsFilters,
+  type Emptiness,
   type Sittable,
   type TestResult,
 } from '@iace/app-kit';
-import { type StudentCatalogSeries } from '@iace/contracts';
+import { TEST_SHUT, type StudentCatalogSeries } from '@iace/contracts';
 import { Text } from '../../src/components/ui/text';
 import { catalogQuery, performanceQuery } from '../../src/lib/queries';
 import { Alert } from '../../src/components/ui/alert';
@@ -26,9 +30,6 @@ import { TESTS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../src/lib/tours';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
 const ANY = ANY_CHOICE;
-
-/** Reaching nothing and searching for nothing are different facts, and they read differently. */
-type Emptiness = 'NONE' | 'FILTERED' | null;
 
 interface Shelf {
   series: StudentCatalogSeries;
@@ -56,7 +57,7 @@ export default function TestsScreen() {
     .filter((row) => course === ANY || row.examStage?.course === course)
     .filter((row) => seriesId === ANY || row.id === seriesId);
   const rows = inState(matching(sittablesOf(filteredSeries), q), bucket);
-  const emptiness = emptyReasonOf(reaches.length, rows.length);
+  const emptiness = emptyReason(reaches, rows.length);
   const results = resultsByTest(everySitting(trend.data));
 
   return (
@@ -117,7 +118,7 @@ function CatalogBody({
       />
     );
   }
-  if (emptiness === 'NONE') {
+  if (emptiness === EMPTINESS.NONE) {
     return (
       <EmptyState
         title="No tests yet"
@@ -126,7 +127,7 @@ function CatalogBody({
       />
     );
   }
-  if (emptiness === 'FILTERED') {
+  if (emptiness === EMPTINESS.FILTERED) {
     return <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing matches" />;
   }
   return null;
@@ -153,11 +154,7 @@ function TestsHeader({ count, testBlocked, filters, state }: Readonly<TestsHeade
         <TourTrigger />
       </View>
 
-      {testBlocked ? (
-        <Alert variant="danger">
-          Your test access is on hold. Nothing here can be started until your branch lifts it.
-        </Alert>
-      ) : null}
+      {testBlocked ? <Alert variant="danger">{SHUT_SAYS[TEST_SHUT.HOLD].notice}</Alert> : null}
 
       <FilterSearch state={state} filters={filters} />
       <FilterSummary state={state} filters={filters} />
@@ -167,11 +164,6 @@ function TestsHeader({ count, testBlocked, filters, state }: Readonly<TestsHeade
 
 const inState = (rows: readonly Sittable[], state: string) =>
   state === ANY ? [...rows] : rows.filter((row) => row.bucket === state);
-
-function emptyReasonOf(reached: number, showing: number): Emptiness {
-  if (reached === 0) return 'NONE';
-  return showing === 0 ? 'FILTERED' : null;
-}
 
 /** A shelf per series, and no shelf for one the search or filters emptied. */
 function shelvesOf(series: readonly StudentCatalogSeries[], rows: readonly Sittable[]): Shelf[] {

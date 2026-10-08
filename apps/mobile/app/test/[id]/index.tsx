@@ -12,12 +12,15 @@ import {
   negativeOf,
   sectionalOf,
   sectionMarksOf,
+  SHUT_SAYS,
+  shutOf,
   shutReason,
   totalMarksOf,
 } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
   TEST_BUCKET,
+  TEST_SHUT,
   testAction,
   testBucket,
   type ExamBrief,
@@ -147,7 +150,7 @@ function AboutContent({
         ) : null}
       </View>
 
-      {listed ? <ShutNotice test={listed} /> : null}
+      {listed ? <ShutNotice test={listed} now={now} /> : null}
 
       <View {...band}>
         <StatTileRow>
@@ -166,11 +169,14 @@ function AboutContent({
   );
 }
 
-/** Not open YET is a consequence, so it is an Alert — nothing else can keep a paper shut. */
-function ShutNotice({ test }: Readonly<{ test: StudentCatalogTest }>) {
+/** What keeps a paper shut is a consequence, so it is an Alert: a hold is already wrong, an opening or a turn only a fact. */
+function ShutNotice({ test, now }: Readonly<{ test: StudentCatalogTest; now: Date }>) {
   const bucket = testBucket(test);
   if (bucket === TEST_BUCKET.OPEN || bucket === TEST_BUCKET.DONE) return null;
-  return <Alert>This paper has not opened yet. Nothing can be started until it does.</Alert>;
+  const shut = shutOf(test, now);
+  return (
+    <Alert variant={shut === TEST_SHUT.HOLD ? 'danger' : 'info'}>{SHUT_SAYS[shut].notice}</Alert>
+  );
 }
 
 function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
@@ -252,7 +258,7 @@ function Exits({
   }
 
   return (
-    <Link href={DETAIL_ROUTES.TEST_INSTRUCTIONS(testId)} asChild>
+    <Link href={DETAIL_ROUTES.TEST_INSTRUCTIONS(testId, listed?.liveAttemptId)} asChild>
       <Button>{action === 'RESUME' ? 'Resume test' : 'Proceed to test'}</Button>
     </Link>
   );

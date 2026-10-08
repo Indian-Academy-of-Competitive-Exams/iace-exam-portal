@@ -5,6 +5,10 @@ import { useStartedSitting } from '@iace/app-kit';
 import { api } from '../../lib/api';
 import { RESUME_PARAM } from '../../lib/constants';
 
+/** The query a Resume carries to the hall: it names its sitting, so one handed in since is never begun afresh. */
+export const resumeSearch = (attemptId: string | null | undefined): string =>
+  attemptId ? `?${RESUME_PARAM}=${attemptId}` : '';
+
 /** The exam page's start: its address names the sitting, so a reload reclaims that one and never starts another. */
 export function useAddressedSitting(testId: string, start: Omit<StartAttemptInput, 'resume'>) {
   const [params, setParams] = useSearchParams();

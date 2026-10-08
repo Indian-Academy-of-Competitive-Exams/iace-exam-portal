@@ -22,7 +22,7 @@ import {
   TimeReturnFigure,
   WeakestSubjectsFigure,
 } from '@iace/app-kit/browser';
-import { everySitting, newestFirst, sittingHint } from '@iace/app-kit';
+import { everySitting, newestFirst, ordinalSuffix, sittingHint } from '@iace/app-kit';
 import {
   RECENT_STANDINGS,
   TEST_SCOPE_LABELS,
@@ -212,10 +212,11 @@ function Body({
 /** The standing is a percentile, so until a sitting is marked there is no headline. */
 function headlineOf(overview: StudentOverview) {
   if (overview.standing.testsEvaluated === 0) return null;
+  const { avgPercentile } = overview.standing;
   return (
     <HeroFigure
-      value={overview.standing.avgPercentile ?? DASH}
-      unit={overview.standing.avgPercentile === null ? undefined : 'th'}
+      value={avgPercentile ?? DASH}
+      unit={avgPercentile === null ? undefined : ordinalSuffix(avgPercentile)}
       caption={bestLine(overview)}
     />
   );
