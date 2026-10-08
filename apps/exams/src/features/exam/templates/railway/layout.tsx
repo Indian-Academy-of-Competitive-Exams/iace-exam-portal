@@ -11,7 +11,7 @@ import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Badge, Button, cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
-import { type ExamSlotProps } from '../shared/slots';
+import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
 import { RailwayPalette } from './palette';
 import { InfoTally } from './info-popup';
 import { PaperModal, InstructionsModal } from './modals';
@@ -22,7 +22,7 @@ import './railway.css';
 /** The original has no screen this narrow; railway.css folds the palette over the paper at the same width. */
 const PHONE_QUERY = '(max-width: 767px)';
 
-export function RailwayLayout({ view, onOpenCalculator }: Readonly<ExamSlotProps>) {
+export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamSlotProps>) {
   const [openPanel, setOpenPanel] = useState<'PAPER' | 'INSTRUCTIONS' | null>(null);
   const phone = useMediaQuery(PHONE_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(!phone);
@@ -80,7 +80,7 @@ export function RailwayLayout({ view, onOpenCalculator }: Readonly<ExamSlotProps
             <RailwayTimer view={view} />
           </div>
 
-          <div className="rw-sectionbar flex shrink-0 items-center gap-1 px-3 py-1">
+          <div className="rw-sectionbar flex shrink-0 flex-wrap items-center gap-1 px-3 py-1">
             {view.sections.map((section) => (
               <span
                 key={section.id}
@@ -114,12 +114,15 @@ export function RailwayLayout({ view, onOpenCalculator }: Readonly<ExamSlotProps
 
           <div className="questn flex shrink-0 items-center justify-between">
             <span>{`Question No. ${view.questionIndex + 1}`}</span>
-            <button type="button" className="fulscrnbtn" onClick={view.fullscreen.enter}>
-              View Full Screen
-            </button>
+            {view.fullscreen.isSupported ? (
+              <button type="button" className="fulscrnbtn" onClick={view.fullscreen.enter}>
+                View Full Screen
+              </button>
+            ) : null}
           </div>
 
-          <ScrollPane className="min-h-0 flex-1">
+          {/* Keyed, so the next question opens at its top and not at the last one's offset. */}
+          <ScrollPane key={view.question?.questionId} className="min-h-0 flex-1">
             {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
           </ScrollPane>
 
@@ -186,8 +189,10 @@ export function RailwayLayout({ view, onOpenCalculator }: Readonly<ExamSlotProps
 
       {openPanel === 'PAPER' ? <PaperModal view={view} onClose={() => setOpenPanel(null)} /> : null}
       {openPanel === 'INSTRUCTIONS' ? (
-        <InstructionsModal onClose={() => setOpenPanel(null)} />
+        <InstructionsModal view={view} onClose={() => setOpenPanel(null)} />
       ) : null}
+
+      <PaperWatermark view={view} config={config} className="rw-watermark" />
     </div>
   );
 }

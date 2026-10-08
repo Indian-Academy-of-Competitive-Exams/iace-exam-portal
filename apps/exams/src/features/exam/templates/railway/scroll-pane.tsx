@@ -42,7 +42,10 @@ export function ScrollPane({
     const node = pane.current;
     if (!node) return;
 
-    const refuse = (event: WheelEvent) => event.preventDefault();
+    // Sideways is let through: a table wider than the pane has no other way across.
+    const refuse = (event: WheelEvent) => {
+      if (Math.abs(event.deltaY) >= Math.abs(event.deltaX)) event.preventDefault();
+    };
     node.addEventListener('wheel', refuse, { passive: false });
 
     // The pane's own box does not change when the question does — only what is inside it does.

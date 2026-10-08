@@ -11,6 +11,7 @@ import {
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
+import { plural } from '@iace/ui';
 import { LEGEND_ORDER, STATE_CLASS } from './states';
 import { useAuth } from '../../../../providers/auth';
 import { type InstructionsView } from '../../use-instructions';
@@ -41,7 +42,7 @@ export function RailwayInstructions({ view }: Readonly<{ view: InstructionsView 
 
           <div className="ri-body min-h-0 flex-1 overflow-y-auto">
             {view.step === 'GENERAL' ? (
-              <GeneralScreen forwardOnly={view.forwardOnly} />
+              <GeneralScreen forwardOnly={view.forwardOnly} sectional={view.sectional} />
             ) : (
               <PaperScreen view={view} />
             )}
@@ -82,7 +83,7 @@ export function RailwayInstructions({ view }: Readonly<{ view: InstructionsView 
 }
 
 function ViewIn({ view }: Readonly<{ view: InstructionsView }>) {
-  if (view.brief.languages.length < 2) return null;
+  if (view.dual || view.brief.languages.length < 2) return null;
 
   return (
     <label className="ri-viewin">
@@ -91,6 +92,7 @@ function ViewIn({ view }: Readonly<{ view: InstructionsView }>) {
         value={view.language}
         onChange={(event) => view.chooseLanguage(event.target.value as LanguageCode)}
       >
+        <option value="">--Select--</option>
         {view.brief.languages.map((code) => (
           <option key={code} value={code}>
             {LANGUAGE_LABELS[contentLanguageOf(code)]}
@@ -101,7 +103,11 @@ function ViewIn({ view }: Readonly<{ view: InstructionsView }>) {
   );
 }
 
-function GeneralScreen({ forwardOnly }: Readonly<{ forwardOnly: boolean }>) {
+/** Read before the paper opens and again from inside it, so the two cannot describe different papers. */
+export function GeneralScreen({
+  forwardOnly,
+  sectional,
+}: Readonly<{ forwardOnly: boolean; sectional: boolean }>) {
   return (
     <>
       <p className="ri-lead">General Instructions:</p>
@@ -111,6 +117,13 @@ function GeneralScreen({ forwardOnly }: Readonly<{ forwardOnly: boolean }>) {
         the timer reaches zero, the examination will end by itself. You will not be required to end
         or submit your examination.
       </p>
+      {sectional ? (
+        <p>
+          Each section of this examination has its own time, and the countdown timer shows the time
+          left for the section you are in. When it reaches zero that section closes, and its
+          questions cannot be opened again.
+        </p>
+      ) : null}
       <p>
         2. The Question Palette displayed on the right side of screen will show the status of each
         question using one of the following symbols:
@@ -195,7 +208,6 @@ function PaperScreen({ view }: Readonly<{ view: InstructionsView }>) {
     (total, section) => total + section.questionCount * section.marksPerQuestion,
     0,
   );
-  const penalty = brief.sections.find((section) => section.negativeMarks > 0)?.negativeMarks ?? 0;
 
   return (
     <>
@@ -206,31 +218,33 @@ function PaperScreen({ view }: Readonly<{ view: InstructionsView }>) {
       <p>Read the following instructions carefully.</p>
 
       <ol className="ri-plain">
-        {rulesFor(brief, penalty).map((rule, at) => (
+        {rulesFor(brief).map((rule, at) => (
           <li key={rule}>{`${at + 1}. ${rule}`}</li>
         ))}
       </ol>
 
-      <div className="ri-choose">
-        <label className="ri-viewin">
-          <span>Choose your default language:</span>
-          <select
-            value={view.language}
-            onChange={(event) => view.chooseLanguage(event.target.value as LanguageCode)}
-          >
-            <option value="">--Select--</option>
-            {brief.languages.map((code) => (
-              <option key={code} value={code}>
-                {LANGUAGE_LABELS[contentLanguageOf(code)]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="ri-note">
-          Please note all questions will appear in your default language. This language can be
-          changed for a particular question later on.
-        </p>
-      </div>
+      {view.dual ? null : (
+        <div className="ri-choose">
+          <label className="ri-viewin">
+            <span>Choose your default language:</span>
+            <select
+              value={view.language}
+              onChange={(event) => view.chooseLanguage(event.target.value as LanguageCode)}
+            >
+              <option value="">--Select--</option>
+              {brief.languages.map((code) => (
+                <option key={code} value={code}>
+                  {LANGUAGE_LABELS[contentLanguageOf(code)]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="ri-note">
+            Please note all questions will appear in your default language. This language can be
+            changed for a particular question later on.
+          </p>
+        </div>
+      )}
 
       <label className="ri-declare">
         <input
@@ -251,20 +265,29 @@ function PaperScreen({ view }: Readonly<{ view: InstructionsView }>) {
   );
 }
 
+/** One figure only where every section deducts the same; a mixed paper is told where each is shown. */
+function deductedSays(brief: ExamBrief): string | null {
+  const penalties = new Set(brief.sections.map((section) => section.negativeMarks));
+  const [first = 0] = penalties;
+  if (penalties.size > 1) return 'the marks deducted for a wrong answer are shown on each question';
+  return first > 0 ? `${plural(first, 'mark')} will be deducted for each wrong answer` : null;
+}
+
 /** The original numbers its own lines, so a paper without negative marking must not skip one. */
-function rulesFor(brief: ExamBrief, penalty: number): string[] {
+function rulesFor(brief: ExamBrief): string[] {
   const minutes = Math.round(brief.durationSec / 60);
   const sections =
     brief.sections.length === 1 ? 'one section' : `${brief.sections.length} sections`;
+  const deducted = deductedSays(brief);
 
   return [
     `The test contain only ${sections} having ${brief.totalQuestions} total questions.`,
     'Each question has 4 options out of which only one is correct.',
-    `You have to finish the test in ${minutes} minutes.`,
-    ...(penalty > 0
+    `You have to finish the test in ${plural(minutes, 'minute')}.`,
+    ...(deducted
       ? [
           'You not to guess the answer as there is negative marking.',
-          `You will be awarded marks for each correct answer and ${penalty} marks will be deducted for each wrong answer.`,
+          `You will be awarded marks for each correct answer and ${deducted}.`,
           'There is no negative marking for the questions that you have not attempted.',
         ]
       : []),

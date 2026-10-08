@@ -192,7 +192,7 @@
 
 [data-exam-template='ssc_railways'] .questiondiv img,
 [data-exam-template='ssc_railways'] .optn img {
-  max-width: 500px !important;
+  max-width: min(500px, 100%) !important;
   vertical-align: middle;
 }
 
@@ -455,6 +455,12 @@
   cursor: default;
 }
 
+/* A seat a forward-only paper has closed: still read, no longer a target. */
+[data-exam-template='ssc_railways'] .rw-cell:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* ---------- info popup ---------- */
 
 /* .subjectcntnt verbatim: the tally a section's (i) drops open. */
@@ -502,6 +508,11 @@
   z-index: 100;
   background: #fff;
   border: 1px solid var(--rw-header-from);
+}
+
+/* Over the panels too: the question paper lists every stem, which is what a photograph would take. */
+[data-exam-template='ssc_railways'] .rw-watermark {
+  z-index: 110;
 }
 
 [data-exam-template='ssc_railways'] .rw-paper-row {
@@ -670,11 +681,13 @@
     white-space: nowrap;
   }
 
+  /* Two tabs to a row leave the second no room for its tally, so here it drops under the bar. */
   [data-exam-template='ssc_railways'] .rw-sectionbar {
-    overflow-x: auto;
+    position: relative;
   }
 
   [data-exam-template='ssc_railways'] .subjcttab {
+    position: static;
     flex-shrink: 0;
   }
 
