@@ -369,7 +369,7 @@ Built and in use. Reach for these rather than adding a second of any of them.
   central exports module would read tables it does not own. `common/exporting` writes the workbook
   (text cells for mobiles and codes, real IST date cells) and counts against `EXPORT_MAX_ROWS` before
   a row is read. `RequiresExport` demands the owning feature's READ **and** `DATA_EXPORT`; the audit
-  log has no owning feature, so its export needs `DATA_EXPORT` alone. Every export writes one
+  log has no owning feature and is a super admin's alone, so its export asks nothing beyond that. Every export writes one
   `EXPORT` audit row: a list export records its filters and rows against the admin, a record
   export (test report, deliveries, grants) its row counts against the record. The rows an import rejected are
   the admin's own upload, so that download takes the preview's permission, with no `DATA_EXPORT`

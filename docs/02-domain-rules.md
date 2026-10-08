@@ -499,7 +499,8 @@ and needs no mapping at all.
   derived, never stored (`dueStanding`), in institute days: on time when finished on or before the
   day, late when after it, overdue while still open past it. Nothing is owed on a role that has
   passed on, on a section still open when its test was offered, or by a typist on a picked paper,
-  who has no Done to give. A holder's whole time on a
+  who has no Done to give — such a seat is counted as neither assigned nor overdue, and reads as
+  Corrections wherever a typed one would read Not started or In progress. A holder's whole time on a
   section is the sum of their `QuestionWorkTime` in that seat, and travels with the assignment
   under the same rule as a question's time: each seat its own, the owner and a super admin both.
   The dashboard gives whoever holds the authoring or the proof-reading key their own standing per
@@ -512,7 +513,10 @@ and needs no mapping at all.
   a read section without its tick — one definition of read, the tick, for release and offer alike.
   Rewording a question — its content, options or key, from any screen — drops its ticks on every
   draft, whether its paper holds the question now or it was taken off and may come back, and sends
-  a released whole section holding it back to its reader the same way.
+  a released whole section holding it back to its reader the same way. A reader's own edit of a
+  question they have checked drops their tick on that test whatever it changed, and time counts on
+  a card for as long as it holds an unsaved edit; nothing is handed on — fixed, done or released —
+  while one does.
 - **A question written for a section is changed and deleted only on that section's page**, under
   the rule of the viewer's seat there; the typist's own editor holds only what they typed straight
   into the bank. A typist whose role passed to somebody else only reads; the section's last typist,
@@ -667,8 +671,8 @@ number means a week later.
   the test, since that is the moment the paper leaves the building.
 
 Who may read what: `REPORTS` READ opens every report and its pickers; the spreadsheet also needs
-`DATA_EXPORT`. The answer key, admin activity and the permissions matrix are a super admin's. The
-audit trail shows an admin their own rows, as its screen does. A student reads five reports, all
+`DATA_EXPORT`. The answer key, admin activity, the audit trail and the permissions matrix are a
+super admin's, as the audit log's own screens and endpoints are. A student reads five reports, all
 of them their own — the score card, the weekly and monthly report, every test, and topic-wise
 accuracy — on the page, printed, or as a spreadsheet, and whatever the request names, the student
 is whoever holds the token. Their spreadsheet asks for no `DATA_EXPORT` and writes no audit row:
