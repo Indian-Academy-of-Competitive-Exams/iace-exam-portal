@@ -29,8 +29,6 @@ const SCORING_SELECT = {
   studentId: true,
   attemptNo: true,
   status: true,
-  // What they were shown last. A re-score that lands on the same number is not news.
-  score: true,
   isGraded: true,
   startedAt: true,
   submittedAt: true,
@@ -41,10 +39,17 @@ const SCORING_SELECT = {
 
 type ScoringRow = Prisma.AttemptGetPayload<{ select: typeof SCORING_SELECT }>;
 
-/** What the write did: whether the marks landed at all, and whether this was the first evaluation. */
+/** What the write did: whether the marks landed, whether this was the first evaluation, and whether a later one moved them. */
 interface Written {
   applied: boolean;
   first: boolean;
+  moved: boolean;
+}
+
+/** The row as the lock found it: whether nobody had marked it, and the total it held if somebody had. */
+interface Marked {
+  first: boolean;
+  previous: Prisma.Decimal | null;
 }
 
 /** Ended, however it ended. Re-scoring an EVALUATED sitting is how a dropped question is applied. */
@@ -92,7 +97,9 @@ export class ScoringProcessor extends ReportingWorkerHost {
     if (written.first && attempt.submittedAt) {
       this.metrics.observeScoring(attempt.submittedAt, new Date());
     }
-    if (!written.first) await this.recount(attempt);
+    // One that read it unmarked and found the same marks lost the first evaluation, which counted them.
+    const rescored = attempt.status === ATTEMPT_STATUS.EVALUATED || written.moved;
+    if (!written.first && rescored) await this.recount(attempt);
     return scored;
   }
 
@@ -116,17 +123,19 @@ export class ScoringProcessor extends ReportingWorkerHost {
   ): Promise<Written> {
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
-      const first = await this.mark(tx, attempt, scored, terms, now);
-      if (first === null) return { applied: false, first: false };
+      const marked = await this.mark(tx, attempt, scored, terms, now);
+      if (marked === null) return { applied: false, first: false, moved: false };
 
-      if (first) {
+      if (marked.first) {
         await this.rollups.foldStudentSitting(tx, foldableOf(attempt, scored, terms, served), now);
         await this.announce(tx, attempt);
-        return { applied: true, first: true };
+        return { applied: true, first: true, moved: false };
       }
 
-      await this.announceCorrection(tx, attempt, scored.score);
-      return { applied: true, first: false };
+      // Against what the locked row held: a score read before another scorer marked it is not news.
+      const moved = Number(marked.previous ?? 0) !== scored.score;
+      if (moved) await this.announceCorrection(tx, attempt, scored.score);
+      return { applied: true, first: false, moved };
     }, TX_LIMITS.SHORT);
   }
 
@@ -137,11 +146,12 @@ export class ScoringProcessor extends ReportingWorkerHost {
     scored: PaperScore,
     terms: readonly PaperTerm[],
     now: Date,
-  ): Promise<boolean | null> {
+  ): Promise<Marked | null> {
     // `sheet` runs to completion whether or not it is read, and reads `marked` so it cannot run alone.
-    const rows = await tx.$queryRaw<{ first: boolean; sheets: number }[]>`
+    const rows = await tx.$queryRaw<(Marked & { sheets: number })[]>`
       WITH held AS (
-        SELECT "id", "evaluatedAt" IS NULL AS first FROM "Attempt" WHERE "id" = ${attempt.id}::uuid FOR UPDATE
+        SELECT "id", "evaluatedAt" IS NULL AS first, "score" AS previous
+        FROM "Attempt" WHERE "id" = ${attempt.id}::uuid FOR UPDATE
       ), marked AS (
         UPDATE "Attempt" a SET
           "status" = ${ATTEMPT_STATUS.EVALUATED}::"AttemptStatus",
@@ -158,7 +168,7 @@ export class ScoringProcessor extends ReportingWorkerHost {
         WHERE a."id" = h."id" AND a."status" = ANY(${[...SCORABLE]}::"AttemptStatus"[])
           -- A scorer that read an older paper than the marks already written must not put them back.
           AND a."scoredRevision" <= ${attempt.test.paperRevision}
-        RETURNING h.first
+        RETURNING h.first, h.previous
       ), sheet AS (
         UPDATE "AttemptSheet" SET
           "verdicts" = ${JSON.stringify(verdictsOf(scored.questions, terms))}::jsonb,
@@ -166,14 +176,14 @@ export class ScoringProcessor extends ReportingWorkerHost {
         WHERE "attemptId" = ${attempt.id}::uuid AND EXISTS (SELECT 1 FROM marked)
         RETURNING 1 AS written
       )
-      SELECT m.first, (SELECT count(*)::int FROM sheet) AS sheets FROM marked m`;
+      SELECT m.first, m.previous, (SELECT count(*)::int FROM sheet) AS sheets FROM marked m`;
 
     const row = rows[0];
     if (row === undefined) return null;
     // Marked without its verdicts is the one state worse than neither, so it fails the transaction.
     if (row.sheets !== 1)
       throw new Error(`Attempt ${attempt.id} was marked with no sheet to score`);
-    return row.first;
+    return row;
   }
 
   private async announce(tx: Prisma.TransactionClient, attempt: ScoringRow): Promise<void> {
@@ -188,14 +198,12 @@ export class ScoringProcessor extends ReportingWorkerHost {
     });
   }
 
-  /** A re-score, which only a drop or a bonus causes. Silent where the marks did not actually move. */
+  /** A re-score that moved the marks, which only a drop or a bonus causes. */
   private async announceCorrection(
     tx: Prisma.TransactionClient,
     attempt: ScoringRow,
     score: number,
   ): Promise<void> {
-    if (Number(attempt.score ?? 0) === score) return;
-
     await this.notifications.tell(tx, {
       studentId: attempt.studentId,
       type: NOTIFICATION_TYPE.RESULT_UPDATED,

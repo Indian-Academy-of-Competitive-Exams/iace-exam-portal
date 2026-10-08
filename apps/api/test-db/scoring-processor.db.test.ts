@@ -8,6 +8,7 @@ import { RollupService } from '../src/attempts/rollup.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
+import { ROLLUP_JOBS } from '../src/queue/queues';
 import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
@@ -276,6 +277,61 @@ describe('ScoringProcessor — what it writes', () => {
     assert.deepEqual(
       stored.verdicts,
       paper.items.map((item) => byQuestion.get(item.questionId)),
+    );
+  });
+});
+
+/** A scorer over the client given, with the rebuilds it asks for left where a test can read them. */
+function scorerOver(client: PrismaService) {
+  const rebuilds = new FakeQueue();
+  const scorer = new ScoringProcessor(
+    client,
+    new RollupQueue(rebuilds.asQueue()),
+    new NotificationsService(prisma),
+    fakeQueueFailures(),
+    new PaperSheetService(prisma),
+    new RollupService(prisma),
+    new FakeMetrics().asService(),
+  );
+  return { scorer, rebuilds };
+}
+
+const told = async () => (await prisma.notification.findMany()).map((row) => row.type).sort();
+
+describe('ScoringProcessor — a second scorer on one sitting', () => {
+  /** The failure this prevents: the scorer that lost the first evaluation announcing a correction nobody made. */
+  it('says the result is ready once, and asks for no recount, when it lands behind the first', async () => {
+    const { attemptId } = await sitting();
+    // It read the sitting unmarked, as a stalled job run again beside its first run does.
+    const { scorer, rebuilds } = scorerOver(
+      afterTheRead(prisma, async () => {
+        await processor.score(attemptId);
+      }),
+    );
+
+    await scorer.score(attemptId);
+
+    assert.deepEqual(await told(), [NOTIFICATION_TYPE.RESULT_READY]);
+    assert.deepEqual(rebuilds.jobs, []);
+  });
+
+  /** A drop is still a correction: told once however often its job is delivered, and counted again. */
+  it('still announces a drop that moved the marks once, and asks for both recounts', async () => {
+    const { paper, attemptId } = await sitting();
+    const { scorer, rebuilds } = scorerOver(prisma);
+    await scorer.score(attemptId);
+
+    await disposeQuestion(prisma, paper, 1, PAPER_QUESTION_STATUS.DROPPED);
+    await scorer.score(attemptId);
+    await scorer.score(attemptId);
+
+    assert.deepEqual(await told(), [
+      NOTIFICATION_TYPE.RESULT_READY,
+      NOTIFICATION_TYPE.RESULT_UPDATED,
+    ]);
+    assert.deepEqual(
+      rebuilds.jobs.map((job) => job.name),
+      [ROLLUP_JOBS.REBUILD_TEST, ROLLUP_JOBS.REBUILD_STUDENT],
     );
   });
 });
