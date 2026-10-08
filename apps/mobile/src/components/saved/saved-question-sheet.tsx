@@ -8,6 +8,7 @@ import { Modal, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LANGUAGE_MODE, type SavedQuestion } from '@iace/contracts';
+import { isSittingVoided } from '@iace/app-kit';
 import { Text } from '../ui/text';
 import { savedSolutionQuery } from '../../lib/queries';
 import { Button } from '../ui/button';
@@ -85,7 +86,7 @@ function useSatQuestion(saved: SavedQuestion) {
     question: solutions.data?.questions[0],
     languages: solutions.data?.languages ?? ['EN'],
     isLoading: solutions.isLoading,
-    isError: solutions.isLoadingError,
+    isError: solutions.isLoadingError && !isSittingVoided(solutions.error),
     retry: () => void solutions.refetch(),
   };
 }

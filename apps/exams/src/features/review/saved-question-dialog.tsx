@@ -4,6 +4,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { LANGUAGE_MODE, type SavedQuestion } from '@iace/contracts';
+import { isSittingVoided } from '@iace/app-kit';
 import {
   Dialog,
   DialogBody,
@@ -29,7 +30,7 @@ function useSatQuestion(saved: SavedQuestion) {
     question: solutions.data?.questions[0],
     languages: solutions.data?.languages ?? ['EN'],
     isLoading: solutions.isLoading,
-    isError: solutions.isError,
+    isError: solutions.isError && !isSittingVoided(solutions.error),
     retry: () => void solutions.refetch(),
   };
 }
