@@ -61,6 +61,9 @@ const FILTERS = [
 
 const NOTHING = <span className="text-muted-foreground">Nothing</span>;
 
+/** The catalogue is written with a curly apostrophe and a keyboard types a straight one. */
+const folded = (text: string): string => text.toLowerCase().replaceAll('’', "'");
+
 export function ReportsPage() {
   const { can, identity } = useAuth();
   const filters = useFilterSpec(FILTERS);
@@ -73,11 +76,11 @@ export function ReportsPage() {
     );
   }
 
-  const sought = filters.values.q.trim().toLowerCase();
+  const sought = folded(filters.values.q.trim());
   // A report only a super admin may open is left out for everyone else, not shown and refused.
   const offered = CATALOGUE.filter((row) => !row.superAdminOnly || identity?.isSuperAdmin)
     .filter((row) => filters.values.group === '' || row.group === filters.values.group)
-    .filter((row) => `${row.title} ${REPORT_SUMMARIES[row.key]}`.toLowerCase().includes(sought));
+    .filter((row) => folded(`${row.title} ${REPORT_SUMMARIES[row.key]}`).includes(sought));
   const shelves = GROUPS.map((group) => ({
     group,
     rows: offered.filter((row) => row.group === group),

@@ -11,7 +11,7 @@ import {
   type ReportQuery,
   type ReportSpec,
 } from '@iace/contracts';
-import { Combobox, type ListFilter, type ListFilterControl } from '@iace/ui';
+import { Combobox, DatePicker, type ListFilter, type ListFilterControl } from '@iace/ui';
 import { REPORT_PARAM_LABELS, REPORT_PERIOD_LABELS } from '../../lib/constants';
 import { ReportChoicePicker } from './report-choice-picker';
 
@@ -119,8 +119,31 @@ const PARAM_FILTERS: Record<ReportParam, Drawn> = {
         />
       ),
     },
-    { key: 'from', kind: 'date', label: 'From', max: fields.to },
-    { key: 'to', kind: 'date', label: 'To', min: fields.from },
+    // A date set by hand writes both ends: a default worked out on each visit would move under a copied link.
+    {
+      key: 'from',
+      kind: 'custom',
+      label: 'From',
+      render: (control: ListFilterControl) => (
+        <DatePicker
+          {...control}
+          max={fields.to}
+          onChange={(from) => set({ from, to: fields.to })}
+        />
+      ),
+    },
+    {
+      key: 'to',
+      kind: 'custom',
+      label: 'To',
+      render: (control: ListFilterControl) => (
+        <DatePicker
+          {...control}
+          min={fields.from}
+          onChange={(to) => set({ from: fields.from, to })}
+        />
+      ),
+    },
   ],
   [REPORT_PARAMS.TOP]: () => [
     {

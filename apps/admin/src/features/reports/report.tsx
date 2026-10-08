@@ -86,10 +86,12 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
   const asked = reportQuerySchema.safeParse(query);
   const missing = asked.success ? reportFieldsMissing(reportKey, asked.data) : [];
   const ready = asked.success && missing.length === 0;
-  // The first thing still to be chosen, which is what an empty page has to name.
+  const issue = asked.success ? undefined : asked.error.issues[0];
+  const atFault: readonly PropertyKey[] = issue ? issue.path : missing;
+  // The first thing still to be chosen, or the one the address has wrong, which is what an empty page has to name.
   const lacking =
-    spec.needs.find((param) =>
-      REPORT_PARAM_FIELDS[param].some((field) => (missing as readonly string[]).includes(field)),
+    paramsOf(spec).find((param) =>
+      REPORT_PARAM_FIELDS[param].some((field) => atFault.includes(field)),
     ) ?? spec.needs[0];
 
   const report = useQuery({
@@ -171,6 +173,7 @@ function Report({ reportKey }: Readonly<{ reportKey: ReportKey }>) {
       {open?.content ?? (
         <Absent
           lacking={lacking}
+          refusal={issue?.code === 'custom' ? issue.message : undefined}
           ready={ready}
           failed={report.isError}
           loaded={Boolean(document)}
@@ -218,17 +221,27 @@ function Centred({ children }: Readonly<{ children: React.ReactNode }>) {
 /** What the card holds before there is a report in it: nothing chosen, nothing loaded, or nothing yet. */
 function Absent({
   lacking,
+  refusal,
   ready,
   failed,
   loaded,
   retry,
 }: Readonly<{
   lacking: ReportParam | undefined;
+  /** The schema's own sentence for an address it will not read: a period over a year, or ending before it starts. */
+  refusal: string | undefined;
   ready: boolean;
   failed: boolean;
   loaded: boolean;
   retry: () => void;
 }>) {
+  if (refusal) {
+    return (
+      <Centred>
+        <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title={refusal} />
+      </Centred>
+    );
+  }
   if (!ready) {
     const wanted = lacking ? REPORT_PARAM_LABELS[lacking].toLowerCase() : 'report';
     return (
