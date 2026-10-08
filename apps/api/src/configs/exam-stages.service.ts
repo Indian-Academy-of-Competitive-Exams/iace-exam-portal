@@ -20,6 +20,7 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import {
   CATALOG_ONLY_STAGE_MESSAGE,
   changedFields,
+  INACTIVE_EXAM_MESSAGE,
   INACTIVE_STAGE_MESSAGE,
   stageDeletionBlocker,
   stageEditBlocker,
@@ -164,11 +165,20 @@ export class ExamStagesService {
     }
   }
 
+  /** A new stage's way in: a retired exam keeps the stages it has and takes no more. */
   private async requireExam(examId: string): Promise<void> {
-    const exam = await this.prisma.exam.findUnique({ where: { id: examId }, select: { id: true } });
+    const exam = await this.prisma.exam.findUnique({
+      where: { id: examId },
+      select: { isActive: true },
+    });
     if (!exam) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such exam', {
         fieldErrors: { examId: ['No such exam'] },
+      });
+    }
+    if (!exam.isActive) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, INACTIVE_EXAM_MESSAGE, {
+        fieldErrors: { examId: [INACTIVE_EXAM_MESSAGE] },
       });
     }
   }

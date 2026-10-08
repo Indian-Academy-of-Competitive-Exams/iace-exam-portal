@@ -238,6 +238,19 @@ describe('ExamStagesService — creating', () => {
       refusedWith(ErrorCodes.VALIDATION_ERROR, 'examId'),
     );
   });
+
+  /** The failure this prevents: a stage filed under an exam that is no longer offered. */
+  it('refuses a stage under a retired exam, on the exam field, and leaves its stages editable', async () => {
+    const service = await serviceWith();
+    await prisma.exam.update({ where: { id: idFor('exam_1') }, data: { isActive: false } });
+
+    await assert.rejects(
+      () => service.create({ examId: idFor('exam_1'), stageKey: 'SSC_CGL_T2', name: 'Tier 2' }),
+      refusedWith(ErrorCodes.VALIDATION_ERROR, 'examId'),
+    );
+    assert.equal(await prisma.examStage.count(), 1);
+    assert.equal((await service.update(idFor('stage_1'), { name: 'Prelims' })).name, 'Prelims');
+  });
 });
 
 describe('ExamStagesService — updating', () => {
