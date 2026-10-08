@@ -36,7 +36,7 @@ export function ComparePanel({ attemptId }: Readonly<{ attemptId: string }>) {
   return (
     <RefreshScroll refreshing={card.isRefetching} onRefresh={refresh}>
       {card.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
-      {card.isError ? (
+      {card.isLoadingError ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
           title="This comparison did not load"

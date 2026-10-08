@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { isMarkingPending, useBookmarks, verdictOf } from '@iace/app-kit';
+import { dispositionLabel, isMarkingPending, useBookmarks, verdictOf } from '@iace/app-kit';
 import { LANGUAGE_MODE, type ExamSection, type SolutionReport } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
@@ -84,6 +84,7 @@ function Paper({
   if (!question) return <EmptyState title="No questions" className="px-6 py-10" />;
 
   const verdict = VERDICT_STYLE[verdictOf(question)];
+  const disposition = dispositionLabel(question);
   const saved = bookmark.saved.has(question.questionId);
 
   return (
@@ -99,7 +100,9 @@ function Paper({
         ) : null}
 
         <View className="flex-row items-center justify-between gap-3">
-          <Text variant="label">{`Question ${question.order} · ${verdict.label}`}</Text>
+          <Text variant="label">
+            {[`Question ${question.order}`, verdict.label, disposition].filter(Boolean).join(' · ')}
+          </Text>
           <Button
             variant="ghost"
             size="sm"

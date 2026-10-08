@@ -12,7 +12,7 @@ import {
   type QuestionReport,
   type QuestionReportRow,
 } from '@iace/contracts';
-import { QUESTION_REPORT_FILTERS } from '@iace/app-kit';
+import { dispositionLabel, paceWord, QUESTION_REPORT_FILTERS } from '@iace/app-kit';
 import { Text } from '../ui/text';
 import { questionReportQuery } from '../../lib/queries';
 import { asText, useFilterState, type FilterState } from '../../lib/filters';
@@ -121,6 +121,7 @@ function Header({
 function Question({ row }: Readonly<{ row: QuestionReportRow }>) {
   const [open, setOpen] = useState(false);
   const result = resultOf(row);
+  const disposition = dispositionLabel(row);
   const counted = row.optionCounts.some((option) => option.count > 0);
 
   return (
@@ -134,7 +135,10 @@ function Question({ row }: Readonly<{ row: QuestionReportRow }>) {
       >
         <View className="flex-row items-center justify-between gap-3">
           <Text className="text-base font-semibold text-foreground">{`Question ${row.order}`}</Text>
-          <Badge variant={result.variant}>{result.label}</Badge>
+          <View className="flex-row items-center gap-2">
+            <Badge variant={result.variant}>{result.label}</Badge>
+            {disposition ? <Badge variant="info">{disposition}</Badge> : null}
+          </View>
         </View>
 
         <View className="flex-row flex-wrap gap-x-5 gap-y-1">
@@ -239,10 +243,9 @@ function correctAnswer(row: QuestionReportRow): string {
   return correct === undefined ? DASH : `Option ${correct.position}`;
 }
 
-/** Above one is slower than the field, below it faster; the word says which without a sentence. */
 function paceOf(pace: number | null): string {
   if (pace === null) return DASH;
-  return `${pace} ${pace > 1 ? 'slower' : 'faster'}`;
+  return `${pace} ${paceWord(pace)}`;
 }
 
 const asPercent = (ratio: number | null) => (ratio === null ? null : ratio * 100);

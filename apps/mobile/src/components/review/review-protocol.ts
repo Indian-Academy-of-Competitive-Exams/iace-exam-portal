@@ -11,7 +11,7 @@ import {
   type QuestionLanguage,
   type RichContent,
 } from '@iace/contracts';
-import { htmlOf, shownLanguages, type ReviewedQuestion } from '@iace/app-kit';
+import { answerKeyText, htmlOf, shownLanguages, type ReviewedQuestion } from '@iace/app-kit';
 import { type QuestionScreen, type ScreenContent } from '../exam/question-bridge';
 
 export interface ReviewInput {
@@ -44,19 +44,11 @@ export function reviewScreen({
     review: {
       correctOptionId: question.options?.find((option) => option.isCorrect)?.id ?? null,
       typedAnswer: question.typedAnswer,
-      answerKey: keyText(question, shown),
+      answerKey: answerKeyText(question, shown),
       // A question nobody wrote a solution for must not draw an empty block headed Solution.
       solution: inShown((language) => question.content?.[language]?.solution).filter(
         (block) => block.html !== '',
       ),
     },
   };
-}
-
-/** A typed answer is compared against the key in the language it was written in. */
-function keyText(question: ReviewedQuestion, shown: readonly QuestionLanguage[]): string | null {
-  const answers = question.answerKey?.answers;
-  if (!answers) return null;
-  const said = shown.map((language) => answers[language]).find(Boolean);
-  return said ?? null;
 }

@@ -30,7 +30,7 @@ export function ScoreCardPanel({ attemptId }: Readonly<{ attemptId: string }>) {
           onRetry={refresh}
         />
       ) : null}
-      {card.isError && !isMarkingPending(card.error) ? (
+      {card.isLoadingError && !isMarkingPending(card.error) ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
           title="Your score card did not load"
