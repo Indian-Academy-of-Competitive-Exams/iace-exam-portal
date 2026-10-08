@@ -7,12 +7,16 @@ import type { Prisma } from '@prisma/client';
 import {
   AppException,
   ASSIGNMENT_ROLES,
+  DEFAULT_EXAM_COURSE,
   EXAM_TEMPLATE,
   ErrorCodes,
+  MATCH_MODES,
   PAPER_SOURCES,
   TEST_SCOPE,
   TEST_SERIES_KIND,
   TEST_STATUS,
+  testListQuerySchema,
+  type TestListQueryInput,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
@@ -33,6 +37,7 @@ import {
   makeSubject,
   resetDatabase,
   testPrisma,
+  uid,
 } from './support/database';
 
 /** One uuid per label, shared across the file so a test can name an id by what it means. */
@@ -238,6 +243,107 @@ describe('TestsService — creating a draft from a config', () => {
     const created = await service.create(DRAFT, ADMIN);
 
     assert.equal(created.baseConfigId, BUILDER.CONFIG);
+  });
+});
+
+describe('TestsService — a difficulty split adds up to its section', () => {
+  const split = (LOW: number, MEDIUM: number, HIGH: number) => ({
+    sections: { [idFor('sec_1')]: { mix: { LOW, MEDIUM, HIGH } } },
+  });
+
+  /** The form checks this and the API did not, so a posted split of 24 was stored against 25. */
+  it('refuses a split that comes to another count, on a new test and on an edit, naming the section', async () => {
+    const { service } = await serviceWith({ test: {} });
+
+    const created = await refused(
+      service.create({ ...DRAFT, title: 'Mock 2', questionPoolFilter: split(8, 8, 8) }, ADMIN),
+    );
+    const edited = await refused(service.update(TEST, { questionPoolFilter: split(10, 10, 10) }));
+
+    for (const error of [created, edited]) {
+      assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+      assert.match(error.message, /General Intelligence holds 25/);
+    }
+    assert.equal((await testRow())?.questionPoolFilter, null);
+  });
+
+  it('takes a split that adds up, and a section that names none', async () => {
+    const { service } = await serviceWith({ test: {} });
+
+    await service.update(TEST, { questionPoolFilter: split(8, 9, 8) });
+    const created = await service.create(
+      { ...DRAFT, title: 'Mock 2', questionPoolFilter: { sections: { [idFor('sec_2')]: {} } } },
+      ADMIN,
+    );
+
+    assert.deepEqual((await testRow())?.questionPoolFilter, split(8, 9, 8));
+    assert.deepEqual(created.questionPoolFilter, { sections: { [idFor('sec_2')]: {} } });
+  });
+});
+
+describe('TestsService.list — the reader’s All or Any over the filters chosen', () => {
+  const listQuery = (over: TestListQueryInput) => testListQuerySchema.parse(over);
+
+  /** Two exams, each with a draft and a retired test: one row for every pairing of the two filters. */
+  async function fourTests() {
+    const { service } = await serviceWith();
+    const other = { exam: uid(), stage: uid(), config: uid() };
+    await prisma.exam.create({
+      data: { id: other.exam, course: DEFAULT_EXAM_COURSE, code: uid(), name: 'RRB JE' },
+    });
+    await prisma.examStage.create({
+      data: { id: other.stage, examId: other.exam, stageKey: uid(), name: 'CBT 1' },
+    });
+    await prisma.baseConfig.create({
+      data: {
+        id: other.config,
+        examStageId: other.stage,
+        name: 'RRB JE pattern',
+        totalQuestions: 100,
+        totalMarks: 100,
+        durationSec: 5400,
+      },
+    });
+    const here = { baseConfigId: BUILDER.CONFIG, examStageId: BUILDER.STAGE };
+    const there = { baseConfigId: other.config, examStageId: other.stage };
+    const rows = [
+      { title: 'Here draft', ...here, status: TEST_STATUS.DRAFT },
+      { title: 'Here retired', ...here, status: TEST_STATUS.INACTIVE },
+      { title: 'There draft', ...there, status: TEST_STATUS.DRAFT },
+      { title: 'There retired', ...there, status: TEST_STATUS.INACTIVE },
+    ];
+    await prisma.test.createMany({
+      data: rows.map((row) => ({ ...row, testSeriesId: idFor('srs_1') })),
+    });
+    const stage = await prisma.examStage.findUniqueOrThrow({ where: { id: BUILDER.STAGE } });
+    return { service, examId: stage.examId };
+  }
+
+  const titles = (page: { items: { title: string | null }[] }) =>
+    page.items.map((test) => test.title).sort();
+
+  it('narrows to the tests matching every filter unless Any is asked for', async () => {
+    const { service, examId } = await fourTests();
+    const chosen = { examId, status: TEST_STATUS.DRAFT };
+
+    const unnamed = await service.list(listQuery(chosen));
+    const all = await service.list(listQuery({ ...chosen, match: MATCH_MODES.ALL }));
+
+    assert.deepEqual(titles(unnamed), ['Here draft']);
+    assert.deepEqual(titles(all), ['Here draft']);
+    assert.equal((await service.list(listQuery({}))).total, 4);
+  });
+
+  /** The toggle was drawn and sent, and the endpoint dropped it: Any listed what All does. */
+  it('widens to the tests matching at least one filter under Any, inside the search', async () => {
+    const { service, examId } = await fourTests();
+    const chosen = { examId, status: TEST_STATUS.DRAFT, match: MATCH_MODES.ANY };
+
+    const any = await service.list(listQuery(chosen));
+    const searched = await service.list(listQuery({ ...chosen, q: 'retired' }));
+
+    assert.deepEqual(titles(any), ['Here draft', 'Here retired', 'There draft']);
+    assert.deepEqual(titles(searched), ['Here retired']);
   });
 });
 

@@ -4,7 +4,6 @@ import {
   ITEM_SIGNALS,
   ITEM_SIGNAL_FLOOR,
   itemSignalsOf,
-  medianInBands,
   worthInspecting,
   type ItemCounts,
 } from '../src/stats';
@@ -20,30 +19,6 @@ function item(overrides: Partial<ItemCounts> = {}): ItemCounts {
     ...overrides,
   };
 }
-
-describe('medianInBands', () => {
-  it('lands inside the band holding the middle sitting', () => {
-    const bands = [
-      { from: 0, to: 10, count: 10 },
-      { from: 10, to: 20, count: 20 },
-      { from: 20, to: 30, count: 10 },
-    ];
-    assert.equal(medianInBands(bands), 15);
-  });
-
-  it('does not answer at all where nothing was counted', () => {
-    assert.equal(medianInBands([]), null);
-    assert.equal(medianInBands([{ from: 0, to: 10, count: 0 }]), null);
-  });
-
-  it('reads a negative floor, because negative marking puts scores below zero', () => {
-    const bands = [
-      { from: -10, to: 0, count: 4 },
-      { from: 0, to: 10, count: 4 },
-    ];
-    assert.equal(medianInBands(bands), 0);
-  });
-});
 
 describe('itemSignalsOf', () => {
   it('says nothing about an item too few sittings have touched', () => {

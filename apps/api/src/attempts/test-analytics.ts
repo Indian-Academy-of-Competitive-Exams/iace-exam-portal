@@ -5,7 +5,6 @@
  */
 import {
   itemSignalsOf,
-  medianInBands,
   type QuestionOption,
   type TestAnalyticsSummary,
   type TestItemAnalytics,
@@ -63,7 +62,7 @@ export function summaryOf(
     isSettling: live.size !== evaluatedCount,
     evaluatedCount,
     meanScore: live.averageScore,
-    medianScore: medianInBands(live.bands),
+    medianScore: live.medianScore,
     maxScore: live.topperScore,
     minScore: live.lowestScore,
     averageTimeSec: stat && perSitting(stat.sumTimeSec, stat.evaluatedCount),

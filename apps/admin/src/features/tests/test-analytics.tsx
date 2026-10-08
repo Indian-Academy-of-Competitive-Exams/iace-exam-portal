@@ -300,7 +300,7 @@ function Spread({ summary }: Readonly<{ summary: TestAnalytics['summary'] }>) {
       <MetricGroup>
         <Metric size="sm" label="Highest" value={summary.maxScore ?? DASH} />
         <Metric size="sm" label="Lowest" value={summary.minScore ?? DASH} />
-        <Metric size="sm" label="Median (approximate)" value={summary.medianScore ?? DASH} />
+        <Metric size="sm" label="Median" value={summary.medianScore ?? DASH} />
         <Metric size="sm" label="Average time" value={durationLabel(summary.averageTimeSec)} />
       </MetricGroup>
       {summary.topper === null ? null : (

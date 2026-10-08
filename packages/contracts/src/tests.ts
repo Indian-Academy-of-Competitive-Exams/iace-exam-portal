@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { csvIdQuery, csvQuery, editLockHolderSchema, searchQuery } from './common';
+import { csvIdQuery, csvQuery, editLockHolderSchema, matchModeQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { baseConfigDetailSchema, examTemplateSchema, stageRefSchema } from './configs';
 import { displayNameSchema } from './naming';
@@ -481,6 +481,7 @@ export const testListQuerySchema = paginationQuerySchema.extend({
   examStageId: z.string().optional(),
   baseConfigId: z.string().optional(),
   status: csvQuery(testStatusSchema),
+  match: matchModeQuery(),
 });
 export type TestListQuery = z.infer<typeof testListQuerySchema>;
 export type TestListQueryInput = z.input<typeof testListQuerySchema>;

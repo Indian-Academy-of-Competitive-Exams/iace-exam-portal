@@ -88,6 +88,7 @@ export interface CohortShape {
   topperScore: number | null;
   lowestScore: number | null;
   averageScore: number | null;
+  medianScore: number | null;
   size: number;
   bands: CohortBand[];
 }
@@ -109,16 +110,38 @@ export function cohortShapeOf(counted: readonly ScoreCount[]): CohortShape {
     highest = Math.max(highest, row.score);
   }
   if (size === 0) {
-    return { topperScore: null, lowestScore: null, averageScore: null, size: 0, bands: [] };
+    return {
+      topperScore: null,
+      lowestScore: null,
+      averageScore: null,
+      medianScore: null,
+      size: 0,
+      bands: [],
+    };
   }
 
   return {
     topperScore: highest,
     lowestScore: lowest,
     averageScore: round(total / size),
+    medianScore: medianOf(counted, size),
     size,
     bands: bandsOf(counted, Math.floor(lowest), Math.ceil(highest)),
   };
+}
+
+/** The middle sitting's score, or the two middle ones halved: off the scores, never the columns drawn from them. */
+function medianOf(counted: readonly ScoreCount[], size: number): number {
+  const ascending = [...counted].sort((a, b) => a.score - b.score);
+  const scoreAt = (position: number): number => {
+    let seen = 0;
+    for (const row of ascending) {
+      seen += row.count;
+      if (position < seen) return row.score;
+    }
+    return ascending.at(-1)?.score ?? 0;
+  };
+  return round((scoreAt(Math.floor((size - 1) / 2)) + scoreAt(Math.floor(size / 2))) / 2);
 }
 
 function bandsOf(counted: readonly ScoreCount[], lo: number, hi: number): CohortBand[] {

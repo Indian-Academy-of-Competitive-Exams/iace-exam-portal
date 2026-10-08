@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  mixIssue,
   scopedSections,
   TEST_SCOPE,
   fieldDiff,
@@ -41,6 +42,7 @@ import { beginDraftPaperEdit, beginPaperEdit, OFFERED_TEST_MESSAGE } from '../co
 import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
 import { EDIT_SUBJECTS, editedElsewhere } from '../common/edit-lock';
 import { formRefusal } from '../common/form-refusal';
+import { matchFilters } from '../common/match-filters';
 import { pageArgs, paged } from '../common/pagination';
 import { everyTermMatches } from '../common/search-terms';
 import { scopeRefOf } from '../common/prisma-json';
@@ -108,15 +110,20 @@ export class TestsService {
   ) {}
 
   async list(query: TestListQuery): Promise<Paginated<Test>> {
-    const where: Prisma.TestWhereInput = {
-      ...everyTermMatches<Prisma.TestWhereInput>(query.q, (term) => [
+    /** What narrows the list whichever mode is chosen: the search, and a caller's own scope. */
+    const always: Prisma.TestWhereInput[] = [
+      everyTermMatches<Prisma.TestWhereInput>(query.q, (term) => [
         { title: { contains: term, mode: 'insensitive' } },
       ]),
-      ...(query.examStageId ? { examStageId: query.examStageId } : {}),
-      ...(query.examId ? { examStage: { examId: { in: query.examId } } } : {}),
-      ...(query.baseConfigId ? { baseConfigId: query.baseConfigId } : {}),
-      ...(query.status ? { status: { in: query.status } } : {}),
-    };
+      ...(query.examStageId ? [{ examStageId: query.examStageId }] : []),
+      ...(query.baseConfigId ? [{ baseConfigId: query.baseConfigId }] : []),
+    ];
+    /** What the match toggle governs: the filters the screen draws. */
+    const chosen: Prisma.TestWhereInput[] = [
+      ...(query.examId ? [{ examStage: { examId: { in: query.examId } } }] : []),
+      ...(query.status ? [{ status: { in: query.status } }] : []),
+    ];
+    const where: Prisma.TestWhereInput = { AND: matchFilters(always, chosen, query.match) };
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.test.findMany({
@@ -195,6 +202,7 @@ export class TestsService {
     const scope = input.scope ?? TEST_SCOPE.FULL;
     const scopeRef = input.scopeRef ?? null;
     this.assertCovers(config, scope, scopeRef);
+    this.assertMixesAddUp(config, input.questionPoolFilter);
 
     const created = await this.prisma.test.create({
       data: {
@@ -261,6 +269,9 @@ export class TestsService {
     const scope = input.scope ?? test.scope;
     const scopeRef = input.scopeRef === undefined ? scopeRefOf(test) : (input.scopeRef ?? null);
     this.assertCovers(config, scope, scopeRef);
+    if (changed.includes('questionPoolFilter')) {
+      this.assertMixesAddUp(config, input.questionPoolFilter);
+    }
 
     const scopeMoves = changed.includes('scope') || changed.includes('scopeRef');
     const keptIds = scopedSections(config.sections, scope, scopeRef).map((section) => section.id);
@@ -349,6 +360,19 @@ export class TestsService {
   }
 
   /** The scope has to name a part of THIS config, or the draw has nothing to narrow to. */
+  /** The form's own rule, asked again here: the schema never sees the section, so never its count. */
+  private assertMixesAddUp(config: BaseConfigDetail, spec: DrawSpec | null | undefined): void {
+    for (const section of config.sections) {
+      const mix = spec?.sections[section.id]?.mix;
+      const issue = mix ? mixIssue(mix, section) : null;
+      if (issue) {
+        throw new AppException(ErrorCodes.VALIDATION_ERROR, issue, {
+          fieldErrors: { questionPoolFilter: [issue] },
+        });
+      }
+    }
+  }
+
   private assertCovers(
     config: BaseConfigDetail,
     scope: TestRow['scope'],

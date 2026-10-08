@@ -167,11 +167,23 @@ describe('cohortShapeOf', () => {
     );
   });
 
+  /** Read off the columns, a field of one scoring 40 had a median of 40.5, above its top score. */
+  it('takes the median from the scores themselves: the middle sitting, or the two middle ones halved', () => {
+    const median = (...counted: [score: number, count: number][]) =>
+      cohortShapeOf(counted.map(([score, count]) => ({ score, count }))).medianScore;
+
+    assert.equal(median([40, 1]), 40);
+    assert.equal(median([20, 1], [10, 1]), 15);
+    assert.equal(median([0, 1], [100, 3], [45.5, 2]), 72.75);
+    assert.equal(median([-3.5, 2], [12, 1]), -3.5);
+  });
+
   it('counts no cohort at all where nobody has sat the paper', () => {
     assert.deepEqual(cohortShapeOf([]), {
       topperScore: null,
       lowestScore: null,
       averageScore: null,
+      medianScore: null,
       size: 0,
       bands: [],
     });

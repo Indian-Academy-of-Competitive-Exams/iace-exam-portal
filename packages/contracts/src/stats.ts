@@ -933,20 +933,3 @@ export function itemSignalsOf(item: ItemCounts, paperAverageTimeSec: number | nu
 /** The flag itself: enough signals at once that the item, not the cohort, is the likely fault. */
 export const worthInspecting = (item: Pick<TestItemAnalytics, 'signals'>): boolean =>
   item.signals.length >= INSPECT_AT_LEAST;
-
-/** The middle sitting, interpolated inside its band — bands are all there is, so approximate. */
-export function medianInBands(bands: readonly CohortBand[]): number | null {
-  const counted = bands.reduce((total, band) => total + band.count, 0);
-  if (counted === 0) return null;
-
-  const middle = counted / 2;
-  let below = 0;
-  for (const band of bands) {
-    if (below + band.count >= middle) {
-      const within = band.count === 0 ? 0 : (middle - below) / band.count;
-      return round2(band.from + (band.to - band.from) * within);
-    }
-    below += band.count;
-  }
-  return round2(bands.at(-1)?.to ?? 0);
-}

@@ -42,6 +42,7 @@ function curve(overrides: Partial<CohortShape> = {}): CohortShape {
     topperScore: 96,
     lowestScore: -4,
     averageScore: 54,
+    medianScore: 57,
     size: 100,
     bands: [
       { from: 0, to: 40, count: 20 },
@@ -56,6 +57,7 @@ const NO_CURVE = curve({
   topperScore: null,
   lowestScore: null,
   averageScore: null,
+  medianScore: null,
   size: 0,
   bands: [],
 });
@@ -108,7 +110,7 @@ describe('summaryOf', () => {
 
     assert.equal(summary.meanScore, 54);
     assert.equal(summary.averageTimeSec, 3300);
-    assert.equal(summary.medianScore, 60);
+    assert.equal(summary.medianScore, 57);
     assert.equal(summary.maxScore, 96);
     assert.equal(summary.minScore, -4);
     assert.equal(summary.evaluatedCount, 100);

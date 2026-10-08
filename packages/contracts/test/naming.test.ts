@@ -138,6 +138,15 @@ describe('suggestedSeriesName', () => {
   it('goes past the highest when numbered ones already exist', () => {
     assert.equal(suggestedSeriesName(stem, [stem, `${stem} 02`, `${stem} 05`]), `${stem} 06`);
   });
+
+  /** The save compares names whatever their case, so a suggestion that did not was refused. */
+  it('reads a name saved in another case as the same name', () => {
+    const lower = stem.toLowerCase();
+
+    assert.equal(suggestedSeriesName(stem, [lower]), `${stem} 02`);
+    assert.equal(suggestedSeriesName(stem, [lower, `${lower} 04`]), `${stem} 05`);
+    assert.equal(suggestedTestName(stem, [`${lower} 03`]), `${stem} 04`);
+  });
 });
 
 describe('testNameKind', () => {

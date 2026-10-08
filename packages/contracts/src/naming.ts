@@ -98,9 +98,11 @@ function numbered(stem: string, position: number): string {
 
 /** The highest number already used under this stem, or 0 when nothing sits under it yet. */
 function highestUnder(stem: string, taken: readonly string[]): number {
+  const under = stem.toLowerCase();
   let highest = 0;
   for (const name of taken) {
-    const rest = name.trim().startsWith(stem) ? name.trim().slice(stem.length).trim() : '';
+    const held = name.trim().toLowerCase();
+    const rest = held.startsWith(under) ? held.slice(under.length).trim() : '';
     const position = /^\d+$/.test(rest) ? Number(rest) : 0;
     if (position > highest) highest = position;
   }
@@ -136,6 +138,7 @@ export function namePeriod(today: string = civilDate()): string {
 
 /** A series is usually alone under its stem, so it takes a number only once it needs one. */
 export function suggestedSeriesName(stem: string, taken: readonly string[]): string {
-  if (!taken.some((name) => name.trim() === stem)) return stem;
+  // Case-blind, as the save's own clash check is: a name it would refuse is not a free one.
+  if (!taken.some((name) => name.trim().toLowerCase() === stem.toLowerCase())) return stem;
   return numbered(stem, Math.max(highestUnder(stem, taken), 1) + 1);
 }

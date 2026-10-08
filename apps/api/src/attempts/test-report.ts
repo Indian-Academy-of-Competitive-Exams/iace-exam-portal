@@ -309,7 +309,7 @@ function summaryRows({ title, summary }: TestAnalytics): SummaryRow[] {
     { label: 'Sittings', value: summary.attemptCount },
     { label: 'Ranked sittings', value: summary.liveEvaluatedCount },
     { label: 'Mean score', value: summary.meanScore },
-    { label: 'Median (approximate)', value: summary.medianScore },
+    { label: 'Median', value: summary.medianScore },
     { label: 'Highest', value: summary.maxScore },
     { label: 'Lowest', value: summary.minScore },
     { label: 'Average time (sec)', value: summary.averageTimeSec },
