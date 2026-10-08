@@ -11,7 +11,7 @@ import {
   type CreateEventInput,
   type Event,
 } from '@iace/contracts';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, changedValues } from '@iace/app-kit';
 import { useListScreen } from '@iace/app-kit/browser';
 import {
   Alert,
@@ -270,7 +270,9 @@ function EventDialog({
   const save = useMutation({
     meta: { success: event ? 'Event saved.' : 'Event created.', fields: EVENT_FIELDS },
     mutationFn: (values: CreateEventInput) =>
-      event ? api.admin.events.update(event.id, values) : api.admin.events.create(values),
+      event
+        ? api.admin.events.update(event.id, changedValues(form))
+        : api.admin.events.create(values),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, EVENT_FIELDS),
   });

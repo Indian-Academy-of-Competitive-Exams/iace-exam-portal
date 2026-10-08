@@ -11,7 +11,7 @@ import {
   type CreateProgramInput,
   type Program,
 } from '@iace/contracts';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, changedValues } from '@iace/app-kit';
 import { useListScreen } from '@iace/app-kit/browser';
 import { NEW_RECORD, QUERY_KEYS, ROUTES } from '../../lib/constants';
 import {
@@ -216,7 +216,9 @@ function ProgramDialog({
   const save = useMutation({
     meta: { success: program ? 'Program saved.' : 'Program created.', fields: PROGRAM_FIELDS },
     mutationFn: (values: CreateProgramInput) =>
-      program ? api.admin.programs.update(program.id, values) : api.admin.programs.create(values),
+      program
+        ? api.admin.programs.update(program.id, changedValues(form))
+        : api.admin.programs.create(values),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, PROGRAM_FIELDS),
   });

@@ -48,7 +48,7 @@ import {
   examStagesQueryKey,
 } from '../../lib/constants';
 import { ExamPicker } from '../../components/exam-picker';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, changedValues } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 
 const EXAM_FIELDS = ['course', 'name', 'code'] as const;
@@ -225,7 +225,7 @@ function ExamDialog({
   const save = useMutation({
     meta: { success: exam ? 'Exam saved.' : 'Exam created.', fields: EXAM_FIELDS },
     mutationFn: (values: CreateExamInput) =>
-      exam ? api.admin.exams.update(exam.id, values) : api.admin.exams.create(values),
+      exam ? api.admin.exams.update(exam.id, changedValues(form)) : api.admin.exams.create(values),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, EXAM_FIELDS),
   });
@@ -389,7 +389,8 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
 
   return (
     <div className="flex flex-col gap-3">
-      {canWrite ? (
+      {/* Left out under a retired exam: it keeps the stages it has and takes no more. */}
+      {canWrite && exam.isActive ? (
         <div className="flex justify-end">
           <Button
             size="sm"
@@ -532,7 +533,7 @@ function EditStageDialog({
 
   const save = useMutation({
     meta: { success: 'Stage saved.', fields: EDIT_STAGE_FIELDS },
-    mutationFn: (values: UpdateExamStageInput) => api.admin.examStages.update(stage.id, values),
+    mutationFn: () => api.admin.examStages.update(stage.id, changedValues(form)),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, EDIT_STAGE_FIELDS),
   });
@@ -544,7 +545,7 @@ function EditStageDialog({
         if (!next) onClose();
       }}
       form={form}
-      onSubmit={(values) => save.mutate(values)}
+      onSubmit={() => save.mutate()}
       title={`Edit ${stage.exam.code} / ${stage.name}`}
       submitLabel="Save"
       loading={save.isPending}
