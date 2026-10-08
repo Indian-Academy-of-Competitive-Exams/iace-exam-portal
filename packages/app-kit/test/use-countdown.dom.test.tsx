@@ -170,3 +170,26 @@ test('a clock rebuilt on every render keeps ticking', () => {
     mock.timers.reset();
   }
 });
+
+/** The failure this prevents: every save's reply restarting the tick, so the clock holds one second and skips the next. */
+test("a clock re-anchored by a save's reply keeps the tick it was already on", () => {
+  const start = Date.parse('2026-09-01T05:00:00.000Z');
+  mock.timers.enable({ apis: ['setInterval', 'Date'], now: start });
+  const endsAt = '2026-09-01T06:00:00.000Z';
+  const hook = renderHook(({ clock }) => useClockCountdown(clock, () => {}), {
+    initialProps: { clock: { endsAt, serverNow: '2026-09-01T05:00:00.000Z', arrivedAt: start } },
+  });
+  try {
+    act(() => mock.timers.tick(600));
+    // The same deadline, anchored on a reply that landed 600ms into the second.
+    hook.rerender({
+      clock: { endsAt, serverNow: '2026-09-01T05:00:00.600Z', arrivedAt: start + 600 },
+    });
+    act(() => mock.timers.tick(400));
+
+    assert.equal(hook.result.current, 3599, 'the tick due a second after mount still fires');
+  } finally {
+    hook.unmount();
+    mock.timers.reset();
+  }
+});

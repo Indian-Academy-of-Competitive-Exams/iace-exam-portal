@@ -11,16 +11,19 @@ import { secondsLeft, type ExamClock } from '@iace/contracts';
 export function useCountdown(secondsLeftNow: () => number, onExpire: () => void): number {
   const [left, setLeft] = useState(secondsLeftNow);
   const latestOnExpire = useRef(onExpire);
+  const latestRead = useRef(secondsLeftNow);
   const expired = useRef(false);
 
   useEffect(() => {
     latestOnExpire.current = onExpire;
+    latestRead.current = secondsLeftNow;
   });
 
+  // One tick for the screen's life: restarted for each clock a save answers with, it holds a second and skips the next.
   useEffect(() => {
-    const tick = setInterval(() => setLeft(secondsLeftNow()), 1000);
+    const tick = setInterval(() => setLeft(latestRead.current()), 1000);
     return () => clearInterval(tick);
-  }, [secondsLeftNow]);
+  }, []);
 
   useEffect(() => {
     if (left > 0) {
