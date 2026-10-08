@@ -34,7 +34,13 @@ import {
   type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
-import { applyFieldErrors, bannerMessage, numberOr, optionalNumber } from '@iace/app-kit';
+import {
+  applyFieldErrors,
+  bannerMessage,
+  isNumberOrBlank,
+  numberOr,
+  optionalNumber,
+} from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
@@ -262,21 +268,36 @@ function shapeOf(values: ConfigFormValues) {
   };
 }
 
-const CONFIG_SERVER_FIELDS = ['examStageId', 'name'] as const;
+/** Refused before the save: read as blank, text in a number field would be stored as "not set" or zero. */
+const NUMBER_FIELD = {
+  validate: (raw: string) => isNumberOrBlank(raw) || 'Enter a number',
+} as const;
+
+const CONFIG_SERVER_FIELDS = ['examStageId', 'name', 'optionalSectionCount', 'languages'] as const;
 const SECTION_SERVER_FIELDS = [
   'name',
   'questionCount',
   'marksPerQuestion',
   'negativeMarks',
+  'perQuestionSec',
   'qualifyingCutoff',
+  'patternNote',
 ] as const;
+const SESSION_SERVER_FIELDS = ['name'] as const;
+
+function rowFields(rows: 'sections' | 'modules', count: number, fields: readonly string[]) {
+  return Array.from({ length: count }, (_, index) =>
+    fields.map((field) => `${rows}.${index}.${field}` as Path<ConfigFormValues>),
+  ).flat();
+}
 
 /** Every path the server can name that this form registers, so a failure lands on its own input. */
-function serverFields(sectionCount: number): Path<ConfigFormValues>[] {
-  const sections = Array.from({ length: sectionCount }, (_, index) =>
-    SECTION_SERVER_FIELDS.map((field) => `sections.${index}.${field}` as Path<ConfigFormValues>),
-  ).flat();
-  return [...CONFIG_SERVER_FIELDS, ...sections];
+function serverFields(sectionCount: number, sessionCount: number): Path<ConfigFormValues>[] {
+  return [
+    ...CONFIG_SERVER_FIELDS,
+    ...rowFields('sections', sectionCount, SECTION_SERVER_FIELDS),
+    ...rowFields('modules', sessionCount, SESSION_SERVER_FIELDS),
+  ];
 }
 
 /** The whole-paper rules. They name no single input, so they are listed above the sections. */
@@ -287,16 +308,13 @@ function sectionIssuesOf(error: unknown): string[] {
 /** The API names its clocks in seconds and the form asks for minutes — the same input either way. */
 function minutesFieldFor(key: string): Path<ConfigFormValues> | null {
   if (key === 'durationSec') return 'durationMin';
-  const section = /^sections\.(\d+)\.durationSec$/.exec(key);
-  return section ? (`sections.${section[1]}.durationMin` as Path<ConfigFormValues>) : null;
+  const row = /^(sections|modules)\.(\d+)\.durationSec$/.exec(key);
+  return row ? (`${row[1]}.${row[2]}.durationMin` as Path<ConfigFormValues>) : null;
 }
 
-function applyServerErrors(
-  error: unknown,
-  form: UseFormReturn<ConfigFormValues>,
-  sectionCount: number,
-): void {
-  applyFieldErrors(error, form.setError, serverFields(sectionCount));
+function applyServerErrors(error: unknown, form: UseFormReturn<ConfigFormValues>): void {
+  const { sections, modules } = form.getValues();
+  applyFieldErrors(error, form.setError, serverFields(sections.length, modules.length));
   if (!AppException.is(error) || !error.fieldErrors) return;
 
   for (const [key, messages] of Object.entries(error.fieldErrors)) {
@@ -305,8 +323,11 @@ function applyServerErrors(
   }
 }
 
-/** What the banner would repeat: `sections` has its own list, the clocks their own inputs. */
-const BANNER_HANDLED_ELSEWHERE = ['sections', 'durationSec'] as const;
+/** What the banner would repeat: `sections` has its own list, and each clock its own Minutes input. */
+function shownElsewhere(error: unknown): string[] {
+  const keys = AppException.is(error) ? Object.keys(error.fieldErrors ?? {}) : [];
+  return ['sections', ...keys.filter((key) => minutesFieldFor(key) !== null)];
+}
 
 export function BaseConfigFormPage() {
   const { id } = useParams();
@@ -415,11 +436,11 @@ function EditorBanners({
       {locked ? (
         <Alert variant="warning">
           <span>
-            This configuration is locked. A test built from it has already been finalized, and a
-            paper somebody has sat cannot change shape underneath them. Every field below is fixed
-            for good. Clone it to carry all of this into a copy you can edit: the copy starts
-            unlocked and is not the stage&apos;s default until you promote it. The name, and whether
-            this one is still offered, can be changed from the configurations list.
+            This configuration is locked. A test built from it has already been sat, and a paper
+            somebody has sat cannot change shape underneath them. Every field below is fixed for
+            good. Clone it to carry all of this into a copy you can edit: the copy starts unlocked
+            and is not the stage&apos;s default until you promote it. The name, and whether this one
+            is still offered, can be changed from the configurations list.
           </span>
         </Alert>
       ) : null}
@@ -490,7 +511,7 @@ function ConfigEditor({
     onError: (error) => {
       // Closed, or the banner and fields holding the error stay behind its overlay.
       setPromoting(null);
-      applyServerErrors(error, form, form.getValues('sections').length);
+      applyServerErrors(error, form);
       // A save refused as out of date leaves that copy cached, to be opened and refused again.
       if (AppException.is(error) && error.code === ErrorCodes.CONFLICT) {
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BASE_CONFIGS });
@@ -534,8 +555,8 @@ function ConfigEditor({
 
   const issues = sectionIssuesOf(save.error);
   const banner = bannerMessage(save.error, [
-    ...serverFields(sections.fields.length).map(String),
-    ...BANNER_HANDLED_ELSEWHERE,
+    ...serverFields(sections.fields.length, modules.fields.length).map(String),
+    ...shownElsewhere(save.error),
   ]);
 
   /** Taking the stage's default off another configuration is confirmed before anything is saved. */
@@ -647,7 +668,14 @@ function ConfigEditor({
       <FormSection title="How the paper runs">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FormField form={form} name="durationMin" label="Duration (minutes)">
-            {(control) => <Input {...control} inputMode="decimal" placeholder="60" />}
+            {(control) => (
+              <Input
+                {...control}
+                {...form.register('durationMin', NUMBER_FIELD)}
+                inputMode="decimal"
+                placeholder="60"
+              />
+            )}
           </FormField>
 
           <FormCombobox
@@ -714,7 +742,14 @@ function ConfigEditor({
             label="Optional sections"
             /* ui-copy-ok: rule */ hint="Blank means none"
           >
-            {(control) => <Input {...control} inputMode="numeric" placeholder="0" />}
+            {(control) => (
+              <Input
+                {...control}
+                {...form.register('optionalSectionCount', NUMBER_FIELD)}
+                inputMode="numeric"
+                placeholder="0"
+              />
+            )}
           </FormField>
 
           <div className="sm:col-span-2 lg:col-span-3">
@@ -751,7 +786,13 @@ function ConfigEditor({
                   label="Minutes"
                   className="w-28"
                 >
-                  {(control) => <Input {...control} inputMode="decimal" />}
+                  {(control) => (
+                    <Input
+                      {...control}
+                      {...form.register(`modules.${index}.durationMin`, NUMBER_FIELD)}
+                      inputMode="decimal"
+                    />
+                  )}
                 </FormField>
                 <Button
                   type="button"
@@ -799,6 +840,7 @@ function ConfigEditor({
               form={form}
               index={index}
               sectionalClocks={timerTemplate === TIMER_TEMPLATE.SECTIONAL_LOCKED}
+              perQuestionClocks={timerTemplate === TIMER_TEMPLATE.PER_ITEM_TIMED}
               sessionPaper={sessionPaper}
               canRemove={sections.fields.length > 1}
               onRemove={() => sections.remove(index)}
@@ -874,12 +916,16 @@ function ToggleField({
 /** Which languages the paper is offered in. Three fixed codes, so checkboxes rather than a list. */
 function LanguageChoice({ form }: Readonly<{ form: UseFormReturn<ConfigFormValues> }>) {
   const languages = useWatch({ control: form.control, name: 'languages' }) ?? [];
+  const error = form.formState.errors.languages?.message;
 
-  const toggle = (code: LanguageCode) =>
+  const toggle = (code: LanguageCode) => {
+    // Never registered, so nothing re-validates it: an error left here would block every later save.
+    form.clearErrors('languages');
     form.setValue(
       'languages',
       languages.includes(code) ? languages.filter((kept) => kept !== code) : [...languages, code],
     );
+  };
 
   return (
     <fieldset className="flex flex-col gap-1">
@@ -894,6 +940,11 @@ function LanguageChoice({ form }: Readonly<{ form: UseFormReturn<ConfigFormValue
           />
         ))}
       </div>
+      {error ? (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
     </fieldset>
   );
 }
@@ -902,6 +953,7 @@ function SectionCard({
   form,
   index,
   sectionalClocks,
+  perQuestionClocks,
   sessionPaper,
   canRemove,
   onRemove,
@@ -909,6 +961,7 @@ function SectionCard({
   form: UseFormReturn<ConfigFormValues>;
   index: number;
   sectionalClocks: boolean;
+  perQuestionClocks: boolean;
   sessionPaper: boolean;
   canRemove: boolean;
   onRemove: () => void;
@@ -960,7 +1013,14 @@ function SectionCard({
         </FormField>
 
         <FormField form={form} name={`sections.${index}.questionCount`} label="Questions">
-          {(control) => <Input {...control} inputMode="numeric" placeholder="25" />}
+          {(control) => (
+            <Input
+              {...control}
+              {...form.register(`sections.${index}.questionCount`, NUMBER_FIELD)}
+              inputMode="numeric"
+              placeholder="25"
+            />
+          )}
         </FormField>
 
         <FormField
@@ -968,7 +1028,14 @@ function SectionCard({
           name={`sections.${index}.marksPerQuestion`}
           label="Marks per question"
         >
-          {(control) => <Input {...control} inputMode="decimal" placeholder="2" />}
+          {(control) => (
+            <Input
+              {...control}
+              {...form.register(`sections.${index}.marksPerQuestion`, NUMBER_FIELD)}
+              inputMode="decimal"
+              placeholder="2"
+            />
+          )}
         </FormField>
 
         <FormField
@@ -977,7 +1044,14 @@ function SectionCard({
           label="Negative marks"
           /* ui-copy-ok: unit */ hint="Per wrong answer"
         >
-          {(control) => <Input {...control} inputMode="decimal" placeholder="0.5" />}
+          {(control) => (
+            <Input
+              {...control}
+              {...form.register(`sections.${index}.negativeMarks`, NUMBER_FIELD)}
+              inputMode="decimal"
+              placeholder="0.5"
+            />
+          )}
         </FormField>
 
         <FormField
@@ -988,16 +1062,30 @@ function SectionCard({
             sectionalClocks ? 'Required: this paper has a clock per section' : 'Optional'
           }
         >
-          {(control) => <Input {...control} inputMode="decimal" />}
+          {(control) => (
+            <Input
+              {...control}
+              {...form.register(`sections.${index}.durationMin`, NUMBER_FIELD)}
+              inputMode="decimal"
+            />
+          )}
         </FormField>
 
         <FormField
           form={form}
           name={`sections.${index}.perQuestionSec`}
           label="Seconds per question"
-          /* ui-copy-ok: rule */ hint="Optional"
+          /* ui-copy-ok: rule */ hint={
+            perQuestionClocks ? 'Required: this paper has a countdown per question' : 'Optional'
+          }
         >
-          {(control) => <Input {...control} inputMode="numeric" />}
+          {(control) => (
+            <Input
+              {...control}
+              {...form.register(`sections.${index}.perQuestionSec`, NUMBER_FIELD)}
+              inputMode="numeric"
+            />
+          )}
         </FormField>
 
         <FormField
@@ -1026,7 +1114,13 @@ function SectionCard({
             name={`sections.${index}.qualifyingCutoff`}
             label="Qualifying cutoff"
           >
-            {(control) => <Input {...control} inputMode="decimal" />}
+            {(control) => (
+              <Input
+                {...control}
+                {...form.register(`sections.${index}.qualifyingCutoff`, NUMBER_FIELD)}
+                inputMode="decimal"
+              />
+            )}
           </FormField>
         ) : null}
 
