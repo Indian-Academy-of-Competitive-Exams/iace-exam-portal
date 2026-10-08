@@ -150,6 +150,7 @@ describe('summaryOf', () => {
     const uncounted = summaryOf(null, curve({ size: 3 }), null, COUNTS);
     assert.equal(uncounted.isSettling, true);
     assert.equal(uncounted.evaluatedCount, 0);
+    assert.equal(uncounted.meanScore, 54, 'the spread is live, so it does not wait for the count');
     assert.equal(summaryOf(null, NO_CURVE, null, COUNTS).isSettling, false);
   });
 });

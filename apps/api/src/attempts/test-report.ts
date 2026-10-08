@@ -6,6 +6,7 @@
 import { type Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
+  scopedSections,
   type AttemptSectionScore,
   type AttemptStatus,
   type TestAnalytics,
@@ -21,6 +22,7 @@ import {
   type ExportColumn,
   type ExportSheet,
 } from '../common/exporting';
+import { scopeRefOf } from '../common/prisma-json';
 import { type PrismaService } from '../prisma/prisma.service';
 import { STUDENT_CARD_SELECT, studentCardsOf, type StudentCard } from '../students';
 import { numberOrNull } from './attempt-report';
@@ -54,6 +56,21 @@ const SITTING_SELECT = {
 } as const satisfies Prisma.AttemptSelect;
 
 type Sitting = Prisma.AttemptGetPayload<{ select: typeof SITTING_SELECT }>;
+
+const PAPER_SECTIONS_SELECT = {
+  scope: true,
+  scopeRef: true,
+  baseConfig: {
+    select: {
+      sections: {
+        select: { id: true, moduleId: true, questionCount: true, name: true, order: true },
+      },
+    },
+  },
+} as const satisfies Prisma.TestSelect;
+
+/** A section as a result column names it. */
+type SectionHeading = Pick<TestSectionAnalytics, 'baseConfigSectionId' | 'name'>;
 
 /** A sitting as the result sheet reads it; outside the cohort its rank and percentile are null. */
 export interface ResultRow extends Sitting {
@@ -118,12 +135,24 @@ export class TestReportSheets {
     return this.held;
   }
 
+  /** Off the paper, not the recount: a marked sitting's section scores have a column at once. */
+  private async paperSections(): Promise<SectionHeading[]> {
+    const test = await this.sources.prisma.test.findUniqueOrThrow({
+      where: { id: this.testId },
+      select: PAPER_SECTIONS_SELECT,
+    });
+    return [...scopedSections(test.baseConfig.sections, test.scope, scopeRefOf(test))]
+      .sort((a, b) => a.order - b.order)
+      .map((section) => ({ baseConfigSectionId: section.id, name: section.name }));
+  }
+
   /** The ranked in rank order, then the sittings outside the cohort. */
   async results(): Promise<ExportSheet<ResultRow>> {
     assertExportable(this.analytics.summary.attemptCount);
-    const [standings, sittings] = await Promise.all([
+    const [standings, sittings, sections] = await Promise.all([
       this.sources.prisma.$queryRaw<TestResultRow[]>(testResultsSql(this.testId)),
       this.sittings(),
+      this.paperSections(),
     ]);
     const byId = new Map(sittings.map((sitting) => [sitting.id, sitting]));
     const rows = standings.flatMap((standing) => {
@@ -132,7 +161,7 @@ export class TestReportSheets {
       const { rank, percentile } = standing;
       return [{ ...sitting, rank, percentile, bySection: sectionsOf(sitting) }];
     });
-    return { name: 'Results', columns: resultColumns(this.orderedSections), rows };
+    return { name: 'Results', columns: resultColumns(sections), rows };
   }
 
   /** Reached, minus anyone holding any sitting of the test, a voided one included. */
@@ -185,7 +214,7 @@ const PERSON_COLUMNS: ExportColumn<StudentCard>[] = [
   { header: 'Programs', width: 24, fileOnly: true, value: (row) => row.programs.join(', ') },
 ];
 
-function resultColumns(sections: readonly TestSectionAnalytics[]): ExportColumn<ResultRow>[] {
+function resultColumns(sections: readonly SectionHeading[]): ExportColumn<ResultRow>[] {
   const person = PERSON_COLUMNS.map((column): ExportColumn<ResultRow> => ({
     ...column,
     value: (row) => column.value(row.student),
@@ -213,7 +242,7 @@ function resultColumns(sections: readonly TestSectionAnalytics[]): ExportColumn<
 }
 
 /** A sitting the scorer has not reached has no section scores yet, so its cells stay blank. */
-function sectionColumns(section: TestSectionAnalytics): ExportColumn<ResultRow>[] {
+function sectionColumns(section: SectionHeading): ExportColumn<ResultRow>[] {
   const scoreIn = (row: ResultRow) => row.bySection.get(section.baseConfigSectionId);
   return [
     { header: `${section.name} score`, width: 12, value: (row) => scoreIn(row)?.score ?? null },

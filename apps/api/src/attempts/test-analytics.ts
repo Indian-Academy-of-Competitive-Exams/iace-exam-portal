@@ -49,45 +49,27 @@ export interface ItemTotals {
   optionCounts: Record<string, number>;
 }
 
-const EMPTY_SUMMARY: TestAnalyticsSummary = {
-  reachedCount: 0,
-  attemptCount: 0,
-  evaluatedCount: 0,
-  meanScore: null,
-  medianScore: null,
-  maxScore: null,
-  minScore: null,
-  averageTimeSec: null,
-  bands: [],
-  topper: null,
-  computedAt: null,
-  liveEvaluatedCount: 0,
-  isSettling: false,
-};
-
+/** The spread is counted live, so it needs no recount; only the count and the time wait for one. */
 export function summaryOf(
   stat: StatTotals | null,
   live: CohortShape,
   topper: TestTopper | null,
   counts: { attemptCount: number; reachedCount: number },
 ): TestAnalyticsSummary {
-  const freshness = {
+  const evaluatedCount = stat?.evaluatedCount ?? 0;
+  return {
     ...counts,
     liveEvaluatedCount: live.size,
-    isSettling: live.size !== (stat?.evaluatedCount ?? 0),
-  };
-  if (stat === null) return { ...EMPTY_SUMMARY, ...freshness };
-  return {
-    ...freshness,
-    evaluatedCount: stat.evaluatedCount,
+    isSettling: live.size !== evaluatedCount,
+    evaluatedCount,
     meanScore: live.averageScore,
     medianScore: medianInBands(live.bands),
     maxScore: live.topperScore,
     minScore: live.lowestScore,
-    averageTimeSec: perSitting(stat.sumTimeSec, stat.evaluatedCount),
+    averageTimeSec: stat && perSitting(stat.sumTimeSec, stat.evaluatedCount),
     bands: live.bands,
     topper,
-    computedAt: stat.computedAt.toISOString(),
+    computedAt: stat?.computedAt.toISOString() ?? null,
   };
 }
 

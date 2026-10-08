@@ -205,13 +205,6 @@ describe('GET admin/tests/:id/report/export', () => {
     const { catalog, testId } = await freeTest();
     const reasoning = await makeSection(prisma, catalog, { name: 'Reasoning', order: 1 });
     const quant = await makeSection(prisma, catalog, { name: 'Quant', order: 2 });
-    await prisma.testSectionStat.createMany({
-      data: [reasoning, quant].map((section) => ({
-        testId,
-        baseConfigSectionId: section.id,
-        computedAt: new Date(),
-      })),
-    });
     const sitting = await makeSitting(prisma, {
       testId,
       studentId: await student('Ana'),

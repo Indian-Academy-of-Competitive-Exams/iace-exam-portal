@@ -128,6 +128,31 @@ describe('TestAnalyticsService — how fresh the counted figures are', () => {
     );
   });
 
+  /** The failure this prevents: a marked hall reading as blank until its first recount lands. */
+  it('shows the spread of a test no recount has reached yet, and only that', async () => {
+    const world = build();
+    const paper = await makePaper(prisma, { questions: ['Reasoning', 'Maths'] });
+    const { attemptId } = await sat(paper);
+    await world.scoring.score(attemptId);
+    const full = Number(
+      (await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } })).score,
+    );
+
+    const { summary } = await world.analytics.forTest(paper.testId);
+
+    assert.deepEqual([summary.meanScore, summary.maxScore, summary.minScore], [full, full, full]);
+    assert.deepEqual(
+      summary.bands.map((band) => band.count),
+      [1],
+    );
+    assert.equal(summary.topper?.attemptId, attemptId);
+    // What only the recount holds stays empty, and the screen is told it is behind.
+    assert.deepEqual(
+      [summary.evaluatedCount, summary.averageTimeSec, summary.computedAt, summary.isSettling],
+      [0, null, null, true],
+    );
+  });
+
   it('queues an immediate rebuild for a test that exists, and refuses one that does not', async () => {
     const world = build();
     const paper = await makePaper(prisma, { questions: ['Reasoning'] });
