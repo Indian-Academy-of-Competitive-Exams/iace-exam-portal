@@ -52,10 +52,7 @@ export function useImportScreen<TPlan, TResult>(options: {
     onSuccess: options.onCommitted,
   });
 
-  const preview = useMutation({
-    mutationFn: options.preview,
-    onSuccess: setPlan,
-  });
+  const preview = useMutation({ mutationFn: options.preview });
 
   const template = useMutation({
     mutationFn: options.template.fetch,
@@ -73,7 +70,8 @@ export function useImportScreen<TPlan, TResult>(options: {
   const choose = (next: File | undefined) => {
     if (!next) return;
     stage(next);
-    preview.mutate(next);
+    // Per call, not on the hook: only the latest call's answer is delivered, so an earlier file answering late sets nothing.
+    preview.mutate(next, { onSuccess: setPlan });
   };
 
   const writes = plan === null ? 0 : options.writes(plan);

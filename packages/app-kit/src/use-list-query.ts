@@ -87,14 +87,17 @@ export function useListQuery<TItem, TFilters extends object>(options: {
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   if (served && query.data.items.length === 0 && page > lastPage) setPage(lastPage);
 
+  // Paused offline, the read never ran: rows held over from the last filter are not its answer.
+  const neverRan = query.isPaused && (query.data === undefined || query.isPlaceholderData);
+
   return {
-    items: query.data?.items ?? [],
+    items: neverRan ? [] : (query.data?.items ?? []),
     total,
     page,
     pageSize,
     isLoading: query.isLoading,
     hasLoaded: query.data !== undefined,
-    isError: query.isError,
+    isError: query.isError || neverRan,
     retry: query.refetch,
     setPage,
     setPageSize: resize,

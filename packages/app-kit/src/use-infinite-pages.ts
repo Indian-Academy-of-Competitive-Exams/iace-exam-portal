@@ -63,14 +63,17 @@ export function useInfinitePages<T>(options: {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  // Paused offline, the read never ran: that is "did not load", not a skeleton with no end.
+  const neverRan = query.isPaused && query.data === undefined;
+
   return {
     items: loadedItems(query.data?.pages ?? []),
     total: query.data?.pages[0]?.total ?? 0,
     hasMore: hasNextPage,
     loadMore,
-    isError: query.isError,
+    isError: query.isError || neverRan,
     retry: query.refetch,
-    isLoading: query.isPending,
+    isLoading: query.isPending && !neverRan,
     isLoadingMore: isFetchingNextPage,
   };
 }
@@ -107,6 +110,8 @@ export function usePagedPicker<T>(options: {
       onLoadMore: pages.loadMore,
       isLoading: pages.isLoading,
       isLoadingMore: pages.isLoadingMore,
+      isError: pages.isError,
+      onRetry: () => void pages.retry(),
     },
   };
 }

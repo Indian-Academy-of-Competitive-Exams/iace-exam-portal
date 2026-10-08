@@ -37,6 +37,8 @@ export function useScrollList<
     total: pages.total,
     isLoading: pages.isLoading,
     hasLoaded: !pages.isLoading,
+    isError: pages.isError,
+    retry: pages.retry,
     scroll: {
       hasMore: pages.hasMore,
       onLoadMore: pages.loadMore,

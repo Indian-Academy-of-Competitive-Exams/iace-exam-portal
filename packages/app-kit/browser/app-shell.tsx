@@ -78,6 +78,8 @@ export function AppShell({
 }: Readonly<AppShellProps>) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [panelOpen, setPanelOpen] = useState(false);
+  // Past the breakpoint the drawer is not drawn, so "open" must not wait there for the window to narrow.
+  if (isDesktop && panelOpen) setPanelOpen(false);
   // null: no workspace on screen. false: one, with the chrome. true: one that has taken the window.
   const [workspace, setWorkspace] = useState<boolean | null>(null);
   const { pathname } = useLocation();

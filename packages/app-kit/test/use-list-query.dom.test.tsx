@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { useListQuery } from '../src/use-list-query';
 
@@ -11,6 +11,7 @@ const client = new QueryClient({ defaultOptions: { queries: { gcTime: 60_000, re
 afterEach(() => {
   cleanup();
   client.clear();
+  onlineManager.setOnline(true);
 });
 
 const wrapper = ({ children }: { children: ReactNode }) => (
@@ -89,5 +90,45 @@ describe('useListQuery', () => {
     assert.deepEqual(list().items, []);
     assert.equal(list().page, 1);
     assert.equal(server.asked, 1);
+  });
+
+  /** The failure this prevents: "No students yet" over a list that was never read. */
+  it('says a list it could not read offline did not load, and reads it once back online', async () => {
+    onlineManager.setOnline(false);
+    const { list } = listOf(3);
+
+    assert.equal(list().isError, true);
+    assert.equal(list().isLoading, false);
+
+    act(() => onlineManager.setOnline(true));
+
+    await waitFor(() => assert.equal(list().items.length, 3));
+    assert.equal(list().isError, false);
+  });
+
+  /** The failure this prevents: the last filter's rows standing as the answer to this one. */
+  it('drops the rows of the last filter when the next one cannot be read', async () => {
+    const view = renderHook(
+      ({ q }) =>
+        useListQuery({
+          queryKey: KEY,
+          filters: { q },
+          fetchPage: ({ q: asked, page, pageSize }) =>
+            Promise.resolve({ items: [`${asked}-1`], total: 1, page, pageSize }),
+        }),
+      { wrapper, initialProps: { q: 'ssc' } },
+    );
+    await waitFor(() => assert.deepEqual(view.result.current.items, ['ssc-1']));
+
+    onlineManager.setOnline(false);
+    view.rerender({ q: 'rrb' });
+
+    assert.deepEqual(view.result.current.items, []);
+    assert.equal(view.result.current.isError, true);
+
+    act(() => onlineManager.setOnline(true));
+
+    await waitFor(() => assert.deepEqual(view.result.current.items, ['rrb-1']));
+    assert.equal(view.result.current.isError, false);
   });
 });

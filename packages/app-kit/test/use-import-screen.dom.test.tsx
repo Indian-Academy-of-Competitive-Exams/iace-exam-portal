@@ -74,6 +74,27 @@ describe('useImportScreen', () => {
     await waitFor(() => assert.equal(read().plan?.name, 'second.csv'));
   });
 
+  /** The failure this prevents: one file's plan on screen while Import sends the other. */
+  for (const answered of [
+    ['small.csv', 'large.csv'],
+    ['large.csv', 'small.csv'],
+  ]) {
+    it(`shows the file now chosen when ${answered[0]} is previewed first`, async () => {
+      const answers = new Map<string, (plan: Plan) => void>();
+      const read = mount({
+        preview: (file) => new Promise<Plan>((resolve) => answers.set(file.name, resolve)),
+      });
+
+      act(() => read().choose(fileNamed('large.csv')));
+      act(() => read().choose(fileNamed('small.csv')));
+      await waitFor(() => assert.equal(answers.size, 2));
+      for (const name of answered) await act(async () => answers.get(name)?.({ name, writes: 1 }));
+
+      assert.equal(read().file?.name, 'small.csv');
+      assert.equal(read().plan?.name, 'small.csv');
+    });
+  }
+
   it('refuses a second commit of a run already committed', async () => {
     const read = mount();
 

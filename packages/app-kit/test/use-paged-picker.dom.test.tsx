@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { type Paginated } from '@iace/contracts';
 import { usePagedPicker, type PickerPageParams } from '../src/use-infinite-pages';
@@ -12,6 +12,7 @@ const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: 
 afterEach(() => {
   cleanup();
   client.clear();
+  onlineManager.setOnline(true);
 });
 
 const wrapper = ({ children }: { children: ReactNode }) => (
@@ -41,5 +42,27 @@ describe('usePagedPicker', () => {
     assert.equal(asked[0]?.signal?.aborted, true, 'the search nobody is waiting for is stopped');
     assert.equal(asked[1]?.signal?.aborted, false);
     assert.equal(asked[1]?.q, 'ssc');
+  });
+
+  /** The failure this prevents: a picker opened offline drawing its skeleton until the page is reloaded. */
+  it('says a list it could not read offline did not load, and reads it once back online', async () => {
+    onlineManager.setOnline(false);
+    const { result } = renderHook(
+      () =>
+        usePagedPicker({
+          queryKey: ['picker'],
+          fetchPage: ({ page, pageSize }) =>
+            Promise.resolve({ items: ['ssc'], total: 1, page, pageSize }),
+        }),
+      { wrapper },
+    );
+
+    assert.equal(result.current.paging.isLoading, false);
+    assert.equal(result.current.paging.isError, true);
+
+    act(() => onlineManager.setOnline(true));
+
+    await waitFor(() => assert.deepEqual(result.current.items, ['ssc']));
+    assert.equal(result.current.paging.isError, false);
   });
 });

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { MemoryRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { type ListFilter } from '@iace/ui';
 import { useScrollList } from '../browser/use-scroll-list';
 import { useLocalFilters } from '../browser/use-local-filters';
@@ -13,6 +13,7 @@ const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: 
 afterEach(() => {
   cleanup();
   client.clear();
+  onlineManager.setOnline(true);
 });
 
 const FILTERS = [
@@ -96,5 +97,19 @@ describe('useScrollList', () => {
     const list = mount();
 
     assert.equal(list().pagination, undefined);
+  });
+
+  /** The failure this prevents: a pool that was never read drawn as a pool with nothing in it. */
+  it('says a pool it could not read offline did not load, and reads it once back online', async () => {
+    onlineManager.setOnline(false);
+    const list = mount();
+
+    assert.equal(list().isLoading, false);
+    assert.equal(list().isError, true);
+
+    act(() => onlineManager.setOnline(true));
+
+    await waitFor(() => assert.equal(rows(), 'all-1a,all-1b'));
+    assert.equal(list().isError, false);
   });
 });
