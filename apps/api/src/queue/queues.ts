@@ -125,6 +125,9 @@ export function rollupRebuildStudentJobId(studentId: string): string {
   return `${QUEUE_NAMES.ROLLUP}-rebuild-student-${studentId}`;
 }
 
+/** One id for the whole backfill: asked for again while one is queued or running, it is the same job. */
+export const ROLLUP_REBUILD_ALL_JOB_ID = `${QUEUE_NAMES.ROLLUP}-rebuild-all`;
+
 /** Long enough for a drop's re-scores to land before the rebuild reads them back. */
 export const ROLLUP_REBUILD_DELAY_MS = 1 * MS_PER_MINUTE;
 

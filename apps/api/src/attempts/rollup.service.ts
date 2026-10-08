@@ -291,21 +291,31 @@ export class RollupService {
 
   /** Every table from scratch, which is also how sittings scored before this worker are counted. */
   async rebuildAll(): Promise<void> {
+    let rebuilt = 0;
     const tests = await this.prisma.attempt.findMany({
       where: { status: ATTEMPT_STATUS.EVALUATED, isGraded: true },
       distinct: ['testId'],
       select: { testId: true },
     });
-    for (const row of tests) await this.rebuildTest(row.testId);
+    for (const { testId } of tests) {
+      if (await this.tried(() => this.rebuildTest(testId), `rollup of test ${testId}`))
+        rebuilt += 1;
+    }
 
     const students = await this.prisma.attempt.findMany({
       where: { status: ATTEMPT_STATUS.EVALUATED },
       distinct: ['studentId'],
       select: { studentId: true },
     });
-    for (const row of students) await this.rebuildStudent(row.studentId);
+    for (const { studentId } of students) {
+      const describe = `rollup of student ${studentId}`;
+      if (await this.tried(() => this.rebuildStudent(studentId), describe)) rebuilt += 1;
+    }
 
-    this.logger.log(`Rebuilt ${tests.length} tests and ${students.length} students`);
+    const asked = tests.length + students.length;
+    this.logger.log(
+      `Rebuilt ${rebuilt} of ${asked} rollups: ${tests.length} tests, ${students.length} students`,
+    );
   }
 
   /** One sitting's own two tables, inside the scorer's transaction: marks and totals commit together. */

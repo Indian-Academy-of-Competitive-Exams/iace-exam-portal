@@ -7,7 +7,13 @@
 import { Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
-import { QUEUE_NAMES, ROLLUP_JOBS, jobOptionsFor } from './queue/queues';
+import {
+  QUEUE_NAMES,
+  ROLLUP_JOBS,
+  ROLLUP_REBUILD_ALL_JOB_ID,
+  jobOptionsFor,
+  keyedJob,
+} from './queue/queues';
 
 const logger = new Logger('rollup-rebuild-all');
 
@@ -26,7 +32,12 @@ async function run(): Promise<void> {
   });
 
   try {
-    const job = await queue.add(ROLLUP_JOBS.REBUILD_ALL, {});
+    // Kept by neither outcome: a retained job under this id would swallow the next deploy's ask.
+    const job = await queue.add(
+      ROLLUP_JOBS.REBUILD_ALL,
+      {},
+      { ...keyedJob(ROLLUP_REBUILD_ALL_JOB_ID), removeOnComplete: true },
+    );
     logger.log(
       `Queued ${ROLLUP_JOBS.REBUILD_ALL} on ${QUEUE_NAMES.ROLLUP} as job ${job.id ?? '?'}`,
     );

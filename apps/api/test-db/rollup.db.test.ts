@@ -523,6 +523,20 @@ describe('RollupService — rebuilding a scope', () => {
     );
     assert.equal(await prisma.testQuestionStat.count(), 4);
   });
+
+  /** The failure this prevents: one test that will not count failing the backfill, and each retry starting over. */
+  it('rebuilds every other test and every student when one test cannot be recounted', async () => {
+    const built = build(failingOnceOnStatWrite(prisma));
+    for (const paper of [await paperOf(), await paperOf()]) {
+      await built.scoring.score((await sat(paper, [RIGHT, null, null, null])).attemptId);
+    }
+    await prisma.studentStat.deleteMany();
+
+    await built.rollup.rebuildAll();
+
+    assert.equal(await prisma.testStat.count(), 1, 'only the test that failed is left uncounted');
+    assert.equal(await prisma.studentStat.count(), 2);
+  });
 });
 
 describe('RollupService — the slower clock the item analysis runs on', () => {
