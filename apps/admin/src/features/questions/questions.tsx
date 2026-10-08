@@ -34,6 +34,7 @@ import {
   QUESTION_STATUS_LABELS,
   QUESTION_STATUS_VARIANT,
   ROUTES,
+  questionAuditQueryKey,
 } from '../../lib/constants';
 import { QUESTIONS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useAuth } from '../../providers/auth';
@@ -239,6 +240,8 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
 
   const settle = () => {
     setAsking(null);
+    // The row's own History reads the audit trail, which sits outside the questions it lists.
+    void queryClient.invalidateQueries({ queryKey: questionAuditQueryKey(question.id) });
     return queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
   };
 

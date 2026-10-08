@@ -130,10 +130,13 @@ export function TaxonomyPage() {
     />
   );
 
-  const done = (queryKey: readonly string[]) => () => {
-    setCreating(false);
-    void queryClient.invalidateQueries({ queryKey });
-  };
+  const done =
+    (...queryKeys: readonly (readonly string[])[]) =>
+    () => {
+      setCreating(false);
+      for (const queryKey of queryKeys) void queryClient.invalidateQueries({ queryKey });
+    };
+  const subjectId = onlySubjectFiltered(filters.get('subjectId'));
 
   return (
     <>
@@ -157,10 +160,13 @@ export function TaxonomyPage() {
         />
       ) : (
         <NewTopicDialog
-          subjectId={onlySubjectFiltered(filters.get('subjectId'))}
+          // Its form resets to the values it was mounted with, so a new filter is a new dialog.
+          key={subjectId}
+          subjectId={subjectId}
           open={creating}
           onOpenChange={setCreating}
-          onDone={done(QUERY_KEYS.TOPICS)}
+          // A subject's row counts its topics.
+          onDone={done(QUERY_KEYS.TOPICS, QUERY_KEYS.SUBJECTS)}
         />
       )}
     </>
