@@ -259,7 +259,7 @@ function Body({ report }: Readonly<{ report: TestAnalytics }>) {
   const { summary, sections, items } = report;
   const flagged = items.filter((item) => worthInspecting(item)).length;
 
-  if (summary.evaluatedCount === 0) return <EmptyState title="No ranked results yet" />;
+  if (summary.liveEvaluatedCount === 0) return <EmptyState title="No ranked results yet" />;
 
   return (
     <div className="flex flex-col gap-8">
