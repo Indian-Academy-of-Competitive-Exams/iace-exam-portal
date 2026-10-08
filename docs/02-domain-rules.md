@@ -79,7 +79,8 @@ Setup, then paper, then offer. There is no certificate step.
 - **A hand-pick is capped per difficulty bucket, not only per section.** Once a section already holds
   as many of one difficulty as its mix allows, the next pick of that difficulty is refused and the
   admin is told to take one off first — otherwise the draw could only ever top up a section the hand
-  had already made impossible to balance.
+  had already made impossible to balance. Replacing a row on a draft swaps it in place, keeping its
+  position, and is judged as one more pick against the same cap.
 - Any question that is not ARCHIVED and carries a current version is drawable. A paper pins a
   version, so there has to be one; nothing else gates the draw, because a paper is built before its
   questions are finished and what stops an unfinished one reaching students is the offer, which
@@ -490,7 +491,10 @@ and needs no mapping at all.
   a super admin read both seats', per question and in total. A discarded draft takes its time
   with it.
 - **A section is handed out with the day it is wanted by.** `QuestionAssignment.dueAt` is required
-  on a new assignment and kept as that day's last instant at the institute; it gates nothing. A row
+  on a new assignment and kept as that day's last instant at the institute; it gates nothing.
+  Whoever may assign may move the day without passing the seat on, until the test is offered or the
+  seat is finished: a finished seat's standing is read off the day, so moving it would rewrite who
+  was late. A row
   from before the date was required has none, and is judged neither way. Where a row stands is
   derived, never stored (`dueStanding`), in institute days: on time when finished on or before the
   day, late when after it, overdue while still open past it. Nothing is owed on a role that has
@@ -525,6 +529,10 @@ and needs no mapping at all.
   `TestQuestionStat` references may be deleted; every served question is a paper row a sat test
   cannot lose, and the rule counts those two tables before it allows the move, so it refuses before
   a foreign key does.
+- **A subject or a topic is deleted only while nothing carries it.** A subject is held by its
+  topics, its questions, a base configuration's sections and a student's subject figures; a topic by
+  its questions and by any test whose draw settings name it, which no foreign key can see. The
+  refusal counts each holder. A rename is free: everything holds the id.
 - **Subject and topic settle when something DEPENDS on the question, not when it is published.**
   Taxonomy is what a section draws on, so moving it afterwards would change what a finalized paper
   was built from — and a `PaperQuestion` records no subject of its own, so a moved question would be
