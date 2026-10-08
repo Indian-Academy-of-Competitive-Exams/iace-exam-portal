@@ -12,6 +12,7 @@ import {
   STUDENT_TYPE,
   type FeatureKey,
 } from '@iace/contracts';
+import { type Prisma } from '@prisma/client';
 import { AdminsService } from '../src/admins';
 import { AuditContext } from '../src/audit';
 import { AuthService } from '../src/auth/auth.service';
@@ -20,6 +21,7 @@ import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { DomainEventBus } from '../src/common/events/domain-event-bus';
+import { type PrismaService } from '../src/prisma/prisma.service';
 import {
   FakeConfig,
   FakeEventBus,
@@ -28,7 +30,7 @@ import {
   FakeRedis,
   NO_DEVICE,
 } from '../test/support/fakes';
-import { makeStudent, resetDatabase, testPrisma } from './support/database';
+import { makeStudent, resetDatabase, testPrisma, type StudentOverrides } from './support/database';
 
 /** The orchestration. Most of what matters is who is let in, and what the API refuses to disclose about who has an account. */
 
@@ -44,6 +46,7 @@ after(() => prisma.$disconnect());
 function build(
   bus: { asService(): DomainEventBus } = new FakeEventBus(),
   env: ConstructorParameters<typeof FakeConfig>[0] = {},
+  client: PrismaService = prisma,
 ) {
   const redis = new FakeRedis();
   const config = new FakeConfig(env);
@@ -52,7 +55,7 @@ function build(
   const tokens = new TokenService(new JwtService({}), config.asService());
   const sessions = new SessionService(redis.asService());
   const auth = new AuthService(
-    prisma,
+    client,
     new OtpService(redis.asService(), config.asService(), sender, metrics.asService()),
     tokens,
     sessions,
@@ -92,6 +95,27 @@ const admin = (over: { id?: string; isSuperAdmin?: boolean; isActive?: boolean }
 
 const failsWith = (code: string) => (error: unknown) =>
   AppException.is(error) && error.code === code;
+
+/** The real client, with a rival taking the number just before a sign-up's own create lands. */
+function takenJustBefore(rival: StudentOverrides): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== 'student') return Reflect.get(target, key) as unknown;
+      return new Proxy(target.student, {
+        get(delegate, method: string | symbol) {
+          if (method !== 'create') return Reflect.get(delegate, method) as unknown;
+          return async (args: Prisma.StudentCreateArgs) => {
+            await makeStudent(prisma, rival);
+            return delegate.create(args);
+          };
+        },
+      });
+    },
+  });
+}
+
+const sessionKeys = (ctx: Ctx) =>
+  Object.keys(ctx.redis.snapshot()).filter((key) => key.startsWith('session:'));
 
 describe('AuthService — a student signs in with a code', () => {
   it('signs in a student the roster holds, and returns tokens plus identity', async () => {
@@ -188,6 +212,45 @@ describe('AuthService — a student signs in with a code', () => {
     );
 
     assert.equal((await ctx.auth.requestStudentOtp(MOBILE)).sent, true);
+  });
+
+  /** The failure this prevents: a code spent on "That already exists" because the desk added the number mid sign-in. */
+  it('signs a first sign-in in to the account an admin made a moment before it', async () => {
+    const bus = new FakeEventBus();
+    const ctx = build(bus, {}, takenJustBefore({ mobile: MOBILE }));
+
+    const { identity } = await signIn(ctx, MOBILE);
+
+    const [held, ...others] = await prisma.student.findMany();
+    assert.equal(others.length, 0);
+    assert.equal(identity.id, held?.id);
+    assert.deepEqual(bus.of(DOMAIN_EVENTS.STUDENT_SIGNED_UP), []);
+    assert.deepEqual(ctx.metrics.authAttempts, ['ok']);
+  });
+
+  it('still refuses a suspended account reached by losing that race', async () => {
+    const ctx = build(new FakeEventBus(), {}, takenJustBefore({ mobile: MOBILE, isActive: false }));
+
+    await assert.rejects(() => signIn(ctx, MOBILE), failsWith(ErrorCodes.FORBIDDEN));
+
+    assert.deepEqual(ctx.metrics.authAttempts, ['deactivated']);
+    assert.deepEqual(sessionKeys(ctx), []);
+  });
+
+  it('leaves one account and one session when two first sign-ins land together', async () => {
+    const ctx = build();
+    await ctx.auth.requestStudentOtp(MOBILE);
+    const code = ctx.sender.lastCode;
+
+    const [won, lost] = await Promise.allSettled([
+      ctx.auth.verifyStudentOtp(MOBILE, code, NO_DEVICE),
+      ctx.auth.verifyStudentOtp(MOBILE, code, NO_DEVICE),
+    ]);
+
+    assert.equal(won.status, 'fulfilled');
+    assert.ok(lost.status === 'rejected' && failsWith(ErrorCodes.OTP_EXPIRED)(lost.reason));
+    assert.equal(await prisma.student.count(), 1);
+    assert.equal(sessionKeys(ctx).length, 1);
   });
 
   /** The guarantee the event must never take over. */

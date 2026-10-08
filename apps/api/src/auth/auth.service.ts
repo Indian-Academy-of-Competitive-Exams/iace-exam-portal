@@ -23,6 +23,7 @@ import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { type AuthenticatedUser } from '../common/security';
 import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
+import { isUniqueViolation } from '../common/prisma-errors';
 import { AUTH_OUTCOMES, MetricsService } from '../common/metrics/metrics.service';
 import { type DeviceContext } from './auth.types';
 
@@ -82,16 +83,11 @@ export class AuthService {
       throw error;
     }
 
-    const existing = await this.prisma.student.findFirst({
-      where: { mobile, deletedAt: null },
-      include: IDENTITY_INCLUDE,
-    });
-    if (existing && !existing.isActive) {
+    const student = (await this.liveStudent(mobile)) ?? (await this.signUp(mobile));
+    if (!student.isActive) {
       this.metrics.countAuthAttempt(AUTH_OUTCOMES.DEACTIVATED);
       throw new AppException(ErrorCodes.FORBIDDEN, DEACTIVATED_MESSAGE);
     }
-
-    const student = existing ?? (await this.signUp(mobile));
     this.metrics.countAuthAttempt(AUTH_OUTCOMES.OK);
 
     const identity = this.studentIdentity(student);
@@ -199,14 +195,28 @@ export class AuthService {
   // Internals
   // ==========================================================================
 
-  /** Signed themselves up, so they are outside the institute: ONLINE is a branch of ours. */
-  private async signUp(mobile: string): Promise<IdentityRow> {
-    const student = await this.prisma.student.create({
-      data: { mobile, studentType: STUDENT_TYPE.NON_IACE },
+  private liveStudent(mobile: string): Promise<IdentityRow | null> {
+    return this.prisma.student.findFirst({
+      where: { mobile, deletedAt: null },
       include: IDENTITY_INCLUDE,
     });
-    this.events.emit(DOMAIN_EVENTS.STUDENT_SIGNED_UP, { studentId: student.id });
-    return student;
+  }
+
+  /** Signed themselves up, so they are outside the institute: ONLINE is a branch of ours. */
+  private async signUp(mobile: string): Promise<IdentityRow> {
+    try {
+      const student = await this.prisma.student.create({
+        data: { mobile, studentType: STUDENT_TYPE.NON_IACE },
+        include: IDENTITY_INCLUDE,
+      });
+      this.events.emit(DOMAIN_EVENTS.STUDENT_SIGNED_UP, { studentId: student.id });
+      return student;
+    } catch (error) {
+      // The number was taken since the read and their code is spent: they get the account that won it.
+      const winner = isUniqueViolation(error) ? await this.liveStudent(mobile) : null;
+      if (!winner) throw error;
+      return winner;
+    }
   }
 
   private async issue(identity: AuthIdentity, device: DeviceContext): Promise<AuthTokens> {
