@@ -128,11 +128,17 @@ function readPush(data) {
 /** A tab already open is the one to bring forward; opening a second is how you lose a sitting. */
 async function openInApp(path) {
   const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const here = open.find((client) => new URL(client.url).origin === self.location.origin);
+  const ours = open.filter((client) => new URL(client.url).origin === self.location.origin);
+  const free = ours.find((client) => !EXAM_PATH.test(new URL(client.url).pathname));
 
-  if (here) {
-    await here.focus();
-    if ('navigate' in here) await here.navigate(path);
+  if (free) {
+    await free.focus();
+    if ('navigate' in free) await free.navigate(path);
+    return;
+  }
+  // Only a paper is open: it comes forward and stays where it is, because its clock is running.
+  if (ours[0]) {
+    await ours[0].focus();
     return;
   }
   await self.clients.openWindow(path);

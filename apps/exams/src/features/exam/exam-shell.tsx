@@ -33,14 +33,17 @@ export function ExamShell({
       // A sitting is not a document to copy from: neither skin lets the paper be selected.
       className="relative flex h-dvh select-none flex-col bg-exam-surface text-exam-ink"
     >
-      <Skin
-        view={view}
-        config={EXAM_TEMPLATE_CONFIG[template]}
-        onOpenCalculator={calculatorEnabled ? () => setCalculating(true) : undefined}
-      />
+      {/* Inert under the full-screen warning, or Tab and Space still answer the paper behind it. */}
+      <div inert={fullscreen.nagging} className="flex min-h-0 flex-1 flex-col">
+        <Skin
+          view={view}
+          config={EXAM_TEMPLATE_CONFIG[template]}
+          onOpenCalculator={calculatorEnabled ? () => setCalculating(true) : undefined}
+        />
 
-      {/* Mounted here, not in a skin, so a config that offers one cannot be drawn without it. */}
-      {calculating ? <Calculator onClose={() => setCalculating(false)} /> : null}
+        {/* Mounted here, not in a skin, so a config that offers one cannot be drawn without it. */}
+        {calculating ? <Calculator onClose={() => setCalculating(false)} /> : null}
+      </div>
 
       {fullscreen.nagging ? <Nag fullscreen={fullscreen} says={nagSays(fullscreen.exits)} /> : null}
 
@@ -69,7 +72,7 @@ function FullscreenNag({
       <div className="flex max-w-md flex-col gap-4">
         <Alert variant="danger">{says}</Alert>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={fullscreen.enter}>
+          <Button type="button" autoFocus onClick={fullscreen.enter}>
             Return to full screen
           </Button>
           <Button type="button" variant="ghost" onClick={fullscreen.ignore}>

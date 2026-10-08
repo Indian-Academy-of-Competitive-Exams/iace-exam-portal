@@ -14,7 +14,7 @@ export function RailwayFullscreenNag({
       <div className="rw-nag flex flex-col gap-5">
         <p>{says}</p>
         <div className="flex justify-end">
-          <button type="button" className="rw-nag-btn" onClick={fullscreen.enter}>
+          <button type="button" autoFocus className="rw-nag-btn" onClick={fullscreen.enter}>
             Return to full screen
           </button>
           <button type="button" className="rw-nag-btn" onClick={fullscreen.ignore}>

@@ -19,6 +19,11 @@ export function useLockedZoom(): void {
       if ((event.ctrlKey || event.metaKey) && ZOOM_KEYS.has(event.key)) event.preventDefault();
     };
 
+    // A touch pinch raises none of the events below, so this is the one refusal it reads.
+    const root = document.documentElement;
+    const touchAction = root.style.touchAction;
+    root.style.touchAction = 'pan-x pan-y';
+
     window.addEventListener('wheel', refuseWheelZoom, { passive: false });
     window.addEventListener('keydown', refuseKeyZoom);
     document.addEventListener('gesturestart', refuse);
@@ -26,6 +31,7 @@ export function useLockedZoom(): void {
     document.addEventListener('gestureend', refuse);
 
     return () => {
+      root.style.touchAction = touchAction;
       window.removeEventListener('wheel', refuseWheelZoom);
       window.removeEventListener('keydown', refuseKeyZoom);
       document.removeEventListener('gesturestart', refuse);
