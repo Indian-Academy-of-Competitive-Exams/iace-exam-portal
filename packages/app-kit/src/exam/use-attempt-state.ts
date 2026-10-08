@@ -9,6 +9,7 @@ import {
   AppException,
   ErrorCodes,
   isReviewState,
+  QUESTION_TIME_MAX_SEC,
   SAVE_BATCH_MAX,
   type AnswerChange,
   type AnswerState,
@@ -488,7 +489,7 @@ function changeFor(
     state: stateFor(option ?? null, marked),
     selectedOptionId: option ?? null,
     typedAnswer: null,
-    timeSpentSec: (held?.timeSpentSec ?? 0) + spentSec,
+    timeSpentSec: timeOn(held, spentSec),
     firstActionAt: held?.firstActionAt ?? seenAt,
   };
 }
@@ -509,10 +510,14 @@ function visitFor(
         : held.state,
     selectedOptionId: held?.selectedOptionId ?? null,
     typedAnswer: held?.typedAnswer ?? null,
-    timeSpentSec: (held?.timeSpentSec ?? 0) + spentSec,
+    timeSpentSec: timeOn(held, spentSec),
     firstActionAt: held?.firstActionAt ?? seenAt,
   };
 }
+
+/** One question's total, held to what a save accepts: past it every save carrying the change is refused. */
+const timeOn = (held: LiveAnswer | undefined, spentSec: number): number =>
+  Math.min(QUESTION_TIME_MAX_SEC, (held?.timeSpentSec ?? 0) + spentSec);
 
 /** The screen's guess. The server derives the truth from the same two facts and wins. */
 function stateFor(option: string | null, marked: boolean): AnswerState {

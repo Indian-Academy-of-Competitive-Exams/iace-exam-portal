@@ -2,7 +2,13 @@
  * Everything the server has not acknowledged, and the copy of it that outlives a reload.
  * No React: a plain object, so the hook above it is left with state, timers and promises.
  */
-import { SAVE_BATCH_MAX, type AnswerChange, type SectionProgress } from '@iace/contracts';
+import {
+  answerChangeSchema,
+  QUESTION_TIME_MAX_SEC,
+  SAVE_BATCH_MAX,
+  type AnswerChange,
+  type SectionProgress,
+} from '@iace/contracts';
 import { type KeyValueStorage } from '../token-store';
 
 /** What one save carries: answers capped where the contract caps them, and every section touched since. */
@@ -85,12 +91,23 @@ export function createPendingAnswers(storage: KeyValueStorage, key: string): Pen
   };
 }
 
-/** Undelivered answers outlive a reload here, because the map they sit in does not. */
+/** Undelivered answers outlive a reload here. Read as a save would read them: any other shape is nothing queued. */
 function storedIn(storage: KeyValueStorage, key: string): AnswerChange[] {
   try {
-    const held = storage.getItem(key);
-    return held === null ? [] : (JSON.parse(held) as AnswerChange[]);
+    const held: unknown = JSON.parse(storage.getItem(key) ?? '[]');
+    if (!Array.isArray(held)) return [];
+    return held.flatMap((stored: unknown) => {
+      const change = answerChangeSchema.safeParse(withinTimeCap(stored));
+      return change.success ? [change.data] : [];
+    });
   } catch {
     return [];
   }
+}
+
+/** A copy stored before the cap was kept may be past it: held to it here, or it is dropped with what no save would take. */
+function withinTimeCap(stored: unknown): unknown {
+  const spent = (stored as Partial<AnswerChange> | null)?.timeSpentSec;
+  if (typeof spent !== 'number') return stored;
+  return { ...(stored as AnswerChange), timeSpentSec: Math.min(spent, QUESTION_TIME_MAX_SEC) };
 }

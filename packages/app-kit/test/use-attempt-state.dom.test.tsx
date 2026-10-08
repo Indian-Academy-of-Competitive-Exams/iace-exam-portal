@@ -5,6 +5,7 @@ import {
   ANSWER_STATE,
   AppException,
   ErrorCodes,
+  QUESTION_TIME_MAX_SEC,
   SAVE_BATCH_MAX,
   saveAttemptStateSchema,
   type ExamClock,
@@ -1129,4 +1130,41 @@ test('an idle screen out of touch past the grace stops sending until the student
 
   assert.ok(whileInTouch >= 1, 'it said it was here while it could still be heard');
   assert.equal(calls.length, whileInTouch, 'and nothing once the grace had passed unanswered');
+});
+
+/** The failure this prevents: a device clock moved forward putting one change past the cap, so every save after it is refused. */
+test('time on one question stops at what a save accepts, however far the device clock jumps', async (t) => {
+  mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-01T05:00:00.000Z') });
+  const sent: SentAnswers[] = [];
+  const { result, unmount } = renderHook(() =>
+    useAttemptState('attempt-1', depsFor(apiThatSaves(sent)), true),
+  );
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+  const TWO_DAYS_MS = 2 * QUESTION_TIME_MAX_SEC * 1000;
+
+  act(() => result.current.open('q1'));
+  mock.timers.tick(TWO_DAYS_MS);
+  // Leaving banks the visit; answering banks the time with the answer. Both are past a day here.
+  act(() => result.current.open('q2'));
+  mock.timers.tick(TWO_DAYS_MS);
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-1' }));
+  await act(async () => void (await result.current.flush()));
+
+  const saved = saveAttemptStateSchema.safeParse(sent.at(-1));
+  assert.equal(saved.success, true, 'the save is one the server takes');
+  assert.deepEqual(
+    saved.data?.answers.map((change) => [change.questionId, change.timeSpentSec]),
+    [
+      ['q1', QUESTION_TIME_MAX_SEC],
+      ['q2', QUESTION_TIME_MAX_SEC],
+    ],
+  );
+  assert.equal(
+    result.current.answers.q1?.timeSpentSec,
+    QUESTION_TIME_MAX_SEC,
+    'and so is the screen',
+  );
 });

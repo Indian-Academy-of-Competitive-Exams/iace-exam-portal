@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ANSWER_STATE, SAVE_BATCH_MAX, type AnswerChange } from '@iace/contracts';
+import {
+  ANSWER_STATE,
+  QUESTION_TIME_MAX_SEC,
+  SAVE_BATCH_MAX,
+  type AnswerChange,
+} from '@iace/contracts';
 import { createPendingAnswers } from '../src/exam/pending-answers';
 import { fakeStorage } from './support/fake-storage';
 
@@ -85,4 +90,34 @@ test('what a save never delivered is read back from the store by the next queue'
 
   reloaded.clear();
   assert.equal(storage.getItem(KEY), null, 'a handed-in paper leaves nothing on the device');
+});
+
+/** The failure this prevents: a stored value of the wrong shape throwing on mount, so the exam screen never opens. */
+test('a stored value that is not a list of changes opens the paper with nothing queued', () => {
+  for (const held of ['{}', 'null', '"queued"', '7', 'not json', '[null, 3, {"questionId": 9}]']) {
+    const storage = fakeStorage();
+    storage.setItem(KEY, held);
+
+    const queue = queueOn(storage);
+
+    assert.deepEqual(queue.changes(), [], held);
+    assert.equal(queue.anyUnsent(), false, held);
+  }
+});
+
+/** The failure this prevents: one copy no save would take, queued beside the rest and refusing every save after it. */
+test('a stored list keeps the changes a save would take and drops the rest', () => {
+  const storage = fakeStorage();
+  storage.setItem(KEY, JSON.stringify([changeFor('q1', 'opt-1'), { questionId: 'q2' }]));
+
+  assert.deepEqual(queueOn(storage).changes(), [changeFor('q1', 'opt-1')]);
+});
+
+/** The failure this prevents: a copy stored before the cap was kept, read back and refusing every save from this device. */
+test('a stored change past the time cap is read back at the cap, neither dropped nor resent as it was', () => {
+  const storage = fakeStorage();
+  const over = { ...changeFor('q1', 'opt-1'), timeSpentSec: QUESTION_TIME_MAX_SEC * 2 };
+  storage.setItem(KEY, JSON.stringify([over]));
+
+  assert.deepEqual(queueOn(storage).changes(), [{ ...over, timeSpentSec: QUESTION_TIME_MAX_SEC }]);
 });
