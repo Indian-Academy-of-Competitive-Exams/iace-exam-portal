@@ -23,6 +23,8 @@ export interface FormDialogProps<TValues extends FieldValues> {
   submitLabel: string;
   /** Mid-request: the submit button spins, Cancel goes inert, and neither Esc nor the ✕ dismisses it. */
   loading?: boolean;
+  /** Holds the submit while something it depends on is missing; the dialog says what, the button does not. */
+  submitDisabled?: boolean;
   children: React.ReactNode;
 }
 
@@ -36,6 +38,7 @@ export function FormDialog<TValues extends FieldValues>({
   description,
   submitLabel,
   loading = false,
+  submitDisabled = false,
   children,
 }: Readonly<FormDialogProps<TValues>>) {
   const change = (next: boolean) => {
@@ -81,7 +84,7 @@ export function FormDialog<TValues extends FieldValues>({
             >
               Cancel
             </Button>
-            <Button type="submit" loading={loading}>
+            <Button type="submit" loading={loading} disabled={submitDisabled}>
               {submitLabel}
             </Button>
           </DialogFooter>

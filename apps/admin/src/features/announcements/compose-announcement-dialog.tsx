@@ -101,6 +101,9 @@ export function ComposeAnnouncementDialog({
     enabled: open,
   });
 
+  // Nothing goes out to a cohort nobody has been shown the size of.
+  const counted = preview.data !== undefined;
+
   const send = useMutation({
     meta: { fields: COMPOSE_FIELDS },
     mutationFn: (values: ComposeForm) => api.admin.announcements.send(values),
@@ -121,10 +124,11 @@ export function ComposeAnnouncementDialog({
       open={open}
       onOpenChange={onOpenChange}
       form={form}
-      onSubmit={(values) => send.mutate(values)}
+      onSubmit={(values) => counted && send.mutate(values)}
       title={draft ? 'Send again' : 'New announcement'}
       submitLabel="Send"
       loading={send.isPending}
+      submitDisabled={!counted}
     >
       <FormField form={form} name="title" label="Title">
         {(control) => (

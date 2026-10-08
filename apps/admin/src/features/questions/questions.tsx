@@ -237,6 +237,8 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
   const queryClient = useQueryClient();
 
   const isArchived = question.status === QUESTION_STATUS.ARCHIVED;
+  // The bank refuses these three while the question is still being written for a section.
+  const itsSections = question.writtenFor?.inProgress ?? false;
 
   const settle = () => {
     setAsking(null);
@@ -271,23 +273,27 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
 
         {canWrite ? (
           <>
-            <DropdownMenuItem asChild>
-              <Link to={ROUTES.QUESTION_EDIT(question.id)}>
-                <Pencil aria-hidden />
-                Edit
-              </Link>
-            </DropdownMenuItem>
+            {itsSections ? null : (
+              <DropdownMenuItem asChild>
+                <Link to={ROUTES.QUESTION_EDIT(question.id)}>
+                  <Pencil aria-hidden />
+                  Edit
+                </Link>
+              </DropdownMenuItem>
+            )}
 
-            <DropdownMenuItem
-              destructive={!isArchived}
-              disabled={act.isPending}
-              onSelect={() => ask(isArchived ? 'UNARCHIVE' : 'ARCHIVE')}
-            >
-              {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
-              {isArchived ? 'Unarchive' : 'Archive'}
-            </DropdownMenuItem>
+            {itsSections && !isArchived ? null : (
+              <DropdownMenuItem
+                destructive={!isArchived}
+                disabled={act.isPending}
+                onSelect={() => ask(isArchived ? 'UNARCHIVE' : 'ARCHIVE')}
+              >
+                {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
+                {isArchived ? 'Unarchive' : 'Archive'}
+              </DropdownMenuItem>
+            )}
 
-            {question.inUse ? null : (
+            {question.inUse || itsSections ? null : (
               <DropdownMenuItem destructive disabled={act.isPending} onSelect={() => ask('DELETE')}>
                 <Trash2 aria-hidden />
                 Delete
