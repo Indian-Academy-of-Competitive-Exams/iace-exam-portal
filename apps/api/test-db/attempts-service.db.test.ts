@@ -16,7 +16,7 @@ import {
   type TestScope,
   type TestStatus,
 } from '@iace/contracts';
-import type { AccessResolverService } from '../src/access';
+import { AccessResolverService } from '../src/access/access-resolver.service';
 import { AttemptResolutionService } from '../src/attempts/attempt-resolution.service';
 import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
@@ -370,6 +370,30 @@ describe('AttemptsService — a reclaim names its sitting', () => {
 
     await assert.rejects(
       () => service.start(student, paper.testId, { resume: handedIn.id }),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED,
+    );
+    assert.equal(await sittingsOf(paper), 1);
+  });
+
+  /** The failure this prevents: a card's Resume, tapped after a hand-in elsewhere, opening a fresh paper. */
+  it('refuses the sitting the catalog named for Resume once it is handed in, and starts no other', async () => {
+    const { service, student, paper } = await hall();
+    await prisma.studentGrant.create({
+      data: { studentId: student, testSeriesId: paper.catalog.testSeriesId },
+    });
+    const live = await running(paper, student);
+    const catalog = await new AccessResolverService(prisma, new FakeRedis().asService()).catalog(
+      student,
+    );
+    const named = catalog.series.flatMap((row) => row.tests).find((row) => row.id === paper.testId);
+    assert.equal(named?.liveAttemptId, live.id);
+    await prisma.attempt.update({
+      where: { id: live.id },
+      data: { status: ATTEMPT_STATUS.SUBMITTED, submittedAt: new Date() },
+    });
+
+    await assert.rejects(
+      () => service.start(student, paper.testId, { resume: live.id }),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED,
     );
     assert.equal(await sittingsOf(paper), 1);

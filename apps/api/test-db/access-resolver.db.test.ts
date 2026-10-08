@@ -9,6 +9,7 @@ import {
   STUDENT_SERIES_SOURCE,
   TEST_SERIES_KIND,
   TEST_SERIES_KINDS,
+  TEST_SHUT,
   TEST_STATUS,
   testSeriesListQuerySchema,
   type AttemptStatus,
@@ -699,6 +700,107 @@ describe('AccessResolverService — a series that unlocks in order', () => {
       gated,
       tests.map((testId) => said.get(testId)),
     );
+  });
+});
+
+describe('AccessResolverService — why a test is shut', () => {
+  const LATER = new Date('2026-07-01T00:00:00.000Z');
+
+  /** An in-order series — one open test, one waiting its turn, one waiting AND not yet open — as each student sees it. */
+  const mixed = async (...students: StudentOverrides[]) => {
+    const at = await place();
+    const seriesId = await series(at, { sequentialTests: true });
+    await testIn(at, seriesId, 1);
+    await testIn(at, seriesId, 2);
+    await testIn(at, seriesId, 3, { opensAt: LATER });
+    const seen = [];
+    for (const over of students) {
+      const catalog = await resolverOn().catalog(await studentAt(at, over), NOW);
+      seen.push(catalog.series[0]?.tests ?? []);
+    }
+    return seen;
+  };
+
+  it('names the turn for a test behind an unsat one, and the opening where both hold it', async () => {
+    const [tests = []] = await mixed({});
+
+    assert.deepEqual(
+      tests.map((test) => test.shut),
+      [null, TEST_SHUT.TURN, TEST_SHUT.NOT_OPEN],
+    );
+  });
+
+  /** THE failure this prevents: a held student told a paper is waiting its turn, or has not opened. */
+  it('names the hold on every test of a held student, whatever else would shut it', async () => {
+    const [tests = []] = await mixed({ isTestBlocked: true });
+
+    assert.deepEqual(
+      tests.map((test) => test.shut),
+      [TEST_SHUT.HOLD, TEST_SHUT.HOLD, TEST_SHUT.HOLD],
+    );
+  });
+
+  it('names the opening on a scheduled test outside any order', async () => {
+    const at = await place();
+    await testIn(at, await series(at), 1, { opensAt: LATER });
+
+    const test = (await resolverOn().catalog(await studentAt(at), NOW)).series[0]?.tests[0];
+
+    assert.equal(test?.shut, TEST_SHUT.NOT_OPEN);
+  });
+
+  /** A reason is added to the answer, never a second answer: a test is startable exactly when nothing shuts it. */
+  it('leaves every test startable exactly when it names no reason', async () => {
+    const tests = (await mixed({}, { isTestBlocked: true })).flat();
+
+    assert.deepEqual(
+      tests.map((test) => test.canStart),
+      [true, false, false, false, false, false],
+    );
+    assert.deepEqual(
+      tests.map((test) => test.canStart),
+      tests.map((test) => test.shut === null),
+    );
+  });
+});
+
+describe('AccessResolverService — the sitting Resume reopens', () => {
+  const sittingOf = (student: string, testId: string, attemptNo: number, status: AttemptStatus) =>
+    prisma.attempt.create({
+      data: {
+        id: uid(),
+        testId,
+        studentId: student,
+        attemptNo,
+        isGraded: attemptNo === 1,
+        status,
+        startedAt: NOW,
+        endsAt: new Date(NOW.getTime() + HOUR_MS),
+        shuffleSeed: 1,
+        ...(status === ATTEMPT_STATUS.IN_PROGRESS ? {} : { submittedAt: NOW }),
+      },
+      select: { id: true },
+    });
+
+  const listed = async (student: string) =>
+    (await resolverOn().catalog(student, NOW)).series[0]?.tests[0];
+
+  it('names the running sitting, and a retake over the sitting it follows', async () => {
+    const { student, testId } = await reachable();
+    await sittingOf(student, testId, 1, ATTEMPT_STATUS.EVALUATED);
+    const retake = await sittingOf(student, testId, 2, ATTEMPT_STATUS.IN_PROGRESS);
+
+    assert.equal((await listed(student))?.liveAttemptId, retake.id);
+  });
+
+  /** THE failure this prevents: a Resume naming a sitting that is over, or none where one is expected. */
+  it('names nothing for a test never opened or already handed in', async () => {
+    const { student, testId } = await reachable();
+    assert.equal((await listed(student))?.liveAttemptId, null);
+
+    await sittingOf(student, testId, 1, ATTEMPT_STATUS.SUBMITTED);
+
+    assert.equal((await listed(student))?.liveAttemptId, null);
   });
 });
 

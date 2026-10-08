@@ -12,8 +12,10 @@ import {
   type StudentCatalogTest,
   type StudentSeriesSource,
   TEST_SERIES_KIND,
+  TEST_SHUT,
   TEST_STATUS,
   type TestSeriesKind,
+  type TestShut,
   isSat,
   testIsOpen,
   scopedSections,
@@ -58,6 +60,8 @@ const SHARED_SELECT = {
           languageMode: true,
           languages: true,
           navigation: true,
+          timerTemplate: true,
+          defaultTestUi: true,
           sections: {
             select: {
               id: true,
@@ -112,7 +116,7 @@ const STANDING_FACTS = {
   // A voided sitting did not happen: it must not hide the real one under it.
   attempts: {
     where: { status: { not: ATTEMPT_STATUS.VOIDED } },
-    select: { testId: true, status: true },
+    select: { id: true, testId: true, status: true },
     orderBy: { attemptNo: 'asc' },
   },
 } as const satisfies Prisma.StudentSelect;
@@ -127,12 +131,12 @@ interface Reach {
 }
 
 interface Standing extends Reach {
-  sittings: ReadonlyMap<string, AttemptStatus>;
+  sittings: ReadonlyMap<string, { id: string; status: AttemptStatus }>;
   everSat: ReadonlySet<string>;
 }
 
-/** The catalog row before the clock is read: `canStart` is the one thing derived per request. */
-type ResolvedTest = Omit<StudentCatalogTest, 'canStart'>;
+/** The catalog row before the clock is read: `canStart` and its reason are derived per request. */
+type ResolvedTest = Omit<StudentCatalogTest, 'canStart' | 'shut'>;
 
 type ResolvedSeries = Omit<StudentCatalogSeries, 'tests'> & { tests: ResolvedTest[] };
 
@@ -286,7 +290,7 @@ export class AccessResolverService {
     return {
       ...reachFrom(student),
       // They arrive in attempt order and the last write wins, so the latest sitting is what shows.
-      sittings: new Map(student.attempts.map((row) => [row.testId, row.status])),
+      sittings: new Map(student.attempts.map((row) => [row.testId, row])),
       // A retake must not re-lock the papers behind it, so in-order reads this and not the newest sitting.
       everSat: new Set(student.attempts.flatMap((row) => (isSat(row.status) ? [row.testId] : []))),
     };
@@ -486,6 +490,7 @@ function toResolvedTest(test: ReachableTest, standing: Standing): ResolvedTest {
   const scopeRef = scopeRefOf(test);
   // A scoped test is its own sections' worth, and the catalog is what a student reads first.
   const scoped = scopedSections(test.baseConfig.sections, test.scope, scopeRef);
+  const latest = standing.sittings.get(test.id);
 
   return {
     id: test.id,
@@ -495,7 +500,8 @@ function toResolvedTest(test: ReachableTest, standing: Standing): ResolvedTest {
     totalQuestions: scopedQuestionCount(test.baseConfig.sections, test.scope, scopeRef),
     order: test.seriesOrder,
     opensAt: opensFor(test, standing.programs)?.toISOString() ?? null,
-    attemptStatus: standing.sittings.get(test.id) ?? null,
+    attemptStatus: latest?.status ?? null,
+    liveAttemptId: latest?.status === ATTEMPT_STATUS.IN_PROGRESS ? latest.id : null,
   };
 }
 
@@ -509,7 +515,7 @@ function project(series: ResolvedSeries, standing: Standing, now: Date): Student
   return {
     ...series,
     tests: series.tests.map((test, index) =>
-      projectTest(test, !standing.isTestBlocked && itsTurn(index), now),
+      projectTest(test, standing.isTestBlocked, itsTurn(index), now),
     ),
   };
 }
@@ -518,9 +524,22 @@ function project(series: ResolvedSeries, standing: Standing, now: Date): Student
 const NONE_WAITING = -1;
 
 /** The clock is read HERE and never held, so a test opens on time without anything bumping a counter. */
-function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
+function projectTest(
+  test: ResolvedTest,
+  held: boolean,
+  itsTurn: boolean,
+  now: Date,
+): StudentCatalogTest {
+  const shut = shutBy(held, testIsOpen(test.opensAt, now), itsTurn);
   // A sat test stays startable: a paper may always be sat again, and Done is only where it sorts.
-  return { ...test, canStart: reachable && testIsOpen(test.opensAt, now) };
+  return { ...test, canStart: shut === null, shut };
+}
+
+/** The ONE fact that shuts a test, the most lasting first; null is startable, which needs all three clear. */
+function shutBy(held: boolean, open: boolean, itsTurn: boolean): TestShut | null {
+  if (held) return TEST_SHUT.HOLD;
+  if (!open) return TEST_SHUT.NOT_OPEN;
+  return itsTurn ? null : TEST_SHUT.TURN;
 }
 
 /** Why a sitting may not begin: not open YET is a different fact from having no access at all. */

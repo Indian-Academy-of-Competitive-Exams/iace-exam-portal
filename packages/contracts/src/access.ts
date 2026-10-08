@@ -397,6 +397,11 @@ export const OPENING_HAS_PASSED =
 // `canStart` is derived from the clock on every read rather than cached.
 // ============================================================================
 
+/** The one fact keeping a test shut for this student, the most lasting first. */
+export const TEST_SHUT = { HOLD: 'HOLD', NOT_OPEN: 'NOT_OPEN', TURN: 'TURN' } as const;
+const testShutSchema = z.enum(TEST_SHUT);
+export type TestShut = z.infer<typeof testShutSchema>;
+
 const studentCatalogTestSchema = z.object({
   id: z.string(),
   title: z.string().nullable(),
@@ -410,7 +415,11 @@ const studentCatalogTestSchema = z.object({
   opensAt: z.string().nullable(),
   /** Where this student has got to. Null is never opened; IN_PROGRESS is what Resume reopens. */
   attemptStatus: attemptStatusSchema.nullable(),
+  /** The sitting Resume reopens, named so one since handed in is refused and never begun afresh. */
+  liveAttemptId: z.string().nullable().optional(),
   canStart: z.boolean(),
+  /** Why `canStart` is false, and null when it is true. Absent from a server older than the field. */
+  shut: testShutSchema.nullable().optional(),
 });
 export type StudentCatalogTest = z.infer<typeof studentCatalogTestSchema>;
 

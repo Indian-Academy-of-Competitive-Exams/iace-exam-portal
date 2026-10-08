@@ -7,16 +7,21 @@ import {
   ErrorCodes,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
+  TEST_STATUS,
+  TEST_UI,
   TIMER_TEMPLATE,
   type LanguageCode,
   type LanguageMode,
   servedQuestions,
+  type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
+import { AccessResolverService } from '../src/access/access-resolver.service';
 import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { FakeRedis } from '../test/support/fakes';
 import {
   makePaper,
   makeStudent,
@@ -167,6 +172,52 @@ describe('AttemptPaperService — what a candidate is allowed to see', () => {
     for (const leak of ['answerKey', 'marksAwarded', 'solution', 'correctCount']) {
       assert.ok(!serialized.includes(leak), `${leak} must not reach a candidate`);
     }
+  });
+});
+
+describe('AttemptPaperService — the brief read before the clock starts', () => {
+  /** A test the student reaches, on one section that carries a duration, configured as given. */
+  const briefOf = async (config: { timerTemplate?: TimerTemplate; defaultTestUi?: TestUi }) => {
+    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: [] });
+    // The section's clock first: a SECTIONAL_LOCKED config refuses a section without one.
+    await prisma.baseConfigSection.update({
+      where: { id: paper.sectionIds[0] ?? '' },
+      data: { durationSec: 1200 },
+    });
+    await prisma.baseConfig.update({ where: { id: paper.catalog.baseConfigId }, data: config });
+    await prisma.test.update({ where: { id: paper.testId }, data: { status: TEST_STATUS.ACTIVE } });
+    const student = (await makeStudent(prisma)).id;
+    await prisma.studentGrant.create({
+      data: { studentId: student, testSeriesId: paper.catalog.testSeriesId },
+    });
+    const briefs = new AttemptPaperService(
+      prisma,
+      new AccessResolverService(prisma, new FakeRedis().asService()),
+      noStorage(),
+      new PaperSheetService(prisma),
+    );
+    return briefs.brief(student, paper.testId);
+  };
+
+  /** THE failure this prevents: a one-clock paper told its sections lock, because each carries a duration. */
+  it('names one clock for a paper whose sections still carry durations', async () => {
+    const brief = await briefOf({});
+
+    assert.equal(brief.timerTemplate, TIMER_TEMPLATE.COMPOSITE_FREE);
+    assert.equal(brief.sections[0]?.durationSec, 1200);
+  });
+
+  /** THE failure this prevents: a bubble sheet taught Save & next, Mark for review and Clear response. */
+  it('names a sectional clock and a bubble sheet as the configuration sets them', async () => {
+    const brief = await briefOf({
+      timerTemplate: TIMER_TEMPLATE.SECTIONAL_LOCKED,
+      defaultTestUi: TEST_UI.OMR,
+    });
+
+    assert.deepEqual(
+      [brief.timerTemplate, brief.testUi],
+      [TIMER_TEMPLATE.SECTIONAL_LOCKED, TEST_UI.OMR],
+    );
   });
 });
 

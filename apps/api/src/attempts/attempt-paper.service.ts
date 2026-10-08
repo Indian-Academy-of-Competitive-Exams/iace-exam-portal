@@ -120,6 +120,8 @@ export class AttemptPaperService {
       title: test.title,
       examTemplate: test.examTemplate,
       navigation: test.baseConfig.navigation,
+      timerTemplate: test.baseConfig.timerTemplate,
+      testUi: test.baseConfig.defaultTestUi,
       durationSec: scopedDurationSec(
         test.baseConfig.sections,
         test.baseConfig,

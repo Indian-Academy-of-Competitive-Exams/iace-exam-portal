@@ -234,6 +234,10 @@ export const examBriefSchema = z.object({
   examTemplate: examTemplateSchema,
   /** Read before the clock starts: a forward-only paper is a different set of rules to teach. */
   navigation: navigationPolicySchema,
+  /** Whether sections lock on clocks of their own: a duration on a section does not say so. */
+  timerTemplate: timerTemplateSchema.optional(),
+  /** How the paper is answered, so a bubble sheet is not taught the CBT's buttons. */
+  testUi: testUiSchema.optional(),
   durationSec: z.number().int(),
   totalQuestions: z.number().int(),
   languageMode: languageModeSchema,
