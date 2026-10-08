@@ -66,12 +66,18 @@ export class AnnouncementsController {
   }
 
   @RequiresFeature(FEATURE_KEYS.NOTIFICATION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Audit(AUDIT_FEATURE.ANNOUNCEMENT, AUDIT_ACTION.CREATE)
   @Post()
-  send(
+  async send(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodBody(createAnnouncementSchema)) body: CreateAnnouncementBody,
   ): Promise<Announcement> {
-    return this.announcements.send(body, user.id);
+    const sent = await this.announcements.send(body, user.id);
+    this.auditContext.setChanged({
+      recipients: { from: null, to: sent.recipientCount },
+      paidChannels: { from: null, to: sent.paidChannels },
+    });
+    return sent;
   }
 
   @RequiresFeature(FEATURE_KEYS.NOTIFICATION_MANAGEMENT, PERMISSION_LEVELS.READ)
