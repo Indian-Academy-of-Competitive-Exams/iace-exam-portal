@@ -41,6 +41,13 @@ export const savedOffer = (detail: OfferSource): OfferDraft => ({
   version: detail.version,
 });
 
+/** A sat test's opening no longer moves, so a draft still holding a new one gives it back. */
+export function heldOffer(saved: OfferDraft, draft: OfferDraft | null, sat: boolean): OfferDraft {
+  if (!draft) return saved;
+  if (!sat) return draft;
+  return { ...draft, schedule: { ...draft.schedule, opensAt: saved.schedule.opensAt } };
+}
+
 export function offerChangesOf(saved: OfferDraft, held: OfferDraft): OfferChanges {
   const schedule = changesOf(saved.schedule, held.schedule);
   const offering = held.offered && !saved.offered;

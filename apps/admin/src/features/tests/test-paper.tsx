@@ -106,7 +106,7 @@ export function TestPaperPage() {
     );
   }
 
-  if (test.error || paper.error || !test.data || !paper.data) {
+  if (!test.data || !paper.data) {
     const reload = () => Promise.all([test.refetch(), paper.refetch()]);
     return (
       <EmptyState
@@ -139,7 +139,9 @@ function TestPaperScreen({
   const [poolOpen, setPoolOpen] = useState(false);
   // Sticky for the life of the screen: the rebuild is delayed and deduped, so there is nothing to poll.
   const [rescoring, setRescoring] = useState(false);
-  const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const { can, identity } = useAuth();
+  const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const elsewhere = detail.editingBy?.adminId === identity?.id ? null : detail.editingBy;
 
   const held = useMemo(() => {
     const counts = new Map<string, number>();
@@ -238,7 +240,9 @@ function TestPaperScreen({
 
   // The screen owns these, not any one section, so they ride the toolbar above the strip.
   const banners =
-    offered || rescoring ? <PaperBanners frozen={offered} rescoring={rescoring} /> : undefined;
+    offered || rescoring || elsewhere ? (
+      <PaperBanners frozen={offered} rescoring={rescoring} elsewhere={elsewhere} />
+    ) : undefined;
 
   const stripAction = (
     <StripActions
@@ -279,10 +283,10 @@ function TestPaperScreen({
             onPaper={paper.sections.find((row) => row.baseConfigSectionId === section.id)}
             held={onThePaper}
             editable={canEditPaper && !framed}
+            offered={offered}
             disposable={canDispose}
             typist={holderOf(assignments, section.id, ASSIGNMENT_ROLES.TYPIST) ?? null}
             reader={holderOf(assignments, section.id, ASSIGNMENT_ROLES.PROOFREADER) ?? null}
-            attemptCount={detail.attemptCount}
             onRescoring={() => setRescoring(true)}
             poolDirty={draft !== null}
             onChanged={refresh}
@@ -296,9 +300,19 @@ function TestPaperScreen({
 }
 
 /** What the screen says about the paper as a whole, above the section strip. */
-function PaperBanners({ frozen, rescoring }: Readonly<{ frozen: boolean; rescoring: boolean }>) {
+function PaperBanners({
+  frozen,
+  rescoring,
+  elsewhere,
+}: Readonly<{ frozen: boolean; rescoring: boolean; elsewhere: TestDetail['editingBy'] }>) {
   return (
     <div className="flex flex-col gap-4 pb-4">
+      {elsewhere ? (
+        <Alert variant="warning">
+          {elsewhere.fullName ?? 'Another admin'} is editing this test. Their changes have to land
+          first.
+        </Alert>
+      ) : null}
       {frozen ? <Alert variant="info">{PAPER_IS_FROZEN}</Alert> : null}
       {rescoring ? <Alert variant="info">{RE_SCORING_RUNS}</Alert> : null}
     </div>
@@ -417,8 +431,8 @@ function PaperSection({
   onPaper,
   held,
   editable,
+  offered,
   disposable,
-  attemptCount,
   poolDirty,
   onChanged,
   onRescoring,
@@ -435,9 +449,10 @@ function PaperSection({
   /** Every question the whole paper holds, since one sits on it once wherever it was put. */
   held: ReadonlySet<string>;
   editable: boolean;
+  /** An offered paper is read as it went out, whoever still held a section of it. */
+  offered: boolean;
   /** An offered paper's one permitted change, and only for somebody who may write tests. */
   disposable: boolean;
-  attemptCount: number;
   /** Both writes draw from the stored pool, so an unsaved one has to stop them. */
   poolDirty: boolean;
   onChanged: (next: TestPaper) => Promise<void>;
@@ -502,7 +517,7 @@ function PaperSection({
   ) : null;
 
   // A typed section reaches its owner when its reader releases it, and not a question before.
-  if (framed && !released) {
+  if (framed && !released && !offered) {
     return <Alert variant="info">{whereTypedWorkIs(typist, reader)}</Alert>;
   }
 
@@ -547,7 +562,7 @@ function PaperSection({
           rows={rows}
           spec={spec}
           editable={picking}
-          disposition={disposable ? { attemptCount, onRescoring } : undefined}
+          disposition={disposable ? { onRescoring } : undefined}
           action={
             <>
               {fillAction}

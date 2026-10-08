@@ -89,7 +89,10 @@ export function TestAnalyticsPage() {
     queryFn: () => api.admin.tests.analytics(id),
     refetchInterval: (query) =>
       sync !== null && !hasLanded(sync, query.state.data?.summary) ? ANALYTICS_SYNC_POLL_MS : false,
+    // A sync is asked for and walked away from, so it is watched from a hidden tab too.
+    refetchIntervalInBackground: true,
   });
+  const { refetch } = analytics;
 
   const resync = useMutation({
     mutationFn: () => api.admin.tests.resyncAnalytics(id),
@@ -110,10 +113,11 @@ export function TestAnalyticsPage() {
     if (sync === null) return;
     const giveUp = setTimeout(() => {
       setSync(null);
-      toast.info('Still recalculating. The figures change here once it finishes.');
+      void refetch();
+      toast.info('Still recalculating. Reload this page for the new figures.');
     }, ANALYTICS_SYNC_MAX_MS);
     return () => clearTimeout(giveUp);
-  }, [sync]);
+  }, [sync, refetch]);
 
   if (analytics.isPending) {
     return (
@@ -125,7 +129,7 @@ export function TestAnalyticsPage() {
       </PageFrame>
     );
   }
-  if (analytics.error || !analytics.data) {
+  if (!analytics.data) {
     return (
       <PageFrame>
         <EmptyState

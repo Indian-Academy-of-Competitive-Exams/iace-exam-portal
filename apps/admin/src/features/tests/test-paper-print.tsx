@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
 import {
   LANGUAGE_LABELS,
@@ -93,6 +93,7 @@ export function TestPaperPrintPage() {
     // Each read of a whole paper is logged against the reader, so it is never read again unasked.
     staleTime: Infinity,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 
   const filters = paperFilters(paper.data?.available ?? [], mayPrintKey);
@@ -127,7 +128,8 @@ export function TestPaperPrintPage() {
             <Button
               size="sm"
               icon={<Printer aria-hidden />}
-              disabled={!paper.data || paper.data.questions.length === 0}
+              // The sheet of the filters before these is still on screen, and is not the one asked for.
+              disabled={!paper.data || paper.isPlaceholderData || paper.data.questions.length === 0}
               onClick={() => sheet.current && printElement(sheet.current, title)}
             >
               Print

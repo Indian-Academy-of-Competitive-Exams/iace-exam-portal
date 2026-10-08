@@ -3,6 +3,7 @@ import type { TestDetail } from '@iace/contracts';
 import {
   NONE_PASSED,
   anyPassed,
+  heldOffer,
   offerChangesOf,
   passedOpenings,
   savedOffer,
@@ -23,7 +24,7 @@ export function useOfferDraft(detail: TestDetail | null) {
   const [checkedAt, setCheckedAt] = useState(() => Date.now());
 
   const saved = detail ? savedOffer(detail) : null;
-  const held = draft ?? saved;
+  const held = detail && saved ? heldOffer(saved, draft, detail.attemptCount > 0) : null;
   const changes = saved && held ? offerChangesOf(saved, held) : null;
   const passed = saved && held ? passedOpenings(saved, held, new Date(checkedAt)) : NONE_PASSED;
 

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DISPOSITION_REASON_MAX,
   PAPER_QUESTION_STATUS,
   type PaperQuestionStatus,
   type PaperRow,
+  type TestDetail,
   type TestPaper,
 } from '@iace/contracts';
 import {
@@ -15,9 +16,11 @@ import {
   RowActions,
   Textarea,
   plural,
+  toast,
   type BadgeProps,
 } from '@iace/ui';
 import { api } from '../../lib/api';
+import { testQueryKey } from '../../lib/constants';
 
 /** What a finalized paper's question is worth now — the only change a frozen paper allows. */
 
@@ -76,14 +79,12 @@ function consequenceOf(status: PaperQuestionStatus, attemptCount: number): strin
 export function PaperDisposition({
   testId,
   row,
-  attemptCount,
   onChanged,
   onRescoring,
 }: Readonly<{
   testId: string;
   row: PaperRow;
-  /** Every sitting on the test, for the confirm to name what it is about to move. */
-  attemptCount: number;
+  /** Re-reads the test as well as the paper, which is where the count after the save comes from. */
   onChanged: (next: TestPaper) => Promise<void>;
   /** Raised only where sittings exist to re-score, so the screen never claims work nobody queued. */
   onRescoring: () => void;
@@ -91,6 +92,17 @@ export function PaperDisposition({
   const [pending, setPending] = useState<PaperQuestionStatus | null>(null);
   const [reason, setReason] = useState('');
   const [missing, setMissing] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Read again as the dialog opens: the screen's own count is as old as the page.
+  const sittings = useQuery({
+    queryKey: testQueryKey(testId),
+    queryFn: () => api.admin.tests.detail(testId),
+    enabled: pending !== null,
+    staleTime: 0,
+    select: (detail) => detail.attemptCount,
+  });
+  const counted = sittings.isSuccess && !sittings.isFetching;
 
   const close = () => {
     setPending(null);
@@ -99,15 +111,14 @@ export function PaperDisposition({
   };
 
   const set = useMutation({
-    meta: {
-      success: attemptCount > 0 ? 'Saved. Re-scoring runs in the background.' : 'Saved.',
-    },
     mutationFn: (status: PaperQuestionStatus) =>
       api.admin.tests.setPaperQuestionStatus(testId, row.id, { status, reason }),
     onSuccess: async (next) => {
       close();
-      if (attemptCount > 0) onRescoring();
       await onChanged(next);
+      const sat = queryClient.getQueryData<TestDetail>(testQueryKey(testId))?.attemptCount ?? 0;
+      if (sat > 0) onRescoring();
+      toast.success(sat > 0 ? 'Saved. Re-scoring runs in the background.' : 'Saved.');
     },
   });
 
@@ -135,9 +146,9 @@ export function PaperDisposition({
           }}
           destructive
           title={DISPOSITION_TITLE[pending](row.order)}
-          description={consequenceOf(pending, attemptCount)}
+          description={counted ? consequenceOf(pending, sittings.data) : DISPOSITION_PAYS[pending]}
           confirmLabel={DISPOSITION_ACTION[pending]}
-          loading={set.isPending}
+          loading={set.isPending || sittings.isFetching}
           onConfirm={() => (reason.trim() === '' ? setMissing(true) : set.mutate(pending))}
         >
           <Field

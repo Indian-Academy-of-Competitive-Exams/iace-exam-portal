@@ -171,7 +171,7 @@ export function AssignStep({
 
   if (detail.paperSource === null) return <SourceDialog testId={detail.id} />;
 
-  if (assignments.isError) {
+  if (assignments.isLoadingError) {
     return (
       <FormSection title="Assignments">
         <EmptyState

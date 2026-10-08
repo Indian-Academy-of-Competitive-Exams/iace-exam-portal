@@ -42,8 +42,6 @@ function refusalOf(stranded: Readonly<Record<string, PickRefusal>>, questionId: 
 
 /** What the disposition menu needs beyond the row itself. Absent where nothing may be disposed. */
 export interface PaperDispositionSpec {
-  /** Every sitting on the test, for the confirm to name what it is about to move. */
-  attemptCount: number;
   onRescoring: () => void;
 }
 

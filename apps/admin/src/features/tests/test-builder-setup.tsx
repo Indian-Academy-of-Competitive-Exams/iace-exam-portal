@@ -102,18 +102,22 @@ function Blueprint({
     form.setValue('testSeriesId', series.id, DIRTY);
     form.setValue('testSeriesName', series.name, DIRTY);
   };
+  // The series a test is being built in has a locked picker, so one dropped could not be chosen back.
+  const dropSeries = () => {
+    if (!fromSeries) pickSeries(NO_SERIES);
+  };
 
   /** A cascade: a stage belongs to one exam, and both a configuration and a series to one stage. */
   const pickExam = (value: string) => {
     form.setValue('examId', value, DIRTY);
     form.setValue('examStageId', '', DIRTY);
     form.setValue('baseConfigId', '', DIRTY);
-    pickSeries(NO_SERIES);
+    dropSeries();
   };
   const pickStage = (value: string) => {
     form.setValue('examStageId', value, DIRTY);
     form.setValue('baseConfigId', '', DIRTY);
-    pickSeries(NO_SERIES);
+    dropSeries();
   };
 
   return (

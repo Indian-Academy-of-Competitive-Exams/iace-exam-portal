@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { TEST_STATUS } from '@iace/contracts';
 import {
   anyPassed,
+  heldOffer,
   offerChangesOf,
   offeringBodyOf,
   passedOpenings,
@@ -71,6 +72,28 @@ describe('the switch on the series test list', () => {
     const stamped = { ...live, opensAt: '2026-09-11T12:30:45.123Z' };
 
     assert.equal(switchedOffering(stamped, false).opensAt, '2026-09-11T12:30:00.000Z');
+  });
+});
+
+describe('the offer the step holds', () => {
+  const saved = draftTest({ schedule: { opensAt: '2026-09-12T10:00', programs: [] } });
+  const draft = draftTest({
+    schedule: { opensAt: '2026-09-14T10:00', programs: [] },
+    offered: true,
+  });
+
+  it('is the draft while nobody has sat the test, and the saved test with no draft', () => {
+    assert.equal(heldOffer(saved, draft, false), draft);
+    assert.equal(heldOffer(saved, null, true), saved);
+  });
+
+  /** The failure this prevents: Done sending a refused opening again from a field that can no longer be edited. */
+  it('gives a new opening back once the test is sat, and keeps the rest of the draft', () => {
+    const held = heldOffer(saved, draft, true);
+
+    assert.equal(held.schedule.opensAt, saved.schedule.opensAt);
+    assert.equal(offerChangesOf(saved, held).schedule.opening, false);
+    assert.equal(held.offered, true);
   });
 });
 

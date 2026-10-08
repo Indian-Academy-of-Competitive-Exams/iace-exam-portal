@@ -108,7 +108,7 @@ export function TestBuilderPage() {
     );
   }
 
-  if (existing && (test.error || !test.data)) {
+  if (existing && !test.data) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}
@@ -208,7 +208,7 @@ function TestBuilder({
 
   /** Leaving Setup saves it first and leaving Offer asks first, so no move quietly drops what was typed. */
   const open = (target: TestBuilderStep) => {
-    if (target === step) return;
+    if (target === step || save.isPending) return;
     const pending = !existing || form.formState.isDirty;
     if (step === TEST_BUILDER_STEP.SETUP && pending) {
       saveThenOpen(target);
