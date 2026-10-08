@@ -49,6 +49,9 @@ export const AUDITED_ADMIN_FIELDS = ['fullName', 'role', 'isSuperAdmin'] as cons
 /** The single column the toggle route moves — the same `fieldDiff` definition of "changed". */
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
 
+const LAST_SUPER_ADMIN =
+  'This is the only active super admin. Make another admin a super admin first.';
+
 @Injectable()
 export class AdminsService {
   constructor(
@@ -183,6 +186,7 @@ export class AdminsService {
         : Object.keys(ROLE_PERMISSION_PRESET[input.role]);
 
     const row = await this.prisma.$transaction(async (tx) => {
+      if (prunesTo) await this.keepASuperAdmin(tx, id);
       const updated = await tx.admin.update({
         where: { id },
         data: {
@@ -230,6 +234,7 @@ export class AdminsService {
 
     // The update returns the row, so the transaction hands back what to report — no second read, and no chance of reporting a state that something else changed in between.
     const row = await this.prisma.$transaction(async (tx) => {
+      await this.keepASuperAdmin(tx, id);
       const updated = await tx.admin.update({
         where: { id },
         data: { isActive: false },
@@ -302,6 +307,15 @@ export class AdminsService {
     const admin = await this.prisma.admin.findUnique({ where: { id } });
     if (!admin) throw new AppException(ErrorCodes.NOT_FOUND, 'Admin not found');
     return admin;
+  }
+
+  /** Locks every active super admin, in id order, so two leaving at once queue rather than both finding the other still there. */
+  private async keepASuperAdmin(tx: Prisma.TransactionClient, leavingId: string): Promise<void> {
+    const held = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "Admin" WHERE "isSuperAdmin" AND "isActive" ORDER BY "id" FOR NO KEY UPDATE`;
+    if (held.length === 1 && held[0]?.id === leavingId) {
+      throw new AppException(ErrorCodes.CONFLICT, LAST_SUPER_ADMIN);
+    }
   }
 
   /** Permissions for many admins in one query — see the note in `list`. */

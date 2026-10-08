@@ -473,6 +473,66 @@ describe('AdminsService — setActive', () => {
   });
 });
 
+describe('AdminsService — somebody is always left who can manage admins', () => {
+  const conflict = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
+  const superAdmin = () => makeAdmin(prisma, { isSuperAdmin: true });
+  const activeSuperAdmins = () =>
+    prisma.admin.count({ where: { isSuperAdmin: true, isActive: true } });
+
+  /** THE failure this prevents: nobody left who can reach the Admins screen, undone only in SQL. */
+  it('refuses to demote or deactivate the only active super admin', async () => {
+    const { service } = build();
+    const only = await superAdmin();
+    await makeAdmin(prisma, { isSuperAdmin: true, isActive: false });
+
+    await assert.rejects(() => service.update(only.id, { role: ADMIN_ROLES.ADMIN }), conflict);
+    await assert.rejects(() => service.setActive(only.id, false, ACTOR), conflict);
+
+    const row = await prisma.admin.findUniqueOrThrow({ where: { id: only.id } });
+    assert.deepEqual([row.isSuperAdmin, row.isActive], [true, true]);
+  });
+
+  it('lets one of several go, by either route, and a rename of the last one through', async () => {
+    const { service } = build();
+    const [first, second, third] = [await superAdmin(), await superAdmin(), await superAdmin()];
+
+    await service.update(first.id, { role: ADMIN_ROLES.ADMIN });
+    await service.setActive(second.id, false, ACTOR);
+    const renamed = await service.update(third.id, { fullName: 'The last one' });
+
+    assert.equal(renamed.fullName, 'The last one');
+    assert.equal(await activeSuperAdmins(), 1);
+  });
+
+  it('lets one of two through and refuses the other when they deactivate each other at once', async () => {
+    const { service } = build();
+    const [first, second] = [await superAdmin(), await superAdmin()];
+
+    const outcomes = await Promise.allSettled([
+      service.setActive(second.id, false, first.id),
+      service.setActive(first.id, false, second.id),
+    ]);
+
+    const refused = outcomes.filter((outcome) => outcome.status === 'rejected');
+    assert.equal(refused.length, 1);
+    assert.ok(conflict(refused[0]?.reason));
+    assert.equal(await activeSuperAdmins(), 1);
+  });
+
+  it('holds when one is demoted while the other is deactivated', async () => {
+    const { service } = build();
+    const [first, second] = [await superAdmin(), await superAdmin()];
+
+    const outcomes = await Promise.allSettled([
+      service.update(first.id, { role: ADMIN_ROLES.ADMIN }),
+      service.setActive(second.id, false, first.id),
+    ]);
+
+    assert.equal(outcomes.filter((outcome) => outcome.status === 'rejected').length, 1);
+    assert.equal(await activeSuperAdmins(), 1);
+  });
+});
+
 describe('AdminsService.update — a role change re-aligns the grants', () => {
   /** THE failure this prevents: a demotion that left every grant of the role they came from live. */
   it('drops every grant the new role does not carry, and seeds nothing in their place', async () => {
@@ -508,6 +568,7 @@ describe('AdminsService.update — a role change re-aligns the grants', () => {
   /** identityOf already ignores a super admin's grants, so a promotion leaves them for the demotion to narrow. */
   it('holds a super admin’s grants dormant, and narrows them when the role comes back down', async () => {
     const { service } = build();
+    await makeAdmin(prisma, { isSuperAdmin: true });
     const admin = await service.create(
       { email: 'promoted@iace.co.in', role: ADMIN_ROLES.ADMIN },
       ACTOR,
