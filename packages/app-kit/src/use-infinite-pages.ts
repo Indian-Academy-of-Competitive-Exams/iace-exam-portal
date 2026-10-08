@@ -13,6 +13,25 @@ export function nextPageParam(lastPage: Paginated<unknown>, loadedPages: number)
   return loadedPages + 1;
 }
 
+/** What one page is asked for: its place in the list and, when cut by cursor, the row it follows. */
+interface PageParam {
+  page: number;
+  after?: string;
+}
+
+const FIRST_PAGE: PageParam = { page: 1 };
+
+/** Cut by cursor the end is a short page, since `total` shrinks as rows are read and would stop the list early. */
+export function nextCursorParam<T>(
+  lastPage: Paginated<T>,
+  loadedPages: number,
+  cursorOf: (item: T) => string,
+): PageParam | null {
+  const last = lastPage.items.at(-1);
+  if (last === undefined || lastPage.items.length < lastPage.pageSize) return null;
+  return { page: loadedPages + 1, after: cursorOf(last) };
+}
+
 const idOf = (item: unknown): unknown =>
   typeof item === 'object' && item !== null && 'id' in item ? item.id : undefined;
 
@@ -33,7 +52,10 @@ export function loadedItems<T>(pages: readonly Paginated<T>[]): T[] {
 /** Pages accumulate as asked for; page size stays whatever the API serves. `queryKey` must include whatever the fetch depends on, so pages reset with it. */
 export function useInfinitePages<T>(options: {
   queryKey: QueryKey;
-  fetchPage: (page: number, signal?: AbortSignal) => Promise<Paginated<T>>;
+  /** `after` is `cursorOf` of the last row held, so a list that shrinks between loads still resumes where it stopped. */
+  fetchPage: (page: number, signal?: AbortSignal, after?: string) => Promise<Paginated<T>>;
+  /** Given, pages are cut after the last row held instead of by position. */
+  cursorOf?: (item: T) => string;
   enabled?: boolean;
 }): {
   items: T[];
@@ -48,13 +70,17 @@ export function useInfinitePages<T>(options: {
   isLoadMoreError: boolean;
   retry: () => void;
 } {
-  const { queryKey, fetchPage, enabled = true } = options;
+  const { queryKey, fetchPage, cursorOf, enabled = true } = options;
 
   const query = useInfiniteQuery({
     queryKey,
-    initialPageParam: 1,
-    queryFn: ({ pageParam, signal }) => fetchPage(pageParam, signal),
-    getNextPageParam: (lastPage, allPages) => nextPageParam(lastPage, allPages.length),
+    initialPageParam: FIRST_PAGE,
+    queryFn: ({ pageParam, signal }) => fetchPage(pageParam.page, signal, pageParam.after),
+    getNextPageParam: (lastPage, allPages): PageParam | null => {
+      if (cursorOf) return nextCursorParam(lastPage, allPages.length, cursorOf);
+      const page = nextPageParam(lastPage, allPages.length);
+      return page === null ? null : { page };
+    },
     enabled,
   });
 

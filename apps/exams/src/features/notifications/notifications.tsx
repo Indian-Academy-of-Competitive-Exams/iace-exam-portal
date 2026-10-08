@@ -67,12 +67,14 @@ export function NotificationsPage() {
   // Paged, not pinned to the first: a student with thirty results must be able to reach the oldest.
   const list = useInfinitePages({
     queryKey: notificationsQueryKey(unreadOnly),
-    fetchPage: (page) =>
+    fetchPage: (page, _signal, after) =>
       api.me.notifications({
         ...(unreadOnly ? { unreadOnly: 'true' } : {}),
         page,
         pageSize: NOTIFICATIONS_PAGE_SIZE,
+        cursor: after,
       }),
+    cursorOf: (row) => row.id,
   });
 
   return (

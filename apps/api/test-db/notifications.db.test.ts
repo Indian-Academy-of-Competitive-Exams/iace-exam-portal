@@ -103,6 +103,75 @@ describe('NotificationsService — one student’s own bell', () => {
   });
 });
 
+describe('NotificationsService — paging by cursor', () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 5, 1, 0, minute));
+
+  /** Five unread rows, newest first: the list a student pages down. */
+  async function fiveUnread(sameInstant = false) {
+    const me = await makeStudent(prisma);
+    const rows: { id: string }[] = [];
+    for (let minute = 0; minute < 5; minute++) {
+      rows.push(
+        await makeNotification(prisma, {
+          studentId: me.id,
+          createdAt: at(sameInstant ? 0 : minute),
+        }),
+      );
+    }
+    return { me, rows };
+  }
+
+  const idsOf = (page: { items: { id: string }[] }) => page.items.map((item) => item.id);
+
+  /** The failure this prevents: rows read between two loads shrink the unread set, and a position-cut page skips as many. */
+  it('skips and repeats nothing when rows are read between page loads', async () => {
+    const { me, rows } = await fiveUnread();
+    const [newest, second, third, fourth, oldest] = [...rows].reverse().map((row) => row.id);
+    const unread = { ...PAGE, pageSize: 2, unreadOnly: true };
+
+    const first = await service.list(me.id, unread);
+    assert.deepEqual(idsOf(first), [newest, second]);
+    for (const id of idsOf(first)) await service.markRead(me.id, id);
+
+    const next = await service.list(me.id, { ...unread, page: 2, cursor: second });
+    assert.deepEqual(idsOf(next), [third, fourth]);
+    assert.equal(next.total, 3);
+
+    const last = await service.list(me.id, { ...unread, page: 3, cursor: fourth });
+    assert.deepEqual(idsOf(last), [oldest]);
+  });
+
+  /** Rows written in one statement share an instant, so the id is what keeps the order total. */
+  it('walks rows that share a creation instant exactly once', async () => {
+    const { me, rows } = await fiveUnread(true);
+    const everyId = rows
+      .map((row) => row.id)
+      .sort()
+      .reverse();
+    const seen: string[] = [];
+
+    for (let cursor: string | undefined; ;) {
+      const page = await service.list(me.id, { ...PAGE, pageSize: 2, cursor });
+      if (page.items.length === 0) break;
+      seen.push(...idsOf(page));
+      cursor = page.items.at(-1)?.id;
+    }
+
+    assert.deepEqual(seen, everyId);
+  });
+
+  it('answers a caller that sends no cursor as it always has', async () => {
+    const { me, rows } = await fiveUnread();
+    const newestFirst = [...rows].reverse().map((row) => row.id);
+
+    const second = await service.list(me.id, { ...PAGE, page: 2, pageSize: 2 });
+
+    assert.deepEqual(idsOf(second), newestFirst.slice(2, 4));
+    assert.equal(second.page, 2);
+    assert.equal(second.total, 5);
+  });
+});
+
 describe('Telling a student', () => {
   /** No delivery row either: the notification itself IS the in-app delivery, and paying is a per-send choice. */
   it('writes the row they read at once, for every kind, booking nothing', async () => {

@@ -30,8 +30,9 @@ export default function NotificationsScreen() {
 
   const list = useInfinitePages({
     queryKey: notificationsQueryKey(unreadOnly),
-    fetchPage: (page) =>
-      api.me.notifications({ page, unreadOnly: unreadOnly ? 'true' : undefined }),
+    fetchPage: (page, _signal, after) =>
+      api.me.notifications({ page, unreadOnly: unreadOnly ? 'true' : undefined, cursor: after }),
+    cursorOf: (row) => row.id,
   });
 
   const read = useMutation({

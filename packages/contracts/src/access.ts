@@ -281,6 +281,8 @@ export type Notification = z.infer<typeof notificationSchema>;
 
 export const notificationListQuerySchema = paginationQuerySchema.extend({
   unreadOnly: optionalBooleanQuery(),
+  /** The last row held: the page answered starts after it, whatever has been read since. */
+  cursor: z.uuid().optional(),
 });
 export type NotificationListQuery = z.infer<typeof notificationListQuerySchema>;
 export type NotificationListQueryInput = z.input<typeof notificationListQuerySchema>;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { loadedItems, nextPageParam } from '../src/use-infinite-pages';
+import { loadedItems, nextCursorParam, nextPageParam } from '../src/use-infinite-pages';
 
 const page = (over: Partial<{ page: number; pageSize: number; total: number; items: number }>) => {
   const { page: p = 1, pageSize = 100, total = 250, items = pageSize } = over;
@@ -40,6 +40,26 @@ describe('nextPageParam', () => {
   /** Counted from what loaded, not the echoed page number, or a broken server loops. */
   it('counts loaded pages rather than trusting the echoed page number', () => {
     assert.equal(nextPageParam(page({ page: 1, total: 250 }), 2), 3);
+  });
+});
+
+/** Rows read between loads shrink `total`, so the end is a short page, never a count. */
+describe('nextCursorParam', () => {
+  const idOf = (item: number) => `n${item}`;
+
+  it('follows the last row held, with the page it would be', () => {
+    assert.deepEqual(nextCursorParam(page({ pageSize: 3, total: 9 }), 2, idOf), {
+      page: 3,
+      after: 'n2',
+    });
+  });
+
+  it('stops on a short page, however large the total claims to be', () => {
+    assert.equal(nextCursorParam(page({ pageSize: 3, total: 99, items: 2 }), 2, idOf), null);
+  });
+
+  it('stops on an empty page', () => {
+    assert.equal(nextCursorParam(page({ pageSize: 3, items: 0 }), 2, idOf), null);
   });
 });
 

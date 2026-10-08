@@ -60,18 +60,26 @@ export class NotificationsService {
     return student?.mobile ?? null;
   }
 
-  /** One student's own bell, newest first. The id is never taken from the request. */
+  /** One student's own bell, newest first; a cursor pages after that row, not by position. The student id is never taken from the request. */
   async list(studentId: string, query: NotificationListQuery): Promise<Paginated<Notification>> {
     const where: Prisma.NotificationWhereInput = {
       studentId,
       ...(query.unreadOnly ? { isRead: false } : {}),
     };
 
+    // The cursor row is excluded by id, not `skip: 1`: once read it leaves the unread filter and skip would eat the next row.
+    const page: Prisma.NotificationFindManyArgs = query.cursor
+      ? {
+          where: { ...where, id: { not: query.cursor } },
+          cursor: { id: query.cursor },
+          take: query.pageSize,
+        }
+      : { where, ...pageArgs(query) };
+
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.notification.findMany({
-        where,
+        ...page,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        ...pageArgs(query),
       }),
       this.prisma.notification.count({ where }),
     ]);
