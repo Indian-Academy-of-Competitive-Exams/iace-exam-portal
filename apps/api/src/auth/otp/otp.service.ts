@@ -108,14 +108,6 @@ export class OtpService {
     const ttlSec = this.config.get('OTP_TTL_SEC');
     const code = this.generateCode();
 
-    const stored: StoredOtp = {
-      codeHash: this.hash(code),
-      createdAt: new Date().toISOString(),
-    };
-    await this.redis.setJson(redisKeys.otp(actor, identifier), stored, ttlSec);
-    // A fresh code resets the attempt count: the old key's leftover count must not carry over.
-    await this.redis.del(redisKeys.otpAttempts(actor, identifier));
-
     // The cooldown stays: the day's counters are spent, and it paces a retry through an outage.
     const sentOn = await this.deliver(actor, identifier, code, ttlSec, channel).catch(
       (error: unknown) => {
@@ -123,10 +115,20 @@ export class OtpService {
         throw new AppException(
           ErrorCodes.SERVICE_UNAVAILABLE,
           'The code could not be sent. Try again in a moment',
+          { details: { retryAfterSec: cooldownSec } },
         );
       },
     );
     if (actor === ActorTypes.STUDENT) this.metrics.countOtpSend('sent');
+
+    // Stored only once it has left: a code that was never sent must not replace one that was.
+    const stored: StoredOtp = {
+      codeHash: this.hash(code),
+      createdAt: new Date().toISOString(),
+    };
+    await this.redis.setJson(redisKeys.otp(actor, identifier), stored, ttlSec);
+    // A fresh code resets the attempt count: the old key's leftover count must not carry over.
+    await this.redis.del(redisKeys.otpAttempts(actor, identifier));
 
     return {
       sent: true,

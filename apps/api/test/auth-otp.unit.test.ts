@@ -2,10 +2,14 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
 import { OtpService } from '../src/auth/otp/otp.service';
+import { type MessageSender } from '../src/common/messaging';
 import { FakeConfig, FakeMessageSender, FakeMetrics, FakeRedis } from './support/fakes';
 
 const MOBILE = '9876543210';
 const IP = '203.0.113.9';
+
+/** A code that is not the one given, whatever that one is. */
+const otherThan = (code: string): string => (code === '000000' ? '111111' : '000000');
 
 function build(overrides = {}) {
   const redis = new FakeRedis();
@@ -80,6 +84,59 @@ describe('OtpService — request', () => {
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.RATE_LIMITED,
       'a tap-happy retry through an outage must not spend the day on sends that never left',
     );
+  });
+
+  /** The failure this prevents: a resend that never arrived killing the code the student already holds. */
+  it('leaves the earlier code working when a resend cannot be delivered, its guesses and the wait as they were', async () => {
+    const redis = new FakeRedis();
+    const delivered = new FakeMessageSender();
+    let down = false;
+    const sender: MessageSender = {
+      send: (message) =>
+        down ? Promise.reject(new Error('provider down')) : delivered.send(message),
+    };
+    const otp = new OtpService(
+      redis.asService(),
+      new FakeConfig().asService(),
+      sender,
+      new FakeMetrics().asService(),
+    );
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+    const held = delivered.lastCode;
+    await assert.rejects(() => otp.verify(ActorTypes.STUDENT, MOBILE, otherThan(held)));
+    redis.advanceSeconds(46);
+    down = true;
+
+    await assert.rejects(
+      () => otp.request(ActorTypes.STUDENT, MOBILE),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.SERVICE_UNAVAILABLE);
+        assert.deepEqual(error.details, { retryAfterSec: 45 });
+        return true;
+      },
+    );
+
+    assert.equal(redis.snapshot()[`otp:attempts:student:${MOBILE}`], '1', 'no fresh guesses');
+    await assert.doesNotReject(() => otp.verify(ActorTypes.STUDENT, MOBILE, held));
+  });
+
+  it('replaces the earlier code once a resend is delivered', async () => {
+    const { otp, redis, sender } = build();
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+    const earlier = sender.lastCode;
+    redis.advanceSeconds(46);
+
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    // Asked for on a number whose two codes happen to match, there is nothing to tell apart.
+    if (sender.lastCode !== earlier) {
+      await assert.rejects(
+        () => otp.verify(ActorTypes.STUDENT, MOBILE, earlier),
+        (error: unknown) => AppException.is(error) && error.code === ErrorCodes.OTP_INVALID,
+      );
+    }
+    await assert.doesNotReject(() => otp.verify(ActorTypes.STUDENT, MOBILE, sender.lastCode));
   });
 
   it('refuses a resend inside the cooldown, and says how long is left', async () => {

@@ -2,7 +2,7 @@ import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { OTP_CHANNELS, type OtpRequestResponse } from '@iace/contracts';
+import { AppException, ErrorCodes, OTP_CHANNELS, type OtpRequestResponse } from '@iace/contracts';
 import { useResendCode } from '../src/login-steps';
 import type { AppApiClient } from '../src';
 
@@ -18,19 +18,21 @@ const challenge = (over: Partial<OtpRequestResponse> = {}): OtpRequestResponse =
   ...over,
 });
 
+const bySms = (): Promise<OtpRequestResponse> =>
+  Promise.resolve(challenge({ channel: OTP_CHANNELS.SMS, otherChannel: OTP_CHANNELS.WHATSAPP }));
+
 function mounted(
   asked: unknown[],
   sent: OtpRequestResponse,
   t: { after: (fn: () => void) => void },
+  answer = bySms,
 ) {
   mock.timers.enable({ apis: ['setInterval', 'Date'] });
   const api = {
     auth: {
       requestStudentOtp: (input: unknown) => {
         asked.push(input);
-        return Promise.resolve(
-          challenge({ channel: OTP_CHANNELS.SMS, otherChannel: OTP_CHANNELS.WHATSAPP }),
-        );
+        return answer();
       },
     },
   } as unknown as AppApiClient;
@@ -107,4 +109,26 @@ test('asks the same way again where only one channel is set up', async (t) => {
 
   assert.equal(result.current.label.startsWith('Send again'), true);
   assert.deepEqual(asked, [{ mobile: MOBILE, channel: OTP_CHANNELS.SMS }]);
+});
+
+/** The failure this prevents: a resend that could not be sent leaving the button live, to be refused on the next tap. */
+test('counts the wait the server names when the next code could not be sent', async (t) => {
+  const unsent = () =>
+    Promise.reject(
+      new AppException(ErrorCodes.SERVICE_UNAVAILABLE, undefined, {
+        details: { retryAfterSec: 45 },
+      }),
+    );
+  const { result } = mounted([], challenge(), t, unsent);
+  await pass(45_000);
+
+  await act(async () => {
+    result.current.resend();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await pass(1_000);
+
+  assert.equal(result.current.canResend, false);
+  assert.equal(result.current.label, 'Send by SMS in 44s');
 });
