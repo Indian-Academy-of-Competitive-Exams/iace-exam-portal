@@ -483,7 +483,8 @@ function FeatureRow({
   return (
     <div className="flex items-center gap-2 border-b border-border py-1 last:border-b-0">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <code className="truncate">{feature.key}</code>
+        <span className="truncate font-medium">{feature.label}</span>
+        <code className="truncate text-xs text-muted-foreground">{feature.key}</code>
         {edited ? <Badge variant="warning">Edited</Badge> : null}
       </div>
 

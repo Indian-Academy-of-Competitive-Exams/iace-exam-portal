@@ -1,19 +1,27 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Copy, Pencil, Plus } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { Copy, Pencil, Plus, TextCursorInput } from 'lucide-react';
 import {
+  createBaseConfigSchema,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   type BaseConfig,
   type BaseConfigDetail,
+  type CreateBaseConfigInput,
 } from '@iace/contracts';
+import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   Button,
   ConfirmDialog,
   DropdownMenuItem,
+  FormDialog,
+  FormField,
+  Input,
   ListView,
   PageHeader,
   TableFrame,
@@ -30,6 +38,10 @@ import { NAV_ITEMS, QUERY_KEYS, ROUTES, TIMER_TEMPLATE_LABELS } from '../../lib/
 import { durationLabel } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 import { ExamMultiPicker } from '../../components/exam-picker';
+
+const RENAME_CONFIG_FIELDS = ['name'] as const;
+const RENAME_CONFIG_SCHEMA = createBaseConfigSchema.pick({ name: true });
+type RenameConfigValues = Pick<CreateBaseConfigInput, 'name'>;
 
 const CONFIG_FILTERS = [
   {
@@ -183,6 +195,7 @@ function ConfigRowActions({
 }: Readonly<{ config: BaseConfig; canWrite: boolean; onChanged: () => void }>) {
   const navigate = useNavigate();
   const [cloning, setCloning] = useState(false);
+  const [renaming, setRenaming] = useState(false);
 
   const clone = useMutation({
     meta: { success: 'Configuration cloned.' },
@@ -221,11 +234,27 @@ function ConfigRowActions({
             Edit
           </Link>
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setRenaming(true)}>
+          <TextCursorInput aria-hidden />
+          Rename
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => setCloning(true)}>
           <Copy aria-hidden />
           Clone
         </DropdownMenuItem>
       </RetireDeleteActions>
+
+      {/* Mounted only while renaming, so its default is the row that was clicked. */}
+      {renaming ? (
+        <RenameConfigDialog
+          config={config}
+          onClose={() => setRenaming(false)}
+          onDone={() => {
+            setRenaming(false);
+            onChanged();
+          }}
+        />
+      ) : null}
 
       {/* A clone is a new blueprint somebody else will find here, so it says what the copy starts as. */}
       <ConfirmDialog
@@ -238,5 +267,43 @@ function ConfigRowActions({
         onConfirm={() => clone.mutate()}
       />
     </>
+  );
+}
+
+function RenameConfigDialog({
+  config,
+  onClose,
+  onDone,
+}: Readonly<{ config: BaseConfig; onClose: () => void; onDone: () => void }>) {
+  const form = useForm<RenameConfigValues>({
+    resolver: zodResolver(RENAME_CONFIG_SCHEMA),
+    defaultValues: { name: config.name },
+  });
+
+  const rename = useMutation({
+    meta: { success: 'Configuration renamed.', fields: RENAME_CONFIG_FIELDS },
+    // The name alone: a locked configuration refuses anything that touches its shape.
+    mutationFn: (values: RenameConfigValues) =>
+      api.admin.baseConfigs.update(config.id, { name: values.name }),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, RENAME_CONFIG_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      form={form}
+      onSubmit={(values) => rename.mutate(values)}
+      title={`Rename ${config.name}`}
+      submitLabel="Save"
+      loading={rename.isPending}
+    >
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} autoFocus />}
+      </FormField>
+    </FormDialog>
   );
 }

@@ -33,6 +33,7 @@ import {
   PageHeader,
   plural,
   TableFrame,
+  Textarea,
   TruncatedText,
   type DataTableColumn,
   UPPERCASE_CODE,
@@ -51,7 +52,7 @@ import { ExamPicker } from '../../components/exam-picker';
 import { applyFieldErrors, changedValues } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 
-const EXAM_FIELDS = ['course', 'name', 'code'] as const;
+const EXAM_FIELDS = ['course', 'name', 'code', 'description'] as const;
 
 /** AP_TS_POLICE reads as AP/TS POLICE — the underscore is a Prisma enum's constraint, not a name. */
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
@@ -218,14 +219,30 @@ function ExamDialog({
   const form = useForm<CreateExamInput>({
     resolver: zodResolver(createExamSchema),
     defaultValues: exam
-      ? { course: exam.course, name: exam.name, code: exam.code }
-      : { course: DEFAULT_EXAM_COURSE, name: '', code: '' },
+      ? {
+          course: exam.course,
+          name: exam.name,
+          code: exam.code,
+          description: exam.description ?? '',
+        }
+      : { course: DEFAULT_EXAM_COURSE, name: '', code: '', description: '' },
   });
 
   const save = useMutation({
     meta: { success: exam ? 'Exam saved.' : 'Exam created.', fields: EXAM_FIELDS },
-    mutationFn: (values: CreateExamInput) =>
-      exam ? api.admin.exams.update(exam.id, changedValues(form)) : api.admin.exams.create(values),
+    mutationFn: (values: CreateExamInput) => {
+      if (!exam) {
+        return api.admin.exams.create({ ...values, description: values.description || undefined });
+      }
+      const changes = changedValues(form);
+      // A blank description clears the stored one: null, where undefined would leave it.
+      return api.admin.exams.update(
+        exam.id,
+        'description' in changes
+          ? { ...changes, description: values.description || null }
+          : changes,
+      );
+    },
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, EXAM_FIELDS),
   });
@@ -255,6 +272,15 @@ function ExamDialog({
         /* ui-copy-ok: rule */ hint={exam ? 'Locked once a student is enrolled' : undefined}
       >
         {(control) => <Input {...control} className={UPPERCASE_CODE} placeholder="SSC CGL" />}
+      </FormField>
+
+      <FormField
+        form={form}
+        name="description"
+        label="Description"
+        /* ui-copy-ok: rule */ hint="Optional"
+      >
+        {(control) => <Textarea {...control} rows={3} />}
       </FormField>
     </FormDialog>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -18,12 +18,13 @@ import {
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { ROUTES } from '../../lib/constants';
-import { applyFieldErrors, signedOutMessage } from '@iace/app-kit';
+import { applyFieldErrors, resendSays, signedOutMessage, useCountdown } from '@iace/app-kit';
 import { useAuth } from '../../providers/auth';
 
 // Same names the server keys `fieldErrors` by — it validates with the same schemas.
 const EMAIL_FIELDS = ['email'] as const;
 const CODE_FIELDS = ['code'] as const;
+const NOTHING_ON_EXPIRY = () => undefined;
 
 /** Email + OTP. No self-signup: an unknown address simply never receives a code. */
 export function LoginPage() {
@@ -69,6 +70,7 @@ export function LoginPage() {
                 setEmail(null);
                 setChallenge(null);
               }}
+              onResent={setChallenge}
               onVerified={(session) => {
                 signIn(session);
                 void navigate(cameFrom, { replace: true });
@@ -134,11 +136,13 @@ function CodeStep({
   email,
   challenge,
   onBack,
+  onResent,
   onVerified,
 }: Readonly<{
   email: string;
   challenge: OtpRequestResponse;
   onBack: () => void;
+  onResent: (fresh: OtpRequestResponse) => void;
   onVerified: (session: Awaited<ReturnType<typeof api.auth.verifyAdminOtp>>) => void;
 }>) {
   const form = useForm({
@@ -151,6 +155,20 @@ function CodeStep({
     mutationFn: (values: { code: string }) => api.auth.verifyAdminOtp({ email, code: values.code }),
     onSuccess: onVerified,
     onError: (error) => applyFieldErrors(error, form.setError, CODE_FIELDS),
+  });
+
+  const [wait, setWait] = useState(() => ({ sec: challenge.resendAfterSec, from: Date.now() }));
+  const waitSec = useCountdown(
+    useCallback(() => Math.max(0, Math.ceil(wait.sec - (Date.now() - wait.from) / 1000)), [wait]),
+    NOTHING_ON_EXPIRY,
+  );
+  const again = useMutation({
+    mutationFn: () => api.auth.requestAdminOtp({ email }),
+    onSuccess: (fresh) => {
+      setWait({ sec: fresh.resendAfterSec, from: Date.now() });
+      form.reset();
+      onResent(fresh);
+    },
   });
 
   return (
@@ -187,11 +205,28 @@ function CodeStep({
           </Alert>
         ) : null}
 
-        <Button type="submit" loading={verify.isPending}>
+        <Button type="submit" loading={verify.isPending} disabled={again.isPending}>
           Verify &amp; continue
         </Button>
 
-        <Button type="button" variant="ghost" size="sm" onClick={onBack}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={waitSec > 0 || verify.isPending}
+          loading={again.isPending}
+          onClick={() => again.mutate()}
+        >
+          {resendSays(waitSec, undefined)}
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={verify.isPending || again.isPending}
+          onClick={onBack}
+        >
           <ArrowLeft aria-hidden />
           Use a different email
         </Button>

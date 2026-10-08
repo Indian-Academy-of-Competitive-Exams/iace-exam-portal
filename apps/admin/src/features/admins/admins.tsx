@@ -2,14 +2,16 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
+import { Pencil, Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
 import {
   ADMIN_ROLES,
   ADMIN_ROLE_VALUES,
   createAdminSchema,
+  updateAdminSchema,
   type Admin,
   type CreateAdminInput,
   type FeatureKey,
+  type UpdateAdminBody,
 } from '@iace/contracts';
 import {
   Badge,
@@ -35,6 +37,28 @@ import { ADMIN_ROLE_LABELS, NAV_ITEMS, QUERY_KEYS } from '../../lib/constants';
 import { SuperAdminOnly } from './super-admin-only';
 
 const NEW_ADMIN_FIELDS = ['email', 'fullName', 'role'] as const;
+const RENAME_ADMIN_FIELDS = ['fullName'] as const;
+
+const ADMIN_FILTERS = [
+  {
+    key: 'q',
+    kind: 'search',
+    label: 'Search admins',
+    placeholder: 'Search by email or name',
+    primary: true,
+  },
+  {
+    key: 'activeOnly',
+    kind: 'choice',
+    label: 'Filter by status',
+    primary: true,
+    items: [
+      { value: '', label: 'Any status' },
+      { value: 'true', label: 'Active' },
+      { value: 'false', label: 'Deactivated' },
+    ],
+  },
+] as const;
 
 const ROLE_ITEMS = ADMIN_ROLE_VALUES.map((role) => ({
   value: role,
@@ -104,8 +128,11 @@ export function AdminsPage() {
 
   const admins = useListScreen({
     queryKey: QUERY_KEYS.ADMINS,
-    filters: [],
-    toQuery: () => ({}),
+    filters: ADMIN_FILTERS,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      activeOnly: (values.activeOnly || undefined) as 'true' | 'false' | undefined,
+    }),
     fetchPage: (params) => api.admin.admins.list(params),
   });
 
@@ -141,7 +168,14 @@ export function AdminsPage() {
             refresh();
           }}
         />
-        <ListView list={admins} columns={columns} rowKey={(a) => a.id} empty="No admins yet" />
+        <ListView
+          list={admins}
+          filters={ADMIN_FILTERS}
+          columns={columns}
+          rowKey={(a) => a.id}
+          empty="No admins yet"
+          emptyFiltered="No admins match those filters"
+        />
       </TableFrame>
     </SuperAdminOnly>
   );
@@ -173,9 +207,10 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
   );
 }
 
-/** Switch an account off, or back on — one control, because it is one decision. */
+/** Rename, and switch an account off or back on — the latter one control, because it is one decision. */
 function AdminRowActions({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: () => void }>) {
   const [confirming, setConfirming] = useState(false);
+  const [renaming, setRenaming] = useState(false);
 
   const setActive = useMutation({
     meta: {
@@ -196,6 +231,10 @@ function AdminRowActions({ admin, onChanged }: Readonly<{ admin: Admin; onChange
   return (
     <>
       <RowActions label={`Actions for ${admin.email}`}>
+        <DropdownMenuItem onSelect={() => setRenaming(true)}>
+          <Pencil aria-hidden />
+          Rename
+        </DropdownMenuItem>
         <DropdownMenuItem
           destructive={admin.isActive}
           disabled={busy}
@@ -205,6 +244,18 @@ function AdminRowActions({ admin, onChanged }: Readonly<{ admin: Admin; onChange
           {admin.isActive ? 'Deactivate' : 'Reactivate'}
         </DropdownMenuItem>
       </RowActions>
+
+      {/* Mounted only while renaming, so its default is the row that was clicked. */}
+      {renaming ? (
+        <RenameAdminDialog
+          admin={admin}
+          onClose={() => setRenaming(false)}
+          onDone={() => {
+            setRenaming(false);
+            onChanged();
+          }}
+        />
+      ) : null}
 
       {/* Both directions ask, and the reverse one is not politeness: switching an
           admin back on restores their sign-in and NOT the permissions that were
@@ -229,6 +280,43 @@ function AdminRowActions({ admin, onChanged }: Readonly<{ admin: Admin; onChange
         onConfirm={() => setActive.mutate()}
       />
     </>
+  );
+}
+
+function RenameAdminDialog({
+  admin,
+  onClose,
+  onDone,
+}: Readonly<{ admin: Admin; onClose: () => void; onDone: () => void }>) {
+  const form = useForm<UpdateAdminBody>({
+    resolver: zodResolver(updateAdminSchema),
+    defaultValues: { fullName: admin.fullName ?? '' },
+  });
+
+  const rename = useMutation({
+    meta: { success: 'Admin renamed.', fields: RENAME_ADMIN_FIELDS },
+    mutationFn: (values: UpdateAdminBody) =>
+      api.admin.admins.update(admin.id, { fullName: values.fullName }),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, RENAME_ADMIN_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      form={form}
+      onSubmit={(values) => rename.mutate(values)}
+      title={`Rename ${admin.email}`}
+      submitLabel="Save"
+      loading={rename.isPending}
+    >
+      <FormField form={form} name="fullName" label="Name">
+        {(control) => <Input {...control} placeholder="Full name" autoFocus />}
+      </FormField>
+    </FormDialog>
   );
 }
 

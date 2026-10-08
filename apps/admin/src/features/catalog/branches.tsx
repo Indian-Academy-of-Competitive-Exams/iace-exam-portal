@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Plus, Users } from 'lucide-react';
+import { Pencil, Plus, Users } from 'lucide-react';
 import {
   BRANCH_TYPE,
   BRANCH_TYPES,
   createBranchSchema,
+  updateBranchSchema,
   type Branch,
   type CreateBranchInput,
+  type UpdateBranchInput,
 } from '@iace/contracts';
 import {
   Alert,
@@ -38,6 +40,7 @@ import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 
 const NEW_BRANCH_FIELDS = ['name', 'type'] as const;
+const RENAME_BRANCH_FIELDS = ['name'] as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableColumn<Branch>[] {
@@ -95,35 +98,92 @@ function BranchRowActions({
 }: Readonly<{ branch: Branch; canEdit: boolean; onChanged: () => void }>) {
   // The online branch is never editable, so its menu holds only the students link.
   const editable = canEdit && branch.type !== BRANCH_TYPE.VIRTUAL;
+  const [renaming, setRenaming] = useState(false);
 
   return (
-    <RetireDeleteActions
-      name={branch.name}
-      noun="branch"
-      isActive={branch.isActive}
-      canEdit={editable}
-      resource={api.admin.branches}
-      id={branch.id}
-      onChanged={onChanged}
-      retireText={
-        branch.isActive
-          ? `Nothing it already holds changes. The ${plural(branch.studentCount, 'student')} who attend it keep working exactly as now. What stops is new ones: this branch will no longer be offered when anyone assigns a student. Reactivating puts it back.`
-          : 'The branch is offered again when anyone assigns a student. Nothing else changes.'
-      }
-      deleteText={
-        branch.studentCount === 0
-          ? 'No student attends this branch, so nothing loses access. This cannot be undone.'
-          : `${plural(branch.studentCount, 'student')} still attend this branch, and deleting it will be refused. Move them to another branch first, or retire this one instead. A retired branch keeps everyone it has and simply takes no new students.`
-      }
+    <>
+      {/* Mounted only while renaming, so its default is the row that was clicked. */}
+      {renaming ? (
+        <RenameBranchDialog
+          branch={branch}
+          onClose={() => setRenaming(false)}
+          onDone={() => {
+            setRenaming(false);
+            onChanged();
+          }}
+        />
+      ) : null}
+      <RetireDeleteActions
+        name={branch.name}
+        noun="branch"
+        isActive={branch.isActive}
+        canEdit={editable}
+        resource={api.admin.branches}
+        id={branch.id}
+        onChanged={onChanged}
+        retireText={
+          branch.isActive
+            ? `Nothing it already holds changes. The ${plural(branch.studentCount, 'student')} who attend it keep working exactly as now. What stops is new ones: this branch will no longer be offered when anyone assigns a student. Reactivating puts it back.`
+            : 'The branch is offered again when anyone assigns a student. Nothing else changes.'
+        }
+        deleteText={
+          branch.studentCount === 0
+            ? 'No student attends this branch, so nothing loses access. This cannot be undone.'
+            : `${plural(branch.studentCount, 'student')} still attend this branch, and deleting it will be refused. Move them to another branch first, or retire this one instead. A retired branch keeps everyone it has and simply takes no new students.`
+        }
+      >
+        <DropdownMenuItem asChild>
+          <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
+            <Users aria-hidden />
+            Students
+          </Link>
+        </DropdownMenuItem>
+        {editable ? (
+          <DropdownMenuItem onSelect={() => setRenaming(true)}>
+            <Pencil aria-hidden />
+            Rename
+          </DropdownMenuItem>
+        ) : null}
+        {editable ? <DropdownMenuSeparator /> : null}
+      </RetireDeleteActions>
+    </>
+  );
+}
+
+function RenameBranchDialog({
+  branch,
+  onClose,
+  onDone,
+}: Readonly<{ branch: Branch; onClose: () => void; onDone: () => void }>) {
+  const form = useForm<UpdateBranchInput>({
+    resolver: zodResolver(updateBranchSchema),
+    defaultValues: { name: branch.name },
+  });
+
+  const rename = useMutation({
+    meta: { success: 'Branch renamed.', fields: RENAME_BRANCH_FIELDS },
+    mutationFn: (values: UpdateBranchInput) =>
+      api.admin.branches.update(branch.id, { name: values.name }),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, RENAME_BRANCH_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      form={form}
+      onSubmit={(values) => rename.mutate(values)}
+      title={`Rename ${branch.name}`}
+      submitLabel="Save"
+      loading={rename.isPending}
     >
-      <DropdownMenuItem asChild>
-        <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
-          <Users aria-hidden />
-          Students
-        </Link>
-      </DropdownMenuItem>
-      {editable ? <DropdownMenuSeparator /> : null}
-    </RetireDeleteActions>
+      <FormField form={form} name="name" label="Branch name">
+        {(control) => <Input {...control} className={UPPERCASE_CODE} autoFocus />}
+      </FormField>
+    </FormDialog>
   );
 }
 

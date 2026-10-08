@@ -11,6 +11,7 @@ import {
   examsInCourses,
   FEATURE_KEYS,
   GENDERS,
+  instituteDateTimeLabel,
   PERMISSION_LEVELS,
   STUDENT_TYPE,
   STUDENT_TYPES,
@@ -43,6 +44,8 @@ import {
   PageHeader,
   Skeleton,
   SkeletonParagraph,
+  StatRow,
+  TruncatedText,
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import {
@@ -356,6 +359,53 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   );
 }
 
+type StudentProfile = NonNullable<StudentDetail['profile']>;
+type EducationEntry = NonNullable<StudentProfile['educationDetails']>[number];
+type PastExamEntry = NonNullable<StudentProfile['pastExamHistory']>[number];
+
+interface HistoryRow {
+  primary: string;
+  secondary: string;
+}
+
+const dotted = (parts: readonly (string | number | undefined)[]) =>
+  parts.filter((part) => part !== undefined && part !== '').join(' · ');
+
+const educationRow = (entry: EducationEntry): HistoryRow => ({
+  primary: entry.level,
+  secondary: dotted([
+    entry.board,
+    entry.institution,
+    entry.year,
+    entry.percentage === undefined ? undefined : `${entry.percentage}%`,
+  ]),
+});
+
+const pastExamRow = (entry: PastExamEntry): HistoryRow => ({
+  primary: entry.exam,
+  secondary: dotted([entry.year, entry.result]),
+});
+
+/** What the student reported about themselves; nothing here is editable by an admin. */
+function HistorySection({ title, rows }: Readonly<{ title: string; rows: readonly HistoryRow[] }>) {
+  if (rows.length === 0) return null;
+
+  return (
+    <FormSection title={title}>
+      <ul className="flex flex-col gap-2 text-sm">
+        {rows.map((row) => (
+          <li key={`${row.primary}|${row.secondary}`} className="flex min-w-0 flex-col">
+            <TruncatedText className="font-medium">{row.primary}</TruncatedText>
+            {row.secondary ? (
+              <TruncatedText className="text-muted-foreground">{row.secondary}</TruncatedText>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </FormSection>
+  );
+}
+
 /** The one tab the form owns: everything Edit and Save reach. */
 function DetailsTab({
   form,
@@ -425,7 +475,25 @@ function DetailsTab({
           </div>
         </FormSection>
 
-        <AccessCard form={form} />
+        <div className="flex flex-col gap-8">
+          <AccessCard form={form} />
+
+          <FormSection title="Record">
+            <div className="flex flex-col gap-2">
+              <StatRow label="Created" value={instituteDateTimeLabel(detail.createdAt)} />
+              <StatRow label="Last changed" value={instituteDateTimeLabel(detail.updatedAt)} />
+            </div>
+          </FormSection>
+
+          <HistorySection
+            title="Education"
+            rows={(detail.profile?.educationDetails ?? []).map(educationRow)}
+          />
+          <HistorySection
+            title="Past exams"
+            rows={(detail.profile?.pastExamHistory ?? []).map(pastExamRow)}
+          />
+        </div>
       </div>
     </>
   );
