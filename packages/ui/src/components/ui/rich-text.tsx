@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {
   EditorContent,
+  Extension,
   useEditor,
   type Content,
   type Editor,
@@ -124,6 +125,15 @@ export function useQuestionEditor({
       onClick: (node: ProseNode, pos: number) =>
         setMath({ latex: String(node.attrs.latex ?? ''), pos }),
     };
+    const openEquation = Extension.create({
+      name: 'openEquation',
+      addKeyboardShortcuts: () => ({
+        'Alt-m': () => {
+          setMath({ latex: '', pos: null });
+          return true;
+        },
+      }),
+    });
     return [
       ...extensions,
       Superscript,
@@ -132,6 +142,7 @@ export function useQuestionEditor({
       ...(takesImages ? [QuestionImage] : []),
       BlockMathAtDollars.configure(math),
       InlineMathAtDollar.configure(math),
+      openEquation,
     ];
   }, [extensions, takesImages]);
 

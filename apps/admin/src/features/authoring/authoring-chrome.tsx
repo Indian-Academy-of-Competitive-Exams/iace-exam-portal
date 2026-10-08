@@ -29,6 +29,8 @@ export function Legend({
         <Shortcut keys={['$…$']}>maths</Shortcut>
         <Shortcut keys={[MOD_KEY, 'V']}>image</Shortcut>
         <Shortcut keys={[ALT_KEY, 'L']}>language</Shortcut>
+        <Shortcut keys={[ALT_KEY, 'M']}>equation</Shortcut>
+        <Shortcut keys={[ALT_KEY, 'T']}>table</Shortcut>
       </div>
       {actions ? (
         <div

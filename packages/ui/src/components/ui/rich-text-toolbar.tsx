@@ -19,6 +19,7 @@ import { cn } from '../../lib/utils';
 import { Alert } from './alert';
 import { Button } from './button';
 import { Input } from './input';
+import { KEY_NAMES, Shortcut } from './kbd';
 import {
   Dialog,
   DialogBody,
@@ -32,6 +33,7 @@ import type { MathFieldProps } from './math-field';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { insertUploaded, type ImageLimits, type UploadImage } from './rich-text-image';
 import { TEXT_SIZES, TEXT_SIZE_MARK, type TextSize } from './rich-text-size';
+import { NEW_TABLE } from './rich-text-table';
 import { Skeleton } from './skeleton';
 
 /** The mark buttons, in the order a writer reaches for them. */
@@ -57,11 +59,14 @@ const LISTS = [
 /** Pressed reads the mark under the caret, so the toolbar says what the next keystroke will be. */
 function ToolButton({
   label,
+  keys,
   active,
   onClick,
   children,
 }: Readonly<{
   label: string;
+  /** What does the same from the keyboard, said where the button names itself. */
+  keys?: readonly string[];
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
@@ -84,7 +89,7 @@ function ToolButton({
           {children}
         </button>
       </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent>{keys ? <Shortcut keys={keys}>{label}</Shortcut> : label}</TooltipContent>
     </Tooltip>
   );
 }
@@ -209,9 +214,6 @@ export interface RichTextToolbarProps {
   className?: string;
 }
 
-/** What a question's table starts as; rows and columns are added from the table itself. */
-const NEW_TABLE = { rows: 3, cols: 3, withHeaderRow: true } as const;
-
 export function RichTextToolbar({
   editor,
   singleLine,
@@ -311,6 +313,7 @@ export function RichTextToolbar({
       {singleLine ? null : (
         <ToolButton
           label="Insert a table"
+          keys={[KEY_NAMES.ALT, 'T']}
           active={false}
           onClick={() => run((chain) => chain.insertTable(NEW_TABLE))}
         >
@@ -320,6 +323,7 @@ export function RichTextToolbar({
 
       <ToolButton
         label="Equation"
+        keys={[KEY_NAMES.ALT, 'M']}
         active={false}
         onClick={() => onMathChange({ latex: '', pos: null })}
       >

@@ -18,6 +18,9 @@ import { REMOVE_LABELS, removeControl } from './rich-text-remove';
 
 const TABLE_NODE = 'table';
 
+/** What a question's table starts as; rows and columns are added from the table itself. */
+export const NEW_TABLE = { rows: 3, cols: 3, withHeaderRow: true } as const;
+
 /** The row that names the columns. A table without it is a table nobody can read. */
 const HEADER_ROW = 0;
 
@@ -109,6 +112,10 @@ function toolbarFor(view: EditorView, pos: number, state: EditorState): HTMLElem
 
 export const TableTools = Extension.create({
   name: 'tableTools',
+
+  addKeyboardShortcuts() {
+    return { 'Alt-t': () => this.editor.commands.insertTable(NEW_TABLE) };
+  },
 
   addProseMirrorPlugins() {
     return [

@@ -224,6 +224,50 @@ describe('tables', () => {
   });
 });
 
+describe('the keys that do what the toolbar offers', () => {
+  const press = (init: KeyboardEventInit) => {
+    const box = document.querySelector('.ProseMirror');
+    assert.ok(box);
+    fireEvent.keyDown(box, { altKey: true, ...init });
+  };
+
+  it('opens the equation dialog on Alt+M', () => {
+    show(<RichText value="" onChange={noop} />);
+
+    press({ key: 'm', keyCode: 77 });
+
+    assert.ok(screen.getByRole('button', { name: 'Insert' }));
+  });
+
+  /** The failure this prevents: Option makes the key a symbol, and a shortcut read by its letter never fires. */
+  it('answers Option+M on a Mac, where the key arrives as µ', () => {
+    show(<RichText value="" onChange={noop} />);
+
+    press({ key: 'µ', keyCode: 77 });
+
+    assert.ok(screen.getByRole('button', { name: 'Insert' }));
+  });
+
+  it('inserts a table on Alt+T', () => {
+    let html = '';
+    show(<RichText value="" onChange={(next) => (html = next)} />);
+
+    press({ key: 't', keyCode: 84 });
+
+    assert.match(html, /<table/);
+  });
+
+  /** An MCQ option is one line, so the key has no more to offer there than the toolbar does. */
+  it('inserts no table on a single-line field', () => {
+    let html = '';
+    show(<RichText value="" onChange={(next) => (html = next)} singleLine />);
+
+    press({ key: 't', keyCode: 84 });
+
+    assert.doesNotMatch(html, /<table/);
+  });
+});
+
 describe('the equation dialog refuses what will not render', () => {
   const open = () => {
     show(<RichText value="" onChange={noop} />);
