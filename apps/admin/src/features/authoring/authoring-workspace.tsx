@@ -113,6 +113,13 @@ const LIVE_AROUND = 1;
 /** How far off a card's top the view may sit and still be at rest on it: layout rounds to whole pixels. */
 const REST_PX = 2;
 
+const restsOn = (view: HTMLElement, card: HTMLElement | undefined): boolean =>
+  card !== undefined && Math.abs(card.offsetTop - view.scrollTop) <= REST_PX;
+
+/** The card to time: the one in view, once it has stopped moving and been read. */
+const restingCard = (atRest: boolean, read: boolean, key: string): string | null =>
+  atRest && read ? key : null;
+
 /** With Alt held, the arrow that moves to the previous or the next question. */
 const QUESTION_STEP_KEYS: Readonly<Record<string, number>> = { ArrowUp: -1, ArrowDown: 1 };
 
@@ -221,8 +228,7 @@ export function AuthoringWorkspace({
       if (card && card.offsetTop <= line) found = key;
     }
     if (found !== activeKey) setActiveKey(found);
-    const top = cardRefs.current.get(found)?.offsetTop;
-    setAtRest(top !== undefined && Math.abs(top - view.scrollTop) <= REST_PX);
+    setAtRest(restsOn(view, cardRefs.current.get(found)));
   }, [keys, activeKey]);
 
   // A deleted question's card is gone: whichever card slid into its place is the one in view.
@@ -296,7 +302,7 @@ export function AuthoringWorkspace({
   const dirty = active in edits;
   const unsaved = Object.keys(edits).length;
   useEffect(() => onUnsavedChange?.(unsaved), [unsaved, onUnsavedChange]);
-  const resting = atRest && shown ? active : null;
+  const resting = restingCard(atRest, shown !== null, active);
   useEffect(() => onResting?.(resting, dirty), [resting, dirty, onResting]);
   useUnsavedPrompt(unsaved > 0);
   const canSave =

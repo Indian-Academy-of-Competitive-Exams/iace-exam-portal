@@ -527,7 +527,7 @@ function cardOf(
         work={work}
         question={question}
         seat={seat}
-        pending={pending}
+        fixable={seat.fixing && review.state === REVIEW_STATES.SENT_BACK && !pending}
         onChanged={onChanged}
         onSettle={onSettle}
       />
@@ -616,15 +616,15 @@ function CardActions({
   work,
   question,
   seat,
-  pending,
+  fixable,
   onChanged,
   onSettle,
 }: Readonly<{
   work: SectionWork;
   question: SectionQuestion;
   seat: ReturnType<typeof seatOf>;
-  /** A card holds an unsaved edit, so nothing is handed on yet. */
-  pending: boolean;
+  /** Sent back to the viewer, with no unsaved edit that marking it fixed would leave behind. */
+  fixable: boolean;
   onChanged: (next: SectionWork) => void;
   onSettle: (savedId?: string) => Promise<void>;
 }>) {
@@ -675,8 +675,7 @@ function CardActions({
       </>
     );
   }
-  if (seat.fixing && state === REVIEW_STATES.SENT_BACK) {
-    if (pending) return null;
+  if (fixable) {
     return (
       <Button
         type="button"
