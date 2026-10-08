@@ -13,16 +13,14 @@ const REPORT_EVERY_MS = 30_000;
 export function useWorkClock(testId: string, sectionId: string, watched: string | null): WorkClock {
   const [clock] = useState(() => new WorkClock());
 
+  // Restarted with the card: its first second is counted a full second after it came to rest.
   useEffect(() => {
     clock.watch(watched);
-  }, [clock, watched]);
-
-  useEffect(() => {
     const ticking = setInterval(() => {
       if (document.visibilityState === 'visible') clock.tick();
     }, SECOND_MS);
     return () => clearInterval(ticking);
-  }, [clock]);
+  }, [clock, watched]);
 
   const report = useCallback(
     (keepalive = false) => {

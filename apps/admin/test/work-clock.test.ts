@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AppException, ErrorCodes, REVIEW_STATES } from '@iace/contracts';
-import { awaitsViewer, reportTime, WorkClock } from '../src/features/authoring/work-clock';
+import {
+  awaitsViewer,
+  liveTotal,
+  reportTime,
+  WorkClock,
+} from '../src/features/authoring/work-clock';
 
 const ticks = (clock: WorkClock, count: number) => {
   for (let at = 0; at < count; at += 1) clock.tick();
@@ -64,6 +69,47 @@ describe('the clock on a question', () => {
     assert.equal(clock.shown('q9', 0), 90);
     assert.equal(clock.shown('new', 0), 0);
     assert.deepEqual(clock.take(3600, 'new'), [['q9', 90]]);
+  });
+});
+
+describe('a seat’s total beside its questions’ clocks', () => {
+  const shownOn = (clock: WorkClock, cards: readonly (readonly [string, number])[]) =>
+    cards.reduce((sum, [key, held]) => sum + clock.shown(key, held), 0);
+
+  /** The failure this prevents: a total read before the last seconds were reported, short of the clocks beside it. */
+  it('adds up to the clocks whether or not the server has been told yet', () => {
+    const clock = new WorkClock();
+    const opened = [
+      ['q1', 40],
+      ['q2', 0],
+    ] as const;
+    assert.equal(liveTotal(clock, 40, opened), shownOn(clock, opened));
+
+    clock.watch('q1');
+    ticks(clock, 20);
+    clock.watch('q2');
+    ticks(clock, 15);
+    assert.equal(liveTotal(clock, 40, opened), 75);
+
+    clock.take(3600);
+    const reread = [
+      ['q1', 60],
+      ['q2', 15],
+    ] as const;
+    assert.equal(liveTotal(clock, 75, reread), 75);
+    assert.equal(shownOn(clock, reread), 75);
+  });
+
+  /** The failure this prevents: a new question's time shown twice when its report lands before it is first drawn. */
+  it('shows a question made from the blank card once, however soon its time was reported', () => {
+    const clock = new WorkClock();
+    clock.watch('new');
+    ticks(clock, 90);
+    clock.move('new', 'q9');
+    clock.take(3600, 'new');
+
+    assert.equal(clock.shown('q9', 90), 90);
+    assert.equal(liveTotal(clock, 90, [['q9', 90]]), 90);
   });
 });
 

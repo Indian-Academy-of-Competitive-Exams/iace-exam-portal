@@ -1021,6 +1021,31 @@ describe('SectionWorkService — the reader’s review', () => {
     assert.equal(await stateOf(), REVIEW_STATES.CHECKED);
   });
 
+  /** The failure this prevents: a question its reader changed after passing it, released under the tick it had before. */
+  it('drops the reader’s tick when they edit the question, its words left alone or not', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typistDone } = await aSection();
+    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(question);
+    await typistDone();
+    await work.edit(pair, question.id, draft(), viewer(READER));
+    await work.check(pair, question.id, viewer(READER));
+
+    await work.edit(
+      pair,
+      question.id,
+      draft({ difficulty: DIFFICULTY_LEVEL.HIGH }),
+      viewer(READER),
+    );
+
+    const read = await work.one(pair, viewer(READER));
+    assert.equal(read.questions[0]?.review.state, REVIEW_STATES.UNCHECKED);
+    await assert.rejects(
+      () => work.release(pair, viewer(READER)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+  });
+
   it('refuses a send-back when the section has no typist to take it', async () => {
     const { work } = await build();
     const { pair, typing, onPaper, handToReader } = await aSection(PAPER_SOURCES.PICKED);

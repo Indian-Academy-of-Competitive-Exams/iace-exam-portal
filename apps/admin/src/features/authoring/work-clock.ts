@@ -70,8 +70,19 @@ export class WorkClock {
       add(seconds, to, moved);
     }
     this.bases.delete(from);
+    // Held as nothing: the question is new, and its first read may already include what moved here.
+    this.bases.set(to, 0);
     for (const listener of this.listeners) listener();
   }
+}
+
+/** A seat's total to show: what the server last held, and whatever each card's clock has counted past its own figure. */
+export function liveTotal(
+  clock: WorkClock,
+  held: number,
+  cards: readonly (readonly [key: string, held: number])[],
+): number {
+  return cards.reduce((total, [key, own]) => total + clock.shown(key, own) - own, held);
 }
 
 /** Hands what is unreported to `send`; a refusal is final, and a report that got no answer waits for the next. */

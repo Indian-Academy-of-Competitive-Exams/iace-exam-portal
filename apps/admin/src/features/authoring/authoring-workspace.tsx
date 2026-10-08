@@ -110,6 +110,9 @@ const invalid = (held: Held): boolean =>
 /** Cards either side of the one in view that keep a live editor; the rest are placeholders. */
 const LIVE_AROUND = 1;
 
+/** How far off a card's top the view may sit and still be at rest on it: layout rounds to whole pixels. */
+const REST_PX = 2;
+
 /** With Alt held, the arrow that moves to the previous or the next question. */
 const QUESTION_STEP_KEYS: Readonly<Record<string, number>> = { ArrowUp: -1, ArrowDown: 1 };
 
@@ -121,6 +124,7 @@ export function AuthoringWorkspace({
   source,
   startAt,
   onActive,
+  onResting,
   title,
   saveLabel,
   extraActions,
@@ -131,6 +135,8 @@ export function AuthoringWorkspace({
   startAt: string | null;
   /** Told the card in view, so the page's URL can follow it. */
   onActive?: (key: string) => void;
+  /** Told the card at rest in the view once it is read, and whether it holds an unsaved edit; null while one is arriving. */
+  onResting?: (key: string | null, dirty: boolean) => void;
   /** What every card belongs to, named in its language bar ahead of the question. */
   title?: React.ReactNode;
   saveLabel: string;
@@ -163,6 +169,7 @@ export function AuthoringWorkspace({
   const [activeKey, setActiveKey] = useState(startAt && keys.includes(startAt) ? startAt : '');
   const [romanised, setRomanised] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [atRest, setAtRest] = useState(true);
   const scroller = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef(new Map<string, HTMLElement>());
 
@@ -214,6 +221,8 @@ export function AuthoringWorkspace({
       if (card && card.offsetTop <= line) found = key;
     }
     if (found !== activeKey) setActiveKey(found);
+    const top = cardRefs.current.get(found)?.offsetTop;
+    setAtRest(top !== undefined && Math.abs(top - view.scrollTop) <= REST_PX);
   }, [keys, activeKey]);
 
   // A deleted question's card is gone: whichever card slid into its place is the one in view.
@@ -287,6 +296,8 @@ export function AuthoringWorkspace({
   const dirty = active in edits;
   const unsaved = Object.keys(edits).length;
   useEffect(() => onUnsavedChange?.(unsaved), [unsaved, onUnsavedChange]);
+  const resting = atRest && shown ? active : null;
+  useEffect(() => onResting?.(resting, dirty), [resting, dirty, onResting]);
   useUnsavedPrompt(unsaved > 0);
   const canSave =
     !editable || !dirty || (issues.length === 0 && duplicate === null && !save.isPending);

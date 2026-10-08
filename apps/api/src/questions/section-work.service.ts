@@ -33,7 +33,12 @@ import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
 import { RedisService } from '../redis/redis.service';
 import { releaseSectionEditLock, sectionEditingBy, takeSectionEditLock } from '../common/edit-lock';
-import { AssignmentsService, assertJobOpen, jobOpen } from '../assignments';
+import {
+  AssignmentsService,
+  assertJobOpen,
+  jobOpen,
+  reopenReadingIfUnchecked,
+} from '../assignments';
 import { stemPreviewOf } from './question-core';
 import { QuestionImportService } from './question-import.service';
 import { reachableTest } from './question-query';
@@ -315,6 +320,17 @@ export class SectionWorkService {
       isSuperAdmin: viewer.isSuperAdmin,
     });
     const saved = await this.questions.update(questionId, draft, viewer.id);
+    // The reader's own edit of any kind is read again: a rewording already is, by every seat.
+    if (heldNow(context)?.role === ASSIGNMENT_ROLES.PROOFREADER && !context.test.finalizedAt) {
+      await this.prisma.$transaction(async (tx) => {
+        await beginDraftPaperEdit(tx, pair.testId, OFFERED_MESSAGE);
+        await tx.questionReview.updateMany({
+          where: { testId: pair.testId, questionId, checkedAt: { not: null } },
+          data: { checkedAt: null },
+        });
+        await reopenReadingIfUnchecked(tx, pair.testId, pair.baseConfigSectionId);
+      }, TX_LIMITS.SHORT);
+    }
     // A rewording that sends a released section back to its reader gives the claim up with it.
     if (context.reader?.finalizedAt && (await jobOpen(this.prisma, context.reader.id))) {
       await releaseSectionEditLock(this.redis, pair, viewer.id);

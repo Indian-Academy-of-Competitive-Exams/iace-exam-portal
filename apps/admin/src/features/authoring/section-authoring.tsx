@@ -80,7 +80,7 @@ import { FinalizeAssignmentDialog } from './finalize-assignment-dialog';
 import { useWorkClock } from './use-work-clock';
 import { DueStandingBadge } from '../../components/due-standing-badge';
 import { TimeSpent } from '../../components/time-spent';
-import { awaitsViewer, type WorkClock } from './work-clock';
+import { awaitsViewer, liveTotal, type WorkClock } from './work-clock';
 
 const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.UNCHECKED]: 'neutral',
@@ -221,20 +221,22 @@ function SectionWorkspace({
   const seated = seat.writes && !work.seatReplaced && work.seat !== SECTION_SEATS.OWNER;
   const counting = seated && !work.offered;
   const [inView, setInView] = useState<string | null>(null);
-  // A saved question's clock stands still: only a blank card, or one waiting on the viewer, counts.
+  const [editing, setEditing] = useState(false);
+  const [unsaved, setUnsaved] = useState(0);
+  // Nothing is handed on over an unsaved edit: the hand-on closes the card, and the edit is left behind.
+  const pending = unsaved > 0;
+  // A saved question's clock stands still: only a blank card, one being edited, or one waiting on the viewer counts.
   const owed =
     inView === NEW_CARD ||
+    editing ||
     work.questions.some(
       (question) => question.questionId === inView && awaitsViewer(seat, question.review.state),
     );
   const clock = useWorkClock(testId, sectionId, counting && owed ? inView : null);
-  const follow = useCallback(
-    (key: string) => {
-      setInView(key);
-      onActive(key);
-    },
-    [onActive],
-  );
+  const rest = useCallback((key: string | null, dirty: boolean) => {
+    setInView(key);
+    setEditing(dirty);
+  }, []);
 
   const source = useMemo((): WorkspaceSource => {
     return {
@@ -243,7 +245,7 @@ function SectionWorkspace({
           work,
           question,
           index,
-          { seat, clock: counting ? clock : null },
+          { seat, clock: counting ? clock : null, pending },
           onChanged,
           onSettle,
         ),
@@ -297,17 +299,17 @@ function SectionWorkspace({
           }
         : undefined,
     };
-  }, [work, seat, blocked, counting, clock, testId, sectionId, onChanged, onSettle]);
+  }, [work, seat, blocked, counting, clock, pending, testId, sectionId, onChanged, onSettle]);
 
   const extra = (
     <>
-      {seat.typing ? (
+      {seat.typing && !pending ? (
         <Button type="button" size="sm" variant="outline" onClick={() => setFinishing(true)}>
           <CheckCheck aria-hidden />
           Mark done
         </Button>
       ) : null}
-      {seat.releasing ? (
+      {seat.releasing && !pending ? (
         <Button type="button" size="sm" variant="outline" onClick={() => setReleasing(true)}>
           <Send aria-hidden />
           Release
@@ -342,7 +344,9 @@ function SectionWorkspace({
         <AuthoringWorkspace
           source={source}
           startAt={startAt}
-          onActive={follow}
+          onActive={onActive}
+          onResting={rest}
+          onUnsavedChange={setUnsaved}
           title={title}
           saveLabel="Save and next"
           extraActions={
@@ -353,7 +357,14 @@ function SectionWorkspace({
           }
           panel={{
             label: 'Section progress',
-            render: (position) => <ProgressPanel work={work} seat={seat} {...position} />,
+            render: (position) => (
+              <ProgressPanel
+                work={work}
+                seat={seat}
+                clock={counting ? clock : null}
+                {...position}
+              />
+            ),
           }}
         />
       )}
@@ -488,7 +499,11 @@ function cardOf(
   work: SectionWork,
   question: SectionQuestion,
   index: number,
-  { seat, clock }: { seat: ReturnType<typeof seatOf>; clock: WorkClock | null },
+  {
+    seat,
+    clock,
+    pending,
+  }: { seat: ReturnType<typeof seatOf>; clock: WorkClock | null; pending: boolean },
   onChanged: (next: SectionWork) => void,
   onSettle: (savedId?: string) => Promise<void>,
 ): WorkspaceCard {
@@ -512,6 +527,7 @@ function cardOf(
         work={work}
         question={question}
         seat={seat}
+        pending={pending}
         onChanged={onChanged}
         onSettle={onSettle}
       />
@@ -535,6 +551,16 @@ function SeatTimes({ time }: Readonly<{ time: QuestionTime }>) {
       <TimeSpent seat="Proof-reader" seconds={time.reader} />
     </>
   );
+}
+
+/** The viewer's own seat in the panel, running with the cards' clocks so the two always add up. */
+function OwnTimeStat({
+  clock,
+  held,
+  cards,
+}: Readonly<{ clock: WorkClock; held: number; cards: Parameters<typeof liveTotal>[2] }>) {
+  const seconds = useSyncExternalStore(clock.subscribe, () => liveTotal(clock, held, cards));
+  return <TimeStat seconds={seconds} />;
 }
 
 /** A seat's whole time on the section, as My sections totals it; summed off the questions listed only where that is not sent. */
@@ -590,12 +616,15 @@ function CardActions({
   work,
   question,
   seat,
+  pending,
   onChanged,
   onSettle,
 }: Readonly<{
   work: SectionWork;
   question: SectionQuestion;
   seat: ReturnType<typeof seatOf>;
+  /** A card holds an unsaved edit, so nothing is handed on yet. */
+  pending: boolean;
   onChanged: (next: SectionWork) => void;
   onSettle: (savedId?: string) => Promise<void>;
 }>) {
@@ -647,6 +676,7 @@ function CardActions({
     );
   }
   if (seat.fixing && state === REVIEW_STATES.SENT_BACK) {
+    if (pending) return null;
     return (
       <Button
         type="button"
@@ -776,15 +806,32 @@ function SendBackDialog({
 function ProgressPanel({
   work,
   seat,
+  clock,
   activeKey,
   jump,
 }: Readonly<{
   work: SectionWork;
   seat: ReturnType<typeof seatOf>;
+  /** Running only for the viewer's own seat, while the paper can still change. */
+  clock: WorkClock | null;
   activeKey: string;
   jump: (key: string) => void;
 }>) {
   const counts = countsOf(work);
+  const ownSeat = work.seat === SECTION_SEATS.TYPIST ? 'typist' : 'reader';
+  const timeOf = (role: 'typist' | 'reader') => {
+    const held = seatTime(work, role);
+    if (!clock || role !== ownSeat || held === null) return <TimeStat seconds={held} />;
+    const cards = work.questions.map(({ questionId, time }) => [questionId, time.own] as const);
+    // The blank card's seconds are on screen too, until its save names the question they belong to.
+    return (
+      <OwnTimeStat
+        clock={clock}
+        held={held}
+        cards={seat.typing ? [...cards, [NEW_CARD, 0]] : cards}
+      />
+    );
+  };
   const tiles = (
     <ol className="grid grid-cols-5 gap-1.5">
       {work.questions.map((question, index) => (
@@ -819,7 +866,7 @@ function ProgressPanel({
         <DueStat holder={work.typist} />
         <Stat label="Written" value={`${counts.written} of ${work.questionCount}`} />
         <Stat label="Sent back to fix" value={counts.sentBack} />
-        <TimeStat seconds={seatTime(work, 'typist')} />
+        {timeOf('typist')}
         {seat.typing ? (
           <Button asChild size="sm" variant="outline">
             <Link to={ROUTES.AUTHORING_IMPORT(work.testId, work.baseConfigSectionId)}>
@@ -836,7 +883,7 @@ function ProgressPanel({
         <Stat label="Checked" value={`${counts.checked} of ${work.questions.length}`} />
         <Stat label="Sent back" value={counts.sentBack} />
         <Stat label="Fixed, to check again" value={counts.fixed} />
-        <TimeStat seconds={seatTime(work, 'reader')} />
+        {timeOf('reader')}
         {tiles}
       </TabsContent>
     </Tabs>
