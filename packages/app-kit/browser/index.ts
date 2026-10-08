@@ -38,7 +38,17 @@ export const browserSignOutSignal: SignOutSignal = {
 
 /** The token store every web SPA wants, with only its storage key to choose. */
 export function createBrowserTokenStore(storageKey: string): TokenStore {
-  return createTokenStore(storageKey, browserStorage);
+  return {
+    ...createTokenStore(storageKey, browserStorage),
+    // The storage event reaches every tab but the one that wrote; a null key is the whole storage cleared.
+    subscribe: (onChange) => {
+      const listener = (event: StorageEvent) => {
+        if (event.key === null || event.key === storageKey) onChange();
+      };
+      window.addEventListener('storage', listener);
+      return () => window.removeEventListener('storage', listener);
+    },
+  };
 }
 
 // --- the web app scaffolding: composes @iace/ui and react-router-dom, hence not in `src/` ------

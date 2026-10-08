@@ -17,6 +17,9 @@ import { type SignOutReason, type SignOutSignal } from './sign-out-signal';
 export interface AuthState<TIdentity> {
   identity: TIdentity | null;
   isLoading: boolean;
+  /** A token is held but the server never said whose: not signed out, so a screen offers `retry`, not sign-in. */
+  isUnreachable: boolean;
+  retry: () => void;
   signIn: (session: AuthSessionResponse) => void;
   signOut: () => Promise<void>;
   signedOutReason: SignOutReason | null;
@@ -66,9 +69,11 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     /** Whether a token exists, in React state — the store is outside React, so writing to it notifies nothing that renders. */
     const [hasToken, setHasToken] = useState(() => tokenStore.get() !== null);
     const [signedOutReason, setSignedOutReason] = useState<SignOutReason | null>(null);
+    /** How many times another tab has put a different person under this one; each remounts every screen. */
+    const [swaps, setSwaps] = useState(0);
 
     // /auth/me re-reads the identity, so a permission change lands on reload.
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isPaused, error, refetch } = useQuery({
       queryKey,
       queryFn: () => endpoints.me(),
       enabled: hasToken,
@@ -79,12 +84,42 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
       staleTime: 5 * 60 * 1000,
     });
 
-    const clearSession = useCallback(() => {
-      tokenStore.clear();
+    /** What this tab shows and holds in memory; the store is left alone, for when another tab emptied it. */
+    const forget = useCallback(() => {
       setHasToken(false);
       // All of it, not just the identity: the next person on a shared machine must not see this one's data.
       queryClient.clear();
     }, [queryClient]);
+
+    const clearSession = useCallback(() => {
+      tokenStore.clear();
+      forget();
+    }, [forget]);
+
+    /** Takes up the token another tab stored: a renewed one is the same person, and only the server can say it is someone else. */
+    const adopt = useCallback(async () => {
+      setSignedOutReason(null);
+      setHasToken(true);
+      if (queryClient.getQueryData(queryKey) === undefined) return void refetch();
+      // Unanswered, nothing changes: the next write heard asks again.
+      const now = await endpoints.me().catch(() => null);
+      // Read after the answer, not before asking: a second write heard meanwhile must not remount twice.
+      const shown = queryClient.getQueryData<AuthIdentity>(queryKey);
+      if (!now || !shown || shown.id === now.id) return;
+      queryClient.clear();
+      queryClient.setQueryData(queryKey, now);
+      setSwaps((count) => count + 1);
+    }, [queryClient, refetch]);
+
+    // Another tab wrote the store: show what it holds now, and never write back, which would end that tab's session.
+    useEffect(
+      () =>
+        tokenStore.subscribe?.(() => {
+          if (tokenStore.get() === null) forget();
+          else void adopt();
+        }),
+      [forget, adopt],
+    );
 
     // Raised by the API client when a refresh fails — the session is unrecoverable and nothing else notices.
     useEffect(
@@ -127,14 +162,24 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
         identity,
         // Only "loading" if there is a token to load an identity for.
         isLoading: isLoading && hasToken,
+        // Paused offline, or failed with no refusal: the token is still good for all anyone knows.
+        isUnreachable:
+          hasToken &&
+          data === undefined &&
+          (isPaused || (error !== null && isWorthAskingAgain(error))),
+        retry: () => void refetch(),
         signIn,
         signOut,
         signedOutReason,
         ...(extend?.(identity) ?? ({} as TExtra)),
       } as AuthState<TIdentity> & TExtra;
-    }, [data, hasToken, isLoading, signIn, signOut, signedOutReason]);
+    }, [data, error, hasToken, isLoading, isPaused, refetch, signIn, signOut, signedOutReason]);
 
-    return <AuthContext value={value}>{children}</AuthContext>;
+    return (
+      <AuthContext key={swaps} value={value}>
+        {children}
+      </AuthContext>
+    );
   }
 
   function useAuth(): AuthState<TIdentity> & TExtra {

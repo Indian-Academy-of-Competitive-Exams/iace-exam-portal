@@ -13,6 +13,8 @@ export interface TokenStore {
   get(): StoredTokens | null;
   set(tokens: AuthTokens): void;
   clear(): void;
+  /** Told of a write made by another holder of the same storage, never of its own; absent where there is none, as on a phone. */
+  subscribe?(onChange: () => void): () => void;
 }
 
 /** Token persistence, outside React; every app passes its OWN key since the SPAs share one origin, and a shared key would hand an admin's token to a student's requests. */

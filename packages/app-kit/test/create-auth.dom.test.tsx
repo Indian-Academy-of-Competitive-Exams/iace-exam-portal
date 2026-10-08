@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { QueryClient, QueryClientProvider, onlineManager, useQuery } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import {
   AppException,
@@ -8,11 +9,14 @@ import {
   type AuthIdentity,
   type AuthSessionResponse,
 } from '@iace/contracts';
-import { createAuth } from '../src/create-auth';
-import { createTokenStore } from '../src/token-store';
+import { createAuth, type AuthState } from '../src/create-auth';
+import { createTokenStore, type KeyValueStorage, type TokenStore } from '../src/token-store';
 import { fakeStorage } from './support/fake-storage';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  onlineManager.setOnline(true);
+});
 
 const tokenStore = createTokenStore('iace.test.auth', fakeStorage());
 
@@ -131,5 +135,262 @@ describe('createAuth', () => {
     await waitFor(() => assert.equal(seen.at(-1)?.actor, 'STUDENT'), { timeout: 3000 });
     assert.equal(asked, 2);
     client.clear();
+  });
+});
+
+const NO_SIGNAL = { emit: () => undefined, subscribe: () => () => undefined };
+const refusal = (httpStatus: number) => new AppException(ErrorCodes.INTERNAL, 'x', { httpStatus });
+
+/** A session whose identity read the test answers, and the state a screen is handed for it. */
+function sessionAnswering(me: () => Promise<AuthIdentity>, store: TokenStore) {
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
+  const auth = createAuth<AuthIdentity>({
+    actor: 'STUDENT',
+    queryKey: ['auth', 'me'],
+    tokenStore: store,
+    signOutSignal: NO_SIGNAL,
+    endpoints: { me, logout: () => Promise.resolve() },
+  });
+  let state: AuthState<AuthIdentity> | undefined;
+  function Probe() {
+    state = auth.useAuth();
+    return null;
+  }
+  render(
+    <QueryClientProvider client={client}>
+      <auth.AuthProvider>
+        <Probe />
+      </auth.AuthProvider>
+    </QueryClientProvider>,
+  );
+  return () => {
+    assert.ok(state);
+    return state;
+  };
+}
+
+function heldToken(key: string): TokenStore {
+  const store = createTokenStore(key, fakeStorage());
+  store.set({ accessToken: 'a', refreshToken: 'r', expiresInSec: 900 });
+  return store;
+}
+
+describe('a session whose server does not answer', () => {
+  /** The failure this prevents: a student reloading mid-paper while the API is down, sent to sign in with a good token. */
+  it('is unreachable rather than signed out, and opens once a retry is answered', async () => {
+    const store = heldToken('iace.test.down');
+    let up = false;
+    const read = sessionAnswering(
+      () =>
+        up ? Promise.resolve({ actor: 'STUDENT' } as AuthIdentity) : Promise.reject(refusal(0)),
+      store,
+    );
+
+    // The one retry is spread over a second or two, so the wait covers the widest draw.
+    await waitFor(() => assert.equal(read().isUnreachable, true), { timeout: 3000 });
+    assert.equal(read().isLoading, false);
+    assert.notEqual(store.get(), null);
+
+    up = true;
+    act(() => read().retry());
+
+    await waitFor(() => assert.equal(read().identity?.actor, 'STUDENT'));
+    assert.equal(read().isUnreachable, false);
+  });
+
+  it('is unreachable while the browser is offline, and opens by itself once back online', async () => {
+    onlineManager.setOnline(false);
+    const read = sessionAnswering(
+      () => Promise.resolve({ actor: 'STUDENT' } as AuthIdentity),
+      heldToken('iace.test.offline'),
+    );
+
+    assert.equal(read().isUnreachable, true);
+    assert.equal(read().isLoading, false);
+
+    act(() => onlineManager.setOnline(true));
+
+    await waitFor(() => assert.equal(read().identity?.actor, 'STUDENT'));
+    assert.equal(read().isUnreachable, false);
+  });
+
+  it('is signed out, not unreachable, when the server refuses the token', async () => {
+    let asked = 0;
+    const read = sessionAnswering(() => {
+      asked += 1;
+      return Promise.reject(refusal(403));
+    }, heldToken('iace.test.refused'));
+
+    await waitFor(() => assert.equal(asked, 1));
+    await waitFor(() => assert.equal(read().isLoading, false));
+
+    assert.equal(read().identity, null);
+    assert.equal(read().isUnreachable, false);
+  });
+});
+
+const PEOPLE: Record<string, string> = { a: 'one', renewed: 'one', b: 'two' };
+const ROWS = ['rows'];
+
+/** This tab and another on one storage: `elsewhere` is the other tab writing, then this one hearing of it. */
+function twoTabs(held: string | null) {
+  const KEY = 'iace.test.tabs';
+  const storage = fakeStorage();
+  const counts = { written: 0, asked: 0, loggedOut: 0, mounted: 0 };
+  const counted: KeyValueStorage = {
+    getItem: (key) => storage.getItem(key),
+    setItem: (key, value) => {
+      counts.written += 1;
+      storage.setItem(key, value);
+    },
+    removeItem: (key) => {
+      counts.written += 1;
+      storage.removeItem(key);
+    },
+  };
+  const heard = new Set<() => void>();
+  const store: TokenStore = {
+    ...createTokenStore(KEY, counted),
+    subscribe: (onChange) => {
+      heard.add(onChange);
+      return () => heard.delete(onChange);
+    },
+  };
+  const other = createTokenStore(KEY, storage);
+  const hold = (accessToken: string | null) =>
+    accessToken === null
+      ? other.clear()
+      : other.set({ accessToken, refreshToken: 'r', expiresInSec: 900 });
+  hold(held);
+
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
+  const auth = createAuth<AuthIdentity>({
+    actor: 'STUDENT',
+    queryKey: ['auth', 'me'],
+    tokenStore: store,
+    signOutSignal: NO_SIGNAL,
+    endpoints: {
+      me: () => {
+        counts.asked += 1;
+        const id = PEOPLE[store.get()?.accessToken ?? ''];
+        return Promise.resolve({ actor: 'STUDENT', id } as AuthIdentity);
+      },
+      logout: () => {
+        counts.loggedOut += 1;
+        return Promise.resolve();
+      },
+    },
+  });
+
+  let who: string | null = null;
+  const drawn: Array<{ who: string | null; rows: string | undefined }> = [];
+  /** A list that never reads the session and never asks twice: only a remount onto an emptied cache changes it. */
+  function Rows() {
+    const rows = useQuery({
+      queryKey: ROWS,
+      queryFn: () => Promise.resolve(`rows of ${store.get()?.accessToken}`),
+      staleTime: Infinity,
+    });
+    useEffect(() => {
+      counts.mounted += 1;
+    }, []);
+    drawn.push({ who, rows: rows.data });
+    return null;
+  }
+  // One element for every render, as a route's is: React skips a child it was handed unchanged.
+  const page = <Rows />;
+  function Screen() {
+    who = auth.useAuth().identity?.id ?? null;
+    return who === null ? null : page;
+  }
+  render(
+    <QueryClientProvider client={client}>
+      <auth.AuthProvider>
+        <Screen />
+      </auth.AuthProvider>
+    </QueryClientProvider>,
+  );
+
+  return {
+    client,
+    counts,
+    drawn,
+    now: () => ({ who, rows: who === null ? undefined : drawn.at(-1)?.rows }),
+    elsewhere: (accessToken: string | null) => {
+      hold(accessToken);
+      heard.forEach((onChange) => onChange());
+    },
+  };
+}
+
+describe('a session another tab changes', () => {
+  it('signs this tab out with nothing cached, and neither writes the store nor calls the server', async () => {
+    const tab = twoTabs('a');
+    await waitFor(() => assert.deepEqual(tab.now(), { who: 'one', rows: 'rows of a' }));
+
+    act(() => tab.elsewhere(null));
+
+    assert.equal(tab.now().who, null);
+    assert.equal(tab.client.getQueryData(ROWS), undefined);
+    assert.equal(tab.counts.written, 0, 'a write here could erase the session the other tab holds');
+    assert.equal(tab.counts.loggedOut, 0);
+    tab.client.clear();
+  });
+
+  /** The failure this prevents: one admin on screen while every request acts as another. */
+  it('shows who the other tab signed in as, with none of the last person left on screen', async () => {
+    const tab = twoTabs('a');
+    await waitFor(() => assert.deepEqual(tab.now(), { who: 'one', rows: 'rows of a' }));
+
+    act(() => tab.elsewhere('b'));
+
+    await waitFor(() => assert.deepEqual(tab.now(), { who: 'two', rows: 'rows of b' }));
+    assert.deepEqual(
+      tab.drawn.filter((screen) => screen.who === 'two' && screen.rows === 'rows of a'),
+      [],
+    );
+    assert.equal(tab.counts.written, 0);
+    tab.client.clear();
+  });
+
+  /** A tab woken late hears the sign-out and the sign-in at once, the store already holding the second. */
+  it('remounts the screen once however many writes it hears of one change', async () => {
+    const tab = twoTabs('a');
+    await waitFor(() => assert.deepEqual(tab.now(), { who: 'one', rows: 'rows of a' }));
+
+    act(() => {
+      tab.elsewhere('b');
+      tab.elsewhere('b');
+    });
+
+    await waitFor(() => assert.deepEqual(tab.now(), { who: 'two', rows: 'rows of b' }));
+    assert.equal(tab.counts.mounted, 2);
+    tab.client.clear();
+  });
+
+  /** A token is renewed every few minutes: that must not cost the other tabs what they have on screen. */
+  it('leaves the screen as it is when the other tab only renewed the token', async () => {
+    const tab = twoTabs('a');
+    await waitFor(() => assert.deepEqual(tab.now(), { who: 'one', rows: 'rows of a' }));
+    const asked = tab.counts.asked;
+
+    act(() => tab.elsewhere('renewed'));
+
+    await waitFor(() => assert.equal(tab.counts.asked, asked + 1));
+    assert.deepEqual(tab.now(), { who: 'one', rows: 'rows of a' });
+    assert.equal(tab.counts.mounted, 1);
+    assert.equal(tab.counts.written, 0);
+    tab.client.clear();
+  });
+
+  it('takes up the session the other tab signed in to', async () => {
+    const tab = twoTabs(null);
+    assert.equal(tab.now().who, null);
+
+    act(() => tab.elsewhere('b'));
+
+    await waitFor(() => assert.deepEqual(tab.now(), { who: 'two', rows: 'rows of b' }));
+    assert.equal(tab.counts.written, 0);
+    tab.client.clear();
   });
 });
