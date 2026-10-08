@@ -43,15 +43,28 @@ function Outcome({ row }: Readonly<{ row: QuestionImportRow }>) {
   );
 }
 
-/** Why the section will not take this row: it is about where the row is going, which its own editor cannot show. */
-function SectionRefusal({ row }: Readonly<{ row: QuestionImportRow }>) {
-  const refused = row.issues.find(
-    (issue) => issue.code === QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
-  );
-  if (!refused) return null;
+const CODE = QUESTION_VALIDATION_CODE;
+
+/** Found only by reading the sheet or by where the row is going, so the card's own checklist never raises them. */
+const BEYOND_THE_CARD: ReadonlySet<string> = new Set([
+  CODE.TYPE_INVALID,
+  CODE.DIFFICULTY_INVALID,
+  CODE.TAG_INVALID,
+  CODE.QUESTION_CODE_INVALID,
+  CODE.QUESTION_CODE_TAKEN,
+  CODE.PICTURE_INVALID,
+  CODE.SUBJECT_UNKNOWN,
+  CODE.TOPIC_UNKNOWN,
+  CODE.SUBJECT_OUTSIDE_SECTION,
+]);
+
+/** Why the row stays out for reasons its own editor cannot show, as last judged. */
+function SheetReasons({ row }: Readonly<{ row: QuestionImportRow }>) {
+  const reasons = row.issues.filter((issue) => BEYOND_THE_CARD.has(issue.code));
+  if (reasons.length === 0) return null;
   return (
     <div className="px-4 pt-3">
-      <Alert variant="warning">{refused.message}</Alert>
+      <Alert variant="warning">{reasons.map((issue) => issue.message).join('. ')}</Alert>
     </div>
   );
 }
@@ -80,12 +93,15 @@ export function ImportWorkspace({
   plan,
   startAt,
   onPlan,
+  onUnsavedChange,
   actions,
 }: Readonly<{
   plan: QuestionImportPlan;
   startAt: string | null;
   /** Every row judged again after a save, which is how a fixed row turns to Create. */
   onPlan: (plan: QuestionImportPlan) => void;
+  /** Told how many cards hold edits no save has taken: Import and the preview read only what was saved. */
+  onUnsavedChange: (cards: number) => void;
   actions: React.ReactNode;
 }>) {
   const queryClient = useQueryClient();
@@ -104,7 +120,7 @@ export function ImportWorkspace({
       cards: rows.map((row, index) => ({
         key: String(row.line),
         lead: <RowLead row={row} index={index} total={rows.length} />,
-        notice: <SectionRefusal row={row} />,
+        notice: <SheetReasons row={row} />,
         editable: row.action !== 'left_out',
       })),
       query: (line) => ({
@@ -137,6 +153,7 @@ export function ImportWorkspace({
       startAt={startAt}
       saveLabel="Save and next"
       extraActions={actions}
+      onUnsavedChange={onUnsavedChange}
       panel={{
         label: 'Imported questions',
         render: (position) => <ImportedRows rows={rows} {...position} />,

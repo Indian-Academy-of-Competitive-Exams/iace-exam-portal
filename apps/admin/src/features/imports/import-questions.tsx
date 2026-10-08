@@ -16,6 +16,7 @@ import {
   Alert,
   Badge,
   Button,
+  ConfirmDialog,
   DropdownMenuItem,
   ImportView,
   PageHeader,
@@ -104,6 +105,14 @@ function statsOf({ summary }: QuestionImportPlan, repeated: number) {
   ];
 }
 
+/** What an unsaved card edit stands in front of, and what each move does to it. */
+const LEAVING = {
+  PREVIEW: { drops: 'Going back to the preview drops them.', confirmLabel: 'Discard changes' },
+  IMPORT: { drops: 'Import writes the sheet without them.', confirmLabel: 'Import without them' },
+} as const;
+
+type Leaving = keyof typeof LEAVING;
+
 /** Registered only while the sheet is on screen: the authoring page over it registers its own. */
 function SheetTour() {
   usePageTour({ id: TOUR_IDS.IMPORT_QUESTIONS, steps: IMPORT_QUESTIONS_TOUR, ready: true });
@@ -143,6 +152,9 @@ export function ImportQuestionsPage() {
   // A fresh preview opens on the authoring page; stepping back to the sheet is remembered per run.
   const [leftRun, setLeftRun] = useState<string | null>(null);
   const [startAt, setStartAt] = useState<string | null>(null);
+  // Cards typed into and not saved: neither the preview nor Import has them.
+  const [unsaved, setUnsaved] = useState(0);
+  const [leaving, setLeaving] = useState<Leaving | null>(null);
   const reviewable = plan !== null && plan.rows.length > 0 && !intake.result;
   const review = (line: string | null) => {
     setStartAt(line);
@@ -162,36 +174,54 @@ export function ImportQuestionsPage() {
   );
 
   if (reviewable && leftRun !== plan.importLogId) {
+    const moves: Record<Leaving, () => void> = {
+      PREVIEW: () => setLeftRun(plan.importLogId),
+      IMPORT: intake.commit,
+    };
+    const move = (to: Leaving) => (unsaved > 0 ? setLeaving(to) : moves[to]());
     return (
-      <ImportWorkspace
-        plan={plan}
-        startAt={startAt}
-        onPlan={(judged) => intake.stage(intake.file, judged)}
-        actions={
-          <>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setLeftRun(plan.importLogId)}
-            >
-              <ArrowLeft aria-hidden />
-              Preview
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={!intake.canCommit}
-              loading={intake.isCommitting}
-              onClick={intake.commit}
-            >
-              <Upload aria-hidden />
-              {`Import ${plural(intake.writes, 'question')}`}
-            </Button>
-          </>
-        }
-      />
+      <>
+        <ImportWorkspace
+          plan={plan}
+          startAt={startAt}
+          onPlan={(judged) => intake.stage(intake.file, judged)}
+          onUnsavedChange={setUnsaved}
+          actions={
+            <>
+              <Button type="button" size="sm" variant="outline" onClick={() => move('PREVIEW')}>
+                <ArrowLeft aria-hidden />
+                Preview
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!intake.canCommit}
+                loading={intake.isCommitting}
+                onClick={() => move('IMPORT')}
+              >
+                <Upload aria-hidden />
+                {`Import ${plural(intake.writes, 'question')}`}
+              </Button>
+            </>
+          }
+        />
+
+        {leaving ? (
+          <ConfirmDialog
+            open
+            onOpenChange={(open) => !open && setLeaving(null)}
+            destructive
+            title="Discard the unsaved changes?"
+            description={`${plural(unsaved, 'question')} on this page ${unsaved === 1 ? 'has' : 'have'} changes that were not saved. ${LEAVING[leaving].drops}`}
+            confirmLabel={LEAVING[leaving].confirmLabel}
+            onConfirm={() => {
+              setLeaving(null);
+              moves[leaving]();
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
