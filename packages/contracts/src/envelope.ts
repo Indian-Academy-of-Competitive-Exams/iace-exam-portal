@@ -8,7 +8,7 @@ import { z, type ZodType } from 'zod';
 // controller cannot emit another shape. React to `error.code`, never to `message`.
 // ============================================================================
 
-/** The stable error vocabulary — add to it, never repurpose a member; throw with the constant, e.g. `AppException(ErrorCodes.PIN_LOCKED, …)`, never the bare string. */
+/** The stable error vocabulary — add to it, never repurpose a member; throw with the constant, e.g. `AppException(ErrorCodes.OTP_EXPIRED, …)`, never the bare string. */
 export const ErrorCodes = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   UNAUTHENTICATED: 'UNAUTHENTICATED',
@@ -24,8 +24,6 @@ export const ErrorCodes = {
   RATE_LIMITED: 'RATE_LIMITED',
   OTP_INVALID: 'OTP_INVALID',
   OTP_EXPIRED: 'OTP_EXPIRED',
-  PIN_LOCKED: 'PIN_LOCKED',
-  PIN_INVALID: 'PIN_INVALID',
   ADMIN_NOT_REGISTERED: 'ADMIN_NOT_REGISTERED',
   DRAW_SHORTFALL: 'DRAW_SHORTFALL',
   EXPORT_TOO_LARGE: 'EXPORT_TOO_LARGE',
@@ -55,9 +53,6 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.ADMIN_NOT_REGISTERED]: 404,
   [ErrorCodes.OTP_INVALID]: 401,
   [ErrorCodes.OTP_EXPIRED]: 401,
-  [ErrorCodes.PIN_INVALID]: 401,
-  // Locked is a throttle, and 429 is what tells a client to back off.
-  [ErrorCodes.PIN_LOCKED]: 429,
   // The request was fine; the bank simply does not hold enough to build the paper it asked for.
   [ErrorCodes.DRAW_SHORTFALL]: 422,
   [ErrorCodes.EXPORT_TOO_LARGE]: 422,
@@ -82,8 +77,6 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCodes.RATE_LIMITED]: 'Too many requests. Please wait a moment',
   [ErrorCodes.OTP_INVALID]: 'Incorrect code',
   [ErrorCodes.OTP_EXPIRED]: 'That code has expired. Request a new one',
-  [ErrorCodes.PIN_INVALID]: 'Incorrect mobile number or PIN',
-  [ErrorCodes.PIN_LOCKED]: 'Too many incorrect attempts. Try again later',
   [ErrorCodes.ADMIN_NOT_REGISTERED]:
     'That email has no admin account. Ask a super admin to create one for you.',
   [ErrorCodes.DRAW_SHORTFALL]:

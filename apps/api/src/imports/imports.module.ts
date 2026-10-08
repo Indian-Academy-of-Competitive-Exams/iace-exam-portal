@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth';
 import { AuditModule } from '../audit';
 import { AccessModule } from '../access';
 import { EventsModule } from '../events';
@@ -11,16 +10,8 @@ import { ImportsService } from './imports.service';
 import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
-  // AuthModule for the starting PIN, EventsModule for the roster, AccessModule for the program catalog.
-  imports: [
-    PrismaModule,
-    AuthModule,
-    StorageModule,
-    AuditModule,
-    EventsModule,
-    AccessModule,
-    uploadLimit,
-  ],
+  // EventsModule for the roster, AccessModule for the program catalog.
+  imports: [PrismaModule, StorageModule, AuditModule, EventsModule, AccessModule, uploadLimit],
   controllers: onRole([API_ROLES.CORE], [ImportsController]),
   providers: [ImportsService],
 })

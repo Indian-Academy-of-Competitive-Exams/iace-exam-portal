@@ -447,7 +447,6 @@ describe('what the import looks up before it plans', () => {
   });
 });
 
-/** Every NEW student is given a starting PIN, and argon2 costs ~13ms a hash by design. */
 describe('how big a file may be', () => {
   const fileOf = (rows: number) =>
     roster(

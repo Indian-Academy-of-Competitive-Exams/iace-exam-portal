@@ -97,11 +97,11 @@ describe('AllExceptionsFilter', () => {
   it('passes an AppException through with its code and status', () => {
     const { status, failure } = capture(
       filter,
-      new AppException(ErrorCodes.PIN_LOCKED, 'Try again in 15 minute(s)'),
+      new AppException(ErrorCodes.RATE_LIMITED, 'Try again in 15 minute(s)'),
     );
 
     assert.equal(status, 429);
-    assert.equal(failure.error.code, 'PIN_LOCKED');
+    assert.equal(failure.error.code, 'RATE_LIMITED');
     assert.equal(failure.error.message, 'Try again in 15 minute(s)');
     assert.equal(failure.success, false);
     assert.ok(failure.meta.requestId);
