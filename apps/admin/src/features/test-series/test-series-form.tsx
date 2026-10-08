@@ -61,7 +61,7 @@ export function TestSeriesFormPage() {
     );
   }
 
-  if (existing && (series.error || !series.data)) {
+  if (existing && !series.data) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}
@@ -72,7 +72,7 @@ export function TestSeriesFormPage() {
   }
 
   // Mounted only once the saved series is here, so a refetch cannot throw away a half-typed edit.
-  return <SeriesEditor detail={series.data ?? null} />;
+  return <SeriesEditor key={seriesId} detail={series.data ?? null} />;
 }
 
 function SeriesEditActions({
@@ -102,6 +102,12 @@ function seriesTitle(detail: TestSeriesDetail | null, isEditing: boolean): strin
   if (!detail) return 'New test series';
   return isEditing ? `Edit ${detail.name}` : detail.name;
 }
+
+/** The picker hands back only an id, so what the stage is CALLED has to be kept as it is chosen. */
+const stageOf = (detail: TestSeriesDetail | null): StageChoice | null =>
+  detail?.examStage
+    ? { examCode: detail.examStage.examCode, stageName: detail.examStage.name }
+    : null;
 
 /** Every field the server can refuse is on the one form tab, so a refusal only has to open it. */
 function refusesTheForm(error: unknown): boolean {
@@ -144,18 +150,15 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
     },
   });
 
-  // The picker hands back only an id, so what the stage is CALLED has to be kept as it is chosen.
-  const [stage, setStage] = useState<StageChoice | null>(
-    detail?.examStage
-      ? { examCode: detail.examStage.examCode, stageName: detail.examStage.name }
-      : null,
-  );
+  const [stage, setStage] = useState(() => stageOf(detail));
   const banner = bannerMessage(save.error, SERVER_FIELDS);
 
   /** A new series has nowhere to fall back to, so Cancel leaves; an existing one returns to itself. */
   const cancel = () => {
     if (!existing) return navigate(ROUTES.TESTS);
     form.reset(valuesOf(detail));
+    save.reset();
+    setStage(stageOf(detail));
     setIsEditing(false);
   };
 
