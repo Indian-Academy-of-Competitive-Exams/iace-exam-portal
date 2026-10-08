@@ -174,11 +174,18 @@ export class ExamsService {
 
   private async assertFree(name: string, code: string, exceptId?: string): Promise<void> {
     const [byName, byCode] = await Promise.all([
-      this.prisma.exam.findFirst({ where: { name }, select: { id: true } }),
+      // Any case, as every search on the column reads it; itself left out so a recased name is not its own clash.
+      this.prisma.exam.findFirst({
+        where: {
+          name: { equals: name, mode: 'insensitive' },
+          ...(exceptId ? { id: { not: exceptId } } : {}),
+        },
+        select: { id: true },
+      }),
       this.prisma.exam.findUnique({ where: { code }, select: { id: true } }),
     ]);
 
-    if (byName && byName.id !== exceptId) {
+    if (byName) {
       throw new AppException(ErrorCodes.CONFLICT, 'That exam already exists', {
         fieldErrors: { name: ['That exam already exists'] },
       });

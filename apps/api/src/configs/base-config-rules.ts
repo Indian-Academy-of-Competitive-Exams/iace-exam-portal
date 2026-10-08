@@ -121,6 +121,7 @@ const minutes = (seconds: number) => `${Math.round(seconds / SECONDS_PER_MINUTE)
 export function configDeletionBlocker(usage: {
   locked: boolean;
   testCount: number;
+  cloneCount: number;
 }): string | null {
   if (usage.locked) {
     return 'This config is locked, so a test built from it has already been sat. Retire it instead. It keeps its history and is simply no longer offered.';
@@ -128,6 +129,10 @@ export function configDeletionBlocker(usage: {
   if (usage.testCount > 0) {
     const tests = `${usage.testCount} test${usage.testCount === 1 ? '' : 's'}`;
     return `${tests} inherit their shape from this config. Retire it instead. A retired config keeps everything it has and is simply no longer offered.`;
+  }
+  if (usage.cloneCount > 0) {
+    const clones = usage.cloneCount === 1 ? '1 config was' : `${usage.cloneCount} configs were`;
+    return `${clones} cloned from this one. Retire it instead. A retired config keeps everything it has and is simply no longer offered.`;
   }
   return null;
 }

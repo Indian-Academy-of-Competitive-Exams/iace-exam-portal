@@ -691,6 +691,27 @@ describe('BaseConfigsService — clone to evolve', () => {
   });
 });
 
+describe('BaseConfigsService — deleting a config others were cloned from', () => {
+  /** The failure this prevents: the lineage foreign key refusing the delete, and the admin reading a generic "still in use". */
+  it('refuses while a clone points back at it, saying how many, and deletes one nothing points at', async () => {
+    const original = await seedConfig({ examStageId: await makeStage(prisma), sections: ['A'] });
+    const clone = await service.clone(original, {}, ADMIN);
+
+    await assert.rejects(
+      () => service.remove(original),
+      (error: unknown) =>
+        AppException.is(error) &&
+        error.code === ErrorCodes.CONFLICT &&
+        /1 config was cloned from this one/.test(error.message),
+    );
+    assert.ok(await prisma.baseConfig.findUnique({ where: { id: original } }));
+
+    await service.remove(clone.id);
+    await service.remove(original);
+    assert.equal(await prisma.baseConfig.count(), 0);
+  });
+});
+
 const refused = async (attempt: Promise<unknown>) => {
   const error = await attempt.catch((caught: unknown) => caught);
   assert.ok(AppException.is(error));

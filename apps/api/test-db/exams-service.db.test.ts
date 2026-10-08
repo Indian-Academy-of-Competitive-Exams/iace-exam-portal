@@ -177,6 +177,35 @@ describe('ExamsService — creating', () => {
   });
 });
 
+describe('ExamsService — a name belongs to one exam, whatever its case', () => {
+  /** Every search on the column ignores case, so "SSC cgl" beside "SSC CGL" is one exam listed twice. */
+  it('refuses a new exam, and a rename, onto a name another exam holds in a different case', async () => {
+    const service = await serviceWith([{}, RRB_JE]);
+
+    await assert.rejects(
+      () => service.create({ course: EXAM_COURSE.SSC, name: 'ssc cgl', code: 'SSC CGL 2' }),
+      refusedWith(ErrorCodes.CONFLICT, 'name'),
+    );
+    await assert.rejects(
+      () => service.update(idFor('exam_2'), { name: 'Ssc Cgl' }),
+      refusedWith(ErrorCodes.CONFLICT, 'name'),
+    );
+    assert.equal(await prisma.exam.count(), 2);
+  });
+
+  it('lets an exam change the case of its own name, and keep it through a code change', async () => {
+    const service = await serviceWith([{}, RRB_JE]);
+
+    const recased = await service.update(idFor('exam_1'), { name: 'Ssc Cgl' });
+    const recoded = await service.update(idFor('exam_1'), { code: 'SSC CGL T1' });
+
+    assert.deepEqual(
+      [recased.name, recoded.name, recoded.code],
+      ['Ssc Cgl', 'Ssc Cgl', 'SSC CGL T1'],
+    );
+  });
+});
+
 describe('ExamsService — updating', () => {
   it('renames an exam however many students are enrolled on it', async () => {
     const service = await serviceWith();

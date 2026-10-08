@@ -316,6 +316,7 @@ export class BaseConfigsService {
     const blocker = configDeletionBlocker({
       locked: config.locked,
       testCount: config._count.tests,
+      cloneCount: await this.prisma.baseConfig.count({ where: { clonedFromId: id } }),
     });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
