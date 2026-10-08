@@ -8,7 +8,7 @@ import { Fragment, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
-import { submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { PAPER_LOCK, submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { Alert } from '../ui/alert';
 import { Button } from '../ui/button';
@@ -115,7 +115,12 @@ function SittingHead({
           <Button variant="ghost" onPress={onRules}>
             Instructions
           </Button>
-          <Button variant="outline" loading={view.submit.isPending} onPress={view.submit.ask}>
+          <Button
+            variant="outline"
+            loading={view.submit.isPending}
+            disabled={view.locked !== null}
+            onPress={view.submit.ask}
+          >
             Submit
           </Button>
         </View>
@@ -132,7 +137,7 @@ function SittingHead({
             key={section.id}
             name={section.name}
             active={section.id === view.sectionId}
-            reachable={view.reachable.includes(section.id)}
+            reachable={view.locked === null && view.reachable.includes(section.id)}
             onOpen={() => view.openSection(section.id)}
           />
         ))}
@@ -152,6 +157,9 @@ function SittingHead({
           </Text>
         ) : null}
         {view.isSaving ? <Text className="text-xs text-exam-ink-muted">Saving…</Text> : null}
+        {view.locked === PAPER_LOCK.WAITING ? (
+          <Text className="text-xs text-exam-ink-muted">Opening your paper…</Text>
+        ) : null}
       </View>
     </Fragment>
   );
@@ -214,6 +222,11 @@ function QuestionBody({
         </View>
       ) : null}
 
+      {/* Over the page, not in it: the options are the WebView's, and it draws none of them shut. */}
+      {view?.question && view.locked !== null ? (
+        <View className="absolute inset-0 bg-exam-surface opacity-50" />
+      ) : null}
+
       {view?.watermark ? <PaperWatermark text={view.watermark} /> : null}
     </View>
   );
@@ -253,6 +266,7 @@ function SittingFoot({
   onCloseRules: () => void;
 }>) {
   const { submit, fullscreen } = view;
+  const off = view.locked !== null;
 
   return (
     <Fragment>
@@ -267,20 +281,29 @@ function SittingFoot({
         ) : null}
         {/* On a bubble sheet the ink carries all three: a part fill flags it, a full one saves and moves. */}
         {view.testUi === TEST_UI.OMR ? (
-          <Button onPress={view.nextQuestion}>Next</Button>
+          <Button disabled={off} onPress={view.nextQuestion}>
+            Next
+          </Button>
         ) : (
           <Fragment>
             <View className="flex-row gap-2">
               {view.forwardOnly ? null : (
-                <Button variant="outline" className="flex-1" onPress={view.markAndNext}>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  disabled={off}
+                  onPress={view.markAndNext}
+                >
                   Mark for review & next
                 </Button>
               )}
-              <Button variant="ghost" onPress={view.clearResponse}>
+              <Button variant="ghost" disabled={off} onPress={view.clearResponse}>
                 Clear response
               </Button>
             </View>
-            <Button onPress={view.nextQuestion}>Save & next</Button>
+            <Button disabled={off} onPress={view.nextQuestion}>
+              Save & next
+            </Button>
           </Fragment>
         )}
       </View>

@@ -12,6 +12,7 @@ import { AppException, ErrorCodes, type ExamQuestion } from '@iace/contracts';
 import {
   HELD_ELSEWHERE_SAYS,
   isHeldElsewhere,
+  SITTING_ENDED_SAYS,
   stoodDownSays,
   useExamView,
   useStartedSitting,
@@ -77,7 +78,7 @@ export default function ExamScreen() {
   }, [forget, startedId]);
 
   // Android's Back would drop a running paper; in a sitting the only way out is handing it in.
-  const askToSubmit = view?.takenOver === false ? view.submit.ask : undefined;
+  const askToSubmit = view && !view.takenOver && !view.ended ? view.submit.ask : undefined;
   useEffect(() => {
     if (!askToSubmit) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -146,7 +147,8 @@ export default function ExamScreen() {
           key={reclaims}
           paper={paper.data.paper}
           arrivedAt={paper.data.arrivedAt}
-          startedByThisCall={attempt.data.startedByThisCall}
+          // A paper whose read failed before is opened as a resume: the sitting may have ended while it waited.
+          startedByThisCall={attempt.data.startedByThisCall && paper.errorUpdateCount === 0}
           title={attempt.data.testTitle}
           // The one thing on the paper that leads back to a person: there is no enrolment number.
           watermark={student?.mobile ?? ''}
@@ -164,6 +166,22 @@ export default function ExamScreen() {
             /* ui-copy-ok: consequence — continuing here is what stops the other one */
             hint={stoodDownSays(view).hint}
             action={<Button onPress={continueHere}>Continue here</Button>}
+          />
+        </View>
+      ) : null}
+      {view?.ended && startedId ? (
+        <View className="absolute inset-0 justify-center bg-background p-6">
+          <EmptyState
+            kind={EMPTY_STATE_KINDS.REFUSED}
+            title={SITTING_ENDED_SAYS.title}
+            /* ui-copy-ok: consequence — what was answered after it ended is in no result */
+            hint={SITTING_ENDED_SAYS.hint}
+            action={
+              // `replace`: Back must never re-enter a paper that has ended.
+              <Button onPress={() => router.replace(DETAIL_ROUTES.REPORT(startedId))}>
+                See your result
+              </Button>
+            }
           />
         </View>
       ) : null}

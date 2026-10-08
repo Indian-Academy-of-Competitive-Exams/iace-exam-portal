@@ -66,7 +66,9 @@ export function QuestionPalette({
           <View className="gap-2 px-4">
             {ANSWER_STATES.filter((state) => isStateShown(state, view.forwardOnly)).map((state) => (
               <View key={state} className="flex-row items-center gap-3">
-                <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)} />
+                <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)}>
+                  <AnsweredTick state={state} />
+                </View>
                 <Text className="flex-1 text-sm text-exam-ink">{ANSWER_STATE_LABELS[state]}</Text>
                 <Text className="text-sm font-semibold tabular-nums text-exam-ink">
                   {view.sectionCounts(view.sectionId)[state]}
@@ -131,6 +133,15 @@ function PaletteCell({
       )}
     >
       <Text className={cn('text-sm font-semibold tabular-nums', ink)}>{number}</Text>
+      <AnsweredTick state={state} />
     </Pressable>
+  );
+}
+
+/** A flag with an answer banked under it has the same body as a bare flag; this dot is what tells them apart. */
+function AnsweredTick({ state }: Readonly<{ state: AnswerState }>) {
+  if (state !== ANSWER_STATE.ANSWERED_MARKED) return null;
+  return (
+    <View className="absolute bottom-0 right-0 h-2/5 w-2/5 rounded-full border border-exam-surface bg-exam-answered-marked-tick" />
   );
 }
