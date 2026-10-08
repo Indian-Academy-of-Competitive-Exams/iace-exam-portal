@@ -5,10 +5,8 @@ import { notificationsQueryKey, UNREAD_QUERY_KEY } from './student-queries';
 
 /** Patched, never invalidated: a screenful of rows read at once is otherwise a GET per row plus the count. */
 export function markNotificationRead(queryClient: QueryClient, notificationId: string): void {
-  queryClient.setQueryData<Paginated<Notification>>(UNREAD_QUERY_KEY, (count) =>
-    count ? { ...count, total: Math.max(0, count.total - 1) } : count,
-  );
-  // Marked in both lists, so the row reads as read and is never counted down again.
+  let wasUnread = false;
+  // Marked in both lists, so the row reads as read and a second answer for it finds nothing to count.
   for (const unreadOnly of [true, false]) {
     queryClient.setQueryData<InfiniteData<Paginated<Notification>>>(
       notificationsQueryKey(unreadOnly),
@@ -17,11 +15,18 @@ export function markNotificationRead(queryClient: QueryClient, notificationId: s
           ...lists,
           pages: lists.pages.map((page) => ({
             ...page,
-            items: page.items.map((row) =>
-              row.id === notificationId ? { ...row, isRead: true } : row,
-            ),
+            items: page.items.map((row) => {
+              if (row.id !== notificationId || row.isRead) return row;
+              wasUnread = true;
+              return { ...row, isRead: true };
+            }),
           })),
         },
     );
   }
+  if (!wasUnread) return;
+
+  queryClient.setQueryData<Paginated<Notification>>(UNREAD_QUERY_KEY, (count) =>
+    count ? { ...count, total: Math.max(0, count.total - 1) } : count,
+  );
 }

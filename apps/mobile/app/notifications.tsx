@@ -1,5 +1,5 @@
 /// <reference types="nativewind/types" />
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,12 +13,12 @@ import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
 import { DETAIL_ROUTES } from '../src/lib/nav';
-import { useTokenColor } from '../src/lib/use-token-color';
 import { asText, useFilterState, type FilterState } from '../src/lib/filters';
 import { Badge } from '../src/components/ui/badge';
 import { Card } from '../src/components/ui/card';
 import { FilterSummary, FilterTrigger } from '../src/components/ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
+import { ListFooter } from '../src/components/ui/list-footer';
 import { Skeleton } from '../src/components/ui/skeleton';
 
 /** What the institute has told this student, newest first. Opening one marks it read. */
@@ -27,7 +27,6 @@ export default function NotificationsScreen() {
   const unreadOnly = asText(state.values.state) === READ_STATE.UNREAD;
   const queryClient = useQueryClient();
   const router = useRouter();
-  const spinner = useTokenColor('--muted-foreground');
 
   const list = useInfinitePages({
     queryKey: notificationsQueryKey(unreadOnly),
@@ -57,13 +56,12 @@ export default function NotificationsScreen() {
         data={list.items}
         keyExtractor={(row) => row.id}
         onEndReachedThreshold={0.5}
-        onEndReached={list.loadMore}
+        // A failed page is asked for again by the footer's Retry: its changing height would have the scroll ask in a loop.
+        onEndReached={list.isLoadMoreError ? undefined : list.loadMore}
         renderItem={({ item }) => <Row row={item} onPress={() => open(item)} />}
         ListHeaderComponent={<FilterSummary state={state} filters={NOTIFICATION_FILTERS} />}
         ListEmptyComponent={<ListBody list={list} unreadOnly={unreadOnly} />}
-        ListFooterComponent={
-          list.isLoadingMore ? <ActivityIndicator className="py-4" color={spinner} /> : null
-        }
+        ListFooterComponent={<ListFooter list={list} />}
       />
     </>
   );

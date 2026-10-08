@@ -125,7 +125,8 @@ function FeedRegion({
       </div>
     );
   }
-  if (list.isError) {
+  // Only with nothing held: a failed "Show older" keeps the rows, and the button to ask again.
+  if (list.isError && rows.length === 0) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}

@@ -44,6 +44,8 @@ export function useInfinitePages<T>(options: {
   isLoadingMore: boolean;
   /** "It did not load" and "there are none" are different facts, and read differently. */
   isError: boolean;
+  /** The next page failed with rows already held: they stay, and the end of the list offers `loadMore` again. */
+  isLoadMoreError: boolean;
   retry: () => void;
 } {
   const { queryKey, fetchPage, enabled = true } = options;
@@ -72,6 +74,7 @@ export function useInfinitePages<T>(options: {
     hasMore: hasNextPage,
     loadMore,
     isError: query.isError || neverRan,
+    isLoadMoreError: query.isFetchNextPageError,
     retry: query.refetch,
     isLoading: query.isPending && !neverRan,
     isLoadingMore: isFetchingNextPage,

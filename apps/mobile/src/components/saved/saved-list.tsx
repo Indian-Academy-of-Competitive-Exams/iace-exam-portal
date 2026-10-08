@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SAVED_FILTER_FIELDS, useInfinitePages } from '@iace/app-kit';
 import { instituteDayLabel, type SavedQuestion } from '@iace/contracts';
@@ -8,12 +8,12 @@ import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { savedQueryKey } from '../../lib/constants';
 import { asSet, type FilterState } from '../../lib/filters';
-import { useTokenColor } from '../../lib/use-token-color';
 import { Alert } from '../ui/alert';
 import { Badge } from '../ui/badge';
 import { Card } from '../ui/card';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
+import { ListFooter } from '../ui/list-footer';
 import { Skeleton } from '../ui/skeleton';
 import { SavedQuestionSheet } from './saved-question-sheet';
 
@@ -29,7 +29,6 @@ export function SavedList({ state }: Readonly<SavedListProps>) {
   const queryClient = useQueryClient();
   const [reading, setReading] = useState<SavedQuestion | null>(null);
   const [dropping, setDropping] = useState<SavedQuestion | null>(null);
-  const spinner = useTokenColor('--muted-foreground');
 
   const subjectId = asSet(state.values[SAVED_FILTER_FIELDS.SUBJECT.key]);
   const testId = asSet(state.values[SAVED_FILTER_FIELDS.TEST.key]);
@@ -66,7 +65,8 @@ export function SavedList({ state }: Readonly<SavedListProps>) {
         data={list.items}
         keyExtractor={(row) => row.id}
         onEndReachedThreshold={0.5}
-        onEndReached={list.loadMore}
+        // A failed page is asked for again by the footer's Retry: its changing height would have the scroll ask in a loop.
+        onEndReached={list.isLoadMoreError ? undefined : list.loadMore}
         renderItem={({ item }) => (
           <SavedRow row={item} onRead={() => setReading(item)} onDrop={() => setDropping(item)} />
         )}
@@ -76,9 +76,7 @@ export function SavedList({ state }: Readonly<SavedListProps>) {
           </Alert>
         }
         ListEmptyComponent={<ListBody list={list} filtered={filtered} />}
-        ListFooterComponent={
-          list.isLoadingMore ? <ActivityIndicator className="py-4" color={spinner} /> : null
-        }
+        ListFooterComponent={<ListFooter list={list} />}
       />
 
       {reading ? <SavedQuestionSheet saved={reading} onClose={() => setReading(null)} /> : null}
