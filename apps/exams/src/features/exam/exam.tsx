@@ -3,14 +3,7 @@
  * chosen template draw it — the screen itself decides nothing about how a
  * sitting behaves, and a skin decides nothing about what it saves.
  */
-import {
-  Link,
-  Navigate,
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AppException, ErrorCodes, type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import {
@@ -18,7 +11,6 @@ import {
   isHeldElsewhere,
   stoodDownSays,
   useExamView,
-  useStartedSitting,
   type EndedSitting,
 } from '@iace/app-kit';
 import { browserSessionStorage, useFullscreen, useLeaveGuard } from '@iace/app-kit/browser';
@@ -27,6 +19,7 @@ import { CATALOG_QUERY_KEY, RESUME_PARAM, ROUTES, STORAGE_KEYS } from '../../lib
 import { tabId } from '../../lib/tab-id';
 import { useAuth } from '../../providers/auth';
 import { ExamShell } from './exam-shell';
+import { useAddressedSitting } from './use-sitting-address';
 
 interface BeganWith {
   languages?: LanguageCode[];
@@ -37,12 +30,10 @@ export function ExamPage() {
   const navigate = useNavigate();
   const { identity: student } = useAuth();
   const began = (useLocation().state ?? {}) as BeganWith;
-  const resume = useSearchParams()[0].get(RESUME_PARAM) ?? undefined;
 
-  const { attempt, paper } = useStartedSitting(api, testId, {
+  const { attempt, paper, resume } = useAddressedSitting(testId, {
     languages: began.languages,
     tab: tabId(),
-    resume,
   });
 
   if (attempt.isError) {
