@@ -2,18 +2,28 @@
  * What a student reads before the clock starts — ported from the web's `test-instructions.tsx`.
  * It never starts the attempt: the exam screen calls `startAttempt` on arrival at `/exam/[testId]`.
  */
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ANSWER_STATES,
   contentLanguageOf,
+  isStateShown,
   LANGUAGE_LABELS,
   languagesFor,
+  NAVIGATION_POLICY,
   type ExamBrief,
   type LanguageCode,
+  type NavigationPolicy,
 } from '@iace/contracts';
-import { beginChoice, isBriefRefused } from '@iace/app-kit';
+import {
+  ANSWER_STATE_LABELS,
+  beginChoice,
+  FORWARD_ONLY_NOTICE,
+  isBriefRefused,
+  PALETTE_SAYS,
+} from '@iace/app-kit';
 import { Text } from '../../../src/components/ui/text';
 import { briefQuery, testPaperQuery } from '../../../src/lib/queries';
 import { Alert } from '../../../src/components/ui/alert';
@@ -22,6 +32,7 @@ import { Card } from '../../../src/components/ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
 import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
+import { AnsweredTick, PALETTE_LEGEND } from '../../../src/components/exam/question-palette';
 import { SystemCheck } from '../../../src/components/tests/system-check';
 import { EXAM_RESUME_PARAM } from '../../../src/lib/constants';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
@@ -51,6 +62,10 @@ export default function TestInstructionsScreen() {
   const router = useRouter();
   const [declared, setDeclared] = useState(false);
   const [language, setLanguage] = useState<LanguageCode | ''>('');
+  const [beginning, setBeginning] = useState(false);
+
+  // Coming back from the paper offers Begin again; until then a second tap must not open a second paper.
+  useFocusEffect(useCallback(() => () => setBeginning(false), []));
 
   const queryClient = useQueryClient();
 
@@ -77,7 +92,11 @@ export default function TestInstructionsScreen() {
           onDeclaredChange={setDeclared}
           language={language}
           onLanguageChange={setLanguage}
-          onBegin={(languages) => router.push(DETAIL_ROUTES.EXAM(testId, languages, resume))}
+          beginning={beginning}
+          onBegin={(languages) => {
+            setBeginning(true);
+            router.push(DETAIL_ROUTES.EXAM(testId, languages, resume));
+          }}
         />
       </ScrollView>
     </Fragment>
@@ -92,6 +111,7 @@ function InstructionsContent({
   onDeclaredChange,
   language,
   onLanguageChange,
+  beginning,
   onBegin,
 }: Readonly<{
   phase: Phase;
@@ -101,6 +121,7 @@ function InstructionsContent({
   onDeclaredChange: (value: boolean) => void;
   language: LanguageCode | '';
   onLanguageChange: (value: LanguageCode) => void;
+  beginning: boolean;
   onBegin: (languages: readonly LanguageCode[]) => void;
 }>) {
   if (phase === 'LOADING') {
@@ -140,6 +161,12 @@ function InstructionsContent({
 
       <SectionsList paper={paper} />
 
+      {paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY ? (
+        <Alert variant="warning">{FORWARD_ONLY_NOTICE}</Alert>
+      ) : null}
+
+      <PaletteCard navigation={paper.navigation} />
+
       <SystemCheck />
 
       <Alert>
@@ -157,7 +184,7 @@ function InstructionsContent({
 
       <Declaration declared={declared} onChange={onDeclaredChange} />
 
-      <Button disabled={!ready} onPress={() => onBegin(languages)}>
+      <Button disabled={!ready || beginning} onPress={() => onBegin(languages)}>
         I am ready to begin
       </Button>
     </Fragment>
@@ -178,6 +205,30 @@ function SectionsList({ paper }: Readonly<{ paper: ExamBrief }>) {
             <Text variant="meta">{sectionLine(section)}</Text>
           </View>
         ))}
+      </Card>
+    </View>
+  );
+}
+
+function PaletteCard({ navigation }: Readonly<{ navigation: NavigationPolicy }>) {
+  const forwardOnly = navigation === NAVIGATION_POLICY.FORWARD_ONLY;
+
+  return (
+    <View className="gap-2">
+      <Text variant="section">Palette</Text>
+      <Card className="gap-3 p-4">
+        <Text variant="meta">{PALETTE_SAYS[navigation]}</Text>
+        {/* The swatches are the exam skin's colours, which a screen outside the paper has to scope itself. */}
+        <View className="exam-template-default gap-2">
+          {ANSWER_STATES.filter((state) => isStateShown(state, forwardOnly)).map((state) => (
+            <View key={state} className="flex-row items-center gap-3">
+              <View className={cn('h-4 w-4 rounded-exam-cell', PALETTE_LEGEND[state].fill)}>
+                <AnsweredTick state={state} />
+              </View>
+              <Text variant="body">{ANSWER_STATE_LABELS[state]}</Text>
+            </View>
+          ))}
+        </View>
       </Card>
     </View>
   );

@@ -3,8 +3,10 @@ import {
   contentLanguageOf,
   EXAM_TEMPLATE,
   LANGUAGE_LABELS,
+  NAVIGATION_POLICY,
   type LanguageCode,
 } from '@iace/contracts';
+import { FORWARD_ONLY_NOTICE, PALETTE_SAYS } from '@iace/app-kit';
 import {
   Alert,
   Button,
@@ -48,13 +50,10 @@ const SECTIONAL = {
 };
 
 const NEXT = { term: 'Next', says: 'Moves on and leaves the question as it stands.' };
-const FREE_PALETTE = {
-  term: 'The palette',
-  says: 'Opens any question directly. The question you leave keeps its answer.',
-};
+const FREE_PALETTE = { term: 'The palette', says: PALETTE_SAYS[NAVIGATION_POLICY.FREE] };
 const FORWARD_PALETTE = {
   term: 'The palette',
-  says: 'Shows where you are. A question you have left cannot be opened again, and there is no marking one for review.',
+  says: PALETTE_SAYS[NAVIGATION_POLICY.FORWARD_ONLY],
 };
 
 type Rule = { term: string; says: string };
@@ -177,12 +176,7 @@ function Walk({ view }: Readonly<{ view: InstructionsView }>) {
 function GeneralStep({ forwardOnly, sectional, omr }: Readonly<PaperTraits>) {
   return (
     <>
-      {forwardOnly ? (
-        <Alert variant="warning">
-          This paper runs one way. Once you leave a question you cannot return to it, so answer
-          before you move on.
-        </Alert>
-      ) : null}
+      {forwardOnly ? <Alert variant="warning">{FORWARD_ONLY_NOTICE}</Alert> : null}
 
       <SurfaceCard title="How the paper works">
         <PaperRules forwardOnly={forwardOnly} sectional={sectional} omr={omr} />

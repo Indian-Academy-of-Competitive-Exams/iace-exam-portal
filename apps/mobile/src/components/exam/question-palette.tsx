@@ -16,7 +16,7 @@ interface PaletteEntry {
 }
 
 /** The five states and their colours; app-kit names them, so the two clients cannot label one differently. */
-const PALETTE_LEGEND: Readonly<Record<AnswerState, PaletteEntry>> = {
+export const PALETTE_LEGEND: Readonly<Record<AnswerState, PaletteEntry>> = {
   [ANSWER_STATE.NOT_VISITED]: {
     fill: 'bg-exam-notvisited',
     ink: 'text-exam-notvisited-ink',
@@ -139,7 +139,7 @@ function PaletteCell({
 }
 
 /** A flag with an answer banked under it has the same body as a bare flag; this dot is what tells them apart. */
-function AnsweredTick({ state }: Readonly<{ state: AnswerState }>) {
+export function AnsweredTick({ state }: Readonly<{ state: AnswerState }>) {
   if (state !== ANSWER_STATE.ANSWERED_MARKED) return null;
   return (
     <View className="absolute bottom-0 right-0 h-2/5 w-2/5 rounded-full border border-exam-surface bg-exam-answered-marked-tick" />

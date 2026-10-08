@@ -1,7 +1,4 @@
-/**
- * What a student reads BEFORE the clock starts — ported from the web's `test-about.tsx`. Past
- * attempts are dropped: they link to a score-card route this slice does not build yet.
- */
+/** What a student reads BEFORE the clock starts — ported from the web's `test-about.tsx`. */
 import { Fragment } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
@@ -10,6 +7,8 @@ import {
   isBriefRefused,
   languagesOf,
   negativeOf,
+  offersRetake,
+  RETAKE_SAYS,
   sectionalOf,
   sectionMarksOf,
   SHUT_SAYS,
@@ -34,6 +33,7 @@ import { Card } from '../../../src/components/ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
 import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
+import { PastAttempts } from '../../../src/components/tests/past-attempts';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
@@ -165,6 +165,8 @@ function AboutContent({
       <PaperCard brief={brief} />
 
       <Exits testId={testId} listed={listed} catalog={catalog} now={now} />
+
+      <PastAttempts testId={testId} />
     </Fragment>
   );
 }
@@ -258,8 +260,11 @@ function Exits({
   }
 
   return (
-    <Link href={DETAIL_ROUTES.TEST_INSTRUCTIONS(testId, listed?.liveAttemptId)} asChild>
-      <Button>{action === 'RESUME' ? 'Resume test' : 'Proceed to test'}</Button>
-    </Link>
+    <Fragment>
+      {listed && offersRetake(listed) ? <Alert>{RETAKE_SAYS}</Alert> : null}
+      <Link href={DETAIL_ROUTES.TEST_INSTRUCTIONS(testId, listed?.liveAttemptId)} asChild>
+        <Button>{action === 'RESUME' ? 'Resume test' : 'Proceed to test'}</Button>
+      </Link>
+    </Fragment>
   );
 }

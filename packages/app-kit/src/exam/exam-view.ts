@@ -5,6 +5,7 @@
  */
 import {
   ANSWER_STATE,
+  NAVIGATION_POLICY,
   type AnswerState,
   type ExamClock,
   type ExamQuestion,
@@ -12,6 +13,7 @@ import {
   type LanguageCode,
   type LanguageMode,
   type LiveAnswer,
+  type NavigationPolicy,
   type PaletteCounts,
   type TestUi,
 } from '@iace/contracts';
@@ -24,6 +26,17 @@ export const ANSWER_STATE_LABELS: Readonly<Record<AnswerState, string>> = {
   [ANSWER_STATE.MARKED_REVIEW]: 'Marked for review',
   [ANSWER_STATE.ANSWERED_MARKED]: 'Answered and marked',
 };
+
+/** What the palette does on each kind of paper, read before the clock starts. */
+export const PALETTE_SAYS: Readonly<Record<NavigationPolicy, string>> = {
+  [NAVIGATION_POLICY.FREE]: 'Opens any question directly. The question you leave keeps its answer.',
+  [NAVIGATION_POLICY.FORWARD_ONLY]:
+    'Shows where you are. A question you have left cannot be opened again, and there is no marking one for review.',
+};
+
+/** Said ahead of a forward-only paper, where the first question left cannot be undone. */
+export const FORWARD_ONLY_NOTICE =
+  'This paper runs one way. Once you leave a question you cannot return to it, so answer before you move on.';
 
 /** Submitting, and what the candidate is told before it happens. */
 export interface ExamSubmitView {

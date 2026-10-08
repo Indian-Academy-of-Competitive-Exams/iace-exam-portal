@@ -154,6 +154,13 @@ export const SHUT_SAYS: Readonly<Record<TestShut, { label: string; notice: strin
   },
 };
 
+/** A paper they have sat and may start again: that sitting is marked, never ranked. */
+export const offersRetake = (test: StudentCatalogTest): boolean =>
+  isSat(test.attemptStatus) && testAction(test) === 'START';
+
+/** Told before a retake starts, in the report's own words for it. */
+export const RETAKE_SAYS = 'This will be a retake, so it is marked but it does not carry a rank.';
+
 /** Which fact shuts a test that cannot be started; `now` only guesses for a server older than `shut`. */
 export function shutOf(test: StudentCatalogTest, now: Date): TestShut {
   if (test.shut) return test.shut;

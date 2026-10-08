@@ -22,6 +22,8 @@ import {
   isBriefRefused,
   languagesOf,
   negativeOf,
+  offersRetake,
+  RETAKE_SAYS,
   sectionalOf,
   sectionMarksOf,
   SHUT_SAYS,
@@ -168,6 +170,8 @@ export function TestAboutPage() {
                 </div>
               </SurfaceCard>
             </div>
+
+            {listed && offersRetake(listed) ? <Alert variant="info">{RETAKE_SAYS}</Alert> : null}
 
             <Exits testId={testId} listed={listed} now={now} />
 

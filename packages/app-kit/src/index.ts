@@ -59,6 +59,8 @@ export {
 } from './exam/start-sitting';
 export {
   ANSWER_STATE_LABELS,
+  FORWARD_ONLY_NOTICE,
+  PALETTE_SAYS,
   PAPER_LOCK,
   SITTING_ENDED_SAYS,
   TIMER_KIND,
@@ -188,6 +190,7 @@ export {
 } from './list-filters';
 export {
   EMPTINESS,
+  RETAKE_SAYS,
   SHUT_SAYS,
   averageAccuracy,
   bestRank,
@@ -196,6 +199,7 @@ export {
   isBriefRefused,
   matching,
   minutes,
+  offersRetake,
   resultsByTest,
   seriesProgress,
   shutOf,
