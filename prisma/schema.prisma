@@ -331,7 +331,7 @@ model ExamStage {
 // ============================================================================
 // Base configs — a stage's reusable blueprint. One isDefault per stage (the
 // seeded official pattern) plus any number of custom ones. A Test inherits from
-// a config rather than copying it; the config locks at first finalize.
+// a config rather than copying it; the config locks at its first sitting.
 // ============================================================================
 
 model BaseConfig {

@@ -41,8 +41,12 @@ there is no per-test duration, marks or timing. The way to change a shape is to 
 - The shape rules are checked in the service before the database's deferred triggers see them, so an
   admin gets a field error rather than a raw exception at commit. A `SECTIONAL_LOCKED` paper gives
   every section its own clock and the paper's duration must be their sum. A `SESSION_MODULE_LOCKED`
-  paper has at least one `BaseConfigModule`, and no other timer template may have any. Two sections
-  never share a position.
+  paper has at least one `BaseConfigModule`, and no other timer template may have any. A
+  `PER_ITEM_TIMED` paper gives every section its seconds per question. Two sections never share a
+  position. A config names at least one language, since a paper in none cannot be begun. No clock
+  runs past 24 hours, whether the paper's, a section's, a session's or one question's, and the
+  sections' marks add up to at most `CONFIG_TOTAL_MARKS_MAX`, the width of the column that caches
+  them.
 - `BaseConfigSection.patternNote` is the exam-pattern workbook's own words. Reference only — no draw
   reads it.
 - A config **locks when the first sitting starts** on a test built from it, not when a test is
@@ -222,7 +226,11 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 ## 7. The sitting
 
 - The server owns `startedAt` and `endsAt`; the client clock only counts down to it. The deadline is
-  set once at start, and moves only by the pause credit below.
+  set once at start, and moves only by the pause credit below or by an admin giving time from the
+  ops screen. **The row is the record and the live key follows it:** every mover adds to
+  `Attempt.endsAt` in one statement, and the key takes the later of its own deadline and the row's,
+  so two movers landing together both count and a key rebuilt from an extended row counts nothing
+  twice. An extension is counted from now when the deadline has already passed.
 - **Resume is not a start.** A live sitting is re-entered without asking the start gate again. A
   test may be sat again any number of times, and nothing counts or caps re-entries into one sitting.
   Two racing starts resolve to one sitting.
@@ -299,14 +307,18 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   revision and the clock rather than the sheet — the screen already holds what it just sent, and
   reads the whole state back only where it starts from nothing. A save that finds no key
   falls back to Postgres, which refuses anything not in progress — so a save after a submit cannot
-  be accepted. A save is still taken up to 30 seconds past the deadline: a slow network is not a
-  cheat.
+  be accepted. That refusal is `SITTING_ENDED`, on a save, a heartbeat or a state read alike: the
+  screen stops saving for good, drops what it had queued and says the test has ended, rather than
+  retrying as it would a dropped network. A save is still taken up to 30 seconds past the deadline:
+  a slow network is not a cheat.
 - **Submit's order is the design.** The screen's last unsaved answers ride the submit and are
   applied by the save's own rules, so the deadline costs one request, not two. Answers are written
   before the sitting is claimed, so a write that throws leaves it open with its state intact; the live state is taken behind the claim and
   written last, so nothing scores a half-written paper; only then is it queued for scoring. A sitting
   left `SUBMITTED` and unscored is queued again by the sweeper under the same id, and a sitting
-  nobody ended is ended by it.
+  nobody ended is ended by it. The sweeper ends through the same gate, with the deadline it listed
+  the sitting by in the claim's own `WHERE`: time given between its list and its end matches no row
+  and leaves the sitting open.
 - The pre-test gate is minimal — mother's name, father's name, date of birth. It **prompts**, and
   `profileCompleted` only drives a nudge. Neither blocks a sitting, and neither is stored: both are
   read off the profile (`READINESS_FIELDS`) wherever a student is read.
@@ -347,7 +359,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   with who did it and why — and it then counts nowhere: every fold, board and cohort read selects
   `EVALUATED`, which the status no longer is. Voiding one already marked asks for the test's cohort
   rollup and that student's own rollup to be built again; ranks and percentiles need nothing, since
-  the next count leaves it out.
+  the next count leaves it out. Its score card, solutions and question report answer
+  `SITTING_VOIDED`, so the student is told it was set aside rather than that it is still being
+  marked.
 - **The ranked slot is spent unless it is handed back.** `isGraded` stays on the voided sitting, so
   a re-sit is a retake; voiding with "Give the ranked attempt back" clears it, and the next sitting
   ranks because no sitting holds the slot. Either way at most one sitting per (student, test) is
