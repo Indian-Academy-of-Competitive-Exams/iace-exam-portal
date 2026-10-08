@@ -113,6 +113,23 @@ describe('questionWhere — a filter holding several values', () => {
     });
   });
 
+  /** The list bar counts a typed box and a date range as always narrowing, so the server must too. */
+  it('keeps a tag, an author and a date range narrowing even when matching any', () => {
+    const where = conditions({
+      tag: 'mensuration',
+      author: 'priya',
+      from: '2026-03-01',
+      subjectId: 'sub_1',
+      difficulty: 'LOW',
+      match: 'any',
+    });
+
+    assert.deepEqual(
+      where.map((entry) => Object.keys(entry)[0]),
+      ['status', 'tags', 'createdBy', 'createdAt', 'OR'],
+    );
+  });
+
   /** The failure this prevents: the ids coming back on the wire again, and with them the bind ceiling. */
   it('searches with one predicate, never a list of matched ids', () => {
     assert.deepEqual(conditionFor({ q: 'Ram & Shyam' }, 'searchText'), {

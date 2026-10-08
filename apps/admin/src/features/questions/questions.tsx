@@ -6,11 +6,16 @@ import {
   EXPORT_KINDS,
   FEATURE_KEYS,
   LANGUAGE_LABELS,
+  LANGUAGE_ORDER,
   PERMISSION_LEVELS,
+  QUESTION_SORTS,
   QUESTION_STATUS,
   QUESTION_STATUSES,
+  type QuestionLanguage,
+  type QuestionSort,
   type QuestionSummary,
   DIFFICULTY_LABELS,
+  todayISO,
 } from '@iace/contracts';
 import { PageCrumbs, useFilters, useListScreen, usePageTour } from '@iace/app-kit/browser';
 import {
@@ -130,7 +135,35 @@ export function QuestionsPage() {
       placeholder: 'In circulation',
       items: QUESTION_STATUSES.map((value) => ({ value, label: value })),
     },
+    {
+      key: 'sort',
+      kind: 'choice',
+      label: 'Sort by',
+      primary: true,
+      // An order, not a filter: it narrows nothing, so it is not one of the things to match.
+      alwaysApplies: true,
+      items: [
+        { value: '', label: 'Newest first' },
+        { value: QUESTION_SORTS.OLDEST, label: 'Oldest first' },
+      ],
+    },
     ...questionFacetFilters(filters, subjectIds),
+    {
+      key: 'language',
+      kind: 'choice',
+      label: 'Language',
+      items: [
+        { value: '', label: 'Any language' },
+        ...LANGUAGE_ORDER.map((language) => ({
+          value: language,
+          label: LANGUAGE_LABELS[language],
+        })),
+      ],
+    },
+    { key: 'tag', kind: 'search', label: 'Tag', placeholder: 'ssc' },
+    { key: 'author', kind: 'search', label: 'Author', placeholder: 'Name or email' },
+    { key: 'from', kind: 'date', label: 'Written from', max: todayISO() },
+    { key: 'to', kind: 'date', label: 'Written to', max: todayISO() },
   ] as const;
 
   const questions = useListScreen({
@@ -144,6 +177,12 @@ export function QuestionsPage() {
       difficulty: values.difficulty as QuestionSummary['difficulty'][],
       // Naming no status is how you ask for the bank; the server leaves the retired out of it.
       status: values.status as QuestionSummary['status'][],
+      sort: (values.sort || undefined) as QuestionSort | undefined,
+      language: (values.language || undefined) as QuestionLanguage | undefined,
+      tag: values.tag || undefined,
+      author: values.author || undefined,
+      from: values.from || undefined,
+      to: values.to || undefined,
     }),
     fetchPage: (params) => api.admin.questions.list(params),
   });

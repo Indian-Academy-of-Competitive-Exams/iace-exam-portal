@@ -57,6 +57,20 @@ function narrowsTheBank(query: QuestionListQuery): Prisma.QuestionWhereInput[] {
   }
   // One column holds the stem, the code and the tags, so this is a predicate rather than a list of ids.
   if (query.q) filters.push({ searchText: { contains: query.q, mode: 'insensitive' } });
+  // Typed boxes and a date range narrow like the search does: the list bar offers no way to OR them.
+  if (query.tag) filters.push({ tags: { has: query.tag } });
+  // No picker to choose an author from, so the name typed is matched against what they sign in as.
+  if (query.author) {
+    filters.push({
+      createdBy: {
+        OR: [
+          { fullName: { contains: query.author, mode: 'insensitive' } },
+          { email: { contains: query.author, mode: 'insensitive' } },
+        ],
+      },
+    });
+  }
+  if (query.from || query.to) filters.push({ createdAt: writtenBetween(query.from, query.to) });
 
   return filters;
 }
@@ -71,19 +85,6 @@ function whatWasAsked(query: QuestionListQuery): Prisma.QuestionWhereInput[] {
   if (query.type) filters.push({ type: { in: query.type } });
   if (query.difficulty) filters.push({ difficulty: { in: query.difficulty } });
   if (query.status) filters.push({ status: { in: query.status } });
-  if (query.tag) filters.push({ tags: { has: query.tag } });
-  // No picker to choose an author from, so the name typed is matched against what they sign in as.
-  if (query.author) {
-    filters.push({
-      createdBy: {
-        OR: [
-          { fullName: { contains: query.author, mode: 'insensitive' } },
-          { email: { contains: query.author, mode: 'insensitive' } },
-        ],
-      },
-    });
-  }
-  if (query.from || query.to) filters.push({ createdAt: writtenBetween(query.from, query.to) });
   // A language is present when the CURRENT version has a stem in it, the key `buildContent` writes.
   if (query.language) {
     filters.push({ currentVersion: { content: { path: [query.language], not: Prisma.DbNull } } });
