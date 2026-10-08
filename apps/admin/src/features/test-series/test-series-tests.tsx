@@ -320,7 +320,7 @@ function MoveDialog({
   const move = useMutation({
     meta: { success: 'Test moved.', fields: MOVE_FIELDS },
     mutationFn: (testSeriesId: string) =>
-      api.admin.tests.moveToSeries(row.testId, { testSeriesId }),
+      api.admin.tests.moveToSeries(row.testId, { testSeriesId, expectedVersion: row.version }),
     onSuccess: () => {
       onClose();
       onMoved();
@@ -328,6 +328,11 @@ function MoveDialog({
     onError: (error) => {
       setConfirming(null);
       applyFieldErrors(error, form.setError, MOVE_FIELDS);
+      // Refused because the row is out of date: the list is read again rather than left to be refused twice.
+      if (AppException.is(error) && error.code === ErrorCodes.CONFLICT) {
+        onClose();
+        onMoved();
+      }
     },
   });
 
@@ -358,7 +363,7 @@ function MoveDialog({
               selectedLabel={chosen.name || undefined}
               placeholder="Choose a series"
               clearable={false}
-              forExamStageId={series.examStageId ?? undefined}
+              forExamStageId={row.examStageId}
               onChange={choose}
             />
           )}

@@ -1409,6 +1409,20 @@ describe('QuestionsService.availability — the count a section is about to draw
 
     assert.equal(held.total, 2, 'the archived and the unversioned do not count');
   });
+
+  /** The failure this prevents: a count that still offers what the paper holds, so Fill finds fewer than it read. */
+  it('leaves out what the test already has on its paper, in whichever section', async () => {
+    const { questions } = await build([{ id: 'on_paper' }, { id: 'free' }, { id: 'also_free' }]);
+    const { currentVersionId } = await questionRow(idFor('on_paper'));
+    const { testId } = await pinnedOn(idFor('on_paper'), currentVersionId ?? '');
+    const count = (forTestId?: string) =>
+      questions.availability(
+        questionAvailabilityQuerySchema.parse({ subjectId: BANK.QUANT, forTestId }),
+      );
+
+    assert.equal((await count(testId)).total, 2);
+    assert.equal((await count()).total, 3, 'the bank itself still holds all three');
+  });
 });
 
 describe('QuestionsService.list — the picker asks for what the draw would find', () => {
@@ -1557,6 +1571,28 @@ describe('QuestionsController — a section’s work in progress is not the bank
     const saved = await bank.update(idFor('typed'), draft({ stem: REWORDED }), BANK_ADMIN);
 
     assert.equal(saved.id, idFor('typed'));
+  });
+
+  /** The failure this prevents: a bank row offering Edit, Archive and Delete that the API then refuses. */
+  it('tells the list which rows are still its section’s to change', async () => {
+    const { questions } = await build([{ id: 'open' }, { id: 'finished' }, { id: 'offered' }]);
+    await assignedFor(idFor('open'));
+    const finished = await assignedFor(idFor('finished'));
+    await prisma.questionAssignment.updateMany({
+      where: { testId: finished },
+      data: { finalizedAt: new Date() },
+    });
+    const offered = await assignedFor(idFor('offered'));
+    await prisma.test.update({ where: { id: offered }, data: { finalizedAt: new Date() } });
+
+    const rows = (await questions.list(listQuery())).items;
+    const inProgress = (label: string) =>
+      rows.find((row) => row.id === idFor(label))?.writtenFor?.inProgress;
+
+    assert.deepEqual(
+      [inProgress('open'), inProgress('finished'), inProgress('offered')],
+      [true, false, false],
+    );
   });
 });
 

@@ -165,7 +165,7 @@ export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
 }
 
 /** A typing or reading job somebody still holds open. */
-const OPEN_ASSIGNMENT = { finalizedAt: null, replacedAt: null } as const;
+export const OPEN_ASSIGNMENT = { finalizedAt: null, replacedAt: null } as const;
 
 /** What a paper may draw: work written under an assignment is its own test's until that test is done. */
 export const drawableFor = (testId?: string): Prisma.QuestionWhereInput => ({

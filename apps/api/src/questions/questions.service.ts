@@ -43,6 +43,7 @@ import {
 import { mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
 import {
+  OPEN_ASSIGNMENT,
   SECTION_WORK_IN_PROGRESS,
   drawableFor,
   buildContent,
@@ -67,7 +68,14 @@ const QUESTION_INCLUDE = {
     select: {
       testId: true,
       baseConfigSectionId: true,
-      test: { select: { title: true } },
+      // With the offer stamp and one open job: together they are `SECTION_WORK_IN_PROGRESS`, read off the row.
+      test: {
+        select: {
+          title: true,
+          finalizedAt: true,
+          assignments: { where: OPEN_ASSIGNMENT, take: 1, select: { id: true } },
+        },
+      },
       baseConfigSection: { select: { name: true } },
     },
   },
@@ -202,6 +210,8 @@ export class QuestionsService {
       ...drawableFor(query.forTestId),
       ...(query.subjectId ? { subjectId: { in: query.subjectId } } : {}),
       ...(query.topicId ? { topicId: { in: query.topicId } } : {}),
+      // One question sits on a paper once, so what the test already holds is out of a fill's reach.
+      ...(query.forTestId ? { paperQuestions: { none: { testId: query.forTestId } } } : {}),
     };
 
     const rows = await this.prisma.question.groupBy({ by: ['difficulty'], where, _count: true });
@@ -789,6 +799,8 @@ function toSummary(row: QuestionRow): QuestionSummary {
           testTitle: row.assignment.test.title,
           baseConfigSectionId: row.assignment.baseConfigSectionId,
           sectionName: row.assignment.baseConfigSection.name,
+          inProgress:
+            row.assignment.test.finalizedAt === null && row.assignment.test.assignments.length > 0,
         }
       : null,
     createdAt: row.createdAt.toISOString(),

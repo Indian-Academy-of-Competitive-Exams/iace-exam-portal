@@ -485,6 +485,8 @@ export const questionSummarySchema = z.object({
       testTitle: z.string().nullable(),
       baseConfigSectionId: z.string(),
       sectionName: z.string(),
+      /** Its test still has a job open, so the bank refuses to change it and its section's page does. */
+      inProgress: z.boolean(),
     })
     .nullable(),
   createdAt: z.string(),

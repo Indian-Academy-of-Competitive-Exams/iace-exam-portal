@@ -3,6 +3,7 @@ import {
   type Assignment,
   type AssignmentRole,
   type BaseConfigSection,
+  type TestDetail,
 } from '@iace/contracts';
 import { plural, type BadgeProps } from '@iace/ui';
 import { durationLabel } from '../../lib/duration';
@@ -47,6 +48,14 @@ export const sectionTally = (
   held: ReadonlyMap<string, number> | null,
 ): string | null =>
   held === null ? null : `${held.get(section.id) ?? 0}/${section.questionCount}`;
+
+/** The stamp a draw-from save sends back: the newest while the pool its draft began on still stands, else the one it began on. */
+export function poolStamp(began: PoolRead, now: PoolRead): string {
+  const same = JSON.stringify(began.questionPoolFilter) === JSON.stringify(now.questionPoolFilter);
+  return same ? now.updatedAt : began.updatedAt;
+}
+
+type PoolRead = Pick<TestDetail, 'updatedAt' | 'questionPoolFilter'>;
 
 /** What the configuration framed this section as — the numbers a paper is judged against. */
 export function framingOf(section: BaseConfigSection): string {

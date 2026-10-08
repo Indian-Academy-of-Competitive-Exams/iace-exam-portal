@@ -171,13 +171,20 @@ export function AssignStep({
 
   if (detail.paperSource === null) return <SourceDialog testId={detail.id} />;
 
-  if (assignments.isLoadingError) {
+  // Who holds a role and what the paper holds both decide the hand-over, so a change re-reads both.
+  const reread = () => {
+    void assignments.refetch();
+    void paper.refetch();
+  };
+
+  // Either read missing leaves a row that misstates its section: unstaffed, or with no count held.
+  if (assignments.isLoadingError || paper.isLoadingError) {
     return (
-      <FormSection title="Assignments">
+      <FormSection title="Sections">
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
-          title="Could not load the assignments"
-          onRetry={assignments.refetch}
+          title="Could not load the sections"
+          onRetry={reread}
         />
       </FormSection>
     );
@@ -197,12 +204,6 @@ export function AssignStep({
       row.finalizedAt === null &&
       (row.role === ASSIGNMENT_ROLES.PROOFREADER || detail.paperSource === PAPER_SOURCES.FRAMED),
   );
-  // Who holds a role and what the paper holds both decide the hand-over, so a change re-reads both.
-  const reread = () => {
-    void assignments.refetch();
-    void paper.refetch();
-  };
-
   return (
     <FormSection title="Sections" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
       {outstanding && !detail.finalizedAt ? (
@@ -215,7 +216,7 @@ export function AssignStep({
         columns={columns}
         rows={sections.map(rowOf)}
         rowKey={(row) => row.section.id}
-        isLoading={assignments.isLoading}
+        isLoading={assignments.isLoading || paper.isLoading}
         empty="No sections"
       />
 
@@ -456,6 +457,8 @@ function HandOverDialog({
     mutationFn: (sectionId: string) => api.admin.tests.handOverSection(testId, sectionId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_PAPER });
+      // A hand-over moves the test's stamp, which Setup sends back with its next save.
+      void queryClient.invalidateQueries({ queryKey: testQueryKey(testId) });
       onHanded();
       onClose();
     },

@@ -618,6 +618,57 @@ describe('TestsService — where a test gets its questions', () => {
   });
 });
 
+describe('TestsService — a save from a stale screen', () => {
+  /** The failure this prevents: a Setup opened before a rename sent its old title back and undid it. */
+  it('refuses a Setup opened before another rename, and the rename stands', async () => {
+    const { service } = await serviceWith({ test: {} });
+    const opened = await service.detail(TEST);
+    await service.update(TEST, { title: 'Mock 1 (renamed)' });
+
+    const error = await refused(
+      service.update(TEST, {
+        title: opened.title ?? undefined,
+        examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+        expectedUpdatedAt: opened.updatedAt,
+      }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    const row = await testRow();
+    assert.deepEqual([row?.title, row?.examTemplate], ['Mock 1 (renamed)', EXAM_TEMPLATE.DEFAULT]);
+  });
+
+  it('refuses a draw-from saved over a split another admin changed since', async () => {
+    const { service } = await serviceWith({ test: {} });
+    const opened = await service.detail(TEST);
+    const theirs = { sections: { [idFor('sec_1')]: { tags: ['PYQ'] } } };
+    await service.update(TEST, { questionPoolFilter: theirs });
+
+    const error = await refused(
+      service.update(TEST, {
+        questionPoolFilter: { sections: {} },
+        expectedUpdatedAt: opened.updatedAt,
+      }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.deepEqual((await testRow())?.questionPoolFilter, theirs);
+  });
+
+  it('lands when the screen holds the test as it stands, and hands back the next stamp', async () => {
+    const { service } = await serviceWith({ test: {} });
+    const opened = await service.detail(TEST);
+
+    const saved = await service.update(TEST, {
+      title: 'Mock 1 (renamed)',
+      expectedUpdatedAt: opened.updatedAt,
+    });
+
+    assert.equal(saved.title, 'Mock 1 (renamed)');
+    assert.notEqual(saved.updatedAt, opened.updatedAt);
+  });
+});
+
 describe('TestsService — editing and removing', () => {
   it('leaves the opening and its program openings alone on an edit that keeps the test ranked', async () => {
     const opensAt = new Date('2026-09-01T04:30:00.000Z');

@@ -4,6 +4,8 @@ import { BarChart3 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
+  AppException,
+  ErrorCodes,
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
   testBuilderStepOf,
@@ -77,6 +79,14 @@ function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
   return done;
 }
 
+/** A paper edit moves the test's stamp and none of these, so only a change to one of them makes Setup stale. */
+const sameSetup = (left: TestDetail, right: TestDetail): boolean =>
+  left.title === right.title &&
+  left.scope === right.scope &&
+  left.examTemplate === right.examTemplate &&
+  left.scopeRef?.moduleId === right.scopeRef?.moduleId &&
+  left.scopeRef?.sectionId === right.scopeRef?.sectionId;
+
 export function TestBuilderPage() {
   const { id } = useParams();
   const [search] = useSearchParams();
@@ -136,6 +146,9 @@ function TestBuilder({
   const sat = (detail?.attemptCount ?? 0) > 0;
 
   const form = useForm<TestFormValues>({ defaultValues: valuesOf(detail, fromSeries) });
+  // The test Setup's values were read from: a save built on an older one is the server's to refuse.
+  const [opened, setOpened] = useState(detail);
+  const fresh = detail && opened && sameSetup(detail, opened) ? detail : opened;
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
   const scope = useWatch({ control: form.control, name: 'scope' });
 
@@ -166,7 +179,7 @@ function TestBuilder({
         examTemplate: values.examTemplate ?? undefined,
       };
       return detail
-        ? api.admin.tests.update(detail.id, owned)
+        ? api.admin.tests.update(detail.id, { ...owned, expectedUpdatedAt: fresh?.updatedAt })
         : api.admin.tests.create({
             ...owned,
             baseConfigId: values.baseConfigId,
@@ -184,9 +197,16 @@ function TestBuilder({
       }
       queryClient.setQueryData(testQueryKey(saved.id), saved);
       form.reset(form.getValues());
+      setOpened(saved);
       setStep(target);
     },
-    onError: (error) => applyServerErrors(error, form, scope),
+    onError: (error) => {
+      applyServerErrors(error, form, scope);
+      // Refused as out of date: read again, so a stamp only a paper edit moved does not refuse the next try.
+      if (detail && AppException.is(error) && error.code === ErrorCodes.CONFLICT) {
+        void queryClient.invalidateQueries({ queryKey: testQueryKey(detail.id) });
+      }
+    },
   });
 
   const offer = useOfferDraft(detail);

@@ -15,6 +15,7 @@ import {
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
+import type { PrismaService } from '../src/prisma/prisma.service';
 import { FinalizeService } from '../src/tests/finalize.service';
 import { OfferingService } from '../src/tests/offering.service';
 import { FakeEventBus } from '../test/support/fakes';
@@ -265,6 +266,109 @@ describe('OfferingService — a test belongs to one series', () => {
   });
 });
 
+/** Returns once some statement waits on a row lock, or once `work` settles without ever having to. */
+async function blockedOrSettled(work: Promise<unknown>): Promise<void> {
+  let settled = false;
+  void work.then(
+    () => (settled = true),
+    () => (settled = true),
+  );
+  for (let tries = 0; tries < 200 && !settled; tries += 1) {
+    const [waiting] = await prisma.$queryRaw<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_stat_activity
+      WHERE "wait_event_type" = 'Lock' AND "datname" = current_database()`;
+    if ((waiting?.n ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+/** The real client, pausing a move just before it writes until `rival` has landed or is waiting on it. */
+function pausingBeforeTheMoveWrites(rival: () => Promise<unknown>): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: Prisma.TransactionClient) => Promise<unknown>, limits?: object) =>
+        target.$transaction((tx) => {
+          const tests = new Proxy(tx.test, {
+            get(delegate, method: string | symbol) {
+              if (method !== 'update') return Reflect.get(delegate, method) as unknown;
+              return async (args: Prisma.TestUpdateArgs) => {
+                await blockedOrSettled(rival());
+                return delegate.update(args);
+              };
+            },
+          });
+          return work(
+            new Proxy(tx, {
+              get: (inner, member: string | symbol) =>
+                member === 'test' ? tests : (Reflect.get(inner, member) as unknown),
+            }),
+          );
+        }, limits);
+    },
+  });
+}
+
+describe('OfferingService — a move takes its turn', () => {
+  /** The failure this prevents: both pass, each blind to the other, and an in-order series opens out of order. */
+  it('never lands a move beside a sibling opening that puts an in-order series out of order', async () => {
+    const { service } = await serviceWith({ opensAt: OPENS_AT });
+    await inOrder(idFor('srs_2'));
+    await testIn({
+      id: idFor('tst_9'),
+      title: 'Mock 1',
+      testSeriesId: idFor('srs_2'),
+      seriesOrder: 1,
+    });
+    let opening: Promise<unknown> = Promise.resolve();
+    const openTheSibling = () => {
+      opening = service.saveOffering(
+        idFor('tst_9'),
+        { opensAt: A_DAY_LATER, programOpenings: [], offered: false, expectedVersion: 0 },
+        false,
+        NOW,
+      );
+      return opening;
+    };
+    const moving = new OfferingService(
+      pausingBeforeTheMoveWrites(openTheSibling),
+      new FakeEventBus().asService(),
+      new AuditContext(),
+      new FinalizeService(),
+    );
+
+    const moved = await moving
+      .moveToSeries(TEST, { testSeriesId: idFor('srs_2') })
+      .then(() => true);
+    const error = await refused(opening);
+
+    assert.equal(moved, true);
+    assert.match(error.fieldErrors?.opensAt?.[0] ?? '', /comes after it/);
+    assert.equal(
+      (await prisma.test.findUniqueOrThrow({ where: { id: idFor('tst_9') } })).opensAt,
+      null,
+    );
+  });
+
+  /** The failure this prevents: two admins move one test off the same list, and the last one silently wins. */
+  it('refuses the second of two moves made from the same list', async () => {
+    const { service } = await serviceWith();
+    await prisma.testSeries.create({
+      data: { id: idFor('srs_3'), name: 'SSC CGL 2026 — Revision', examStageId: BUILDER.STAGE },
+    });
+    const { version } = await testRow();
+
+    const results = await Promise.allSettled([
+      service.moveToSeries(TEST, { testSeriesId: idFor('srs_2'), expectedVersion: version }),
+      service.moveToSeries(TEST, { testSeriesId: idFor('srs_3'), expectedVersion: version }),
+    ]);
+
+    assert.deepEqual(results.map((result) => result.status).sort(), ['fulfilled', 'rejected']);
+    const refusal = results.find((result) => result.status === 'rejected');
+    assert.equal((refusal?.reason as AppException).code, ErrorCodes.CONFLICT);
+  });
+});
+
 describe('OfferingService — the Offer step saves in one piece', () => {
   it('offers again a test retired after it was offered', async () => {
     const { service } = await serviceWith({ ...FROZEN, status: TEST_STATUS.INACTIVE });
@@ -381,6 +485,8 @@ describe('OfferingService — a series and the tests it holds', () => {
       {
         testId: TEST,
         title: 'Mock 1',
+        examStageId: BUILDER.STAGE,
+        version: 0,
         order: 1,
         unlockAt: OPENS_AT.toISOString(),
         status: TEST_STATUS.ACTIVE,

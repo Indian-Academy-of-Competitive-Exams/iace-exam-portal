@@ -375,6 +375,8 @@ export const testDetailSchema = testSchema.extend({
   opensAt: z.string().nullable(),
   /** Per-program openings earlier than `opensAt`. Empty opens every program with the test. */
   programUnlocks: z.array(testProgramUnlockSchema),
+  /** Sent back as `expectedUpdatedAt`, so Setup or a draw-from saved from a stale screen is refused. */
+  updatedAt: z.string(),
 });
 export type TestDetail = z.infer<typeof testDetailSchema>;
 
@@ -467,6 +469,8 @@ export const updateTestSchema = testOwnFieldsSchema.extend({
   title: testTitleSchema.optional(),
   /** Absent on create: the choice is made in the builder, once, and the server refuses a second. */
   paperSource: paperSourceSchema.optional(),
+  /** The `updatedAt` the screen read. A save that does not match it is refused, not merged. */
+  expectedUpdatedAt: z.string().optional(),
 });
 export type UpdateTestInput = z.input<typeof updateTestSchema>;
 export type UpdateTestBody = z.infer<typeof updateTestSchema>;
@@ -538,6 +542,10 @@ export type TestPaper = z.infer<typeof testPaperSchema>;
 export const seriesTestRowSchema = z.object({
   testId: z.string(),
   title: z.string().nullable(),
+  /** The test's own stage, which is what a series it moves to has to be built for. */
+  examStageId: z.string(),
+  /** Sent back with a move, so one made from a list read before another change is refused. */
+  version: z.number().int(),
   order: z.number().int().nullable(),
   unlockAt: z.string().nullable(),
   status: testStatusSchema,
@@ -589,6 +597,8 @@ export type TestSeriesLink = z.infer<typeof testSeriesLinkSchema>;
 /** The series it moves to. A test belongs to exactly one and is never left in none. */
 export const setTestSeriesSchema = z.object({
   testSeriesId: z.string().min(1),
+  /** The test's version when the list was read; a move made from an older one is refused. */
+  expectedVersion: z.number().int().optional(),
 });
 export type SetTestSeriesInput = z.input<typeof setTestSeriesSchema>;
 export type SetTestSeriesBody = z.infer<typeof setTestSeriesSchema>;

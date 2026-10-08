@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   SECTION_FULLNESS,
+  poolStamp,
   sectionFullness,
   sectionTally,
 } from '../src/features/tests/test-paper-view';
@@ -39,5 +40,25 @@ describe('sectionTally', () => {
   /** A section the paper has no row for holds zero, not nothing measurable. */
   it('reads zero for a section the paper has no row for', () => {
     assert.equal(sectionTally(section, new Map()), '0/25');
+  });
+});
+
+describe('poolStamp', () => {
+  const split = (tag: string) => ({ sections: { sec_1: { tags: [tag] } } });
+  const began = { updatedAt: '2026-10-08T04:00:00.000Z', questionPoolFilter: split('PYQ') };
+  const LATER = '2026-10-08T04:05:00.000Z';
+
+  /** The failure this prevents: a hand-over or a typist's Done moving the stamp, and every Save refused until a reload. */
+  it('sends the newest stamp while the pool the draft began on still stands', () => {
+    assert.equal(poolStamp(began, { ...began, updatedAt: LATER }), LATER);
+    const unset = { updatedAt: began.updatedAt, questionPoolFilter: null };
+    assert.equal(poolStamp(unset, { ...unset, updatedAt: LATER }), LATER);
+  });
+
+  /** The failure this prevents: a re-read handing a stale draft the stamp of the very split it is about to undo. */
+  it('keeps the stamp the draft began on once another save has moved the pool', () => {
+    const moved = { updatedAt: LATER, questionPoolFilter: split('2024') };
+
+    assert.equal(poolStamp(began, moved), began.updatedAt);
   });
 });

@@ -104,12 +104,14 @@ export const PAPER_SOURCE_FIXED_MESSAGE =
 export const SAT_TEST_MESSAGE =
   'Students have sat this test, so its paper cannot move under their results. Only its name still changes.';
 
-type TestField = keyof UpdateTestBody;
+/** The stamp a save carries is not a column, so no rule here is ever shown it. */
+type TestEdit = Omit<UpdateTestBody, 'expectedUpdatedAt'>;
+type TestField = keyof TestEdit;
 
 /** What an edit would actually move: a value sent back as it is stored is not a change. */
 export function changedTestFields(
   stored: Readonly<Record<TestField, unknown>>,
-  input: UpdateTestBody,
+  input: TestEdit,
 ): TestField[] {
   return (Object.keys(input) as TestField[]).filter(
     (key) =>

@@ -47,7 +47,6 @@ export function DrawSpecEditor({
         topicId: topicIds.length > 0 ? topicIds : undefined,
         forTestId: testId,
       }),
-    enabled: section.subjectId !== null,
   });
 
   const held = available.data?.byDifficulty ?? {};

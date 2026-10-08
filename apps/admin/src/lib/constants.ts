@@ -896,11 +896,11 @@ export const questionVersionsQueryKey = (questionId: string) =>
 export const sectionQuestionPickerQueryKey = (sectionId: string) =>
   [...QUERY_KEYS.QUESTIONS, QUERY_SCOPES.PICKER, sectionId] as const;
 
+/** With the test alone it is every count read for that test's paper, which a paper edit makes stale. */
 export const availableQuestionsQueryKey = (
   testId: string,
-  subjectId: string | null,
-  topicIds: string,
-) => [...QUERY_KEYS.QUESTIONS, 'available', testId, subjectId, topicIds] as const;
+  ...slice: [subjectId: string | null, topicIds: string] | []
+) => [...QUERY_KEYS.QUESTIONS, 'available', testId, ...slice] as const;
 
 export const importDraftsQueryKey = (importLogId: string) =>
   [...QUERY_KEYS.QUESTIONS, 'import', importLogId] as const;

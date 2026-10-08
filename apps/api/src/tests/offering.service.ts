@@ -50,6 +50,8 @@ const OFFERING_SELECT = {
 const SERIES_TEST_SELECT = {
   id: true,
   title: true,
+  examStageId: true,
+  version: true,
   seriesOrder: true,
   opensAt: true,
   status: true,
@@ -93,6 +95,13 @@ const AUDITED_OFFERING_FIELDS = ['status', 'opensAt', 'programUnlocks'] as const
 const OFFER_CHANGED_ELSEWHERE =
   'This test changed after you opened its Offer step. Reload it to see what changed before saving.';
 
+const MOVE_CHANGED_ELSEWHERE =
+  'This test changed after this list was read, so it was not moved. Read the list again first.';
+
+/** Taken after the Test row, never before it: a move and an in-order opening both judge one series' openings. */
+const holdSeries = (tx: Prisma.TransactionClient, testSeriesId: string) =>
+  tx.$queryRaw`SELECT 1 FROM "TestSeries" WHERE "id" = ${testSeriesId}::uuid FOR NO KEY UPDATE`;
+
 /** The Offer step speaks minutes, so a stored time is unchanged when a save names the same minute. */
 const sameMinute = (left: Date | null, right: Date | null): boolean =>
   left === null || right === null
@@ -101,7 +110,7 @@ const sameMinute = (left: Date | null, right: Date | null): boolean =>
 
 type OfferingClient = Pick<
   Prisma.TransactionClient,
-  'test' | 'program' | 'testProgramUnlock' | 'attempt'
+  'test' | 'testSeries' | 'program' | 'testProgramUnlock' | 'attempt'
 >;
 
 const nameTakenIn = (seriesName: string, title: string) =>
@@ -211,35 +220,41 @@ export class OfferingService {
 
   /** One column, so the test's own clock is untouched by a move and cannot be re-saved away. */
   async moveToSeries(testId: string, input: SetTestSeriesBody): Promise<TestSeriesLink> {
-    const test = await this.requireTest(testId);
     const next = input.testSeriesId;
-    if (next === test.testSeriesId) return linkOf(test);
 
-    // A test students have sat is part of their record wherever it was offered.
-    await this.assertUnsat(this.prisma, test, CANNOT_CHANGE_SERIES);
-    const series = await this.assertSeriesUsable(test, next);
-    await this.assertTitleFreeIn(next, series.name, test);
-    const opensAt = test.opensAt;
-    if (series.sequentialTests && opensAt !== null) {
-      await this.assertOpeningFitsOrder(this.prisma, next, FORM_LEVEL_FIELD, (siblings) =>
-        arrivalClash(opensAt, siblings),
-      );
-    }
-
-    const moved = await this.prisma.$transaction(async (tx) => {
+    const { held, moved } = await this.prisma.$transaction(async (tx) => {
       await beginPaperEdit(tx, testId);
-      // Asked again under the Test lock: a first sitting started since has landed, or waits behind the move.
+      const test = await this.requireTest(testId, tx);
+      if (input.expectedVersion !== undefined && input.expectedVersion !== test.version) {
+        throw formRefusal(ErrorCodes.CONFLICT, MOVE_CHANGED_ELSEWHERE);
+      }
+      if (next === test.testSeriesId) return { held: test, moved: null };
+
+      // A test students have sat is part of their record wherever it was offered.
       await this.assertUnsat(tx, test, CANNOT_CHANGE_SERIES);
-      return tx.test.update({
+      await holdSeries(tx, next);
+      const series = await this.assertSeriesUsable(tx, test, next);
+      await this.assertTitleFreeIn(tx, next, series.name, test);
+      const opensAt = test.opensAt;
+      if (series.sequentialTests && opensAt !== null) {
+        await this.assertOpeningFitsOrder(tx, next, FORM_LEVEL_FIELD, (siblings) =>
+          arrivalClash(opensAt, siblings),
+        );
+      }
+
+      const moved = await tx.test.update({
         where: { id: testId },
         // An Offer step opened before the move names the series it left, so it must be refused.
         data: { testSeriesId: next, seriesOrder: null, version: { increment: 1 } },
         select: OFFERING_SELECT,
       });
+      return { held: test, moved };
     }, TX_LIMITS.SHORT);
 
+    if (moved === null) return linkOf(held);
+
     // One bump rebuilds every held series, the one it left included.
-    if (inTheCatalog(test)) {
+    if (inTheCatalog(held)) {
       this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: next });
     }
 
@@ -310,6 +325,7 @@ export class OfferingService {
     if (opensAt !== null) {
       assertOpeningAhead(opensAt, now, OPENS_AT_FIELD);
       if (test.testSeries.sequentialTests) {
+        await holdSeries(tx, test.testSeriesId);
         await this.assertOpeningFitsOrder(tx, test.testSeriesId, OPENS_AT_FIELD, (siblings) =>
           orderClash(test, opensAt, siblings),
         );
@@ -365,10 +381,11 @@ export class OfferingService {
 
   /** A series must exist and be built for this test's stage, and it says how it opens what it holds. */
   private async assertSeriesUsable(
+    db: OfferingClient,
     test: OfferingRow,
     testSeriesId: string,
   ): Promise<{ name: string; sequentialTests: boolean }> {
-    const series = await this.prisma.testSeries.findUnique({
+    const series = await db.testSeries.findUnique({
       where: { id: testSeriesId },
       select: { name: true, examStageId: true, sequentialTests: true },
     });
@@ -402,6 +419,8 @@ export class OfferingService {
     return rows.map((row) => ({
       testId: row.id,
       title: row.title,
+      examStageId: row.examStageId,
+      version: row.version,
       order: row.seriesOrder,
       unlockAt: row.opensAt?.toISOString() ?? null,
       status: row.status,
@@ -414,13 +433,14 @@ export class OfferingService {
 
   /** A name is unique inside a series, so the series it ARRIVES in is the one that judges it. */
   private async assertTitleFreeIn(
+    db: OfferingClient,
     testSeriesId: string,
     seriesName: string,
     test: OfferingRow,
   ): Promise<void> {
     if (test.title === null) return;
 
-    const clash = await this.prisma.test.findFirst({
+    const clash = await db.test.findFirst({
       where: { testSeriesId, title: { equals: test.title, mode: 'insensitive' } },
       select: { id: true },
     });

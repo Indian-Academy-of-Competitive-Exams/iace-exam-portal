@@ -5,6 +5,7 @@ import { Printer, SlidersHorizontal } from 'lucide-react';
 import {
   ASSIGNMENT_ROLES,
   AppException,
+  ErrorCodes,
   FEATURE_KEYS,
   FORM_LEVEL_FIELD,
   PAPER_SOURCES,
@@ -47,11 +48,18 @@ import { useAuth } from '../../providers/auth';
 import { DrawSpecEditor } from './draw-spec';
 import { PaperQuestions } from './paper-questions';
 import { QuestionChooser, type QuestionPicks } from './question-picker';
-import { FULLNESS_VARIANT, holderOf, sectionFullness, sectionTally } from './test-paper-view';
+import {
+  FULLNESS_VARIANT,
+  holderOf,
+  poolStamp,
+  sectionFullness,
+  sectionTally,
+} from './test-paper-view';
 import {
   NAV_ITEMS,
   QUERY_KEYS,
   ROUTES,
+  availableQuestionsQueryKey,
   testAssignmentsQueryKey,
   testPaperQueryKey,
   testQueryKey,
@@ -96,7 +104,7 @@ export function TestPaperPage() {
     enabled: testId !== '',
   });
 
-  if (test.isLoading || paper.isLoading) {
+  if (test.isLoading || paper.isLoading || assignments.isLoading) {
     // Both have a known shape, so the screen is drawn and held rather than spun at.
     return (
       <div className="flex flex-col gap-4">
@@ -106,8 +114,9 @@ export function TestPaperPage() {
     );
   }
 
-  if (!test.data || !paper.data) {
-    const reload = () => Promise.all([test.refetch(), paper.refetch()]);
+  // Who holds each section is part of the paper: without it a staffed section reads as unstaffed.
+  if (!test.data || !paper.data || !assignments.data) {
+    const reload = () => Promise.all([test.refetch(), paper.refetch(), assignments.refetch()]);
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}
@@ -117,10 +126,8 @@ export function TestPaperPage() {
     );
   }
 
-  // Mounted only once both are here, so a refetch cannot throw away a half-edited pool.
-  return (
-    <TestPaperScreen detail={test.data} paper={paper.data} assignments={assignments.data ?? []} />
-  );
+  // Mounted only once all three are here, so a refetch cannot throw away a half-edited pool.
+  return <TestPaperScreen detail={test.data} paper={paper.data} assignments={assignments.data} />;
 }
 
 function TestPaperScreen({
@@ -136,6 +143,8 @@ function TestPaperScreen({
   const filters = useFilters<'section'>();
   const openSectionId = filters.get('section') || (sections[0]?.id ?? '');
   const [draft, setDraft] = useState<DrawSpec | null>(null);
+  // The test the unsaved pool was begun on: a save built on an older pool is the server's to refuse.
+  const [began, setBegan] = useState(detail);
   const [poolOpen, setPoolOpen] = useState(false);
   // Sticky for the life of the screen: the rebuild is delayed and deduped, so there is nothing to poll.
   const [rescoring, setRescoring] = useState(false);
@@ -160,20 +169,36 @@ function TestPaperScreen({
   const save = useMutation({
     meta: { success: 'Drawn from saved.' },
     // Alone on purpose: Setup owns every other field, and a stale copy would undo its last save.
-    mutationFn: (next: DrawSpec) => api.admin.tests.update(detail.id, { questionPoolFilter: next }),
+    mutationFn: (next: DrawSpec) =>
+      api.admin.tests.update(detail.id, {
+        questionPoolFilter: next,
+        expectedUpdatedAt: poolStamp(began, detail),
+      }),
     onSuccess: async (saved) => {
       setDraft(null);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS, refetchType: 'none' });
       queryClient.setQueryData(testQueryKey(saved.id), saved);
     },
+    onError: (error) => {
+      // Refused as out of date: read again, so a stamp only a paper edit moved does not refuse the next try.
+      if (AppException.is(error) && error.code === ErrorCodes.CONFLICT) {
+        void queryClient.invalidateQueries({ queryKey: testQueryKey(detail.id) });
+      }
+    },
   });
 
   const refresh = async (next: TestPaper) => {
     queryClient.setQueryData(testPaperQueryKey(detail.id), next);
+    // What a section can still draw from is counted without what the paper now holds.
+    void queryClient.invalidateQueries({ queryKey: availableQuestionsQueryKey(detail.id) });
     await queryClient.invalidateQueries({ queryKey: testQueryKey(detail.id) });
   };
 
   const spec = draft ?? detail.questionPoolFilter ?? NO_SPEC;
+  const editPool = (sectionId: string, next: SectionDrawSpec) => {
+    if (draft === null) setBegan(detail);
+    setDraft({ sections: { ...spec.sections, [sectionId]: next } });
+  };
   const offered = detail.finalizedAt !== null;
   // What the server assembles: an offered paper is frozen, and a sat one for good.
   const canEditPaper = detail.attemptCount === 0 && !offered;
@@ -271,7 +296,7 @@ function TestPaperScreen({
               spec={spec.sections[section.id] ?? {}}
               canSave={canEditPaper}
               open={poolOpen}
-              onChange={(next) => setDraft({ sections: { ...spec.sections, [section.id]: next } })}
+              onChange={(next) => editPool(section.id, next)}
             />
           )}
 

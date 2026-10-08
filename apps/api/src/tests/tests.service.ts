@@ -39,6 +39,7 @@ import {
 } from './test-rules';
 import { beginDraftPaperEdit, beginPaperEdit, OFFERED_TEST_MESSAGE } from '../common/paper-edit';
 import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
+import { EDIT_SUBJECTS, editedElsewhere } from '../common/edit-lock';
 import { formRefusal } from '../common/form-refusal';
 import { pageArgs, paged } from '../common/pagination';
 import { everyTermMatches } from '../common/search-terms';
@@ -227,8 +228,15 @@ export class TestsService {
     return series;
   }
 
-  async update(id: string, input: UpdateTestBody, editor: Editor = {}): Promise<TestDetail> {
+  async update(
+    id: string,
+    { expectedUpdatedAt, ...input }: UpdateTestBody,
+    editor: Editor = {},
+  ): Promise<TestDetail> {
     const test = await this.requireTest(id);
+    if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== test.updatedAt.toISOString()) {
+      throw editedElsewhere(EDIT_SUBJECTS.TEST);
+    }
     await takeTestEditLock(this.redis, this.prisma, id, editor);
 
     const changed = changedTestFields(test, input);
@@ -261,8 +269,9 @@ export class TestsService {
       if (stopsOnceSat) await this.assertStillUnsat(tx, id);
       const dropped = scopeMoves ? await this.dropOutOfScope(tx, id, keptIds) : 0;
 
-      const updated = await tx.test.update({
-        where: { id },
+      // Conditional on the row the rules above judged: a save that lost the race is refused, not merged.
+      const claimed = await tx.test.updateMany({
+        where: { id, updatedAt: test.updatedAt },
         data: {
           title: input.title,
           scope: input.scope,
@@ -272,9 +281,12 @@ export class TestsService {
           questionPoolFilter: toJson(input.questionPoolFilter),
           // An Offer step opened before this edit must be refused, so every paper edit moves the version.
           version: paperMoves ? { increment: 1 } : undefined,
+          updatedAt: new Date(),
         },
-        include: TEST_INCLUDE,
       });
+      if (claimed.count !== 1) throw editedElsewhere(EDIT_SUBJECTS.TEST);
+
+      const updated = await tx.test.findUniqueOrThrow({ where: { id }, include: TEST_INCLUDE });
       return { updated, dropped };
     }, TX_LIMITS.SHORT);
 
@@ -430,5 +442,6 @@ function toTestSchedule(row: TestRow): Omit<TestDetail, keyof Test | 'baseConfig
       programCode: unlock.programCode,
       opensAt: unlock.opensAt.toISOString(),
     })),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
