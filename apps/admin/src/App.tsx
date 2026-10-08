@@ -182,7 +182,7 @@ const screen = (path: string, page: React.ReactNode) => (
 
 /** ProtectedRoute is the outer gate; AppShell is the layout inside it. */
 export function App() {
-  const { identity, isLoading } = useAuth();
+  const { identity, isLoading, isUnreachable, retry } = useAuth();
 
   return (
     <Routes>
@@ -192,6 +192,8 @@ export function App() {
           <ProtectedRoute
             isAuthenticated={identity !== null}
             isLoading={isLoading}
+            isUnreachable={isUnreachable}
+            onRetry={retry}
             loginPath={ROUTES.LOGIN}
           />
         }
