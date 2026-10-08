@@ -25,6 +25,7 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
 import { everyTermMatches } from '../common/search-terms';
+import { byOrderThenId } from '../common/series-order';
 
 /** What the four CHECKs on `TestSeries` refuse, in the words the form uses for the fields. */
 const KIND_PAIRING_MESSAGES = {
@@ -46,6 +47,17 @@ const branchesAreStandardOnly = (count: number) =>
   `Only a standard series reaches students branch by branch. This one is switched on at ${count} ${count === 1 ? 'branch' : 'branches'} and carries a branch list no other kind can hold, so its kind cannot change.`;
 
 const NO_SUCH_BRANCH_MESSAGE = 'One of those branches does not exist.';
+
+const INACTIVE_EVENT_MESSAGE =
+  'That event is no longer active. Pick another, or reactivate it first.';
+
+const UNTITLED_TEST = 'An untitled test';
+
+const heldForAnotherStage = (count: number) =>
+  `This series holds ${count} ${count === 1 ? 'test' : 'tests'} built for another stage, and a series carries only tests built for its own. Move ${count === 1 ? 'it' : 'them'} to another series first.`;
+
+const opensOutOfOrder = (later: string, earlier: string) =>
+  `${later} comes after ${earlier} in this series and opens no later than it. Move one of the two openings before opening the tests in order.`;
 
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
@@ -115,24 +127,24 @@ export class TestSeriesService {
       this.prisma.testSeries.count({ where }),
     ]);
 
-    const branchCount = await this.liveBranchCount();
+    const live = await this.liveBranchIds();
 
     return paged(
       query,
-      rows.map((row) => toSummary(row, branchCount)),
+      rows.map((row) => toSummary(row, live)),
       total,
     );
   }
 
   async detail(id: string): Promise<TestSeriesDetail> {
     const row = await this.requireSeries(id);
-    const [branchCount, reachedCount, satCount] = await Promise.all([
-      this.liveBranchCount(),
+    const [live, reachedCount, satCount] = await Promise.all([
+      this.liveBranchIds(),
       this.access.audienceCount(id),
       this.satCount(id),
     ]);
 
-    return { ...toSummary(row, branchCount), reachedCount, satCount };
+    return { ...toSummary(row, live), reachedCount, satCount };
   }
 
   /** Raw because a headcount is one row: Prisma's `distinct` would pull every sitting back to count it. */
@@ -158,6 +170,7 @@ export class TestSeriesService {
       eventId: input.eventId ?? null,
       branchIds: [],
     });
+    await this.assertEventUsable(input.eventId);
 
     const series = await this.prisma.testSeries.create({
       data: { ...columnsOf(input), name: input.name },
@@ -173,20 +186,25 @@ export class TestSeriesService {
 
   async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesDetail> {
     const series = await this.requireSeries(id);
-    await this.assertTargetsUsable(input);
+    await this.assertTargetsUsable(input, series);
     if (input.name !== undefined) await this.assertNameFree(input.name, id);
-    // `branchIds` is untouched here — only `setBranches` moves it, so this reads what it already holds.
+    const kind = input.kind ?? series.kind;
+    const standard = kind === TEST_SERIES_KIND.STANDARD;
+    // `branchIds` carries no foreign key, so a branch deleted since may still be on it: only a live one holds the kind.
     this.assertKindHoldsTogether({
-      kind: input.kind ?? series.kind,
+      kind,
       examStageId: settledValue(input.examStageId, series.examStageId),
       programCode: settledValue(input.programCode, series.programCode),
       eventId: settledValue(input.eventId, series.eventId),
-      branchIds: series.branchIds,
+      branchIds: standard ? series.branchIds : await this.liveAmong(series.branchIds),
     });
+    await this.assertEventUsable(input.eventId, series.eventId);
+    await this.assertTestsFit(series, input);
 
     await this.prisma.testSeries.update({
       where: { id },
-      data: columnsOf(input),
+      // Past the rule above, whatever a series of another kind still lists is a branch that is gone.
+      data: { ...columnsOf(input), ...(standard ? {} : { branchIds: [] }) },
     });
 
     const updated = await this.requireSeries(id);
@@ -240,6 +258,9 @@ export class TestSeriesService {
     await this.prisma.testSeries.update({ where: { id }, data: { branchIds: chosen } });
 
     this.auditContext.setEntityId(id);
+    this.auditContext.setChanged(
+      fieldDiff(series, { ...series, branchIds: chosen }, ['branchIds']),
+    );
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
     return this.branches(id);
   }
@@ -288,9 +309,64 @@ export class TestSeriesService {
     throw new AppException(ErrorCodes.VALIDATION_ERROR, message, { fieldErrors });
   }
 
-  private async assertTargetsUsable(input: Partial<CreateTestSeriesBody>): Promise<void> {
-    if (input.examStageId) await this.stages.assertUsable(input.examStageId);
-    if (input.programCode) await this.programs.assertUsable([input.programCode], 'programCode');
+  /** A target is judged when it is chosen: one the series already holds is not this save's to refuse. */
+  private async assertTargetsUsable(
+    input: Partial<CreateTestSeriesBody>,
+    held?: SeriesRow,
+  ): Promise<void> {
+    const { examStageId, programCode } = input;
+    if (examStageId && examStageId !== held?.examStageId) {
+      await this.stages.assertUsable(examStageId);
+    }
+    if (programCode && programCode !== held?.programCode) {
+      await this.programs.assertUsable([programCode], 'programCode');
+    }
+  }
+
+  /** Asked after the kind rule, which answers an event on the wrong kind; a deleted one would leave as the foreign key's generic refusal. */
+  private async assertEventUsable(eventId?: string | null, held?: string | null): Promise<void> {
+    if (!eventId || eventId === held) return;
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { isActive: true },
+    });
+    if (!event) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such event', {
+        fieldErrors: { eventId: ['Pick an event'] },
+      });
+    }
+    if (!event.isActive) throw refusedUnder('eventId', INACTIVE_EVENT_MESSAGE);
+  }
+
+  /** What an edit may not leave behind: a test of another stage, or an in-order series whose openings do not ascend. */
+  private async assertTestsFit(series: SeriesRow, input: UpdateTestSeriesBody): Promise<void> {
+    if (input.examStageId && input.examStageId !== series.examStageId) {
+      const stray = await this.prisma.test.count({
+        where: { testSeriesId: series.id, examStageId: { not: input.examStageId } },
+      });
+      if (stray > 0) throw refusedUnder('examStageId', heldForAnotherStage(stray));
+    }
+    if (input.sequentialTests && !series.sequentialTests) {
+      const clash = await this.openingOutOfOrder(series.id);
+      if (clash) throw refusedUnder('sequentialTests', clash);
+    }
+  }
+
+  /** In order means the openings ascend with it. A series holds a handful of tests, so they are compared here. */
+  private async openingOutOfOrder(testSeriesId: string): Promise<string | null> {
+    const tests = await this.prisma.test.findMany({
+      where: { testSeriesId, opensAt: { not: null } },
+      select: { id: true, title: true, seriesOrder: true, opensAt: true },
+    });
+    const placed = tests.map((test) => ({ ...test, order: test.seriesOrder })).sort(byOrderThenId);
+
+    for (const [index, later] of placed.entries()) {
+      const earlier = placed[index - 1];
+      if (earlier?.opensAt && later.opensAt && later.opensAt <= earlier.opensAt) {
+        return opensOutOfOrder(later.title ?? UNTITLED_TEST, earlier.title ?? UNTITLED_TEST);
+      }
+    }
+    return null;
   }
 
   /** Nothing in `branchIds` may name a branch that is not really there — the array carries no FK. */
@@ -331,10 +407,24 @@ export class TestSeriesService {
     });
   }
 
-  private async liveBranchCount(): Promise<number> {
-    return this.prisma.branch.count();
+  private async liveBranchIds(): Promise<ReadonlySet<string>> {
+    const rows = await this.prisma.branch.findMany({ select: { id: true } });
+    return new Set(rows.map((row) => row.id));
+  }
+
+  /** Which of these ids still name a branch. */
+  private async liveAmong(branchIds: readonly string[]): Promise<string[]> {
+    if (branchIds.length === 0) return [];
+    const rows = await this.prisma.branch.findMany({
+      where: { id: { in: [...branchIds] } },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
   }
 }
+
+const refusedUnder = (field: string, message: string): AppException =>
+  new AppException(ErrorCodes.VALIDATION_ERROR, message, { fieldErrors: { [field]: [message] } });
 
 /** The columns a series' kind implies something about, plus what its branch switch says today. */
 interface SeriesPairing {
@@ -388,7 +478,9 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
 }
 
-function toSummary(row: SeriesRow, branchCount: number): TestSeriesSummary {
+function toSummary(row: SeriesRow, live: ReadonlySet<string>): TestSeriesSummary {
+  // The list carries no foreign key, so a branch deleted since is still on it and must not be counted.
+  const branchIds = row.branchIds.filter((id) => live.has(id));
   return {
     id: row.id,
     name: row.name,
@@ -399,11 +491,11 @@ function toSummary(row: SeriesRow, branchCount: number): TestSeriesSummary {
     programCode: row.programCode,
     sequentialTests: row.sequentialTests,
     kind: row.kind,
-    branchIds: row.branchIds,
+    branchIds,
     eventId: row.eventId,
     testCount: row._count.tests,
-    enabledBranchCount: row.branchIds.length,
-    branchCount,
+    enabledBranchCount: branchIds.length,
+    branchCount: live.size,
     createdAt: row.createdAt.toISOString(),
   };
 }
