@@ -50,6 +50,11 @@ moment:
 aws ssm put-parameter --name /examprep/staging/env --type SecureString --tier Advanced --overwrite --value file://deploy/.env
 ```
 
+An IAM user under the MFA guard needs an MFA session for that push (`aws sts get-session-token
+--serial-number … --token-code …`, exported into the shell). Plain access keys pass the guard on a
+direct call, but SSM encrypts the value by calling KMS on your behalf, and that call arrives marked
+as made without MFA, so it is refused as `kms:GenerateDataKey … explicit deny`.
+
 On a new box, one command brings the environment with it:
 
 ```bash
