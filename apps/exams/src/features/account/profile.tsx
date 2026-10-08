@@ -4,10 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import {
+  AppException,
   courseLabel,
   DOCUMENT_KINDS,
   EARLIEST_BIRTH_DATE,
+  ErrorCodes,
   GENDERS,
+  ownDetailsMoved,
   todayISO,
   updateMeSchema,
   type EnrolmentName,
@@ -17,6 +20,7 @@ import {
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
+  Alert,
   Badge,
   Button,
   Combobox,
@@ -55,8 +59,16 @@ const FORM_FIELDS = [
 export function ProfilePage() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  // The record the open edit began on; what was written elsewhere since is measured against it.
+  const [opened, setOpened] = useState<Me | null>(null);
 
-  const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
+  const profileQuery = { queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() };
+  const me = useQuery(profileQuery);
+  const moved = isEditing ? ownDetailsMoved(opened, me.data) : [];
+  const edit = () => {
+    setOpened(me.data ?? null);
+    setIsEditing(true);
+  };
 
   const form = useForm<UpdateMeInput>({
     resolver: zodResolver(updateMeSchema),
@@ -87,7 +99,24 @@ export function ProfilePage() {
   const save = useMutation({
     // `fields` keeps a validation failure off the toast and on the input that caused it.
     meta: { success: 'Your details have been saved.', fields: FORM_FIELDS },
-    mutationFn: (values: UpdateMeInput) => api.me.update(values),
+    mutationFn: async (values: UpdateMeInput) => {
+      // On the newest stamp while none of these fields has moved, else the one the edit began on, which is refused.
+      const send = (latest: Me | undefined) =>
+        api.me.update({
+          ...values,
+          expectedUpdatedAt: (ownDetailsMoved(opened, latest).length === 0 ? latest : opened)
+            ?.updatedAt,
+        });
+      try {
+        return await send(me.data);
+      } catch (error) {
+        if (!AppException.is(error) || error.code !== ErrorCodes.CONFLICT) throw error;
+        // An enrolment or a block moves the stamp too, so the record is read again before giving up.
+        const latest = await queryClient.fetchQuery({ ...profileQuery, staleTime: 0 });
+        if (ownDetailsMoved(opened, latest).length > 0) throw error;
+        return send(latest);
+      }
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
       // The identity carries preTestReady, and saving these fields is what changes it.
@@ -107,6 +136,12 @@ export function ProfilePage() {
       footer={
         ready && isEditing ? (
           <>
+            {moved.length > 0 ? (
+              <Alert variant="warning">
+                Changed elsewhere since you began editing: {moved.join(', ')}. Discard, then edit
+                again from your details as they stand.
+              </Alert>
+            ) : null}
             {/* Cancel is neutral grey, never red — it destroys nothing. */}
             <Button
               type="button"
@@ -118,7 +153,11 @@ export function ProfilePage() {
             >
               Discard
             </Button>
-            <Button type="submit" loading={save.isPending} disabled={!form.formState.isDirty}>
+            <Button
+              type="submit"
+              loading={save.isPending}
+              disabled={!form.formState.isDirty || moved.length > 0}
+            >
               Save changes
             </Button>
           </>
@@ -132,7 +171,7 @@ export function ProfilePage() {
             title="Profile"
             action={
               ready && !isEditing ? (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                <Button variant="outline" size="sm" onClick={edit}>
                   <Pencil aria-hidden />
                   Edit details
                 </Button>
@@ -140,9 +179,7 @@ export function ProfilePage() {
             }
           />
           {/* Up here because the panel's read-only fieldset would disable its button. */}
-          {me.data ? (
-            <PreTestPrompt preTestReady={me.data.preTestReady} onAdd={() => setIsEditing(true)} />
-          ) : null}
+          {me.data ? <PreTestPrompt preTestReady={me.data.preTestReady} onAdd={edit} /> : null}
         </>
       }
     >
