@@ -3,7 +3,10 @@ import { Prisma } from '@prisma/client';
 import {
   ANSWER_MODE,
   DEFAULT_LANGUAGE,
+  LANGUAGE_LABELS,
+  LANGUAGE_ORDER,
   QUESTION_STATUS,
+  QUESTION_VALIDATION_CODE,
   canonicalStemKey,
   hasText,
   languagesIn,
@@ -114,14 +117,46 @@ export function validateQuestion(
   draft: QuestionDraft,
   taxonomy: TaxonomyContext,
 ): ValidationIssue[] {
-  return validateAgainstRules(asStored(draft), taxonomy, mathErrorIn);
+  return [
+    ...validateAgainstRules(asStored(draft), taxonomy, mathErrorIn),
+    ...emptiedTranslations(draft),
+  ];
 }
 
-/** A lone foreign image or a script reads as a stem until it is sanitised, so it is judged as the empty one stored. */
+/** A lone foreign image or a script reads as content until it is sanitised, and is then stored as nothing. */
+const emptiedByStoring = (value: string | undefined): boolean =>
+  value !== undefined && !blank(value) && blank(sanitizeContentHtml(value));
+
+const asStoredText = (text: LocalizedText, languages: readonly QuestionLanguage[]) => {
+  const stored: LocalizedText = { ...text };
+  for (const language of languages) {
+    if (emptiedByStoring(text[language])) stored[language] = '';
+  }
+  return stored;
+};
+
+/** The English stem and every option are judged as the fields stored, so the rules refuse an emptied one by name. */
 function asStored(draft: QuestionDraft): QuestionDraft {
-  const stem = draft.stem[DEFAULT_LANGUAGE];
-  if (blank(stem) || textNode(stem).length > 0) return draft;
-  return { ...draft, stem: { ...draft.stem, [DEFAULT_LANGUAGE]: '' } };
+  return {
+    ...draft,
+    stem: asStoredText(draft.stem, [DEFAULT_LANGUAGE]),
+    options: draft.options.map((option) => ({
+      ...option,
+      text: asStoredText(option.text, LANGUAGE_ORDER),
+    })),
+  };
+}
+
+/** Blanked like the English one, a translated stem would only drop its language, so it is refused by name. */
+function emptiedTranslations(draft: QuestionDraft): ValidationIssue[] {
+  return LANGUAGE_ORDER.filter(
+    (language) => language !== DEFAULT_LANGUAGE && emptiedByStoring(draft.stem[language]),
+  ).map((language) => ({
+    code: QUESTION_VALIDATION_CODE.TRANSLATION_WITHOUT_STEM,
+    message: `The ${LANGUAGE_LABELS[language]} question text holds nothing that can be stored`,
+    field: `stem.${language}`,
+    column: `stem_${language}`,
+  }));
 }
 
 /** Bumped whenever canonicalStemKey's fold changes; the worker rehashes every row below it. */

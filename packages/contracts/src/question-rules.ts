@@ -11,6 +11,7 @@ import {
   imageKeysIn,
   latexIn,
   previewTextOf,
+  toleranceSchema,
   type LocalizedText,
   type QuestionDraft,
   type QuestionIdentity,
@@ -276,6 +277,14 @@ function checkTypedAnswer(draft: QuestionDraft, issues: ValidationIssue[]): void
         message: `"${typed}" is not a number, and this answer is compared as one`,
         field: `answerKey.answers.${language}`,
         column: `answer_${language}`,
+      });
+    }
+    if (!toleranceSchema.optional().safeParse(answerKey.tolerance).success) {
+      issues.push({
+        code: CODE.ANSWER_NOT_NUMERIC,
+        message: `A tolerance is a number from 0 to ${toleranceSchema.maxValue}`,
+        field: 'answerKey.tolerance',
+        column: 'answer_tolerance',
       });
     }
     return;

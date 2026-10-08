@@ -246,6 +246,32 @@ describe('the question sheet', () => {
     assert.deepEqual(row.draft?.options, []);
   });
 
+  /** The sheet took any number from zero up, so 5000 previewed as Create and the review save refused it. */
+  it('skips a row whose tolerance is not one the save would take, and says which cell', () => {
+    for (const answer_tolerance of ['5000', '-1', 'abc']) {
+      const row = plan([
+        {
+          subject: 'Quantitative Aptitude',
+          difficulty: 'LOW',
+          type: 'TEXT_FIELD',
+          stem_en: 'Write pi to two decimal places.',
+          answer_mode: 'NUMERIC',
+          answer_en: '3.14',
+          answer_tolerance,
+        },
+      ]).rows[0];
+
+      assert.equal(row?.action, 'skip', answer_tolerance);
+      assert.deepEqual(
+        row?.issues.map((issue) => [issue.code, issue.column]),
+        [[QUESTION_VALIDATION_CODE.ANSWER_NOT_NUMERIC, 'answer_tolerance']],
+        answer_tolerance,
+      );
+      // The review window parses this draft, so it must not carry what the schema refuses.
+      assert.equal(row?.editable.answerKey?.tolerance, undefined, answer_tolerance);
+    }
+  });
+
   it('splits tags on a comma and folds them to one casing', () => {
     const row = plan([{ ...MCQ_ROW, tags: 'SSC CGL, percentages ,SSC CGL' }]).rows[0];
     assert.ok(row);

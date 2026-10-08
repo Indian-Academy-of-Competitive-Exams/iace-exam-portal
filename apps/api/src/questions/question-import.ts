@@ -18,6 +18,7 @@ import {
   questionCodeSchema,
   questionTypeSchema,
   tagSchema,
+  toleranceSchema,
   type AnswerMode,
   type ImportWarning,
   type LocalizedText,
@@ -583,18 +584,18 @@ function readAnswerKey(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['a
 
   if (blank(rawTolerance)) return { mode, answers };
 
-  const tolerance = Number(rawTolerance);
-  if (!Number.isFinite(tolerance) || tolerance < 0) {
+  const tolerance = toleranceSchema.safeParse(Number(rawTolerance));
+  if (!tolerance.success) {
     issues.push({
       code: CODE.ANSWER_NOT_NUMERIC,
-      message: `"${rawTolerance}" is not a tolerance`,
+      message: `"${rawTolerance}" is not a tolerance. Use a number from 0 to ${toleranceSchema.maxValue}`,
       field: 'answerKey.tolerance',
       column: 'answer_tolerance',
     });
     return { mode, answers };
   }
 
-  return { mode, answers, tolerance };
+  return { mode, answers, tolerance: tolerance.data };
 }
 
 /** The mark takes one of the ten, so a row naming all ten is over the cap and is refused. */

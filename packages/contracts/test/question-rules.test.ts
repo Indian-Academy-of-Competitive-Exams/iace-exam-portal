@@ -208,6 +208,25 @@ describe('validateQuestion — the answer of a typed question', () => {
 
     assert.ok(codes(toleranced).includes(CODE.TOLERANCE_NOT_ALLOWED));
   });
+
+  const numeric = (tolerance: number) =>
+    typed({ answerKey: { mode: ANSWER_MODE.NUMERIC, answers: { en: '5' }, tolerance } });
+
+  /** "abc" in the box reaches the rules as NaN, and JSON would have carried it on as null. */
+  it('refuses a tolerance that is not a number a mark can be, naming the box', () => {
+    for (const tolerance of [Number.NaN, -1, 5000]) {
+      const [issue] = validateQuestion(numeric(tolerance), taxonomy());
+
+      assert.equal(issue?.code, CODE.ANSWER_NOT_NUMERIC, String(tolerance));
+      assert.equal(issue?.field, 'answerKey.tolerance', String(tolerance));
+    }
+  });
+
+  it('takes a tolerance from nothing up to the largest mark', () => {
+    for (const tolerance of [0, 0.01, 999.99]) {
+      assert.deepEqual(validateQuestion(numeric(tolerance), taxonomy()), [], String(tolerance));
+    }
+  });
 });
 
 describe('validateQuestion — the taxonomy the ids must resolve against', () => {

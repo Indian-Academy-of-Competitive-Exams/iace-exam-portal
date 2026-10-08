@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { csvIdQuery, csvQuery, matchModeQuery, searchQuery } from './common';
-import { dateOnlySchema } from './students';
+import { blankIsAbsent, dateOnlySchema } from './students';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 import { type LanguageCode } from './exams';
@@ -250,7 +250,7 @@ export type Topic = z.infer<typeof topicSchema>;
 
 export const createSubjectSchema = z.object({
   name: subjectNameSchema,
-  code: subjectCodeSchema.optional(),
+  code: blankIsAbsent(subjectCodeSchema),
 });
 export type CreateSubjectInput = z.input<typeof createSubjectSchema>;
 export type CreateSubjectBody = z.infer<typeof createSubjectSchema>;
@@ -304,6 +304,9 @@ export const MCQ_OPTION_MAX = 6;
 
 const MARKS_MAX = 999.99;
 
+/** How far either side of a numeric answer still counts: a mark-sized number, judged alike by the form, the sheet and the save. */
+export const toleranceSchema = z.number().min(0).max(MARKS_MAX);
+
 /** Marks are Decimal(6,2) in the database; more than two places is not a mark. Used by a base config's sections, and by an answer tolerance. */
 export const questionMarksSchema = z.coerce
   .number()
@@ -356,7 +359,7 @@ const answerKeyDraftSchema = z.object({
   /** The accepted answer per language. English is required, like every other field. */
   answers: localizedTextSchema,
   /** NUMERIC only: how far either side of the answer still counts. */
-  tolerance: z.coerce.number().min(0).max(MARKS_MAX).optional(),
+  tolerance: toleranceSchema.optional(),
 });
 export type AnswerKeyDraft = z.infer<typeof answerKeyDraftSchema>;
 
@@ -370,7 +373,11 @@ export const questionDraftSchema = z.object({
   solution: localizedTextSchema.optional(),
   options: z.array(questionOptionDraftSchema).max(MCQ_OPTION_MAX).default([]),
   answerKey: answerKeyDraftSchema.nullable().optional(),
-  tags: z.array(tagSchema).max(TAGS_MAX).default([]),
+  tags: z
+    .array(tagSchema)
+    .overwrite((tags) => [...new Set(tags)])
+    .max(TAGS_MAX)
+    .default([]),
   /** The `updatedAt` the editor loaded. Sent, it refuses a save built on a stale screen. */
   expectedUpdatedAt: z.string().optional(),
 });
@@ -426,6 +433,19 @@ export const QUESTION_VALIDATION_CODE = {
   SUBJECT_OUTSIDE_SECTION: 'SUBJECT_OUTSIDE_SECTION',
 } as const;
 const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
+
+/** Found only by reading a sheet or by where its row is going, so an editor's own checklist never raises them. */
+export const SHEET_ONLY_VALIDATION_CODES: ReadonlySet<string> = new Set([
+  QUESTION_VALIDATION_CODE.TYPE_INVALID,
+  QUESTION_VALIDATION_CODE.DIFFICULTY_INVALID,
+  QUESTION_VALIDATION_CODE.TAG_INVALID,
+  QUESTION_VALIDATION_CODE.QUESTION_CODE_INVALID,
+  QUESTION_VALIDATION_CODE.QUESTION_CODE_TAKEN,
+  QUESTION_VALIDATION_CODE.PICTURE_INVALID,
+  QUESTION_VALIDATION_CODE.SUBJECT_UNKNOWN,
+  QUESTION_VALIDATION_CODE.TOPIC_UNKNOWN,
+  QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
+]);
 
 /** One problem with one question: `field` is the draft path the form focuses (`stem.en`, `options.2.text.hi`); `column` is what the sheet calls the same thing. */
 const validationIssueSchema = z.object({

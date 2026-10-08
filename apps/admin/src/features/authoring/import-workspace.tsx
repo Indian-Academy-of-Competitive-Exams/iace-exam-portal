@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  QUESTION_VALIDATION_CODE,
+  SHEET_ONLY_VALIDATION_CODES,
   repeatedLineOf,
   type QuestionImportDraft,
   type QuestionImportPlan,
@@ -43,24 +43,9 @@ function Outcome({ row }: Readonly<{ row: QuestionImportRow }>) {
   );
 }
 
-const CODE = QUESTION_VALIDATION_CODE;
-
-/** Found only by reading the sheet or by where the row is going, so the card's own checklist never raises them. */
-const BEYOND_THE_CARD: ReadonlySet<string> = new Set([
-  CODE.TYPE_INVALID,
-  CODE.DIFFICULTY_INVALID,
-  CODE.TAG_INVALID,
-  CODE.QUESTION_CODE_INVALID,
-  CODE.QUESTION_CODE_TAKEN,
-  CODE.PICTURE_INVALID,
-  CODE.SUBJECT_UNKNOWN,
-  CODE.TOPIC_UNKNOWN,
-  CODE.SUBJECT_OUTSIDE_SECTION,
-]);
-
 /** Why the row stays out for reasons its own editor cannot show, as last judged. */
 function SheetReasons({ row }: Readonly<{ row: QuestionImportRow }>) {
-  const reasons = row.issues.filter((issue) => BEYOND_THE_CARD.has(issue.code));
+  const reasons = row.issues.filter((issue) => SHEET_ONLY_VALIDATION_CODES.has(issue.code));
   if (reasons.length === 0) return null;
   return (
     <div className="px-4 pt-3">

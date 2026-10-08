@@ -316,6 +316,44 @@ describe('validateQuestion — empty markup', () => {
     }
   });
 
+  const FOREIGN = '<p><img src="https://elsewhere.test/q.png"></p>';
+
+  /** Judged as posted, a Hindi stem that was only a foreign image was stored as Hindi with no question in it. */
+  it('refuses a translated stem that is only what the sanitiser takes away, naming the language', () => {
+    for (const language of ['hi', 'te'] as const) {
+      const lone = typed({ stem: { en: 'Name the capital of India.', [language]: FOREIGN } });
+      const [issue, ...rest] = validateQuestion(lone, taxonomy());
+
+      assert.equal(issue?.code, QUESTION_VALIDATION_CODE.TRANSLATION_WITHOUT_STEM, language);
+      assert.equal(issue?.field, `stem.${language}`, language);
+      assert.deepEqual(rest, [], language);
+    }
+  });
+
+  it('refuses an option that is only what the sanitiser takes away, naming the option', () => {
+    const emptied = mcq({
+      stem: { en: 'What is 20% of 150?', hi: '150 का 20% कितना है?' },
+      options: mcq().options.map((option) => ({
+        ...option,
+        text: { en: option.text.en, hi: option.position === 2 ? '<script>x</script>' : 'तीस' },
+      })),
+    });
+    const foreign = mcq({
+      options: mcq().options.map((option) =>
+        option.position === 4 ? { ...option, text: { en: FOREIGN } } : option,
+      ),
+    });
+
+    assert.deepEqual(
+      validateQuestion(emptied, taxonomy()).map((issue) => [issue.code, issue.field]),
+      [[QUESTION_VALIDATION_CODE.OPTION_TEXT_REQUIRED, 'options.1.text.hi']],
+    );
+    assert.deepEqual(
+      validateQuestion(foreign, taxonomy()).map((issue) => [issue.code, issue.field]),
+      [[QUESTION_VALIDATION_CODE.OPTION_TEXT_REQUIRED, 'options.3.text.en']],
+    );
+  });
+
   /** A figure is the whole question in a reasoning paper — markup with no words is still content. */
   it('accepts a stem that is only a figure', () => {
     const figure = mcq({ stem: { en: '<div><img data-key="questions/images/a.png"></div>' } });

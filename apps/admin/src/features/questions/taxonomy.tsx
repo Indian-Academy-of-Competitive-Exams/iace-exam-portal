@@ -112,8 +112,8 @@ export function TaxonomyPage() {
   const [creating, setCreating] = useState(false);
   const queryClient = useQueryClient();
   const filters = useFilters<'level' | 'q' | 'subjectId'>();
-  const level = filters.get('level') || LEVELS.SUBJECTS;
-  const onSubjects = level === LEVELS.SUBJECTS;
+  const onSubjects = filters.get('level') !== LEVELS.TOPICS;
+  const level = onSubjects ? LEVELS.SUBJECTS : LEVELS.TOPICS;
 
   const header = (
     <PageHeader

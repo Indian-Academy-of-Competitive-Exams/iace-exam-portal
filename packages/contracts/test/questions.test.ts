@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  ANSWER_MODE,
   DIFFICULTY_LEVEL,
   LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
@@ -94,6 +95,33 @@ describe('names, tags and codes are normalised rather than refused', () => {
 
   it('folds a tag to one casing so a filter is one facet', () => {
     assert.equal(tagSchema.parse('  SSC   CGL '), 'ssc cgl');
+  });
+
+  /** Folded per tag and never compared, "ssc, SSC" was stored as two of the same. */
+  it('keeps one of a tag written twice, and counts the ten after that', () => {
+    const tagged = (tags: string[]) => questionDraftSchema.safeParse(draft({ tags }));
+    const ten = Array.from({ length: 10 }, (_, index) => `tag ${index}`);
+
+    assert.deepEqual(tagged(['ssc', ' SSC ', 'cgl']).data?.tags, ['ssc', 'cgl']);
+    assert.equal(tagged([...ten, 'TAG 0']).data?.tags.length, 10);
+    assert.equal(tagged([...ten, 'one more']).success, false);
+  });
+
+  /** Coerced, the null JSON makes of NaN was stored as a tolerance of 0. */
+  it('refuses a tolerance that is not a number instead of reading it as none', () => {
+    const typed = (tolerance: unknown) =>
+      questionDraftSchema.safeParse(
+        draft({
+          type: QUESTION_TYPE.TEXT_FIELD,
+          options: [],
+          answerKey: { mode: ANSWER_MODE.NUMERIC, answers: { en: '5' }, tolerance },
+        }),
+      );
+
+    assert.equal(typed(0.5).success, true);
+    assert.equal(typed(null).success, false);
+    assert.equal(typed('abc').success, false);
+    assert.equal(typed(5000).success, false);
   });
 
   it('uppercases a question code', () => {
