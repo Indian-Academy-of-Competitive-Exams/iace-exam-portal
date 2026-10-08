@@ -1,11 +1,13 @@
 import type * as React from 'react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { FileText, Pencil, Save } from 'lucide-react';
 import {
+  AppException,
   EARLIEST_BIRTH_DATE,
+  ErrorCodes,
   examsInCourses,
   FEATURE_KEYS,
   GENDERS,
@@ -17,6 +19,7 @@ import {
   type Gender,
   type StudentDetail,
   type UpdateStudentBody,
+  type UpdateStudentInput,
   type StudentType,
 } from '@iace/contracts';
 import {
@@ -54,7 +57,7 @@ import { STUDENT_DETAIL_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useBranchChoice, useBranches } from '../../lib/use-branches';
 import { useExams } from './use-exams';
 import { useAuth } from '../../providers/auth';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors, bannerMessage, changedValues } from '@iace/app-kit';
 import { PageCrumbs, useFilters, usePageTour } from '@iace/app-kit/browser';
 import { ProgramMultiPicker } from '../../components/access-picker';
 import { StudentPerformancePanel } from './student-performance';
@@ -98,6 +101,25 @@ const FORM_FIELDS = [
   'address',
   'gender',
 ] as const;
+type FormFieldName = (typeof FORM_FIELDS)[number];
+
+/** One name per field, for its label and for the alert that says it moved. */
+const FIELD_LABELS: Record<FormFieldName, string> = {
+  fullName: 'Full name',
+  studentType: 'Student type',
+  enrolledExams: 'Enrolled exams',
+  enrolledCourses: 'Enrolled courses',
+  programs: 'Programs',
+  currentBranchId: 'Current branch',
+  motherName: "Mother's name",
+  fatherName: "Father's name",
+  dob: 'Date of birth',
+  email: 'Email',
+  address: 'Address',
+  gender: 'Gender',
+};
+
+const PROFILE_TEXT_FIELDS = ['motherName', 'fatherName', 'dob', 'email', 'address'] as const;
 
 /** An empty input means "no value", which the API expresses as null. */
 const orNull = (value: string) => (value.trim() === '' ? null : value.trim());
@@ -121,6 +143,42 @@ function accessPatch(
     ...branchPatch(),
   };
 }
+
+/** What a save sends: a field left as it opened is omitted, so it cannot put back a value saved since. */
+function patchOf(form: UseFormReturn<FormValues>): UpdateStudentInput {
+  const changed = changedValues(form);
+  const profile: NonNullable<UpdateStudentInput['profile']> = {};
+  for (const field of PROFILE_TEXT_FIELDS) {
+    const value = changed[field];
+    if (value !== undefined) profile[field] = orNull(value);
+  }
+  if (changed.gender !== undefined) profile.gender = changed.gender || null;
+
+  return {
+    ...(changed.fullName === undefined ? {} : { fullName: orNull(changed.fullName) }),
+    ...accessPatch(form.getValues(), form.formState.dirtyFields),
+    ...(changed.enrolledExams ? { enrolledExams: changed.enrolledExams } : {}),
+    ...(changed.enrolledCourses ? { enrolledCourses: changed.enrolledCourses } : {}),
+    ...(changed.programs ? { programs: changed.programs } : {}),
+    ...(Object.keys(profile).length > 0 ? { profile } : {}),
+  };
+}
+
+/** The fields a save writes that were written elsewhere since its edit began; none while no edit is open. */
+function movedSince(
+  patch: UpdateStudentInput,
+  opened: StudentDetail | null,
+  latest: StudentDetail | undefined,
+): FormFieldName[] {
+  if (!opened || !latest) return [];
+  const [before, now] = [toFormValues(opened), toFormValues(latest)];
+  const sent = new Set([...Object.keys(patch), ...Object.keys(patch.profile ?? {})]);
+  return FORM_FIELDS.filter(
+    (field) => sent.has(field) && JSON.stringify(before[field]) !== JSON.stringify(now[field]),
+  );
+}
+
+const isStale = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
 
 function toFormValues(student: StudentDetail): FormValues {
   return {
@@ -211,11 +269,11 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         <FormCombobox
           form={form}
           name="studentType"
-          label="Student type"
+          label={FIELD_LABELS.studentType}
           items={STUDENT_TYPES.map((value) => ({ value, label: STUDENT_TYPE_LABELS[value] }))}
         />
 
-        <FormField form={form} name="enrolledCourses" label="Enrolled courses">
+        <FormField form={form} name="enrolledCourses" label={FIELD_LABELS.enrolledCourses}>
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
             <MultiCombobox
               id={id}
@@ -233,7 +291,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
           )}
         </FormField>
 
-        <FormField form={form} name="enrolledExams" label="Enrolled exams">
+        <FormField form={form} name="enrolledExams" label={FIELD_LABELS.enrolledExams}>
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
             <MultiCombobox
               id={id}
@@ -253,7 +311,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
           )}
         </FormField>
 
-        <FormField form={form} name="programs" label="Programs">
+        <FormField form={form} name="programs" label={FIELD_LABELS.programs}>
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
             <ProgramMultiPicker
               id={id}
@@ -270,7 +328,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         <FormField
           form={form}
           name="currentBranchId"
-          label="Current branch"
+          label={FIELD_LABELS.currentBranchId}
           // ui-copy-ok: rule — why the picker is locked, which a disabled control cannot say
           hint={branch.hint}
         >
@@ -317,21 +375,25 @@ function DetailsTab({
       <div className="grid gap-8 lg:grid-cols-2">
         <FormSection title="Details">
           <div className="flex flex-col gap-4">
-            <FormField form={form} name="fullName" label="Full name">
+            <FormField form={form} name="fullName" label={FIELD_LABELS.fullName}>
               {(control) => <Input {...control} />}
             </FormField>
 
             <FieldRow>
-              <FormField form={form} name="motherName" label="Mother's name">
+              <FormField form={form} name="motherName" label={FIELD_LABELS.motherName}>
                 {(control) => <Input {...control} />}
               </FormField>
-              <FormField form={form} name="fatherName" label="Father's name">
+              <FormField form={form} name="fatherName" label={FIELD_LABELS.fatherName}>
                 {(control) => <Input {...control} />}
               </FormField>
             </FieldRow>
 
             <FieldRow>
-              <Field htmlFor="dob" label="Date of birth" error={form.formState.errors.dob?.message}>
+              <Field
+                htmlFor="dob"
+                label={FIELD_LABELS.dob}
+                error={form.formState.errors.dob?.message}
+              >
                 {/* Bounded both ends: a picker offering what the server refuses is a dead end. */}
                 {(control) => (
                   <DatePicker
@@ -346,18 +408,18 @@ function DetailsTab({
               <FormCombobox
                 form={form}
                 name="gender"
-                label="Gender"
+                label={FIELD_LABELS.gender}
                 clearable
                 placeholder="Not recorded"
                 items={GENDERS.map((value) => ({ value, label: GENDER_LABELS[value] }))}
               />
             </FieldRow>
 
-            <FormField form={form} name="email" label="Email">
+            <FormField form={form} name="email" label={FIELD_LABELS.email}>
               {(control) => <Input {...control} type="email" />}
             </FormField>
 
-            <FormField form={form} name="address" label="Address">
+            <FormField form={form} name="address" label={FIELD_LABELS.address}>
               {(control) => <Input {...control} />}
             </FormField>
           </div>
@@ -392,12 +454,19 @@ const TAB_CONTENT: Readonly<Record<StudentTab, (props: TabProps) => React.ReactN
   ),
 };
 
+/** A fresh page for each student: an edit begun on one never carries over to the next. */
 export function StudentDetailPage() {
   const { id = '' } = useParams();
+  return <StudentDetailView key={id} id={id} />;
+}
+
+function StudentDetailView({ id }: Readonly<{ id: string }>) {
   const { can, identity } = useAuth();
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  // The record the open edit began on; what was written elsewhere since is measured against it.
+  const [opened, setOpened] = useState<StudentDetail | null>(null);
 
   // Not a filter, but the same store: the open tab is a URL key somebody can send.
   const filters = useFilters<'tab'>();
@@ -406,10 +475,11 @@ export function StudentDetailPage() {
   const tab = openStudentTab(filters.get('tab'), rights);
   const onDetails = tab === STUDENT_TABS.DETAILS;
 
-  const student = useQuery({
+  const studentQuery = {
     queryKey: studentQueryKey(id),
     queryFn: () => api.admin.students.detail(id),
-  });
+  };
+  const student = useQuery(studentQuery);
 
   // Before the early returns below, and keyed on the query: the tabs it points at are a skeleton until then.
   usePageTour({
@@ -435,38 +505,33 @@ export function StudentDetailPage() {
     },
   });
 
-  // Seeded once per student: a refetch of the same one would wipe an in-progress edit.
-  const seededId = useRef<string | null>(null);
+  // Follows the record until an edit starts: a re-read mid-edit must not wipe what was typed.
+  const { reset } = form;
   useEffect(() => {
-    const loaded = student.data;
-    if (!loaded || seededId.current === loaded.id) return;
-    seededId.current = loaded.id;
-    form.reset(toFormValues(loaded));
-  }, [student.data, form]);
+    if (student.data && !isEditing) reset(toFormValues(student.data));
+  }, [student.data, reset, isEditing]);
 
   const save = useMutation({
     meta: { success: 'Saved.', fields: FORM_FIELDS },
-    mutationFn: (values: FormValues) =>
-      api.admin.students.update(id, {
-        fullName: orNull(values.fullName),
-        ...accessPatch(values, form.formState.dirtyFields),
-        // An omitted key means "leave it alone", which is true of a list nobody touched.
-        ...(form.formState.dirtyFields.enrolledExams
-          ? { enrolledExams: values.enrolledExams }
-          : {}),
-        ...(form.formState.dirtyFields.enrolledCourses
-          ? { enrolledCourses: values.enrolledCourses }
-          : {}),
-        ...(form.formState.dirtyFields.programs ? { programs: values.programs } : {}),
-        profile: {
-          motherName: orNull(values.motherName),
-          fatherName: orNull(values.fatherName),
-          dob: orNull(values.dob),
-          email: orNull(values.email),
-          address: orNull(values.address),
-          gender: values.gender === '' ? null : values.gender,
-        },
-      }),
+    mutationFn: async () => {
+      const patch = patchOf(form);
+      // On the newest stamp while nothing this save writes has moved, else the one the edit began on, which is refused.
+      const send = (latest: StudentDetail | undefined) =>
+        api.admin.students.update(id, {
+          ...patch,
+          expectedUpdatedAt: (movedSince(patch, opened, latest).length === 0 ? latest : opened)
+            ?.updatedAt,
+        });
+      try {
+        return await send(student.data);
+      } catch (error) {
+        if (!isStale(error)) throw error;
+        // A block, a mobile change or a save to other fields moves the stamp too, so the record is read again before giving up.
+        const latest = await queryClient.fetchQuery({ ...studentQuery, staleTime: 0 });
+        if (movedSince(patch, opened, latest).length > 0) throw error;
+        return send(latest);
+      }
+    },
     onSuccess: (updated) => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS, refetchType: 'none' });
       queryClient.setQueryData(studentQueryKey(id), updated);
@@ -510,11 +575,16 @@ export function StudentDetailPage() {
   }
 
   const detail = student.data;
+  const moved = isEditing ? movedSince(patchOf(form), opened, detail) : [];
+  const edit = () => {
+    setOpened(detail);
+    setIsEditing(true);
+  };
 
   return (
     <FormPanel
       disabled={!isEditing}
-      onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      onSubmit={form.handleSubmit(() => save.mutate())}
       tabs={{
         value: tab,
         onValueChange: (value) => filters.set({ tab: value }),
@@ -530,6 +600,13 @@ export function StudentDetailPage() {
           <>
             {save.error && bannerMessage(save.error, FORM_FIELDS) === null ? (
               <Alert variant="danger">Check the highlighted fields above.</Alert>
+            ) : null}
+            {moved.length > 0 ? (
+              <Alert variant="warning">
+                Changed elsewhere since you began editing:{' '}
+                {moved.map((field) => FIELD_LABELS[field]).join(', ')}. Discard, then edit again
+                from the record as it stands.
+              </Alert>
             ) : null}
             {/* Cancel is neutral grey, never red — it destroys nothing. */}
             <Button
@@ -548,7 +625,7 @@ export function StudentDetailPage() {
               type="submit"
               icon={<Save aria-hidden />}
               loading={save.isPending}
-              disabled={!form.formState.isDirty}
+              disabled={!form.formState.isDirty || moved.length > 0}
             >
               Save changes
             </Button>
@@ -577,7 +654,7 @@ export function StudentDetailPage() {
                   data-tour={TOUR_TARGETS.STUDENT_EDIT}
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsEditing(true)}
+                  onClick={edit}
                 >
                   <Pencil aria-hidden />
                   Edit details
@@ -593,7 +670,7 @@ export function StudentDetailPage() {
                 ? undefined
                 : () => {
                     filters.set({ tab: STUDENT_TABS.DETAILS });
-                    setIsEditing(true);
+                    edit();
                   }
             }
           />

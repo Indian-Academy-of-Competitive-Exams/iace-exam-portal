@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -147,9 +147,7 @@ export function StudentsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  // The "Add student" button links here; reading it is what makes it work.
-  const creating = searchParams.get('new') === '1';
+  const [creating, setCreating] = useState(false);
 
   const { branches } = useBranches();
 
@@ -308,11 +306,9 @@ export function StudentsPage() {
                   Import
                 </Link>
               </Button>
-              <Button size="sm" asChild>
-                <Link to={`${ROUTES.STUDENTS}?new=1`}>
-                  <UserPlus aria-hidden />
-                  Add student
-                </Link>
+              <Button size="sm" onClick={() => setCreating(true)}>
+                <UserPlus aria-hidden />
+                Add student
               </Button>
             </>
           ) : null}
@@ -340,13 +336,7 @@ export function StudentsPage() {
     <TableFrame header={header}>
       {/* Rendered inside the frame, not the header: a dialog is portalled, so where it
           sits in the tree costs the pinned header nothing. */}
-      <NewStudentDialog
-        open={creating && canWrite}
-        onClose={() => {
-          searchParams.delete('new');
-          setSearchParams(searchParams);
-        }}
-      />
+      <NewStudentDialog open={creating && canWrite} onClose={() => setCreating(false)} />
       <ListView
         list={students}
         filters={filterSpec}
