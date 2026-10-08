@@ -10,11 +10,13 @@ import {
   type LiveSitting,
   type RecentSubmission,
 } from '@iace/contracts';
+import { isWorthAskingAgain } from '@iace/app-kit';
 import { PageCrumbs, useFilters, usePageTour } from '@iace/app-kit/browser';
 import {
   Alert,
   Badge,
   DataTable,
+  EMPTY_STATE_KINDS,
   PageHeader,
   TableFrame,
   TruncatedText,
@@ -41,9 +43,10 @@ const PANELS = {
   RECENT: 'recent',
 } as const;
 
-type Panel = (typeof PANELS)[keyof typeof PANELS];
+const PANEL_VALUES = Object.values(PANELS);
 
 const NO_TEST = 'Choose a test to watch';
+const UNTITLED = 'Untitled test';
 
 const STATUS_VARIANT = {
   IN_PROGRESS: 'info',
@@ -58,7 +61,7 @@ export function LiveOpsPage() {
   usePageTour({ id: TOUR_IDS.LIVE_OPS, steps: LIVE_OPS_TOUR, ready: true });
   const filters = useFilters<'testId' | 'panel'>();
   const testId = filters.get('testId');
-  const panel = (filters.get('panel') || PANELS.ACTIVE) as Panel;
+  const panel = PANEL_VALUES.find((value) => value === filters.get('panel')) ?? PANELS.ACTIVE;
   const canResolve = can(FEATURE_KEYS.TEST_OPERATIONS, PERMISSION_LEVELS.WRITE);
 
   const board = useQuery({
@@ -67,8 +70,18 @@ export function LiveOpsPage() {
     queryKey: liveOpsBoardQueryKey(testId),
     queryFn: () => api.admin.liveOps.board(testId),
     enabled: testId !== '',
-    refetchInterval: LIVE_OPS_POLL_MS,
+    // A refusal is the server's answer, so the board stops asking once it has one.
+    refetchInterval: (query) => (isWorthAskingAgain(query.state.error) ? LIVE_OPS_POLL_MS : false),
   });
+  const refusal = board.isError && !isWorthAskingAgain(board.error) ? board.error.message : null;
+  const data = refusal === null ? board.data : undefined;
+  const tableState = {
+    isLoading: board.isLoading,
+    isError: board.isError && refusal === null,
+    onRetry: board.refetch,
+    emptyKind: refusal === null ? EMPTY_STATE_KINDS.EMPTY : EMPTY_STATE_KINDS.REFUSED,
+  };
+  const emptyOf = (empty: string) => refusal ?? (testId === '' ? NO_TEST : empty);
 
   const actions = useSittingActions();
   const sittingColumns = useMemo(
@@ -79,7 +92,7 @@ export function LiveOpsPage() {
     () => submissionColumns(canResolve, actions.ask),
     [canResolve, actions.ask],
   );
-  const counts = board.data?.counts;
+  const counts = data?.counts;
 
   const header = (
     <PageHeader
@@ -98,10 +111,11 @@ export function LiveOpsPage() {
           <div data-tour={TOUR_TARGETS.LIVE_PICKER} className="flex flex-col gap-3">
             <LiveTestPicker
               value={testId}
+              selectedLabel={data ? (data.testTitle ?? UNTITLED) : undefined}
               onChange={(value) => filters.set({ testId: value, panel: undefined })}
             />
-            <ScoringBacklog board={board.data} />
-            <StaleBoard stale={board.isError && board.data !== undefined} />
+            <ScoringBacklog board={data} />
+            <StaleBoard stale={board.isError && data !== undefined} />
           </div>
         }
         tabs={{
@@ -113,14 +127,11 @@ export function LiveOpsPage() {
               label: tabLabel('Active now', counts?.active),
               content: (
                 <SittingPanel
-                  testId={testId}
-                  rows={board.data?.active ?? []}
+                  {...tableState}
+                  rows={data?.active ?? []}
                   total={counts?.active}
                   columns={sittingColumns}
-                  isLoading={board.isLoading}
-                  isError={board.isError}
-                  onRetry={board.refetch}
-                  empty="Nobody is sitting this test right now"
+                  empty={emptyOf('Nobody is sitting this test right now')}
                 />
               ),
             },
@@ -129,14 +140,11 @@ export function LiveOpsPage() {
               label: tabLabel('Past deadline', counts?.stuck),
               content: (
                 <SittingPanel
-                  testId={testId}
-                  rows={board.data?.stuck ?? []}
+                  {...tableState}
+                  rows={data?.stuck ?? []}
                   total={counts?.stuck}
                   columns={sittingColumns}
-                  isLoading={board.isLoading}
-                  isError={board.isError}
-                  onRetry={board.refetch}
-                  empty="Nothing is waiting to be swept"
+                  empty={emptyOf('Nothing is waiting to be swept')}
                 />
               ),
             },
@@ -145,16 +153,14 @@ export function LiveOpsPage() {
               label: tabLabel('Landed', counts?.submittedRecently),
               content: (
                 <DataTable
+                  {...tableState}
                   columns={recentColumns}
-                  rows={board.data?.recent ?? []}
+                  rows={data?.recent ?? []}
                   rowKey={(row) => row.attemptId}
-                  isLoading={board.isLoading}
-                  isError={board.isError}
-                  onRetry={board.refetch}
-                  empty={testId === '' ? NO_TEST : 'No sitting has landed in the last half hour'}
+                  empty={emptyOf('No sitting has landed in the last half hour')}
                   footer={
                     <ShowingSome
-                      shown={board.data?.recent.length ?? 0}
+                      shown={data?.recent.length ?? 0}
                       total={counts?.submittedRecently}
                     />
                   }
@@ -202,16 +208,10 @@ function ScoringBacklog({ board }: Readonly<{ board?: LiveOpsBoard }>) {
 }
 
 function SittingPanel({
-  testId,
   rows,
   total,
-  columns,
-  isLoading,
-  isError,
-  onRetry,
-  empty,
+  ...table
 }: Readonly<{
-  testId: string;
   rows: readonly LiveSitting[];
   total?: number;
   columns: DataTableColumn<LiveSitting>[];
@@ -219,16 +219,13 @@ function SittingPanel({
   isError: boolean;
   onRetry: () => void;
   empty: string;
+  emptyKind: (typeof EMPTY_STATE_KINDS)[keyof typeof EMPTY_STATE_KINDS];
 }>) {
   return (
     <DataTable
-      columns={columns}
+      {...table}
       rows={rows}
       rowKey={(row) => row.attemptId}
-      isLoading={isLoading}
-      isError={isError}
-      onRetry={onRetry}
-      empty={testId === '' ? NO_TEST : empty}
       footer={<ShowingSome shown={rows.length} total={total} />}
     />
   );
@@ -324,6 +321,7 @@ function liveColumns(canResolve: boolean, ask: AskSittingAction): DataTableColum
           sitting={{
             attemptId: row.attemptId,
             studentName: row.studentName,
+            mobile: row.mobile,
             isGraded: row.isGraded,
             isLive: true,
           }}
@@ -386,6 +384,7 @@ function submissionColumns(
             sitting={{
               attemptId: row.attemptId,
               studentName: row.studentName,
+              mobile: row.mobile,
               isGraded: row.isGraded,
               isLive: false,
             }}

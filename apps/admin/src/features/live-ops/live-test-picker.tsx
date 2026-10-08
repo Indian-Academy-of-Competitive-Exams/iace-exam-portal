@@ -15,8 +15,9 @@ const WINDOW_FORMATTER = new Intl.DateTimeFormat('en-IN', {
 /** Which test is being watched. Every panel on the ops screen is read through this one choice. */
 export function LiveTestPicker({
   value,
+  selectedLabel,
   onChange,
-}: Readonly<{ value: string; onChange: (value: string) => void }>) {
+}: Readonly<{ value: string; selectedLabel?: string; onChange: (value: string) => void }>) {
   const tests = usePagedPicker({
     queryKey: liveTestPickerQueryKey(),
     fetchPage: (params) => api.admin.liveOps.tests(params),
@@ -26,6 +27,7 @@ export function LiveTestPicker({
     <Combobox
       {...tests.paging}
       value={value}
+      selectedLabel={selectedLabel}
       onChange={onChange}
       clearable={false}
       placeholder="Choose a test"

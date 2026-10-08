@@ -20,10 +20,11 @@ import {
 import { api } from '../../lib/api';
 import { QUERY_KEYS } from '../../lib/constants';
 
-/** Enough of a sitting to act on it. Both panels hand over the same four facts. */
+/** Enough of a sitting to act on it. Both panels hand over the same five facts. */
 export interface ActionableSitting {
   attemptId: string;
   studentName: string | null;
+  mobile: string;
   isGraded: boolean;
   /** Still in progress. Only a live sitting can be submitted, extended or reset. */
   isLive: boolean;
@@ -45,32 +46,37 @@ export type AskSittingAction = (sitting: ActionableSitting, action: SittingActio
 const PROMPTS: Readonly<
   Record<
     SittingAction,
-    { title: string; description: string; confirmLabel: string; destructive: boolean }
+    {
+      title: (who: string) => string;
+      description: string;
+      confirmLabel: string;
+      destructive: boolean;
+    }
   >
 > = {
   [ACTIONS.FORCE_SUBMIT]: {
-    title: 'Submit this sitting?',
+    title: (who) => `Submit the sitting of ${who}?`,
     description:
       'The paper is submitted and marked exactly as it would be if the student had ended it. A ranked sitting stays ranked. Nothing further can be answered.',
     confirmLabel: 'Submit it',
     destructive: false,
   },
   [ACTIONS.EXTEND]: {
-    title: 'Add time to this sitting?',
+    title: (who) => `Add time for ${who}?`,
     description:
       'The deadline moves for this one student, and their clock follows it. Nobody else on the paper is affected.',
     confirmLabel: 'Add the time',
     destructive: false,
   },
   [ACTIONS.RESET]: {
-    title: 'Put this live sitting back?',
+    title: (who) => `Put the live sitting of ${who} back?`,
     description:
       'The answers already saved are read back from the database and the sitting carries on from there. Section timers keep what they have left, and start again from where the paper says only if the live state is gone.',
     confirmLabel: 'Put it back',
     destructive: false,
   },
   [ACTIONS.VOID]: {
-    title: 'Void this sitting?',
+    title: (who) => `Void the sitting of ${who}?`,
     description:
       'It is archived rather than deleted, and stops counting: this test loses it from its rank, percentile and averages, and so does the student’s own record. The recount takes about a minute.',
     confirmLabel: 'Void it',
@@ -181,7 +187,7 @@ export function useSittingActions(): { ask: AskSittingAction; dialog: React.Reac
           open
           onOpenChange={(open) => !open && close()}
           loading={resolve.isPending}
-          title={prompt.title}
+          title={prompt.title(whose(asked.sitting))}
           description={prompt.description}
           confirmLabel={prompt.confirmLabel}
           destructive={prompt.destructive}
@@ -210,6 +216,11 @@ export function useSittingActions(): { ask: AskSittingAction; dialog: React.Reac
         </ConfirmDialog>
       ) : null,
   };
+}
+
+/** The mobile rides the name: a hall can hold two students called the same, and the rows re-sort under the pointer. */
+function whose({ studentName, mobile }: ActionableSitting): string {
+  return studentName ? `${studentName} (${mobile})` : mobile;
 }
 
 function call(action: SittingAction | null, attemptId: string, values: ActionValues) {
