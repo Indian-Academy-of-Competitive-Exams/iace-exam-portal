@@ -310,13 +310,13 @@ const EDUCATION_COLUMNS: readonly HistoryColumn[] = [
   { key: 'level', label: 'Qualification' },
   { key: 'board', label: 'Board or university' },
   { key: 'institution', label: 'Institution' },
-  { key: 'year', label: 'Year', numeric: true },
-  { key: 'percentage', label: 'Percentage', numeric: true },
+  { key: 'year', label: 'Year', keyboardType: 'number-pad' },
+  { key: 'percentage', label: 'Percentage', keyboardType: 'decimal-pad' },
 ];
 
 const EXAM_COLUMNS: readonly HistoryColumn[] = [
   { key: 'exam', label: 'Exam' },
-  { key: 'year', label: 'Year', numeric: true },
+  { key: 'year', label: 'Year', keyboardType: 'number-pad' },
   { key: 'result', label: 'Result' },
 ];
 

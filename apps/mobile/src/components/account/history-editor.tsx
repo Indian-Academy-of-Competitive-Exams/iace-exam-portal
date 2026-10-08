@@ -4,7 +4,7 @@
  * room for five columns, and a row that wraps mid-column reads as two rows.
  */
 /// <reference types="nativewind/types" />
-import { Pressable, View } from 'react-native';
+import { Pressable, View, type KeyboardTypeOptions } from 'react-native';
 import {
   useFieldArray,
   type Control,
@@ -21,7 +21,7 @@ import { TextField } from '../ui/text-field';
 export interface HistoryColumn {
   key: string;
   label: string;
-  numeric?: boolean;
+  keyboardType?: KeyboardTypeOptions;
 }
 
 export interface HistoryEditorProps<TValues extends FieldValues> {
@@ -60,7 +60,7 @@ export function HistoryEditor<TValues extends FieldValues>({
               control={control}
               name={`${name}.${index}.${column.key}` as Path<TValues>}
               label={column.label}
-              keyboardType={column.numeric ? 'number-pad' : 'default'}
+              keyboardType={column.keyboardType}
             />
           ))}
 

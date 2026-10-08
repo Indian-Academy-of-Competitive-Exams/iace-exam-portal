@@ -133,22 +133,13 @@ function Preview({
 
 /** The library, not the camera: a hall-ticket photo is one they already had taken. */
 async function pickPhoto(): Promise<UploadFile | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    NativeAlert.alert('IACE cannot open your photos until you allow it in Settings.');
-    return null;
-  }
-
   // Android's own photo picker shows the Google library; legacy asks the phone's gallery instead.
   const picked = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     legacy: true,
   });
   const asset = picked.canceled ? undefined : picked.assets[0];
-  if (!asset) return null;
-  if (tooBig(asset.fileSize)) return null;
-
-  return new File(asset.uri);
+  return asset ? withinLimit(asset.uri, asset.fileSize) : null;
 }
 
 async function pickFile(kind: DocumentKind): Promise<UploadFile | null> {
@@ -158,17 +149,16 @@ async function pickFile(kind: DocumentKind): Promise<UploadFile | null> {
     copyToCacheDirectory: true,
   });
   const asset = picked.canceled ? undefined : picked.assets[0];
-  if (!asset) return null;
-  if (tooBig(asset.size)) return null;
-
-  return new File(asset.uri);
+  return asset ? withinLimit(asset.uri, asset.size) : null;
 }
 
 /** Refused here rather than after the upload: the server's answer costs them the whole file. */
-function tooBig(size: number | null | undefined): boolean {
-  if (typeof size !== 'number' || size <= DOCUMENT_MAX_BYTES) return false;
+function withinLimit(uri: string, reported: number | undefined): UploadFile | null {
+  const file = new File(uri);
+  // Some providers report no size, and the file the upload reads has one.
+  if ((reported ?? file.size) <= DOCUMENT_MAX_BYTES) return file;
   NativeAlert.alert(`That file is over ${MEGABYTES}MB. Choose a smaller one.`);
-  return true;
+  return null;
 }
 
 /** Said before they choose, not after it is refused. */
