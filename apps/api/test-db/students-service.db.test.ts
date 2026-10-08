@@ -492,6 +492,81 @@ describe('StudentsService.update — an exam added again is told again', () => {
   });
 });
 
+describe('StudentsService.update — a save from a form read before another write', () => {
+  const stale = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
+
+  /** The failure this prevents: a page opened before a rename put the old name back under "Saved." */
+  it('is refused once the student has moved since the form was read, and what moved stands', async () => {
+    const { service } = await serviceWith({ student: { fullName: 'Asha' } });
+    const opened = await service.detail(STUDENT);
+    await service.update(STUDENT, { fullName: 'Asha Rani' });
+
+    await assert.rejects(
+      () =>
+        service.update(STUDENT, {
+          fullName: 'Asha',
+          profile: { email: 'asha@example.com' },
+          expectedUpdatedAt: opened.updatedAt,
+        }),
+      stale,
+    );
+
+    assert.equal((await row()).fullName, 'Asha Rani');
+    assert.equal(await prisma.studentProfile.count(), 0);
+  });
+
+  /** Each save carries only what was changed, so the second, read after the first, leaves the first one's field alone. */
+  it('lands on the stamp the record holds, moves it, and keeps both of two saves to different fields', async () => {
+    const { service } = await serviceWith({ student: { fullName: 'Asha' } });
+    const opened = await service.detail(STUDENT);
+
+    const renamed = await service.update(STUDENT, {
+      fullName: 'Asha Rani',
+      expectedUpdatedAt: opened.updatedAt,
+    });
+    const filled = await service.update(STUDENT, {
+      profile: { email: 'asha@example.com' },
+      expectedUpdatedAt: renamed.updatedAt,
+    });
+
+    assert.notEqual(renamed.updatedAt, opened.updatedAt);
+    assert.notEqual(filled.updatedAt, renamed.updatedAt, 'a profile field moves the stamp too');
+    assert.deepEqual([filled.fullName, filled.profile?.email], ['Asha Rani', 'asha@example.com']);
+  });
+
+  /** A phone build from before the stamp sends none, and has to go on saving. */
+  it('saves a patch that carries no stamp, whatever has moved since', async () => {
+    const { service } = await serviceWith({ student: { fullName: 'Asha' } });
+    await service.setTestBlocked(STUDENT, true);
+
+    const saved = await service.update(STUDENT, { profile: { motherName: 'Lakshmi' } });
+
+    assert.equal(saved.profile?.motherName, 'Lakshmi');
+  });
+
+  /** The stamp is checked on a read; only the write refusing closes the gap between the two. */
+  it('writes nothing when another save lands between its read and its write', async () => {
+    let armed = true;
+    const renameOnce = async () => {
+      if (!armed) return;
+      armed = false;
+      await prisma.student.update({ where: { id: STUDENT }, data: { fullName: 'Asha Rani' } });
+    };
+    const { service } = await serviceWith({
+      student: { fullName: 'Asha' },
+      client: afterEachStudentRead(renameOnce),
+    });
+
+    await assert.rejects(
+      () => service.update(STUDENT, { fullName: 'Asha', profile: { motherName: 'Lakshmi' } }),
+      stale,
+    );
+
+    assert.equal((await row()).fullName, 'Asha Rani');
+    assert.equal(await prisma.studentProfile.count(), 0);
+  });
+});
+
 describe('StudentsService.update — the access fields', () => {
   it('replaces the courses wholesale, down to none, and leaves them alone when the patch omits them', async () => {
     const { service } = await serviceWith({

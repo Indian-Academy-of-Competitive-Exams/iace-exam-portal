@@ -45,6 +45,7 @@ import { type ProfileDocumentColumn } from './student-flags';
 import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
 import { everyTermMatches } from '../common/search-terms';
 import { maskedMobile } from '../common/redact';
+import { formRefusal } from '../common/form-refusal';
 import { HOLDS_OWN_ACCESS } from './own-access';
 
 /** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
@@ -80,6 +81,8 @@ const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
 const AUDITED_TEST_BLOCKED_FIELDS = ['isTestBlocked'] as const;
 const MOBILE_FIELD = 'mobile';
 const CHANGED_MEANWHILE = 'That student changed while this was being saved. Open them again.';
+/** Read by an admin on the student's page and by the student on their own, so it names neither. */
+const CHANGED_SINCE_OPENED = 'These details changed after the form was opened. Nothing was saved.';
 
 /** Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports` excepted (see its own note; a bulk roster is one statement per file rather than per row). */
 @Injectable()
@@ -352,8 +355,14 @@ export class StudentsService {
   }
 
   /** A patch: an omitted key is left alone, an explicit null clears the field. */
-  async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
+  async update(
+    id: string,
+    { expectedUpdatedAt, ...input }: UpdateStudentBody,
+  ): Promise<StudentDetail> {
     const student = await this.requireLive(id);
+    if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== student.updatedAt.toISOString()) {
+      throw formRefusal(ErrorCodes.CONFLICT, CHANGED_SINCE_OPENED);
+    }
 
     await this.assertPatchUsable(student, input);
     const currentBranchId = await this.branchAfter(student, input);
@@ -381,8 +390,15 @@ export class StudentsService {
     const before = auditFieldsOf(student);
     // The save and the word to the student commit together, so a crash cannot leave one without the other.
     const updated = await this.prisma.$transaction(async (tx) => {
+      // Conditional on the row the rules above judged, and stamped here: a profile write alone leaves `updatedAt` where it was.
+      const claimed = await tx.student.updateMany({
+        where: { id, deletedAt: null, updatedAt: student.updatedAt },
+        data: { updatedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw formRefusal(ErrorCodes.CONFLICT, CHANGED_SINCE_OPENED);
+
       const row = await tx.student.update({
-        where: { id, deletedAt: null },
+        where: { id },
         data: updatedColumns,
         include: { profile: true },
       });

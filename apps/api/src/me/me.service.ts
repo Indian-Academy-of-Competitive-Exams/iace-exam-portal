@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
-  fieldDiff,
   type DocumentKind,
   type Me,
   type StudentCatalog,
@@ -14,16 +13,6 @@ import { StudentsService } from '../students';
 import { AccessResolverService } from '../access';
 import { AuditContext } from '../audit';
 import { checkDocument, columnFor, documentKey } from './documents';
-
-/** What a student's own profile edit covers — the fields a pre-test prompt asks for, plus contact details. Narrower than `AUDITED_STUDENT_FIELDS`: this route cannot touch enrolment or branch. */
-export const AUDITED_PROFILE_FIELDS = [
-  'motherName',
-  'fatherName',
-  'dob',
-  'email',
-  'address',
-  'gender',
-] as const;
 
 /** The student's own account. */
 @Injectable()
@@ -50,17 +39,10 @@ export class MeService {
 
   /** An enrolment cannot arrive here — see updateMeSchema for why. */
   async update(studentId: string, input: UpdateMeBody): Promise<Me> {
-    const before = await this.students.detail(studentId);
     const updated = await this.students.update(studentId, input);
 
-    const columns = this.auditContext.current()?.changed;
-    const profile = updated.profile
-      ? fieldDiff(before.profile, updated.profile, AUDITED_PROFILE_FIELDS)
-      : null;
-
-    // Merged over `StudentsService.update`'s diff, never replacing it: this route can rename the student too, and replacing it filed that as a change with nothing in it.
+    // The path carries no `:id`; the diff is the one `StudentsService.update` filed, which names a personal field and withholds what it held.
     this.auditContext.setEntityId(studentId);
-    this.auditContext.setChanged(columns || profile ? { ...columns, ...profile } : null);
 
     return this.withEnrolment(updated);
   }

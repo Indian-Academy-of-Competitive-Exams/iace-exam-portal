@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
-import { DOCUMENT_KINDS } from '@iace/contracts';
+import { AppException, DOCUMENT_KINDS, ErrorCodes, updateMeSchema } from '@iace/contracts';
 import { type AccessResolverService } from '../src/access';
 import { AuditContext } from '../src/audit';
 import { NotificationsService } from '../src/notifications/notifications.service';
@@ -67,12 +67,30 @@ describe('MeService.update — the entity and diff a student’s own edit contri
     assert.equal(store?.entityId, STUDENT);
   });
 
-  it('reports the profile diff, not the (empty) student-level diff StudentsService.update files', async () => {
+  /** The failure this prevents: a date of birth and an email written into a log that outlives an erasure. */
+  it('names the personal fields a student changed, and holds none of their values', async () => {
     const { me, recorded } = await build({ motherName: 'Lakshmi' });
+    const profile = {
+      motherName: 'Laxmi',
+      fatherName: 'Ravi',
+      dob: '2004-05-01',
+      email: 'asha@example.com',
+      address: '12 Tank Bund Road',
+    };
 
-    const store = await recorded(() => me.update(STUDENT, { profile: { motherName: 'Laxmi' } }));
+    const store = await recorded(() => me.update(STUDENT, { profile }));
 
-    assert.deepEqual(store?.changed, { motherName: { from: 'Lakshmi', to: 'Laxmi' } });
+    assert.deepEqual(Object.keys(store?.changed ?? {}).sort(), [
+      'address',
+      'dob',
+      'email',
+      'fatherName',
+      'motherName',
+    ]);
+    const logged = JSON.stringify(store?.changed);
+    for (const value of ['Lakshmi', 'Laxmi', 'Ravi', '2004', 'asha@example.com', 'Tank Bund']) {
+      assert.ok(!logged.includes(value), `${value} must not reach the audit log`);
+    }
   });
 
   /** Replacing the student-column diff instead of merging it once filed a self-rename as a row showing no change. */
@@ -83,10 +101,8 @@ describe('MeService.update — the entity and diff a student’s own edit contri
       me.update(STUDENT, { fullName: 'Asha Rani', profile: { motherName: 'Laxmi' } }),
     );
 
-    assert.deepEqual(store?.changed, {
-      fullName: { from: 'Asha', to: 'Asha Rani' },
-      motherName: { from: 'Lakshmi', to: 'Laxmi' },
-    });
+    assert.deepEqual(Object.keys(store?.changed ?? {}).sort(), ['fullName', 'motherName']);
+    assert.deepEqual(store?.changed?.fullName, { from: 'Asha', to: 'Asha Rani' });
   });
 
   /** A rename with no profile row at all still has to reach the log. */
@@ -104,6 +120,26 @@ describe('MeService.update — the entity and diff a student’s own edit contri
     const store = await recorded(() => me.update(STUDENT, { profile: { motherName: 'Lakshmi' } }));
 
     assert.equal(store?.changed, null);
+  });
+});
+
+describe('MeService.update — a save from a form opened before another write', () => {
+  const stale = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
+
+  /** The failure this prevents: details typed on the phone putting back what was corrected since Edit was tapped. */
+  it('is refused on the stamp the form opened with, and saves on the one the record holds', async () => {
+    const { me } = await build({ motherName: 'Lakshmi' });
+    const opened = await me.profile(STUDENT);
+    const corrected = await me.update(STUDENT, { profile: { fatherName: 'Ravi' } });
+    // Through the route's own schema: an allowlist that dropped the stamp would save what this refuses.
+    const typed = (expectedUpdatedAt: string) =>
+      updateMeSchema.parse({ profile: { fatherName: 'Raju' }, expectedUpdatedAt });
+
+    await assert.rejects(() => me.update(STUDENT, typed(opened.updatedAt)), stale);
+    assert.equal((await me.profile(STUDENT)).profile?.fatherName, 'Ravi');
+
+    const saved = await me.update(STUDENT, typed(corrected.updatedAt));
+    assert.equal(saved.profile?.fatherName, 'Raju');
   });
 });
 

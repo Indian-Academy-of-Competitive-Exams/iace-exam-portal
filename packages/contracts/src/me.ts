@@ -56,9 +56,32 @@ export type Me = z.infer<typeof meSchema>;
 export const updateMeSchema = updateStudentSchema.pick({
   fullName: true,
   profile: true,
+  expectedUpdatedAt: true,
 });
 export type UpdateMeInput = z.input<typeof updateMeSchema>;
 export type UpdateMeBody = z.infer<typeof updateMeSchema>;
+
+/** Every field a student's own save writes, under the name both of their forms give it. */
+const OWN_DETAILS: readonly (readonly [label: string, read: (me: Me) => unknown])[] = [
+  ['Full name', (me) => me.fullName],
+  ["Mother's name", (me) => me.profile?.motherName],
+  ["Father's name", (me) => me.profile?.fatherName],
+  ['Date of birth', (me) => me.profile?.dob],
+  ['Email', (me) => me.profile?.email],
+  ['Address', (me) => me.profile?.address],
+  ['Gender', (me) => me.profile?.gender],
+  ['Education', (me) => me.profile?.educationDetails],
+  ['Exams sat elsewhere', (me) => me.profile?.pastExamHistory],
+];
+
+/** Which of them differ between the record an edit began on and the record as it stands, by name; none while there is no edit to measure. */
+export function ownDetailsMoved(opened: Me | null, latest: Me | undefined): string[] {
+  if (!opened || !latest) return [];
+  const held = (me: Me, read: (me: Me) => unknown) => JSON.stringify(read(me) ?? null);
+  return OWN_DETAILS.filter(([, read]) => held(opened, read) !== held(latest, read)).map(
+    ([label]) => label,
+  );
+}
 
 export const ME_ROUTES = {
   profile: '/me',
