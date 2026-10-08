@@ -6,9 +6,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
+  AppException,
   DOCUMENT_KINDS,
   EARLIEST_BIRTH_DATE,
+  ErrorCodes,
   GENDERS,
+  ownDetailsMoved,
   todayISO,
   updateMeSchema,
   type Gender,
@@ -51,7 +54,11 @@ const GENDER_OPTIONS: readonly ChipOption[] = GENDERS.map((value) => ({
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
-  const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
+  // The record the open edit began on; what was written elsewhere since is measured against it.
+  const [opened, setOpened] = useState<Me | null>(null);
+  const profileQuery = { queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() };
+  const me = useQuery(profileQuery);
+  const moved = isEditing ? ownDetailsMoved(opened, me.data) : [];
 
   const form = useForm({
     resolver: zodResolver(updateMeSchema),
@@ -66,7 +73,24 @@ export default function ProfileScreen() {
 
   const save = useMutation({
     meta: { fields: FORM_FIELDS },
-    mutationFn: (values: UpdateMeInput) => api.me.update(values),
+    mutationFn: async (values: UpdateMeInput) => {
+      // On the newest stamp while none of these fields has moved, else the one the edit began on, which is refused.
+      const send = (latest: Me | undefined) =>
+        api.me.update({
+          ...values,
+          expectedUpdatedAt: (ownDetailsMoved(opened, latest).length === 0 ? latest : opened)
+            ?.updatedAt,
+        });
+      try {
+        return await send(me.data);
+      } catch (error) {
+        if (!AppException.is(error) || error.code !== ErrorCodes.CONFLICT) throw error;
+        // An enrolment or a block moves the stamp too, so the record is read again before giving up.
+        const latest = await queryClient.fetchQuery({ ...profileQuery, staleTime: 0 });
+        if (ownDetailsMoved(opened, latest).length > 0) throw error;
+        return send(latest);
+      }
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
       // Re-read as well: an upload answering after this would otherwise put back the record it left with.
@@ -177,6 +201,13 @@ export default function ProfileScreen() {
               emptyRow={EMPTY_EXAM}
             />
 
+            {moved.length > 0 ? (
+              <Alert variant="warning">
+                Changed elsewhere since you began editing: {moved.join(', ')}. Cancel, then edit
+                again from your details as they stand.
+              </Alert>
+            ) : null}
+
             <View className="flex-row gap-2">
               <Button
                 variant="outline"
@@ -192,6 +223,7 @@ export default function ProfileScreen() {
               <Button
                 className="flex-1"
                 loading={save.isPending}
+                disabled={moved.length > 0}
                 onPress={form.handleSubmit((values) => save.mutate(values))}
               >
                 Save
@@ -202,7 +234,13 @@ export default function ProfileScreen() {
           <View className="gap-4">
             <Text variant="section">Your details</Text>
             <Rows rows={detailsOf(me.data)} />
-            <Button variant="outline" onPress={() => setIsEditing(true)}>
+            <Button
+              variant="outline"
+              onPress={() => {
+                setOpened(me.data);
+                setIsEditing(true);
+              }}
+            >
               Edit your details
             </Button>
 
