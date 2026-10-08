@@ -90,8 +90,9 @@ describe('bandsFor — which bands a caller may see', () => {
     assert.equal(bandsFor(holding(FEATURE_KEYS.QUESTION_MANAGEMENT)).work, false);
   });
 
-  it('leaves the audit feed to every admin who is still active', () => {
-    assert.equal(bandsFor(admin()).feed, true);
-    assert.equal(bandsFor(admin({ isActive: false })).feed, false);
+  it('keeps the audit feed for a super admin who is still active', () => {
+    assert.equal(bandsFor(admin()).feed, false);
+    assert.equal(bandsFor(admin({ isSuperAdmin: true })).feed, true);
+    assert.equal(bandsFor(admin({ isSuperAdmin: true, isActive: false })).feed, false);
   });
 });

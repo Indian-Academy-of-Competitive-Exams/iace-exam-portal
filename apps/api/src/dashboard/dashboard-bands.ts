@@ -16,7 +16,7 @@ export interface DashboardBands {
   tests: boolean;
   bank: boolean;
   sittings: boolean;
-  /** The audit trail is every admin's own, so the feed is the one band no key gates. */
+  /** The audit trail is a super admin's, and so is the feed that reads it. */
   feed: boolean;
   windows: boolean;
   /** The caller's own sections: whoever can be handed one. */
@@ -45,7 +45,7 @@ export function bandsFor(user: AuthenticatedUser): DashboardBands {
     tests: holds(user, [FEATURE_KEYS.TEST_MANAGEMENT]),
     bank: holds(user, BANK_KEYS),
     sittings: holds(user, SITTING_KEYS),
-    feed: user.isActive,
+    feed: user.isActive && user.isSuperAdmin,
     windows: holds(user, WINDOW_KEYS),
     work: holds(user, WORK_KEYS),
   };

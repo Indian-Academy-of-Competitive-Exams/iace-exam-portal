@@ -70,9 +70,9 @@ const dashboardSittingSchema = z.object({
 });
 export type DashboardSitting = z.infer<typeof dashboardSittingSchema>;
 
-/** Band C. The feed is every admin's own trail; the sittings need STUDENT_PERFORMANCE. */
+/** Band C. The feed is a super admin's, as the audit log is; the sittings need STUDENT_PERFORMANCE. */
 const dashboardActivitySchema = z.object({
-  feed: z.array(rowActionSchema),
+  feed: z.array(rowActionSchema).optional(),
   sittings: z.array(dashboardSittingSchema).optional(),
 });
 export type DashboardActivity = z.infer<typeof dashboardActivitySchema>;

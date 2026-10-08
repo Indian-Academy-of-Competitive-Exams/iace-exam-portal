@@ -45,7 +45,6 @@ import {
   auditImportsQueryKey,
   auditRowActionsQueryKey,
 } from '../../lib/constants';
-import { useAuth } from '../../providers/auth';
 
 const IMPORT_STATUS_LABELS: Readonly<Record<ImportLogStatus, string>> = {
   [IMPORT_LOG_STATUS.PREVIEWED]: 'Previewed',
@@ -188,9 +187,6 @@ function ImportFileAction({ run }: Readonly<{ run: ImportLogSummary }>) {
 }
 
 export function AuditActivityPage() {
-  const { identity } = useAuth();
-  const isSuperAdmin = identity?.isSuperAdmin ?? false;
-
   const buildFilters = (selectedActorLabels: Record<string, string>) =>
     [
       {
@@ -215,24 +211,19 @@ export function AuditActivityPage() {
           label: AUDIT_ACTION_LABELS[value],
         })),
       },
-      // The server ignores the actor filter for anyone but a super admin, so only one is offered it.
-      ...(isSuperAdmin
-        ? ([
-            {
-              key: 'actorId',
-              kind: 'customMulti',
-              label: 'Filter by actor',
-              primary: true,
-              render: (control: ListFilterMultiControl) => (
-                <AdminMultiPicker
-                  {...control}
-                  selectedLabels={selectedActorLabels}
-                  placeholder="Any admin"
-                />
-              ),
-            },
-          ] as const)
-        : []),
+      {
+        key: 'actorId',
+        kind: 'customMulti',
+        label: 'Filter by actor',
+        primary: true,
+        render: (control: ListFilterMultiControl) => (
+          <AdminMultiPicker
+            {...control}
+            selectedLabels={selectedActorLabels}
+            placeholder="Any admin"
+          />
+        ),
+      },
     ] as const satisfies readonly ListFilter[];
 
   // Called twice from one declaration: the hook needs only the keys, the view needs the labels too.
@@ -242,7 +233,7 @@ export function AuditActivityPage() {
     toQuery: (values) => ({
       feature: values.feature as AuditFeature[],
       action: values.action as AuditAction[],
-      actorId: isSuperAdmin ? values.actorId : undefined,
+      actorId: values.actorId,
     }),
     fetchPage: (params) => api.admin.audit.rowActions(params),
   });

@@ -266,7 +266,11 @@ export const REPORTS = {
     title: 'Question usage',
     takes: [REPORT_PARAMS.TOP],
   },
-  [REPORT_KEYS.AUDIT_TRAIL]: { ...THE_OFFICE_OVER_A_WEEK, title: 'Audit trail' },
+  [REPORT_KEYS.AUDIT_TRAIL]: {
+    ...THE_OFFICE_OVER_A_WEEK,
+    title: 'Audit trail',
+    superAdminOnly: true,
+  },
   [REPORT_KEYS.ADMIN_ACTIVITY]: {
     ...THE_OFFICE_OVER_A_WEEK,
     title: 'Admin activity',

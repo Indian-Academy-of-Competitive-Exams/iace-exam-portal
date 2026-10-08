@@ -161,9 +161,11 @@ const whileLoading = (page: React.ReactNode) => (
 
 /** The page, or the refusal its own endpoints would answer with; not the security boundary, which is the API's guard. */
 function Gated({ path, children }: Readonly<{ path: string; children: React.ReactNode }>) {
-  const { can } = useAuth();
+  const { identity, can } = useAuth();
 
-  if (opensRoute(path, can)) return <>{children}</>;
+  if (opensRoute(path, { isSuperAdmin: identity?.isSuperAdmin ?? false, can })) {
+    return <>{children}</>;
+  }
   return (
     <PageFrame>
       <EmptyState
@@ -252,7 +254,6 @@ export function App() {
           {screen(ROUTES.TEST_PAPER_PRINT_PATTERN, <TestPaperPrintPage />)}
           {screen(ROUTES.TEST_ANALYTICS_PATTERN, <TestAnalyticsPage />)}
           {screen(ROUTES.LIVE_OPS, <LiveOpsPage />)}
-          {/* Super-admin screens. The route exists for everyone; the page itself refuses. */}
           {screen(ROUTES.ADMINS, <AdminsPage />)}
           {screen(ROUTES.PERMISSIONS, <PermissionsPage />)}
           {screen(ROUTES.ANNOUNCEMENTS, <AnnouncementsPage />)}

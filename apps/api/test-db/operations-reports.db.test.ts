@@ -36,7 +36,7 @@ const IN_WEEK = new Date('2026-06-09T06:00:00.000Z');
 const forbidden = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.FORBIDDEN;
 
 describe('the audit trail', () => {
-  it('shows an admin their own changes and a super admin everybody’s, as the log screen does', async () => {
+  it('shows a super admin everybody’s changes and refuses anybody else, as the log screen does', async () => {
     const other = await makeAdmin(prisma, { fullName: 'Somebody Else' });
     await rowActions(prisma, [
       { actorId: VIEWER.id, createdAt: IN_WEEK },
@@ -44,10 +44,9 @@ describe('the audit trail', () => {
       { actorId: VIEWER.id, createdAt: new Date('2026-05-01T06:00:00.000Z') },
     ]);
 
-    const own = await read(REPORT_KEYS.AUDIT_TRAIL, WEEK);
     const all = await read(REPORT_KEYS.AUDIT_TRAIL, WEEK, SUPER_ADMIN);
 
-    assert.equal(figureOf(own, 'Changes'), 1);
+    await assert.rejects(read(REPORT_KEYS.AUDIT_TRAIL, WEEK), forbidden);
     assert.equal(figureOf(all, 'Changes'), 2);
     assert.deepEqual(
       tableOf(all, 'Audit log')

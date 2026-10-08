@@ -155,18 +155,19 @@ export class DashboardService {
     bands: DashboardBands,
     user: AuthenticatedUser,
   ): Promise<DashboardActivity | undefined> {
-    if (!bands.feed) return undefined;
+    if (!bands.feed && !bands.sittings) return undefined;
 
     const [feed, sittings] = await Promise.all([
-      this.audit.listRowActions(rowActionListQuerySchema.parse({ pageSize: DASHBOARD_FEED_ROWS }), {
-        id: user.id,
-        isSuperAdmin: user.isSuperAdmin,
-        isActive: user.isActive,
-      }),
+      bands.feed
+        ? this.audit.listRowActions(
+            rowActionListQuerySchema.parse({ pageSize: DASHBOARD_FEED_ROWS }),
+            { id: user.id, isSuperAdmin: user.isSuperAdmin, isActive: user.isActive },
+          )
+        : undefined,
       bands.sittings ? this.sittings() : undefined,
     ]);
 
-    return { feed: feed.items, sittings };
+    return { feed: feed?.items, sittings };
   }
 
   private async sittings(): Promise<DashboardSitting[]> {

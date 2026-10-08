@@ -520,10 +520,10 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     featureKey: FEATURE_KEYS.NOTIFICATION_MANAGEMENT,
     children: [{ to: ROUTES.ANNOUNCEMENTS, label: 'Sent', icon: Megaphone }],
   },
-  // Not superAdminOnly: every admin reaches this, scoped to their own rows.
   {
     label: 'Audit log',
     icon: History,
+    superAdminOnly: true,
     children: [
       { to: ROUTES.AUDIT, label: 'Activity', icon: History },
       { to: ROUTES.AUDIT_IMPORTS, label: 'Imports', icon: Upload },
@@ -655,7 +655,7 @@ const ASSIGNEE_KEYS = [FEATURE_KEYS.QUESTION_AUTHORING, FEATURE_KEYS.QUESTION_PR
 /** A section answers to its typist, its proof-reader and the test's owner alike. */
 export const SECTION_KEYS = [...ASSIGNEE_KEYS, FEATURE_KEYS.TEST_MANAGEMENT] as const;
 
-/** Each screen's guard as its endpoints state it: a read to open one, a write to make one. Unlisted is every admin's; a super-admin screen refuses itself. */
+/** Each screen's guard as its endpoints state it: a read to open one, a write to make one. Unlisted is every admin's, or a super admin's below. */
 export const ROUTE_ACCESS: Readonly<Partial<Record<string, RouteAccess>>> = {
   [ROUTES.STUDENTS]: reads(FEATURE_KEYS.STUDENT_MANAGEMENT),
   [ROUTES.STUDENT_PATTERN]: reads(FEATURE_KEYS.STUDENT_MANAGEMENT),
@@ -695,24 +695,41 @@ export const ROUTE_ACCESS: Readonly<Partial<Record<string, RouteAccess>>> = {
   [ROUTES.TEST_SERIES_NEW]: writes(FEATURE_KEYS.TEST_MANAGEMENT),
   [ROUTES.LIVE_OPS]: reads(FEATURE_KEYS.TEST_OPERATIONS),
   [ROUTES.ANNOUNCEMENTS]: reads(FEATURE_KEYS.NOTIFICATION_MANAGEMENT),
+  [ROUTES.REPORTS]: reads(FEATURE_KEYS.REPORTS),
+  [ROUTES.REPORT_PATTERN]: reads(FEATURE_KEYS.REPORTS),
 };
 
+/** The screens that decide who decides, and the log of what everybody did: no key opens them, only a super admin. */
+const SUPER_ADMIN_ROUTES: ReadonlySet<string> = new Set([
+  ROUTES.ADMINS,
+  ROUTES.PERMISSIONS,
+  ROUTES.SECTION_PROGRESS,
+  ROUTES.AUDIT,
+  ROUTES.AUDIT_IMPORTS,
+]);
+
+interface RouteViewer {
+  isSuperAdmin: boolean;
+  can: Can;
+}
+
 /** Whether the viewer may open a route pattern; a super admin passes inside `can`. */
-export function opensRoute(path: string, can: Can): boolean {
+export function opensRoute(path: string, viewer: RouteViewer): boolean {
+  if (SUPER_ADMIN_ROUTES.has(path)) return viewer.isSuperAdmin;
   const access = ROUTE_ACCESS[path];
-  return access === undefined || access.keys.some((key) => can(key, access.level));
+  return access === undefined || access.keys.some((key) => viewer.can(key, access.level));
 }
 
 /** Strips `superAdminOnly` and any row whose screen would refuse the viewer. `featureKey` is the shell's job. */
 export function filterAdminNav(
   items: readonly AdminNavItem[],
-  viewer: { isSuperAdmin: boolean; can: Can },
+  viewer: RouteViewer,
 ): AdminNavItem[] {
   return filterNavBy(
     items,
     (item) =>
       (Boolean(item.superAdminOnly) && !viewer.isSuperAdmin) ||
-      (item.to !== undefined && !opensRoute(item.to, viewer.can)),
+      (item.to !== undefined && !opensRoute(item.to, viewer)),
   );
 }
 

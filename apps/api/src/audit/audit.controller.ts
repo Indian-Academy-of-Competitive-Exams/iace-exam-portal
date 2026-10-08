@@ -16,7 +16,13 @@ import {
   type RowActionListQuery,
 } from '@iace/contracts';
 import { chosenFilters, sendWorkbook } from '../common/exporting';
-import { Actors, CurrentUser, RequiresExport, type AuthenticatedUser } from '../common/security';
+import {
+  Actors,
+  CurrentUser,
+  RequiresExport,
+  RequiresSuperAdmin,
+  type AuthenticatedUser,
+} from '../common/security';
 import { ZodQuery } from '../common/zod-validation.pipe';
 import { AuditContext } from './audit.context';
 import { Audit } from './audit.decorator';
@@ -28,9 +34,10 @@ const viewerOf = (user: AuthenticatedUser): AuditViewer => ({
   isActive: user.isActive,
 });
 
-/** No class-level `@RequiresFeature`: every admin reaches the reads, and the service is what decides whether a given row is theirs to see. */
+/** The log is a super admin's alone; the service still pins any other viewer to their own rows, for the callers that are not this one. */
 @Controller('admin/audit')
 @Actors(ActorTypes.ADMIN)
+@RequiresSuperAdmin()
 export class AuditController {
   constructor(
     private readonly audit: AuditService,

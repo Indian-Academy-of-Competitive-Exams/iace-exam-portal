@@ -109,7 +109,7 @@ function Bands({ data }: Readonly<{ data: Dashboard }>) {
         {data.bank ? <BankFigure bank={data.bank} /> : null}
         {data.windows ? <WindowsCard windows={data.windows} /> : null}
         {data.activity?.sittings ? <SittingsFigure sittings={data.activity.sittings} /> : null}
-        {data.activity ? <ActivityCard feed={data.activity.feed} /> : null}
+        {data.activity?.feed ? <ActivityCard feed={data.activity.feed} /> : null}
       </div>
     </div>
   );

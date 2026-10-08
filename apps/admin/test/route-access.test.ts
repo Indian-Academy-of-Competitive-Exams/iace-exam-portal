@@ -20,8 +20,8 @@ const holding =
   (key: FeatureKey, level: PermissionLevel = READ) =>
     can({ isActive: true, isSuperAdmin, permissions }, key, level);
 
-const opens = (path: string, permissions: AdminPermissions) =>
-  opensRoute(path, holding(permissions));
+const opens = (path: string, permissions: AdminPermissions, isSuperAdmin = false) =>
+  opensRoute(path, { isSuperAdmin, can: holding(permissions, isSuperAdmin) });
 
 const everyPath = (items: readonly NavItem[]): string[] =>
   items.flatMap((item) => [...(item.to ? [item.to] : []), ...everyPath(item.children ?? [])]);
@@ -108,12 +108,7 @@ describe('a screen opened by its address', () => {
     const reader = { [FEATURE_KEYS.QUESTION_AUTHORING]: READ };
 
     assert.equal(opens(ROUTES.AUTHORING_EDITOR, reader), false);
-    assert.deepEqual(railOf(reader), [
-      ROUTES.AUTHORING_ASSIGNMENTS,
-      ROUTES.AUTHORING_HISTORY,
-      ROUTES.AUDIT,
-      ROUTES.AUDIT_IMPORTS,
-    ]);
+    assert.deepEqual(railOf(reader), [ROUTES.AUTHORING_ASSIGNMENTS, ROUTES.AUTHORING_HISTORY]);
     // What they wrote is still theirs to read, as the server answers it.
     for (const path of [ROUTES.AUTHORING_HISTORY, ROUTES.AUTHORING_EDITOR_PATTERN]) {
       assert.equal(opens(path, reader), true, path);
@@ -141,17 +136,39 @@ describe('a screen opened by its address', () => {
     );
   });
 
-  it('names no key for the screens every admin reaches', () => {
-    for (const path of [ROUTES.HOME, ROUTES.AUDIT, ROUTES.AUDIT_IMPORTS]) {
-      assert.equal(opens(path, {}), true, path);
+  /** The failure this prevents: a report's address opening a screen whose every request is refused. */
+  it('opens Reports by address only with its key', () => {
+    for (const path of [ROUTES.REPORTS, ROUTES.REPORT_PATTERN]) {
+      assert.equal(opens(path, { [FEATURE_KEYS.TEST_MANAGEMENT]: WRITE }), false, path);
+      assert.equal(opens(path, { [FEATURE_KEYS.REPORTS]: READ }), true, path);
+    }
+  });
+
+  it('names no key for the screen every admin reaches', () => {
+    assert.equal(opens(ROUTES.HOME, {}), true);
+  });
+
+  const SUPER_ADMIN_SCREENS = [
+    ROUTES.ADMINS,
+    ROUTES.PERMISSIONS,
+    ROUTES.SECTION_PROGRESS,
+    ROUTES.AUDIT,
+    ROUTES.AUDIT_IMPORTS,
+  ];
+
+  /** The failure this prevents: the audit log, or who holds what, opened by typing its address with every key held. */
+  it('opens a super admin’s screens to nobody else, whatever keys they hold', () => {
+    const everyKey = Object.fromEntries(FEATURE_KEY_VALUES.map((key) => [key, WRITE]));
+
+    for (const path of SUPER_ADMIN_SCREENS) {
+      assert.equal(opens(path, everyKey), false, path);
+      assert.equal(railOf(everyKey).includes(path), false, path);
     }
   });
 
   it('refuses a super admin nothing, on the rail or by address', () => {
-    const superAdmin = holding({}, true);
-
-    for (const path of Object.keys(ROUTE_ACCESS)) {
-      assert.equal(opensRoute(path, superAdmin), true, path);
+    for (const path of [...Object.keys(ROUTE_ACCESS), ...SUPER_ADMIN_SCREENS]) {
+      assert.equal(opens(path, {}, true), true, path);
     }
     assert.deepEqual(railOf({}, true), everyPath(NAV_ITEMS));
   });

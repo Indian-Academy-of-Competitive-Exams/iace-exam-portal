@@ -98,28 +98,16 @@ function History({ question }: Readonly<{ question: QuestionSummary }>) {
     queryKey: questionVersionsQueryKey(question.id),
     queryFn: () => api.admin.questions.versions(question.id),
   });
-
-  const edits = useListScreen({
-    queryKey: questionAuditQueryKey(question.id),
-    filters: [],
-    toQuery: () => ({ entityId: question.id, feature: [AUDIT_FEATURE.QUESTION] }),
-    fetchPage: (params) => api.admin.audit.rowActions(params),
-  });
-
   const versionCells = useMemo(() => versionColumns(), []);
-  const editCells = useMemo(() => editColumns(), []);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
-      <Alert variant="info">
-        <span>
+      {isSuperAdmin ? (
+        <Alert variant="info">
           An edit rewrites the current version until a test students can reach pins it, so there are
           fewer versions than edits.
-          {isSuperAdmin
-            ? ''
-            : ' The edits below are your own; a super admin sees everybody\u2019s.'}
-        </span>
-      </Alert>
+        </Alert>
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <SectionHeading level={3} title="Versions" />
@@ -135,17 +123,32 @@ function History({ question }: Readonly<{ question: QuestionSummary }>) {
         />
       </section>
 
-      <section className="flex flex-col gap-3 border-t border-border pt-6">
-        <SectionHeading level={3} title="Edits" />
-        <ListView
-          list={edits}
-          columns={editCells}
-          rowKey={(row) => row.id}
-          skeletonRows={5}
-          empty="No edits recorded"
-        />
-      </section>
+      {isSuperAdmin ? <Edits question={question} /> : null}
     </div>
+  );
+}
+
+/** The audit log's rows for this question, so a super admin's alone, as the log is. */
+function Edits({ question }: Readonly<{ question: QuestionSummary }>) {
+  const edits = useListScreen({
+    queryKey: questionAuditQueryKey(question.id),
+    filters: [],
+    toQuery: () => ({ entityId: question.id, feature: [AUDIT_FEATURE.QUESTION] }),
+    fetchPage: (params) => api.admin.audit.rowActions(params),
+  });
+  const editCells = useMemo(() => editColumns(), []);
+
+  return (
+    <section className="flex flex-col gap-3 border-t border-border pt-6">
+      <SectionHeading level={3} title="Edits" />
+      <ListView
+        list={edits}
+        columns={editCells}
+        rowKey={(row) => row.id}
+        skeletonRows={5}
+        empty="No edits recorded"
+      />
+    </section>
   );
 }
 
