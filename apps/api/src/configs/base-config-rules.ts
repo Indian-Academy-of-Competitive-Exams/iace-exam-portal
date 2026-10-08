@@ -1,7 +1,9 @@
 import {
+  CONFIG_TOTAL_MARKS_MAX,
   EXAM_TEMPLATE,
   TEST_UI,
   TIMER_TEMPLATE,
+  configTotalsOf,
   type BaseConfigModuleDraft,
   type BaseConfigSectionDraft,
   type ExamTemplate,
@@ -52,11 +54,13 @@ export function configShapeIssues(
 ): string[] {
   const issues = [
     ...sectionalIssues(timerTemplate, sections, durationSec),
+    ...perQuestionIssues(timerTemplate, sections),
     ...sessionIssues(timerTemplate, modules, durationSec),
+    ...totalMarksIssues(sections),
   ];
 
   if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length > 0) {
-    issues.push('Only a session paper has modules. Change the timer, or remove them.');
+    issues.push('Only a session paper has sessions. Change the timer, or remove them.');
   }
 
   const orders = sections.map((section) => section.order);
@@ -85,6 +89,31 @@ function sectionalIssues(
   return clockIssue('sections', sections, durationSec, (clocked, paper) => clocked !== paper);
 }
 
+/** Every question counts down on its own, so every section says how long its questions get. */
+function perQuestionIssues(
+  timerTemplate: TimerTemplate,
+  sections: readonly BaseConfigSectionDraft[],
+): string[] {
+  if (timerTemplate !== TIMER_TEMPLATE.PER_ITEM_TIMED) return [];
+
+  const untimed = sections.filter((section) => !section.perQuestionSec);
+  if (untimed.length === 0) return [];
+  return [
+    `A per-question paper gives every question its own countdown, and ${untimed.map((section) => section.name).join(', ')} has no seconds per question.`,
+  ];
+}
+
+/** The total is a cache in a column of its own, narrower than the sections can add up to. */
+function totalMarksIssues(sections: readonly BaseConfigSectionDraft[]): string[] {
+  const { totalMarks } = configTotalsOf(sections);
+  if (totalMarks <= CONFIG_TOTAL_MARKS_MAX) return [];
+  return [
+    `The sections add up to ${marks(totalMarks)} marks, and a paper holds at most ${marks(CONFIG_TOTAL_MARKS_MAX)}.`,
+  ];
+}
+
+const marks = (value: number) => value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
 /** A module's clock is optional, so the total is judged for an overrun and never for a match. */
 function sessionIssues(
   timerTemplate: TimerTemplate,
@@ -92,9 +121,9 @@ function sessionIssues(
   durationSec?: number,
 ): string[] {
   if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED) return [];
-  if (modules.length === 0) return ['A session paper is made of modules. Add at least one.'];
+  if (modules.length === 0) return ['A session paper needs at least one session.'];
 
-  return clockIssue('modules', modules, durationSec, (clocked, paper) => clocked > paper);
+  return clockIssue('sessions', modules, durationSec, (clocked, paper) => clocked > paper);
 }
 
 /** Both templates say it the same way, so the wording cannot drift between them. */
@@ -109,13 +138,19 @@ function clockIssue(
   const clocked = parts.reduce((sum, part) => sum + (part.durationSec ?? 0), 0);
   return wrong(clocked, durationSec)
     ? [
-        `The ${noun} add up to ${minutes(clocked)}, but the paper is set to ${minutes(durationSec)}.`,
+        `The ${noun} add up to ${clockLabel(clocked)}, but the paper is set to ${clockLabel(durationSec)}.`,
       ]
     : [];
 }
 
-/** Said in what the reader set it in: a paper's clock is minutes on the screen, seconds in the row. */
-const minutes = (seconds: number) => `${Math.round(seconds / SECONDS_PER_MINUTE)} minutes`;
+const counted = (count: number, unit: string) => `${count} ${unit}${count === 1 ? '' : 's'}`;
+
+/** Said in what the reader set it in, minutes, with the seconds left over so two clocks that differ never read the same. */
+function clockLabel(seconds: number): string {
+  const whole = counted(Math.floor(seconds / SECONDS_PER_MINUTE), 'minute');
+  const rest = seconds % SECONDS_PER_MINUTE;
+  return rest === 0 ? whole : `${whole} ${counted(rest, 'second')}`;
+}
 
 /** A config with tests built from it is history — deleting it would orphan every one of them. */
 export function configDeletionBlocker(usage: {

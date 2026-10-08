@@ -539,6 +539,7 @@ function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSecti
     marksPerQuestion: Number(section.marksPerQuestion),
     negativeMarks: Number(section.negativeMarks),
     durationSec: section.durationSec,
+    perQuestionSec: section.perQuestionSec,
     patternNote: section.patternNote,
   };
 }

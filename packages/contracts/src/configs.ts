@@ -7,7 +7,7 @@ import { questionMarksSchema } from './questions';
 
 // ============================================================================
 // Base configs — a stage's blueprint. A test inherits its shape from one rather
-// than restating it, and the config locks at the first finalize of any test
+// than restating it, and the config locks at the first sitting of any test
 // built from it, so evolving it means cloning it.
 // ============================================================================
 
@@ -150,7 +150,7 @@ export const baseConfigSchema = z.object({
   clonedFromId: z.string().nullable(),
   version: z.number().int(),
   isActive: z.boolean(),
-  /** Trips at the first finalize. Read-only afterwards; clone to evolve. */
+  /** Trips at the first sitting of a test built from it. Read-only afterwards; clone to evolve. */
   locked: z.boolean(),
   /** A display cache: the sums over the sections. */
   totalQuestions: z.number().int(),
@@ -187,7 +187,7 @@ export const baseConfigDetailSchema = baseConfigSchema.extend({
 export type BaseConfigDetail = z.infer<typeof baseConfigDetailSchema>;
 
 // ============================================================================
-// Writing. A config's SHAPE freezes at the first finalize of a test built from
+// Writing. A config's SHAPE freezes at the first sitting of a test built from
 // it — the way to change a locked one is to clone it.
 // ============================================================================
 
@@ -198,6 +198,17 @@ const configNameSchema = displayNameSchema('config', CONFIG_NAME_MAX);
 
 const SECTION_NAME_MAX = 80;
 const sectionNameSchema = displayNameSchema('section', SECTION_NAME_MAX, 1);
+
+/** Every clock is an integer column of seconds; a day is past any paper and far inside the column. */
+const CLOCK_MAX_SEC = 24 * 60 * 60;
+const clockSchema = z.coerce
+  .number()
+  .int()
+  .min(0, 'A clock cannot be negative')
+  .max(CLOCK_MAX_SEC, 'A clock cannot run longer than 24 hours');
+
+/** `BaseConfig.totalMarks` is Decimal(8,2). */
+export const CONFIG_TOTAL_MARKS_MAX = 999_999.99;
 
 /** One section of the paper. `durationSec` is required when the config is SECTIONAL_LOCKED. */
 const baseConfigSectionDraftSchema = z.object({
@@ -210,8 +221,8 @@ const baseConfigSectionDraftSchema = z.object({
   marksPerQuestion: questionMarksSchema,
   /** Per section: one paper may mix them, which is why this is not on the config. */
   negativeMarks: questionMarksSchema,
-  durationSec: z.coerce.number().int().min(0).nullish(),
-  perQuestionSec: z.coerce.number().int().min(0).nullish(),
+  durationSec: clockSchema.nullish(),
+  perQuestionSec: clockSchema.nullish(),
   mandatory: z.boolean().optional(),
   meritOrQualifying: meritTypeSchema.optional(),
   qualifyingCutoff: questionMarksSchema.nullish(),
@@ -222,22 +233,23 @@ export type BaseConfigSectionDraft = z.infer<typeof baseConfigSectionDraftSchema
 
 /** A session block above the sections. Only SESSION_MODULE_LOCKED configs carry them. */
 const baseConfigModuleDraftSchema = z.object({
-  name: displayNameSchema('module', SECTION_NAME_MAX, 1),
+  name: displayNameSchema('session', SECTION_NAME_MAX, 1),
   order: z.coerce.number().int().min(0).max(99),
-  durationSec: z.coerce.number().int().min(0).nullish(),
+  durationSec: clockSchema.nullish(),
 });
 export type BaseConfigModuleDraft = z.infer<typeof baseConfigModuleDraftSchema>;
 
 /** The shape fields, shared by create and update — everything the lock freezes. */
 const configShapeSchema = z.object({
-  durationSec: z.coerce.number().int().min(1),
+  durationSec: clockSchema.min(1, 'A paper needs a duration'),
   timerTemplate: timerTemplateSchema.optional(),
   navigation: navigationPolicySchema.optional(),
   optionalSectionCount: z.coerce.number().int().min(0).max(20).nullish(),
   defaultTestUi: testUiSchema.optional(),
   examTemplate: examTemplateSchema.optional(),
   languageMode: languageModeSchema.optional(),
-  languages: z.array(languageCodeSchema).optional(),
+  /** Required: the column defaults to none, and a paper in no language cannot be begun. */
+  languages: z.array(languageCodeSchema).min(1, 'Offer the paper in at least one language'),
   shuffleQuestions: z.boolean().optional(),
   shuffleOptions: z.boolean().optional(),
   calculatorEnabled: z.boolean().optional(),
@@ -290,12 +302,14 @@ export function configTotalsOf(sections: readonly BaseConfigSectionDraft[]): {
   totalQuestions: number;
   totalMarks: number;
 } {
+  const marks = sections.reduce(
+    (sum, section) => sum + section.questionCount * section.marksPerQuestion,
+    0,
+  );
   return {
     totalQuestions: sections.reduce((sum, section) => sum + section.questionCount, 0),
-    totalMarks: sections.reduce(
-      (sum, section) => sum + section.questionCount * section.marksPerQuestion,
-      0,
-    ),
+    // Marks carry two places, and a binary sum of them drifts: 3 x 0.1 is 0.30000000000000004.
+    totalMarks: Math.round(marks * 100) / 100,
   };
 }
 

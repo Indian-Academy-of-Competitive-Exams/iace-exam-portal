@@ -4,6 +4,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import {
   AppException,
   ErrorCodes,
+  LANGUAGE_CODE,
   MERIT_TYPE,
   TIMER_TEMPLATE,
   type BaseConfigDetail,
@@ -93,6 +94,7 @@ function draft(
     examStageId,
     name: 'SSC CGL Tier 1',
     durationSec: 3600,
+    languages: [LANGUAGE_CODE.EN],
     sections: [
       {
         name: 'General Intelligence',
@@ -252,6 +254,40 @@ describe('BaseConfigsService — creating', () => {
         return true;
       },
     );
+  });
+
+  /** The failure this prevents: only the deferred trigger refusing it, as a raw exception at commit. */
+  it('refuses a per-question paper whose section has no seconds, and takes and renames one that has', async () => {
+    const stageId = await makeStage(prisma);
+    const perQuestion = (perQuestionSec?: number) =>
+      draft(stageId, {
+        timerTemplate: TIMER_TEMPLATE.PER_ITEM_TIMED,
+        sections: [
+          {
+            name: 'Reasoning',
+            order: 1,
+            questionCount: 25,
+            marksPerQuestion: 2,
+            negativeMarks: 0,
+            perQuestionSec,
+          },
+        ],
+      });
+
+    await assert.rejects(
+      () => service.create(perQuestion(), ADMIN),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+        assert.match(error.fieldErrors?.sections?.[0] ?? '', /Reasoning/);
+        return true;
+      },
+    );
+    assert.equal(await prisma.baseConfig.count(), 0);
+
+    const created = await service.create(perQuestion(45), ADMIN);
+    assert.equal(created.sections[0]?.perQuestionSec, 45);
+    assert.equal((await service.update(created.id, { name: 'Renamed' })).name, 'Renamed');
   });
 
   it('refuses two sections sitting at the same position', async () => {
