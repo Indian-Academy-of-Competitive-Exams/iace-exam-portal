@@ -1,11 +1,17 @@
 import test, { mock, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  focusManager,
+  onlineManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
 import {
   ANSWER_STATE,
   AppException,
   ErrorCodes,
+  NAVIGATION_POLICY,
   OMR_FILL,
   TIMER_TEMPLATE,
   type ExamPaper,
@@ -19,7 +25,12 @@ import {
   type ExamEngineDeps,
   type FullscreenHandle,
 } from '../src';
-import { autosaveDelayMs, SUBMIT_TIMEOUT_MS, submitRetryDelayMs } from '../src/autosave-policy';
+import {
+  autosaveDelayMs,
+  SAVE_TIMEOUT_MS,
+  SUBMIT_TIMEOUT_MS,
+  submitRetryDelayMs,
+} from '../src/autosave-policy';
 import { fakeStorage } from './support/fake-storage';
 
 const client = new QueryClient({
@@ -408,17 +419,194 @@ test('a sectional paper takes no answer until the server says which section is o
   assert.equal(result.current.hasUnsent(), false);
 });
 
-test('a paper under one clock takes an answer at once, before the server has answered', (t) => {
+test('a paper this screen just started takes an answer at once', (t) => {
   const { api } = apiSeededLater();
-  const { result, unmount } = mounted(api, {
-    ...paper(),
-    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
-  });
+  const started = { ...paper(), timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE };
+  const { result, unmount } = mounted(api, started, () => {}, true);
   t.after(unmount);
 
   act(() => result.current.chooseOption('opt-early'));
 
   assert.equal(result.current.answers['sec1-q1']?.selectedOptionId, 'opt-early');
+});
+
+/** The failure this prevents: a tap on a reopened paper, drawn blank, replacing the saved answer, its flag and its time. */
+test('a reopened paper takes no answer, move or submit until its saved state has arrived', async (t) => {
+  const { api, land } = apiSeededLater();
+  const { result, unmount } = mounted(api, {
+    ...paper(),
+    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
+    questions: [...paper().questions, { ...questionFor('sec1', 4), questionId: 'sec1-q2' }],
+  });
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-early'));
+  act(() => result.current.nextQuestion());
+  act(() => result.current.submit.ask());
+  assert.equal(result.current.question?.questionId, 'sec1-q1', 'the seat did not move');
+  assert.equal(result.current.submit.asking, false, 'nothing is counted off a paper not yet drawn');
+
+  const saved = {
+    state: ANSWER_STATE.ANSWERED_MARKED,
+    selectedOptionId: 'opt-saved',
+    typedAnswer: null,
+    timeSpentSec: 120,
+    answeredAt: '2026-09-01T05:10:00.000Z',
+    firstActionAt: '2026-09-01T05:09:00.000Z',
+  };
+  await act(async () => {
+    land({ answers: { 'sec1-q1': saved }, sections: {}, revision: 4 });
+    await Promise.resolve();
+  });
+  assert.deepEqual(result.current.answers['sec1-q1'], saved, 'what the server held is drawn whole');
+  assert.equal(result.current.hasUnsent(), false);
+
+  act(() => result.current.chooseOption('opt-now'));
+  act(() => result.current.submit.ask());
+  assert.equal(result.current.selectedOptionId, 'opt-now', 'from here the paper is live');
+  assert.equal(result.current.marked, true, 'and an answer keeps the flag it could not see before');
+  assert.equal(result.current.submit.asking, true);
+});
+
+/** The failure this prevents: a forward-only reload drawn on seat one, where Next reopens seats already left. */
+test('a forward-only reload lands on the furthest seat, whatever was tapped while it loaded', async (t) => {
+  const { api, land } = apiSeededLater();
+  const { result, unmount } = mounted(api, {
+    ...paper(),
+    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
+    navigation: NAVIGATION_POLICY.FORWARD_ONLY,
+    questions: [
+      ...paper().questions,
+      { ...questionFor('sec1', 4), questionId: 'sec1-q2' },
+      { ...questionFor('sec1', 5), questionId: 'sec1-q3' },
+    ],
+  });
+  t.after(unmount);
+
+  act(() => result.current.nextQuestion());
+
+  const left = {
+    state: ANSWER_STATE.NOT_ANSWERED,
+    selectedOptionId: null,
+    typedAnswer: null,
+    timeSpentSec: 30,
+    answeredAt: null,
+    firstActionAt: '2026-09-01T05:01:00.000Z',
+  };
+  await act(async () => {
+    land({
+      answers: { 'sec1-q1': left, 'sec1-q2': left, 'sec1-q3': left },
+      sections: {},
+      revision: 4,
+    });
+    await Promise.resolve();
+  });
+
+  assert.equal(result.current.question?.questionId, 'sec1-q3');
+});
+
+/** The failure this prevents: a state read that never answers leaving a reopened one-clock paper dead until it is reloaded. */
+test('a reopened one-clock paper waits on its saved state only as long as a save is given', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const { api, land } = apiSeededLater();
+  const { result, unmount } = mounted(api, {
+    ...paper(),
+    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
+    questions: [...paper().questions, { ...questionFor('sec1', 4), questionId: 'sec1-q2' }],
+  });
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  await advance(SAVE_TIMEOUT_MS - 250);
+  act(() => result.current.chooseOption('opt-waiting'));
+  assert.equal(result.current.answers['sec1-q1'], undefined, 'held for the whole of the wait');
+
+  await advance(250);
+  act(() => result.current.chooseOption('opt-waited'));
+  act(() => result.current.submit.ask());
+  assert.equal(result.current.selectedOptionId, 'opt-waited', 'then live on what the device holds');
+  assert.equal(result.current.submit.asking, true);
+
+  const saved = {
+    state: ANSWER_STATE.ANSWERED,
+    selectedOptionId: 'opt-saved',
+    typedAnswer: null,
+    timeSpentSec: 60,
+    answeredAt: '2026-09-01T05:10:00.000Z',
+    firstActionAt: '2026-09-01T05:09:00.000Z',
+  };
+  await act(async () => {
+    land({ answers: { 'sec1-q1': saved, 'sec1-q2': saved }, sections: {}, revision: 4 });
+    await Promise.resolve();
+  });
+  assert.equal(
+    result.current.answers['sec1-q2']?.selectedOptionId,
+    'opt-saved',
+    'a late state is drawn',
+  );
+  assert.equal(result.current.selectedOptionId, 'opt-waited', 'under what was answered since');
+});
+
+/** The failure this prevents: a sectional paper released without its state, stamping a closed section as entered again. */
+test('a reopened sectional paper stays held however long its saved state takes', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const { api } = apiSeededLater();
+  const { result, unmount } = mounted(api);
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  await advance(SAVE_TIMEOUT_MS + 1_000);
+  act(() => result.current.chooseOption('opt-waited'));
+
+  assert.equal(result.current.answers['sec1-q1'], undefined);
+  assert.equal(result.current.hasUnsent(), false, 'and no section was stamped as entered');
+});
+
+/** The failure this prevents: the wait outliving the state it waited for, a timer firing on a paper already live. */
+test('a saved state that lands inside the wait opens the paper at once and leaves no wait behind', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const { api, land } = apiSeededLater();
+  const deps = depsFor(api);
+  const held = {
+    paper: { ...paper(), timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE },
+    arrivedAt: Date.now(),
+    startedByThisCall: false,
+    title: null,
+    watermark: '',
+    onEnded() {},
+  };
+  let renders = 0;
+  const { result, unmount } = renderHook(
+    () => {
+      renders += 1;
+      return useExamView(held, deps);
+    },
+    {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    },
+  );
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  await act(async () => {
+    land({ answers: {}, sections: {}, revision: 0 });
+    await Promise.resolve();
+  });
+  act(() => result.current.chooseOption('opt-a'));
+  assert.equal(result.current.selectedOptionId, 'opt-a', 'live as soon as the state is in');
+
+  // Short of the earliest autosave, so the only thing that could fire here is a wait nobody stood down.
+  const drawn = renders;
+  await advance(SAVE_TIMEOUT_MS + 1_000);
+  assert.equal(renders, drawn, 'nothing fires on a paper that is already live');
 });
 
 /** The server's SAVE_GRACE_SEC: a last batch landing later than this past the deadline is dropped as late. */
@@ -432,7 +620,10 @@ const hangs = (signal: AbortSignal | undefined) =>
     ),
   );
 
-type SubmitCall = { last?: { answers: { questionId: string }[] }; signal?: AbortSignal };
+type SubmitCall = {
+  last?: { answers: { questionId: string; selectedOptionId?: string | null }[] };
+  signal?: AbortSignal;
+};
 type RequestExtra = { signal?: AbortSignal };
 
 function apiThatSubmits(submit: (call: SubmitCall, count: number) => Promise<unknown>) {
@@ -925,9 +1116,17 @@ test('a render that changes nothing hands back the very same view', async (t) =>
 });
 
 /** The failure this prevents: the seat moving under a screen still drawing the question behind it. */
-test('a seat change before the server has answered redraws the question on its own', async (t) => {
-  const { api, land } = apiSeededLater();
-  const { result, unmount } = mounted(api, twoInSectionOne());
+test('a seat change that banks nothing redraws the question on its own', async (t) => {
+  // A state read the server refused releases the paper, and a bare visit is not banked on one never seeded.
+  const api = {
+    me: {
+      attemptState: async () => {
+        throw new AppException(ErrorCodes.NOT_FOUND);
+      },
+      saveAttemptState: async () => ({ revision: 0, applied: true }),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = await seated(api, twoInSectionOne());
   t.after(unmount);
 
   const held = result.current.answers;
@@ -936,11 +1135,6 @@ test('a seat change before the server has answered redraws the question on its o
   assert.equal(result.current.answers, held, 'nothing was banked, so only the seat moved');
   assert.equal(result.current.question?.questionId, 'sec1-q2');
   assert.equal(result.current.questionIndex, 1);
-
-  await act(async () => {
-    land({ answers: {}, sections: {}, revision: 0 });
-    await settle();
-  });
 });
 
 /** The failure this prevents: the submit dialog still standing over a sitting that went elsewhere. */
@@ -1026,4 +1220,223 @@ test('a filled bubble answers this seat and moves on; a smudge does neither', as
   const held = result.current.answers;
   act(() => result.current.bubbleAnswer('opt-c', 0.05));
   assert.equal(result.current.answers, held, 'a smudge writes nothing at all');
+});
+
+const refusedForGood = () =>
+  Promise.reject(new AppException(ErrorCodes.INTERNAL, 'refused', { httpStatus: 400 }));
+
+/** The failure this prevents: an answer given after the bell riding a retry inside the server's grace. */
+test('once the paper’s clock has run out nothing more is taken, and a retry hands in none of it', async (t) => {
+  const { api, submits } = apiThatSubmits(refusedForGood);
+  const { result, unmount } = await seated(api, twoInSectionOne());
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-in-time'));
+  await act(async () => {
+    result.current.timer.onExpire();
+    await settle();
+  });
+  assert.equal(result.current.submit.failed, true);
+
+  act(() => result.current.chooseOption('opt-late'));
+  act(() => result.current.openQuestion('sec1-q2'));
+  act(() => result.current.openSection('sec2'));
+  assert.equal(result.current.selectedOptionId, 'opt-in-time', 'the option on screen did not move');
+  assert.equal(result.current.question?.questionId, 'sec1-q1', 'nor did the palette');
+  assert.equal(result.current.sectionId, 'sec1', 'nor the section');
+
+  await act(async () => {
+    result.current.submit.retry();
+    await settle();
+  });
+  assert.deepEqual(
+    submits.at(-1)?.last?.answers.map((change) => [change.questionId, change.selectedOptionId]),
+    [['sec1-q1', 'opt-in-time']],
+    'the retry carried what was answered in time, and nothing since',
+  );
+});
+
+/** The failure this prevents: time added to a stuck paper leaving a red box whose one button hands it in. */
+test('time added to a paper that had run out opens it again and takes the failure down', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const api = {
+    me: {
+      attemptState: async () => ({ answers: {}, sections: {}, revision: 0 }),
+      saveAttemptState: async (_id: string, body: SaveCall) => ({
+        revision: body.revision,
+        applied: true,
+        endsAt: '2026-09-01T08:00:00.000Z',
+        serverNow: paper().serverNow,
+      }),
+      submitAttempt: refusedForGood,
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = await seated(api, onePaperClock());
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  act(() => result.current.chooseOption('opt-a'));
+  await act(async () => {
+    result.current.timer.onExpire();
+    await settle();
+  });
+  assert.equal(result.current.submit.failed, true);
+
+  // The autosave is the only thing that brings a deadline back to the screen.
+  await advance(31_000);
+
+  assert.equal(result.current.submit.failed, false, 'nothing is owed on a paper with time left');
+  act(() => result.current.chooseOption('opt-b'));
+  assert.equal(result.current.selectedOptionId, 'opt-b', 'and it takes answers again');
+});
+
+/** The failure this prevents: time arriving with the last save calling off a hand-in already going, or never opening the paper. */
+test('time that arrives while the hand-in is in the air opens the paper only once that hand-in has failed', async (t) => {
+  // Every autosave 20s apart, so one is in the air when the clock runs out.
+  t.mock.method(Math, 'random', () => 0);
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const gate = apiGatedSave();
+  let refuse: (error: unknown) => void = () => {};
+  const api = {
+    me: {
+      ...(gate.api as unknown as { me: object }).me,
+      submitAttempt: () =>
+        new Promise((_resolve, reject) => {
+          refuse = reject;
+        }),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = await seated(api, onePaperClock());
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  act(() => result.current.chooseOption('opt-a'));
+  await advance(autosaveDelayMs(Math.random));
+  act(() => result.current.timer.onExpire());
+  await act(async () => {
+    gate.saved({
+      revision: 1,
+      applied: true,
+      endsAt: '2026-09-01T08:00:00.000Z',
+      serverNow: paper().serverNow,
+    });
+    await settle();
+  });
+  await advance(500);
+
+  act(() => result.current.chooseOption('opt-mid'));
+  assert.equal(
+    result.current.submit.isPending,
+    true,
+    'the hand-in already going is not called off',
+  );
+  assert.equal(result.current.selectedOptionId, 'opt-a', 'and nothing is taken beside it');
+
+  await act(async () => {
+    refuse(new AppException(ErrorCodes.INTERNAL, 'refused', { httpStatus: 400 }));
+    await settle();
+  });
+  await advance(500);
+
+  assert.equal(result.current.submit.failed, false, 'the paper has time, so no failure is owed');
+  act(() => result.current.chooseOption('opt-b'));
+  assert.equal(result.current.selectedOptionId, 'opt-b');
+});
+
+/** The failure this prevents: the last section's question still drawn, and answerable, under a failed hand-in. */
+test('a last section that has closed draws no question and takes nothing while the hand-in fails', async (t) => {
+  const api = {
+    me: {
+      attemptState: async () => ({
+        answers: {},
+        sections: {
+          sec1: { remainingSec: 0, closed: true },
+          sec2: { remainingSec: 0, closed: true },
+          sec3: { remainingSec: 600, closed: false, openedAt: '2026-09-01T04:50:00.000Z' },
+        },
+        revision: 0,
+      }),
+      saveAttemptState: async () => ({ revision: 0, applied: true }),
+      submitAttempt: refusedForGood,
+    },
+  } as unknown as AppApiClient;
+  const twoInTheLast: ExamPaper = {
+    ...paper(),
+    questions: [...paper().questions, { ...questionFor('sec3', 4), questionId: 'sec3-q2' }],
+  };
+  const { result, unmount } = await seated(api, twoInTheLast);
+  t.after(unmount);
+  assert.equal(result.current.question?.questionId, 'sec3-q1');
+
+  await act(async () => {
+    result.current.timer.onExpire();
+    await settle();
+  });
+  assert.equal(result.current.submit.failed, true);
+  assert.equal(
+    result.current.question,
+    undefined,
+    'a skin draws its closed message, not a question',
+  );
+
+  const held = result.current.answers;
+  act(() => result.current.openQuestion('sec3-q2'));
+  act(() => result.current.chooseOption('opt-late'));
+  assert.equal(result.current.answers, held, 'neither the palette nor an option wrote anything');
+});
+
+const neverLanded = (httpStatus: number) => () =>
+  Promise.reject(new AppException(ErrorCodes.INTERNAL, 'never landed', { httpStatus }));
+
+/** The failure this prevents: a hand-in held untried while the browser says offline, with no failure and nothing to press. */
+test('a hand-in is tried while the browser says offline, and its failure reaches the screen', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  onlineManager.setOnline(false);
+  const { api, submits } = apiThatSubmits(neverLanded(0));
+  const { result, unmount } = mounted(api, onePaperClock());
+  t.after(() => {
+    unmount();
+    onlineManager.setOnline(true);
+    mock.timers.reset();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  act(() => result.current.submit.confirm());
+  await advance(submitRetryDelayMs(0) + submitRetryDelayMs(1) + submitRetryDelayMs(2) + 1_000);
+
+  assert.equal(submits.length, 4, 'the first try and its three retries all left');
+  assert.equal(result.current.submit.failed, true, 'so there is a failure to show and to retry');
+  assert.equal(result.current.submit.isPending, false);
+});
+
+/** The failure this prevents: the retries waiting for a hidden tab to be looked at while the server's grace runs out. */
+test('a hand-in is retried at 1, 2 and 4 seconds while the tab is hidden', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  focusManager.setFocused(false);
+  const { api, submits } = apiThatSubmits(neverLanded(500));
+  const { result, unmount } = mounted(api, onePaperClock());
+  t.after(() => {
+    unmount();
+    focusManager.setFocused(undefined);
+    mock.timers.reset();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  act(() => result.current.timer.onExpire());
+  const leftBy: number[] = [];
+  // Half a second past each try, so every count is read with that try's own wait still running.
+  for (const wait of [500, submitRetryDelayMs(0), submitRetryDelayMs(1), submitRetryDelayMs(2)]) {
+    await advance(wait);
+    leftBy.push(submits.length);
+  }
+
+  assert.deepEqual(leftBy, [1, 2, 3, 4]);
 });
