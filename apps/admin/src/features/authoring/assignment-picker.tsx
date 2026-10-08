@@ -23,6 +23,8 @@ export function AssignmentMultiPicker({
       onLoadMore={pages.loadMore}
       isLoading={pages.isLoading}
       isLoadingMore={pages.isLoadingMore}
+      isError={pages.isError}
+      onRetry={pages.retry}
       chips={false}
       placeholder={props.placeholder ?? 'Any section'}
       items={pages.items.map((assignment) => ({

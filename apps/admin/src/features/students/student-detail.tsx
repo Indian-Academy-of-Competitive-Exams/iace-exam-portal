@@ -485,7 +485,7 @@ export function StudentDetailPage() {
   });
 
   // Framed like the page it stands in for, so the scrollport does not appear only once data lands.
-  if (student.isPending) {
+  if (student.isPending && !student.isPaused) {
     return (
       <PageFrame>
         <div className="flex flex-col gap-5">

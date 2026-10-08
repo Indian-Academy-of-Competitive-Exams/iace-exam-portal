@@ -121,6 +121,8 @@ export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: str
                   onLoadMore={found.loadMore}
                   isLoading={found.isLoading}
                   isLoadingMore={found.isLoadingMore}
+                  isError={found.isError}
+                  onRetry={found.retry}
                 />
               )}
             </Field>
