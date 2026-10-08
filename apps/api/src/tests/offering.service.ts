@@ -6,6 +6,7 @@ import {
   FORM_LEVEL_FIELD,
   OPENING_HAS_PASSED,
   TEST_STATUS,
+  fieldDiff,
   programOpeningField,
   testIsOpen,
   type SaveOfferingBody,
@@ -83,6 +84,11 @@ const OPENS_BEFORE_THE_TEST_DOES =
 const OPENS_AT_FIELD = 'opensAt';
 
 const DUPLICATE_PROGRAM_OPENING = 'Each program opens a test once. Give each program one opening.';
+
+const CANNOT_CHANGE_SERIES = 'it cannot be moved to another series';
+
+/** What the Offer step's audit diff covers: whether students get the test, and when it opens for whom. */
+const AUDITED_OFFERING_FIELDS = ['status', 'opensAt', 'programUnlocks'] as const;
 
 const OFFER_CHANGED_ELSEWHERE =
   'This test changed after you opened its Offer step. Reload it to see what changed before saving.';
@@ -210,7 +216,7 @@ export class OfferingService {
     if (next === test.testSeriesId) return linkOf(test);
 
     // A test students have sat is part of their record wherever it was offered.
-    await this.assertUnsat(this.prisma, test, 'it cannot be moved to another series');
+    await this.assertUnsat(this.prisma, test, CANNOT_CHANGE_SERIES);
     const series = await this.assertSeriesUsable(test, next);
     await this.assertTitleFreeIn(next, series.name, test);
     const opensAt = test.opensAt;
@@ -220,12 +226,17 @@ export class OfferingService {
       );
     }
 
-    const moved = await this.prisma.test.update({
-      where: { id: testId },
-      // An Offer step opened before the move names the series it left, so it must be refused.
-      data: { testSeriesId: next, seriesOrder: null, version: { increment: 1 } },
-      select: OFFERING_SELECT,
-    });
+    const moved = await this.prisma.$transaction(async (tx) => {
+      await beginPaperEdit(tx, testId);
+      // Asked again under the Test lock: a first sitting started since has landed, or waits behind the move.
+      await this.assertUnsat(tx, test, CANNOT_CHANGE_SERIES);
+      return tx.test.update({
+        where: { id: testId },
+        // An Offer step opened before the move names the series it left, so it must be refused.
+        data: { testSeriesId: next, seriesOrder: null, version: { increment: 1 } },
+        select: OFFERING_SELECT,
+      });
+    }, TX_LIMITS.SHORT);
 
     // One bump rebuilds every held series, the one it left included.
     if (inTheCatalog(test)) {
@@ -242,15 +253,23 @@ export class OfferingService {
     isSuperAdmin: boolean,
     now: Date = new Date(),
   ): Promise<TestOffering> {
-    await this.prisma.$transaction(async (tx) => {
+    const held = await this.prisma.$transaction(async (tx) => {
       await beginPaperEdit(tx, testId);
       const test = await this.requireTest(testId, tx);
       if (test.version !== body.expectedVersion) {
         throw formRefusal(ErrorCodes.CONFLICT, OFFER_CHANGED_ELSEWHERE);
       }
+      const programUnlocks = await this.programUnlocks(tx, testId);
       const opensAt = dateOrNull(body.opensAt);
       await this.writeOpening(tx, test, opensAt, now);
-      await this.writeProgramOpenings(tx, test.id, body.programOpenings, opensAt, now);
+      await this.writeProgramOpenings(
+        tx,
+        test.id,
+        body.programOpenings,
+        programUnlocks,
+        opensAt,
+        now,
+      );
 
       if (body.offered && test.status !== TEST_STATUS.ACTIVE) {
         await this.finalizer.offerWithin(tx, test.id, isSuperAdmin);
@@ -259,14 +278,23 @@ export class OfferingService {
         await tx.test.update({ where: { id: test.id }, data: { status: TEST_STATUS.INACTIVE } });
       }
       await tx.test.update({ where: { id: test.id }, data: { version: { increment: 1 } } });
+      return { status: test.status, opensAt: test.opensAt, programUnlocks };
     }, TX_LIMITS.MEDIUM);
 
     const saved = await this.requireTest(testId);
+    const programUnlocks = await this.programUnlocks(this.prisma, testId);
+    this.auditContext.setChanged(
+      fieldDiff(
+        held,
+        { status: saved.status, opensAt: saved.opensAt, programUnlocks },
+        AUDITED_OFFERING_FIELDS,
+      ),
+    );
     this.announce(saved);
     return {
       status: saved.status,
       opensAt: saved.opensAt?.toISOString() ?? null,
-      programUnlocks: await this.programUnlocks(this.prisma, testId),
+      programUnlocks,
     };
   }
 
@@ -295,6 +323,7 @@ export class OfferingService {
     tx: Prisma.TransactionClient,
     testId: string,
     rows: SaveOfferingBody['programOpenings'],
+    held: readonly TestProgramUnlock[],
     testOpensAt: Date | null,
     now: Date,
   ): Promise<void> {
@@ -302,18 +331,16 @@ export class OfferingService {
     if (new Set(codes).size !== codes.length) {
       throw formRefusal(ErrorCodes.VALIDATION_ERROR, DUPLICATE_PROGRAM_OPENING);
     }
-    const stored = new Map(
-      (await this.programUnlocks(tx, testId)).map((row) => [row.programCode, row.opensAt]),
-    );
+    const stored = new Map(held.map((row) => [row.programCode, row.opensAt]));
 
     const kept: { programCode: string; opensAt: Date }[] = [];
     for (const row of rows) {
       const opensAt = new Date(row.opensAt);
-      const held = stored.get(row.programCode);
-      const untouched = held !== undefined && sameMinute(new Date(held), opensAt);
+      const before = stored.get(row.programCode);
+      const untouched = before !== undefined && sameMinute(new Date(before), opensAt);
       const late = noLaterThanTheTest(testOpensAt, opensAt);
       if (untouched && late === null)
-        kept.push({ programCode: row.programCode, opensAt: new Date(held) });
+        kept.push({ programCode: row.programCode, opensAt: new Date(before) });
       if (untouched) continue;
 
       await this.requireProgram(tx, row.programCode);
@@ -360,6 +387,8 @@ export class OfferingService {
       select: SERIES_TEST_SELECT,
       orderBy: [{ seriesOrder: 'asc' }, { id: 'asc' }],
     });
+    // A series holding a test exists by its foreign key, so only an empty answer needs the look.
+    if (rows.length === 0) await this.requireSeries(testSeriesId);
     // The series' own tests, not a `_count` that groups every attempt ever sat on any paper.
     const sat = countsBy(
       await this.prisma.attempt.groupBy({
@@ -457,6 +486,11 @@ export class OfferingService {
       ErrorCodes.CONFLICT,
       `This test has ${attemptsLabel(sat)} on it, so ${consequence}.`,
     );
+  }
+
+  private async requireSeries(id: string): Promise<void> {
+    const series = await this.prisma.testSeries.findUnique({ where: { id }, select: { id: true } });
+    if (!series) throw new AppException(ErrorCodes.NOT_FOUND, 'No such series');
   }
 
   private async requireTest(id: string, db: OfferingClient = this.prisma): Promise<OfferingRow> {

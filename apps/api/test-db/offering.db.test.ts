@@ -83,10 +83,12 @@ async function serviceWith(test: TestFields = {}, sittings = 0) {
     });
   }
   const events = new FakeEventBus();
+  const audit = new AuditContext();
   const finalizer = new FinalizeService();
   return {
     events,
-    service: new OfferingService(prisma, events.asService(), new AuditContext(), finalizer),
+    audit,
+    service: new OfferingService(prisma, events.asService(), audit, finalizer),
   };
 }
 
@@ -327,6 +329,30 @@ describe('OfferingService — the Offer step saves in one piece', () => {
     assert.equal((await testRow()).opensAt?.getTime(), OPENS_AT.getTime() + 30_000);
   });
 
+  /** The failure this prevents: going live, retiring and a moved opening each filed as a bare "Updated". */
+  it('files what each save changed: the status, the opening, a program let in early', async () => {
+    const { service, audit } = await serviceWith({ ...FROZEN, status: TEST_STATUS.INACTIVE });
+    const changedBy = (over: Partial<SaveOfferingBody>) =>
+      audit.run(async () => {
+        await save(service, over);
+        return audit.current()?.changed;
+      });
+    const early = [{ programCode: PROGRAM, opensAt: OPENS_AT.toISOString() }];
+
+    assert.deepEqual(await changedBy({ offered: true }), {
+      status: { from: TEST_STATUS.INACTIVE, to: TEST_STATUS.ACTIVE },
+    });
+    assert.deepEqual(await changedBy({ offered: false }), {
+      status: { from: TEST_STATUS.ACTIVE, to: TEST_STATUS.INACTIVE },
+    });
+    assert.deepEqual(await changedBy({ opensAt: A_DAY_LATER }), {
+      opensAt: { from: null, to: A_DAY_LATER_DATE },
+    });
+    assert.deepEqual(await changedBy({ programOpenings: early }), {
+      programUnlocks: { from: [], to: early },
+    });
+  });
+
   it('writes neither the opening nor any program opening when one program opening is refused', async () => {
     const { service } = await serviceWith();
     const late = new Date(A_DAY_LATER_DATE.getTime() + HOUR_MS).toISOString();
@@ -365,6 +391,16 @@ describe('OfferingService — a series and the tests it holds', () => {
         paperSource: null,
       },
     ]);
+  });
+
+  /** The failure this prevents: a series deleted in another tab reading as one that holds no tests yet. */
+  it('answers that a series is gone, where one holding nothing answers an empty list', async () => {
+    const { service } = await serviceWith();
+
+    assert.deepEqual(await service.testsIn(idFor('srs_2')), []);
+    const error = await refused(service.testsIn(randomUUID()));
+
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });
 
   it('sets when a test opens, and busts that catalog', async () => {

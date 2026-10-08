@@ -210,6 +210,33 @@ describe('FinalizeService — a second offer', () => {
     assert.equal((await testRow(paper)).version, 1);
   });
 
+  /** docs/02 §3: a retired test offered again only changes status. The failure: only a super admin could bring one back. */
+  it('opens a retired test again for any admin, though a super admin offered it past its reader', async () => {
+    const paper = await draft();
+    await prisma.questionAssignment.create({
+      data: {
+        id: uid(),
+        testId: paper.testId,
+        baseConfigId: paper.catalog.baseConfigId,
+        baseConfigSectionId: paper.sectionIds[0] ?? '',
+        assigneeId: (await makeAdmin(prisma)).id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+        handedAt: new Date(),
+      },
+    });
+    const refused = await offerTest(prisma, paper.testId).catch((thrown: unknown) => thrown);
+    assert.ok(AppException.is(refused), 'a first offer still waits on the reading');
+    await offerTest(prisma, paper.testId, true);
+    await prisma.test.update({
+      where: { id: paper.testId },
+      data: { status: TEST_STATUS.INACTIVE },
+    });
+
+    await offerTest(prisma, paper.testId);
+
+    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+  });
+
   /** `finalizedAt` is the watermark: without it a retired test re-offered would re-freeze its paper. */
   it('opens a retired test again without re-freezing its paper', async () => {
     const paper = await draft();

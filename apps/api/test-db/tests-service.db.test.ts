@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { Prisma } from '@prisma/client';
 import {
   AppException,
@@ -17,6 +18,9 @@ import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
+import type { PrismaService } from '../src/prisma/prisma.service';
+import { FinalizeService } from '../src/tests/finalize.service';
+import { OfferingService } from '../src/tests/offering.service';
 import { TestsService } from '../src/tests/tests.service';
 import { FakeEventBus, FakeRedis } from '../test/support/fakes';
 import {
@@ -55,6 +59,7 @@ interface Bench {
   /** The series tests are made in: stage-agnostic (so FREE) unless given a stage. */
   series?: { id: string; name: string; examStageId?: string }[];
   test?: Partial<Prisma.TestUncheckedCreateInput>;
+  client?: PrismaService;
 }
 
 /** The SSC CGL Tier 1 pattern — two sections, 50 questions, an hour — and a series to build in. */
@@ -97,7 +102,14 @@ async function serviceWith(over: Bench = {}) {
     redis,
     events.asService(),
   );
-  return { events, service: new TestsService(prisma, configs, audit, events.asService(), redis) };
+  const service = new TestsService(
+    over.client ?? prisma,
+    configs,
+    audit,
+    events.asService(),
+    redis,
+  );
+  return { events, audit, service };
 }
 
 const FROZEN = { finalizedAt: new Date('2026-08-01T00:00:00.000Z') };
@@ -378,6 +390,145 @@ describe('TestsService — a narrower scope drops what it no longer covers', () 
       (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: reading.id } })).replacedAt,
       null,
     );
+  });
+});
+
+describe('TestsService — an edit says what it moved', () => {
+  const paperRowIn = async (sectionLabel: string) => {
+    const question = await makeQuestion(prisma, { subjectId: (await makeSubject(prisma)).id });
+    await prisma.paperQuestion.create({
+      data: {
+        id: randomUUID(),
+        testId: TEST,
+        baseConfigId: BUILDER.CONFIG,
+        baseConfigSectionId: idFor(sectionLabel),
+        questionId: question.id,
+        questionVersionId: question.versionId,
+        order: 1,
+        marks: 2,
+        negativeMarks: 0.5,
+      },
+    });
+  };
+
+  /** The failure this prevents: a scope moved to another section, its questions gone, and no row saying so. */
+  it('files the part a sectional test now names, and the questions that dropped', async () => {
+    const from = { sectionId: idFor('sec_1') };
+    const to = { sectionId: idFor('sec_2') };
+    const { service, audit } = await serviceWith({
+      test: { scope: TEST_SCOPE.SECTIONAL, scopeRef: from },
+    });
+    await paperRowIn('sec_1');
+
+    const changed = await audit.run(async () => {
+      await service.update(TEST, { scopeRef: to });
+      return audit.current()?.changed;
+    });
+
+    assert.deepEqual(changed, {
+      scopeRef: { from, to },
+      questionsRemoved: { from: null, to: 1 },
+    });
+  });
+
+  it('files what a section now draws from', async () => {
+    const { service, audit } = await serviceWith({ test: {} });
+    const drawFrom = { sections: { [idFor('sec_1')]: { tags: ['PYQ'] } } };
+
+    const changed = await audit.run(async () => {
+      await service.update(TEST, { questionPoolFilter: drawFrom });
+      return audit.current()?.changed;
+    });
+
+    assert.deepEqual(changed, { questionPoolFilter: { from: null, to: drawFrom } });
+  });
+});
+
+interface StartRace {
+  /** The first sitting, started the moment the edit asked under its lock whether anybody sat the test. */
+  start?: Promise<unknown>;
+  /** Whether that sitting got in before the edit went on to write. */
+  landed?: boolean;
+}
+
+const SAT_READS = new Set(['findFirst', 'count']);
+const TIME_TO_LAND_MS = 200;
+
+/** The first sitting, started now: whether it gets in during the time an insert nothing holds back would need. */
+async function startFirstSitting(race: StartRace): Promise<void> {
+  race.start = sat();
+  race.landed = await Promise.race([
+    race.start.then(() => true),
+    delay(TIME_TO_LAND_MS).then(() => false),
+  ]);
+}
+
+/** The real client, with a first sitting fired from inside the edit's transaction, straight after it asks who sat it. */
+function startingMidEdit(race: StartRace): PrismaService {
+  const attempts = (delegate: Prisma.TransactionClient['attempt']) =>
+    new Proxy(delegate, {
+      get(inner, method: string | symbol) {
+        const call = Reflect.get(inner, method) as (...args: unknown[]) => Promise<unknown>;
+        if (typeof method !== 'string' || !SAT_READS.has(method)) return call;
+        return async (...args: unknown[]) => {
+          const answer = await Reflect.apply(call, inner, args);
+          await startFirstSitting(race);
+          return answer;
+        };
+      },
+    });
+  const watching = (tx: Prisma.TransactionClient) =>
+    new Proxy(tx, {
+      get: (inner, member: string | symbol) =>
+        member === 'attempt' ? attempts(inner.attempt) : (Reflect.get(inner, member) as unknown),
+    });
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return (work: (tx: Prisma.TransactionClient) => Promise<unknown>, options?: object) =>
+        target.$transaction((tx) => work(watching(tx)), options);
+    },
+  });
+}
+
+/** docs/02 §3 and §5: once sat, only the title moves. The Test lock is what makes "once" mean one order. */
+describe('TestsService — an edit and the first sitting take turns', () => {
+  /** The failure this prevents: a first sitting landing between the sat check and the write, re-skinned under it. */
+  it('holds the first sitting behind a re-skin that has already asked whether anybody sat it', async () => {
+    const race: StartRace = {};
+    const { service } = await serviceWith({ test: {}, client: startingMidEdit(race) });
+
+    const updated = await service.update(TEST, { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
+    await race.start;
+
+    assert.equal(race.landed, false);
+    assert.equal(updated.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
+    assert.equal(await prisma.attempt.count({ where: { testId: TEST } }), 1);
+  });
+
+  /** The failure this prevents: a test sat in one series and found in another. */
+  it('holds the first sitting behind a series move the same way', async () => {
+    const race: StartRace = {};
+    await serviceWith({
+      test: {},
+      series: [
+        { id: idFor('srs_1'), name: 'SSC CGL Tier 1 mocks' },
+        { id: idFor('srs_2'), name: 'SSC CGL Tier 1 sectionals' },
+      ],
+    });
+    const offering = new OfferingService(
+      startingMidEdit(race),
+      new FakeEventBus().asService(),
+      new AuditContext(),
+      new FinalizeService(),
+    );
+
+    const link = await offering.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
+    await race.start;
+
+    assert.equal(race.landed, false);
+    assert.equal(link.testSeriesId, idFor('srs_2'));
+    assert.equal(await prisma.attempt.count({ where: { testId: TEST } }), 1);
   });
 });
 

@@ -22,6 +22,7 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import { BaseConfigsService } from '../configs';
 import {
+  PAPER_AUDIT_FIELDS,
   PAPER_SOURCE_FIXED_MESSAGE,
   SAT_TEST_MESSAGE,
   SERIES_GONE_MESSAGE,
@@ -36,7 +37,7 @@ import {
   titleRefused,
   testDeletionBlocker,
 } from './test-rules';
-import { beginDraftPaperEdit, OFFERED_TEST_MESSAGE } from '../common/paper-edit';
+import { beginDraftPaperEdit, beginPaperEdit, OFFERED_TEST_MESSAGE } from '../common/paper-edit';
 import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
 import { formRefusal } from '../common/form-refusal';
 import { pageArgs, paged } from '../common/pagination';
@@ -87,6 +88,8 @@ const NO_TEST_COUNTS: TestCounts = { attempts: 0, paperQuestions: 0 };
 export const AUDITED_TEST_FIELDS = [
   'title',
   'scope',
+  'scopeRef',
+  'questionPoolFilter',
   'examTemplate',
   'status',
   'paperSource',
@@ -155,9 +158,20 @@ export class TestsService {
   }
 
   /** Whether anybody has sat it, which is all the edit lock asks: one indexed row, never a count. */
-  private async anySitting(testId: string): Promise<boolean> {
-    const sat = await this.prisma.attempt.findFirst({ where: { testId }, select: { id: true } });
+  private async anySitting(
+    testId: string,
+    db: Pick<Prisma.TransactionClient, 'attempt'> = this.prisma,
+  ): Promise<boolean> {
+    const sat = await db.attempt.findFirst({ where: { testId }, select: { id: true } });
     return sat !== null;
+  }
+
+  /** Asked again under the Test lock: a first sitting started since the check before it has landed, or waits behind this edit. */
+  private async assertStillUnsat(tx: Prisma.TransactionClient, testId: string): Promise<void> {
+    await beginPaperEdit(tx, testId);
+    if (await this.anySitting(testId, tx)) {
+      throw formRefusal(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE);
+    }
   }
 
   async detail(id: string): Promise<TestDetail> {
@@ -221,7 +235,8 @@ export class TestsService {
     if (changed.includes('paperSource')) {
       this.assertPaperSourceOpen(test);
     }
-    if (locksOutTestEdit(changed) && (await this.anySitting(id))) {
+    const stopsOnceSat = locksOutTestEdit(changed);
+    if (stopsOnceSat && (await this.anySitting(id))) {
       throw formRefusal(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE);
     }
     const paperMoves = movesThePaper(changed);
@@ -239,24 +254,14 @@ export class TestsService {
     const scopeRef = input.scopeRef === undefined ? scopeRefOf(test) : (input.scopeRef ?? null);
     this.assertCovers(config, scope, scopeRef);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const scopeMoves = changed.includes('scope') || changed.includes('scopeRef');
+    const keptIds = scopedSections(config.sections, scope, scopeRef).map((section) => section.id);
+    const { updated, dropped } = await this.prisma.$transaction(async (tx) => {
       if (paperMoves) await beginDraftPaperEdit(tx, id);
-      // A row outside the new scope cannot be judged complete or offered, so a narrower scope drops it.
-      if (changed.includes('scope') || changed.includes('scopeRef')) {
-        const keptIds = scopedSections(config.sections, scope, scopeRef).map(
-          (section) => section.id,
-        );
-        // A scope covering no section at all leaves every row out of it, so none is spared.
-        const outOfScope = keptIds.length === 0 ? {} : { baseConfigSectionId: { notIn: keptIds } };
-        await tx.paperQuestion.deleteMany({ where: { testId: id, ...outOfScope } });
-        // Its holders stand down with the paper, or a dropped section's reader blocks the offer for ever.
-        await tx.questionAssignment.updateMany({
-          where: { testId: id, ...outOfScope, replacedAt: null },
-          data: { replacedAt: new Date() },
-        });
-      }
+      if (stopsOnceSat) await this.assertStillUnsat(tx, id);
+      const dropped = scopeMoves ? await this.dropOutOfScope(tx, id, keptIds) : 0;
 
-      return tx.test.update({
+      const updated = await tx.test.update({
         where: { id },
         data: {
           title: input.title,
@@ -270,9 +275,13 @@ export class TestsService {
         },
         include: TEST_INCLUDE,
       });
+      return { updated, dropped };
     }, TX_LIMITS.SHORT);
 
-    this.auditContext.setChanged(fieldDiff(test, updated, AUDITED_TEST_FIELDS));
+    const diff = fieldDiff(test, updated, AUDITED_TEST_FIELDS);
+    this.auditContext.setChanged(
+      dropped > 0 ? { ...diff, [PAPER_AUDIT_FIELDS.REMOVED]: { from: null, to: dropped } } : diff,
+    );
 
     // The catalog and the brief hold both, and an offered test may still be renamed or re-skinned.
     const shownChanged = updated.title !== test.title || updated.examTemplate !== test.examTemplate;
@@ -286,6 +295,23 @@ export class TestsService {
       baseConfig: config,
       editingBy: await testEditingBy(this.redis, this.prisma, id),
     };
+  }
+
+  /** A row outside the new scope cannot be judged complete or offered, so a narrower scope drops it, and says how many. */
+  private async dropOutOfScope(
+    tx: Prisma.TransactionClient,
+    testId: string,
+    keptIds: readonly string[],
+  ): Promise<number> {
+    // A scope covering no section at all leaves every row out of it, so none is spared.
+    const outOfScope = keptIds.length === 0 ? {} : { baseConfigSectionId: { notIn: [...keptIds] } };
+    const gone = await tx.paperQuestion.deleteMany({ where: { testId, ...outOfScope } });
+    // Its holders stand down with the paper, or a dropped section's reader blocks the offer for ever.
+    await tx.questionAssignment.updateMany({
+      where: { testId, ...outOfScope, replacedAt: null },
+      data: { replacedAt: new Date() },
+    });
+    return gone.count;
   }
 
   async remove(id: string): Promise<void> {

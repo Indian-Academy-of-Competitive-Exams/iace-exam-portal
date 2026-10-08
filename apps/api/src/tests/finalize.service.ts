@@ -45,8 +45,8 @@ export class FinalizeService {
   ): Promise<void> {
     const test = await tx.test.findUnique({ where: { id: testId }, select: OFFER_SELECT });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
-    await this.assertAssignmentsRead(tx, test.id, isSuperAdmin);
 
+    // A frozen paper was judged at its first offer, so offering it again only changes its status.
     if (test.finalizedAt !== null) {
       if (test.status !== TEST_STATUS.ACTIVE) {
         await tx.test.update({ where: { id: test.id }, data: { status: TEST_STATUS.ACTIVE } });
@@ -54,6 +54,7 @@ export class FinalizeService {
       return;
     }
 
+    await this.assertAssignmentsRead(tx, test.id, isSuperAdmin);
     await this.assertPaperIsWhole(tx, test, await this.paperOf(tx, test));
     const finalizedAt = new Date();
     // The status rides the SAME write, so the two can never land apart.
