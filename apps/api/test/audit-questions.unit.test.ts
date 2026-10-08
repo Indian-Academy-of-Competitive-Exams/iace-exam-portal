@@ -7,8 +7,8 @@ describe('the question audit diff', () => {
   it('covers the columns a question edit can change', () => {
     for (const field of [
       'type',
-      'subjectId',
-      'topicId',
+      'subject',
+      'topic',
       'difficulty',
       'questionCode',
       'status',
@@ -23,8 +23,8 @@ describe('the question audit diff', () => {
   /** Retiring a question changes which papers can draw it, so it is worth finding later. */
   it('reports a retire', () => {
     const before = {
-      subjectId: 's1',
-      topicId: null,
+      subject: 'Quant',
+      topic: null,
       status: QUESTION_STATUS.ACTIVE as QuestionStatus,
     };
 

@@ -313,7 +313,10 @@ function readRow(
   warnings: ImportWarning[],
 ): ReadRow {
   if (edit) {
-    const draft = withImportTag(edit);
+    // The review window's editor has no code field, so an edit naming none keeps the sheet's.
+    const questionCode =
+      edit.questionCode === undefined ? readCode(row, issues) : edit.questionCode;
+    const draft = withImportTag({ ...edit, questionCode });
     if (draft.tags.length > TAGS_MAX) issues.push(TOO_MANY_TAGS);
     return { content: rowContent(row, [], []), names: namesOf(edit, catalog), draft };
   }

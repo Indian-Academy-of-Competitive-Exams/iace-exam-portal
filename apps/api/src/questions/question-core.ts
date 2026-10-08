@@ -164,6 +164,9 @@ export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
   return stem.length > limit ? `${stem.slice(0, limit - 1)}…` : stem;
 }
 
+/** A typing or reading job somebody still holds open. */
+const OPEN_ASSIGNMENT = { finalizedAt: null, replacedAt: null } as const;
+
 /** What a paper may draw: work written under an assignment is its own test's until that test is done. */
 export const drawableFor = (testId?: string): Prisma.QuestionWhereInput => ({
   status: { not: QUESTION_STATUS.ARCHIVED },
@@ -171,6 +174,11 @@ export const drawableFor = (testId?: string): Prisma.QuestionWhereInput => ({
   OR: [
     { assignmentId: null },
     ...(testId ? [{ assignment: { testId } }] : []),
-    { assignment: { test: { assignments: { none: { finalizedAt: null, replacedAt: null } } } } },
+    { assignment: { test: { assignments: { none: OPEN_ASSIGNMENT } } } },
   ],
 });
+
+/** Written for a section of a draft test that still has a job open: its section's page changes it, not the bank. */
+export const SECTION_WORK_IN_PROGRESS = {
+  assignment: { test: { finalizedAt: null, assignments: { some: OPEN_ASSIGNMENT } } },
+} as const satisfies Prisma.QuestionWhereInput;

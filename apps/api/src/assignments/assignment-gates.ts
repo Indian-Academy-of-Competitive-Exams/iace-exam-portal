@@ -1,11 +1,19 @@
+import { type Prisma } from '@prisma/client';
 import {
   ASSIGNMENT_ROLES,
+  AppException,
+  ErrorCodes,
   PAPER_SOURCES,
   dueStanding,
   type AssignmentRole,
   type DueStanding,
   type PaperSource,
 } from '@iace/contracts';
+import { beginDraftPaperEdit } from '../common/paper-edit';
+
+const TEST_OFFERED_MESSAGE = 'This test has been offered, so its sections no longer change.';
+const JOB_OVER_MESSAGE =
+  'This section has been finished or passed to somebody else, so it is no longer yours to change.';
 
 /** An assignment as its two actions read it: its own stamps, and its test's source and offer. */
 interface GatedRow {
@@ -22,6 +30,32 @@ export const doneOpen = (row: GatedRow): boolean =>
   row.finalizedAt === null &&
   row.test.paperSource === PAPER_SOURCES.FRAMED &&
   row.test.finalizedAt === null;
+
+/** Whether a holder's job is still theirs to work under: not finished, and not passed on. */
+export async function jobOpen(
+  db: Pick<Prisma.TransactionClient, 'questionAssignment'>,
+  assignmentId: string,
+): Promise<boolean> {
+  const open = await db.questionAssignment.count({
+    where: { id: assignmentId, finalizedAt: null, replacedAt: null },
+  });
+  return open > 0;
+}
+
+/** A job read again under its test's row: Done, a release and the offer all take it, so a write under the job lands before them or not at all. */
+export async function assertJobOpen(
+  tx: Prisma.TransactionClient,
+  assignmentId: string,
+): Promise<void> {
+  const job = await tx.questionAssignment.findUnique({
+    where: { id: assignmentId },
+    select: { testId: true },
+  });
+  if (job) await beginDraftPaperEdit(tx, job.testId, TEST_OFFERED_MESSAGE);
+  if (!(await jobOpen(tx, assignmentId))) {
+    throw new AppException(ErrorCodes.CONFLICT, JOB_OVER_MESSAGE);
+  }
+}
 
 /** A reader's release is open: the section has reached them, is still theirs, and is not released. */
 export const readOpen = (row: GatedRow & { handedAt: Date | null }): boolean =>

@@ -152,11 +152,12 @@ export class QuestionsController {
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')
-  update(
+  async update(
     @Param('id') id: string,
     @Body(new ZodBody(questionDraftSchema)) body: QuestionDraft,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionDetail> {
+    await this.questions.assertNotSectionWork(id);
     // Same reason as create: the version records who wrote it, from the token.
     return this.questions.update(id, body, user.id);
   }
@@ -165,7 +166,8 @@ export class QuestionsController {
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @HttpCode(HttpStatus.OK)
   @Post(':id/archive')
-  archive(@Param('id') id: string): Promise<QuestionDetail> {
+  async archive(@Param('id') id: string): Promise<QuestionDetail> {
+    await this.questions.assertNotSectionWork(id);
     return this.questions.archive(id);
   }
 
@@ -182,7 +184,8 @@ export class QuestionsController {
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @HttpCode(HttpStatus.OK)
   @Delete(':id')
-  remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param('id') id: string): Promise<void> {
+    await this.questions.assertNotSectionWork(id);
     return this.questions.remove(id);
   }
 }

@@ -36,10 +36,12 @@ import {
   type SectionProgressRow,
   type SectionRoleProgress,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { AdminsService } from '../admins';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { scopeRefOf } from '../common/prisma-json';
+import { releaseSectionEditLock } from '../common/edit-lock';
 import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
@@ -63,6 +65,9 @@ const HAS_WORKED_MESSAGE =
 const REPLACED_MESSAGE = 'This assignment has passed to somebody else and stays on the record.';
 const SECTION_DROPPED_MESSAGE =
   'This section left the test, and the assignment stays on the record.';
+const DUE_DAY_GONE_MESSAGE = 'Choose today or a later day.';
+const TYPED_HERE_MESSAGE =
+  'This admin typed questions for this section, so they cannot proof-read it.';
 
 const notWhole = (issue: string) => formRefusal(ErrorCodes.CONFLICT, issue);
 
@@ -236,6 +241,7 @@ export class AssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly admins: AdminsService,
+    private readonly redis: RedisService,
   ) {}
 
   /** Every assignment on the test, section and assignee named, one query. */
@@ -283,7 +289,12 @@ export class AssignmentsService {
     const test = await this.requireTest(testId);
     if (test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
     assertSourceChosen(test);
-    const section = await this.requireSection(test.baseConfigId, body.baseConfigSectionId);
+    if (body.dueAt < todayISO()) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, DUE_DAY_GONE_MESSAGE, {
+        fieldErrors: { dueAt: [DUE_DAY_GONE_MESSAGE] },
+      });
+    }
+    const section = await this.requireSection(test, body.baseConfigSectionId);
     const assignee = await this.requireAssignee(body.assigneeId);
     await this.assertHoldsFeature(assignee, body.role);
     await this.assertNotTheOtherRole(testId, section.id, body.assigneeId, body.role);
@@ -291,7 +302,7 @@ export class AssignmentsService {
     const pair = { testId, baseConfigSectionId: section.id };
 
     try {
-      const row = await this.prisma.$transaction(async (tx) => {
+      const { row, replaced } = await this.prisma.$transaction(async (tx) => {
         // Test before its rows, the app's one lock order: an edit reopening this holder took the test first.
         await beginDraftPaperEdit(tx, testId, OFFERED_MESSAGE);
 
@@ -312,7 +323,7 @@ export class AssignmentsService {
             data: { replacedAt: new Date() },
           });
         }
-        return tx.questionAssignment.create({
+        const row = await tx.questionAssignment.create({
           data: {
             ...pair,
             baseConfigId: test.baseConfigId,
@@ -325,7 +336,10 @@ export class AssignmentsService {
           },
           include: ASSIGNMENT_INCLUDE,
         });
+        return { row, replaced: holding?.assigneeId };
       });
+      // The earlier holder only reads now, so a claim they left must not keep the new one out.
+      if (replaced) await releaseSectionEditLock(this.redis, pair, replaced);
       // Whoever assigns may hold the other seat on this section, so the answer carries nobody's time.
       return { ...(await this.withFacts(row)), secondsSpent: null };
     } catch (error) {
@@ -631,7 +645,7 @@ export class AssignmentsService {
     return sectionsOf(test).map((section) => ({ id: section.id, name: section.name }));
   }
 
-  /** A reader's release, by the row the section resolved. Idempotent: a repeat restamps. A typist uses Done. */
+  /** A reader's release, by the row the section resolved. Idempotent: a repeat leaves the first stamp. A typist uses Done. */
   async finalize(id: string): Promise<Assignment> {
     const row = await this.prisma.questionAssignment.findUnique({
       where: { id },
@@ -650,19 +664,30 @@ export class AssignmentsService {
     if (!row.handedAt) throw notWhole(NOT_HANDED_MESSAGE);
     if (row.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, READING_OVER_MESSAGE);
     const section = { testId: row.testId, baseConfigSectionId: row.baseConfigSectionId };
-    const gap = await this.releaseGap(
-      section,
-      row.test.paperSource,
-      row.baseConfigSection.questionCount,
-    );
-    if (gap) throw notWhole(gap);
 
-    // Re-reading is the same fact restated: the stamp moves, so a section read again is covered again.
-    const updated = await this.prisma.questionAssignment.update({
-      where: { id },
-      data: { finalizedAt: new Date() },
-      include: ASSIGNMENT_INCLUDE,
-    });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // The row every review write and paper edit takes, so the gap read here is the gap the stamp lands on.
+      await beginDraftPaperEdit(tx, row.testId, READING_OVER_MESSAGE);
+      const held = await tx.questionAssignment.findUniqueOrThrow({
+        where: { id },
+        include: ASSIGNMENT_INCLUDE,
+      });
+      // A reopen clears the stamp, so one still standing is the finish its due day is judged by.
+      if (held.finalizedAt) return held;
+
+      const gap = await this.releaseGap(
+        section,
+        row.test.paperSource,
+        row.baseConfigSection.questionCount,
+        tx,
+      );
+      if (gap) throw notWhole(gap);
+      return tx.questionAssignment.update({
+        where: { id },
+        data: { finalizedAt: new Date() },
+        include: ASSIGNMENT_INCLUDE,
+      });
+    }, TX_LIMITS.SHORT);
     return this.withFacts(updated);
   }
 
@@ -671,14 +696,16 @@ export class AssignmentsService {
     section: { testId: string; baseConfigSectionId: string },
     paperSource: PaperSource | null,
     needed: number,
+    db: Prisma.TransactionClient = this.prisma,
   ): Promise<string | null> {
-    const counted = await this.releaseCounts([{ ...section, test: { paperSource } }]);
+    const counted = await this.releaseCounts([{ ...section, test: { paperSource } }], db);
     return releaseGapOf(counted.get(sectionKey(section)) ?? NO_RELEASE_COUNTS, needed);
   }
 
   /** The three counts a release turns on, for every section named at once — a page of the queue asked one section at a time was three statements a row. */
   private async releaseCounts(
     rows: readonly (SectionPair & { test: { paperSource: PaperSource | null } })[],
+    db: Prisma.TransactionClient = this.prisma,
   ): Promise<Map<string, ReleaseCounts>> {
     const sections = sectionPairs(rows);
     if (sections.length === 0) return new Map();
@@ -688,7 +715,7 @@ export class AssignmentsService {
     const [typing, onPaper, unchecked] = await Promise.all([
       typed.length === 0
         ? []
-        : this.prisma.questionAssignment.groupBy({
+        : db.questionAssignment.groupBy({
             by: ['testId', 'baseConfigSectionId'],
             where: {
               OR: typed,
@@ -698,12 +725,12 @@ export class AssignmentsService {
             },
             _count: { _all: true },
           }),
-      this.prisma.paperQuestion.groupBy({
+      db.paperQuestion.groupBy({
         by: ['testId', 'baseConfigSectionId'],
         where: { OR: sections },
         _count: { _all: true },
       }),
-      this.prisma.paperQuestion.groupBy({
+      db.paperQuestion.groupBy({
         by: ['testId', 'baseConfigSectionId'],
         where: {
           OR: sections.map(({ testId, baseConfigSectionId }) => ({
@@ -802,27 +829,35 @@ export class AssignmentsService {
     return toAssignment(row, (await this.factsOf([row]))(row));
   }
 
-  private async requireTest(id: string): Promise<{
-    id: string;
-    baseConfigId: string;
-    paperSource: PaperSource | null;
-    finalizedAt: Date | null;
-  }> {
+  private async requireTest(id: string) {
     const test = await this.prisma.test.findUnique({
       where: { id },
-      select: { id: true, baseConfigId: true, paperSource: true, finalizedAt: true },
+      select: {
+        id: true,
+        baseConfigId: true,
+        paperSource: true,
+        finalizedAt: true,
+        scope: true,
+        scopeRef: true,
+      },
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
     return test;
   }
 
-  private async requireSection(baseConfigId: string, id: string): Promise<{ id: string }> {
-    const section = await this.prisma.baseConfigSection.findFirst({
-      where: { id, baseConfigId },
-      select: { id: true },
+  /** A section the test's scope leaves out is no part of its paper, so nobody is given it. */
+  private async requireSection(
+    test: ScopedTest & { baseConfigId: string },
+    id: string,
+  ): Promise<{ id: string }> {
+    const baseConfigSection = await this.prisma.baseConfigSection.findFirst({
+      where: { id, baseConfigId: test.baseConfigId },
+      select: { id: true, moduleId: true, questionCount: true },
     });
-    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, 'No such section');
-    return section;
+    if (!baseConfigSection || !inScope({ baseConfigSection, test })) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such section');
+    }
+    return baseConfigSection;
   }
 
   private async requireAssignee(id: string): Promise<{ id: string; name: string }> {
@@ -855,19 +890,31 @@ export class AssignmentsService {
     assigneeId: string,
     role: AssignmentRole,
   ): Promise<void> {
+    const pair = { testId, baseConfigSectionId: sectionId };
+    const refused = (message: string) =>
+      new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+        fieldErrors: { assigneeId: [message] },
+      });
+
     const clash = await this.prisma.questionAssignment.findFirst({
-      where: { testId, baseConfigSectionId: sectionId, role: otherRole(role), replacedAt: null },
+      where: { ...pair, role: otherRole(role), replacedAt: null },
       select: { assigneeId: true },
     });
-    if (clash?.assigneeId !== assigneeId) return;
+    if (clash?.assigneeId === assigneeId) {
+      throw refused(
+        role === ASSIGNMENT_ROLES.PROOFREADER
+          ? 'This admin is already the typist on this section'
+          : 'This admin is already the proof-reader on this section',
+      );
+    }
+    if (role !== ASSIGNMENT_ROLES.PROOFREADER) return;
 
-    const message =
-      role === ASSIGNMENT_ROLES.PROOFREADER
-        ? 'This admin is already the typist on this section'
-        : 'This admin is already the proof-reader on this section';
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-      fieldErrors: { assigneeId: [message] },
+    // A typist whose role passed on as well: what they wrote for the section is still their own typing.
+    const typed = await this.prisma.question.findFirst({
+      where: { createdById: assigneeId, assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST } },
+      select: { id: true },
     });
+    if (typed) throw refused(TYPED_HERE_MESSAGE);
   }
 }
 
@@ -1081,8 +1128,12 @@ function toAssignment(
   };
 }
 
+/** What a test's scope is read from, and what the scope rule asks of a section. */
+type ScopedTest = Pick<AssignmentRow['test'], 'scope' | 'scopeRef'>;
+type ScopedSection = Parameters<typeof scopedSections>[0][number];
+
 /** Whether the test still covers the row's section; a narrower scope stands its holders down. */
-function inScope(row: Pick<AssignmentRow, 'baseConfigSection' | 'test'>): boolean {
+function inScope(row: { baseConfigSection: ScopedSection; test: ScopedTest }): boolean {
   return scopedSections([row.baseConfigSection], row.test.scope, scopeRefOf(row.test)).length > 0;
 }
 

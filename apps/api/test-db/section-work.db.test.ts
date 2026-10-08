@@ -31,6 +31,7 @@ import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { PaperService } from '../src/tests/paper.service';
 import { TypistDoneController } from '../src/tests/tests.controller';
 import type { AuthenticatedUser } from '../src/common/security';
+import type { PrismaService } from '../src/prisma/prisma.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import { QuestionsService } from '../src/questions/questions.service';
@@ -93,7 +94,29 @@ function draft(over: Partial<QuestionDraftInput> = {}) {
   });
 }
 
-async function build() {
+/** A client whose next write transaction opens only once `first.run` has landed: the other call won the race. */
+function landingFirst(first: { run?: () => Promise<unknown> }): PrismaService {
+  return new Proxy(prisma, {
+    get(target, key: string | symbol) {
+      if (key !== '$transaction') return Reflect.get(target, key) as unknown;
+      return async (...args: Parameters<PrismaService['$transaction']>) => {
+        const { run } = first;
+        first.run = undefined;
+        await run?.();
+        return target.$transaction(...args);
+      };
+    },
+  });
+}
+
+/** Each service's own client, for a case that lands something ahead of one of its writes. */
+interface Clients {
+  bank?: PrismaService;
+  section?: PrismaService;
+  roles?: PrismaService;
+}
+
+async function build({ bank = prisma, section = prisma, roles = prisma }: Clients = {}) {
   await makeQuestionBank(prisma, {
     [TYPIST]: 'Anita',
     [READER]: 'Bhaskar',
@@ -103,14 +126,15 @@ async function build() {
   });
   const audit = new AuditContext();
   const redis = new FakeRedis().asService();
-  const questions = new QuestionsService(prisma, audit, new FakeStorage() as never);
+  const questions = new QuestionsService(bank, audit, new FakeStorage() as never);
   const assignments = new AssignmentsService(
-    prisma,
+    roles,
     new AdminsService(prisma, audit, new FakeEventBus().asService()),
+    redis,
   );
   const storage = new FakeStorage() as never;
-  const imports = new QuestionImportService(prisma, storage, new AuditService(prisma, storage));
-  const work = new SectionWorkService(prisma, redis, questions, assignments, imports);
+  const imports = new QuestionImportService(bank, storage, new AuditService(prisma, storage));
+  const work = new SectionWorkService(section, redis, questions, assignments, imports);
   const bus = new FakeEventBus().asService();
   const configs = new BaseConfigsService(
     prisma,
@@ -381,6 +405,34 @@ describe('SectionWorkService — a section nobody types any more', () => {
   });
 });
 
+describe('SectionWorkService — a test owner who once held a seat', () => {
+  /** The failure this prevents: an owner who edits as the owner shown a stood-down typist's page, without either seat's time. */
+  it('reads the section as its owner once their own seat has passed on', async () => {
+    const { work } = await build();
+    const { catalog, pair, typing, reading, onPaper, typistDone } = await aSection();
+    await onPaper(await makeQuestion(prisma, { subjectId: BANK.QUANT }));
+    await typistDone();
+    await prisma.questionAssignment.update({
+      where: { id: typing.id },
+      data: { replacedAt: new Date() },
+    });
+    await assign(catalog, pair.testId, pair.baseConfigSectionId, STRANGER, ASSIGNMENT_ROLES.TYPIST);
+    await prisma.questionAssignment.update({
+      where: { id: reading.id },
+      data: { finalizedAt: new Date() },
+    });
+
+    const asOwner = await work.one(pair, viewer(TYPIST, OWNS));
+    assert.equal(asOwner.seat, SECTION_SEATS.OWNER);
+    assert.equal(asOwner.questions[0]?.editable, true);
+    assert.deepEqual(asOwner.questions[0]?.time, { own: 0, typist: 0, reader: 0 });
+
+    const stoodDown = await work.one(pair, viewer(TYPIST));
+    assert.equal(stoodDown.seat, SECTION_SEATS.TYPIST);
+    assert.deepEqual(stoodDown.questions[0]?.time, { own: 0, typist: null, reader: null });
+  });
+});
+
 describe('SectionWorkService.remove', () => {
   /** The failure this prevents: a question on the section deleted by somebody who may not change it. */
   it('deletes a typist’s own draft, and refuses one a test owner cannot change', async () => {
@@ -581,6 +633,55 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
     await assert.rejects(
       () => work.previewImport(pair, oneRowSheet(), viewer(TYPIST)),
       refusedWith(ErrorCodes.FORBIDDEN),
+    );
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 0);
+  });
+
+  /** The failure this prevents: a section of an offered test still gaining drafts no paper can take. */
+  it('refuses typing into a section of a test that has been offered', async () => {
+    const { work } = await build();
+    const { pair, test, typing } = await aSection();
+    await prisma.test.update({
+      where: { id: test.id },
+      data: { finalizedAt: new Date(), status: TEST_STATUS.ACTIVE },
+    });
+
+    await assert.rejects(
+      () => work.create(pair, draft(), viewer(TYPIST)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await assert.rejects(
+      () => work.previewImport(pair, oneRowSheet(), viewer(TYPIST)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 0);
+  });
+
+  /** The failure this prevents: a draft that passed its check before Done landing after it, where only a super admin can remove it. */
+  it('refuses a draft, typed or imported, whose write lands after the section was marked done', async () => {
+    const first: { run?: () => Promise<unknown> } = {};
+    const { work } = await build({ bank: landingFirst(first) });
+    const { pair, typing } = await aSection();
+    const markedDone = () =>
+      prisma.questionAssignment.update({
+        where: { id: typing.id },
+        data: { finalizedAt: new Date() },
+      });
+    const reopened = () =>
+      prisma.questionAssignment.update({ where: { id: typing.id }, data: { finalizedAt: null } });
+
+    first.run = markedDone;
+    await assert.rejects(
+      () => work.create(pair, draft(), viewer(TYPIST)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+
+    await reopened();
+    const plan = await work.previewImport(pair, oneRowSheet(), viewer(TYPIST));
+    first.run = markedDone;
+    await assert.rejects(
+      () => work.commitImport(pair, plan.importLogId, viewer(TYPIST)),
+      refusedWith(ErrorCodes.CONFLICT),
     );
     assert.equal(await prisma.question.count({ where: { assignmentId: typing.id } }), 0);
   });
@@ -987,6 +1088,126 @@ describe('SectionWorkService — the reader’s review', () => {
       read.questions.find((row) => row.questionId === own.id)?.review.state,
       REVIEW_STATES.UNCHECKED,
     );
+  });
+});
+
+describe('SectionWorkService — review writes take turns', () => {
+  const ROUNDS = 8;
+
+  /** The failure this prevents: a tick landing on a question just sent back, which release and the offer then count as read. */
+  it('never leaves a question both sent back and checked when the two land together', async () => {
+    const { work } = await build();
+    const { pair, onPaper, typistDone } = await aSection();
+    const questions = [];
+    for (let round = 0; round < ROUNDS; round++) {
+      const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+      await onPaper(question);
+      questions.push(question);
+    }
+    await typistDone();
+
+    for (const question of questions) {
+      await Promise.allSettled([
+        work.check(pair, question.id, viewer(READER)),
+        work.sendBack(pair, question.id, { reason: SEND_BACK_REASONS.SPELLING }, viewer(READER)),
+      ]);
+    }
+
+    const both = await prisma.questionReview.count({
+      where: {
+        testId: pair.testId,
+        sentBackAt: { not: null },
+        fixedAt: null,
+        checkedAt: { not: null },
+      },
+    });
+    assert.equal(both, 0);
+    assert.equal(await prisma.questionReview.count({ where: { testId: pair.testId } }), ROUNDS);
+  });
+
+  /** The failure this prevents: a section released over a question whose tick was taken back as the release landed. */
+  it('never leaves a released section with an unticked question when a release and an uncheck land together', async () => {
+    const { work } = await build();
+    const { pair, reading, onPaper, typistDone } = await aSection();
+    await prisma.baseConfigSection.update({
+      where: { id: pair.baseConfigSectionId },
+      data: { questionCount: 1 },
+    });
+    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(question);
+    await typistDone();
+
+    for (let round = 0; round < ROUNDS; round++) {
+      await prisma.questionAssignment.update({
+        where: { id: reading.id },
+        data: { finalizedAt: null },
+      });
+      await work.check(pair, question.id, viewer(READER));
+
+      await Promise.allSettled([
+        work.release(pair, viewer(READER)),
+        work.uncheck(pair, question.id, viewer(READER)),
+      ]);
+
+      const { finalizedAt } = await prisma.questionAssignment.findUniqueOrThrow({
+        where: { id: reading.id },
+      });
+      const { checkedAt } = await prisma.questionReview.findFirstOrThrow({
+        where: { testId: pair.testId, questionId: question.id },
+      });
+      assert.ok(finalizedAt === null || checkedAt !== null, `round ${round}: released unticked`);
+    }
+  });
+
+  /** The failure this prevents: a tick or a send-back that passed its check before the release landing on the released section. */
+  it('refuses a review write that lands after the section was released', async () => {
+    const first: { run?: () => Promise<unknown> } = {};
+    const { work } = await build({ section: landingFirst(first) });
+    const { pair, reading, onPaper, typistDone } = await aSection();
+    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(question);
+    await typistDone();
+    const released = () =>
+      prisma.questionAssignment.update({
+        where: { id: reading.id },
+        data: { finalizedAt: new Date() },
+      });
+
+    await work.check(pair, question.id, viewer(READER));
+    first.run = released;
+    await assert.rejects(
+      () => work.uncheck(pair, question.id, viewer(READER)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+
+    const review = await prisma.questionReview.findFirstOrThrow({
+      where: { testId: pair.testId, questionId: question.id },
+    });
+    assert.notEqual(review.checkedAt, null);
+  });
+
+  /** The failure this prevents: a release whose check passed stamping the section after a tick was taken back. */
+  it('refuses a release whose section lost a tick after its check passed', async () => {
+    const first: { run?: () => Promise<unknown> } = {};
+    const { work } = await build({ roles: landingFirst(first) });
+    const { pair, reading, onPaper, typistDone } = await aSection();
+    await prisma.baseConfigSection.update({
+      where: { id: pair.baseConfigSectionId },
+      data: { questionCount: 1 },
+    });
+    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(question);
+    await typistDone();
+    await work.check(pair, question.id, viewer(READER));
+
+    first.run = () => work.uncheck(pair, question.id, viewer(READER));
+    await assert.rejects(
+      () => work.release(pair, viewer(READER)),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+
+    const held = await prisma.questionAssignment.findUniqueOrThrow({ where: { id: reading.id } });
+    assert.equal(held.finalizedAt, null);
   });
 });
 

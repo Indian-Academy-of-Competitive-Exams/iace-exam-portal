@@ -13,6 +13,8 @@ import {
   createAssignmentSchema,
   mineAssignmentsQuerySchema,
   sectionProgressQuerySchema,
+  todayISO,
+  type AssignmentRole,
   type AssignmentWithTest,
   type CreateAssignmentInput,
   type FeatureKey,
@@ -28,6 +30,7 @@ import { AdminsService } from '../src/admins/admins.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
+import { shiftInstituteDay } from '../src/common/time/institute-day';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { TestsService } from '../src/tests/tests.service';
 import { FakeEventBus, FakeRedis } from '../test/support/fakes';
@@ -62,7 +65,7 @@ function build() {
     new FakeEventBus().asService(),
   );
   return {
-    assignments: new AssignmentsService(prisma, admins),
+    assignments: new AssignmentsService(prisma, admins, redis),
     admins,
     tests: new TestsService(
       prisma,
@@ -80,12 +83,21 @@ const grant = (
   level: PermissionLevel = PERMISSION_LEVELS.WRITE,
 ) => prisma.adminFeaturePermission.create({ data: { adminId, featureKey: key, level } });
 
+/** A due day counted from today at the institute: a section is never handed out for a day already gone. */
+const dueIn = (days: number): string => shiftInstituteDay(todayISO(), days);
+
+/** The last instant of an institute day, as a due date is stored and sent. */
+const endOf = (day: string): string => `${day}T18:29:59.999Z`;
+
+/** Nobody in these cases has edited a section, so there is no claim to give up. */
+const NO_CLAIMS = new FakeRedis().asService();
+
 const body = (over: Partial<CreateAssignmentInput>): CreateAssignmentInput =>
   createAssignmentSchema.parse({
     baseConfigSectionId: '',
     assigneeId: '',
     role: ASSIGNMENT_ROLES.TYPIST,
-    dueAt: '2026-10-09',
+    dueAt: dueIn(4),
     ...over,
   });
 
@@ -307,6 +319,66 @@ describe('AssignmentsService — assigning', () => {
         Boolean(error.fieldErrors?.assigneeId),
     );
   });
+
+  /** The failure this prevents: a typist whose role passed on made the reader of the questions they wrote. */
+  it('refuses as proof-reader an earlier typist who wrote for the section, and takes one who wrote nothing', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const wrote = await makeSection(prisma, catalog, { name: 'Reasoning', order: 1 });
+    const blank = await makeSection(prisma, catalog, { name: 'Quant', order: 2 });
+    const [earlier, next] = [await makeAdmin(prisma), await makeAdmin(prisma)];
+    for (const admin of [earlier, next]) await grant(admin.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await grant(earlier.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const give = (
+      baseConfigSectionId: string,
+      assigneeId: string,
+      role: AssignmentRole = ASSIGNMENT_ROLES.TYPIST,
+    ) => assignments.assign(test.id, body({ baseConfigSectionId, assigneeId, role }), assigneeId);
+    const typing = await give(wrote.id, earlier.id);
+    await give(blank.id, earlier.id);
+    const question = await makeQuestion(prisma, { subjectId: (await makeSubject(prisma)).id });
+    await prisma.question.update({
+      where: { id: question.id },
+      data: { assignmentId: typing.id, createdById: earlier.id },
+    });
+    await give(wrote.id, next.id);
+    await give(blank.id, next.id);
+
+    await assert.rejects(
+      () => give(wrote.id, earlier.id, ASSIGNMENT_ROLES.PROOFREADER),
+      (error: unknown) =>
+        AppException.is(error) &&
+        error.code === ErrorCodes.VALIDATION_ERROR &&
+        Boolean(error.fieldErrors?.assigneeId),
+    );
+    const reading = await give(blank.id, earlier.id, ASSIGNMENT_ROLES.PROOFREADER);
+    assert.equal(reading.assigneeId, earlier.id);
+  });
+
+  /** The failure this prevents: a reader on a section outside the paper, who can never release it, blocking the offer for good. */
+  it('refuses a section the test’s scope leaves out', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const inScope = await makeSection(prisma, catalog, { name: 'Reasoning', order: 1 });
+    const outside = await makeSection(prisma, catalog, { name: 'Quant', order: 2 });
+    const test = await framed(catalog);
+    await prisma.test.update({
+      where: { id: test.id },
+      data: { scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: inScope.id } },
+    });
+    const reader = await makeAdmin(prisma);
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const read = (baseConfigSectionId: string) =>
+      assignments.assign(
+        test.id,
+        body({ baseConfigSectionId, assigneeId: reader.id, role: ASSIGNMENT_ROLES.PROOFREADER }),
+        reader.id,
+      );
+
+    await assert.rejects(() => read(outside.id), refusedWith(ErrorCodes.NOT_FOUND));
+    assert.equal((await read(inScope.id)).baseConfigSectionId, inScope.id);
+  });
 });
 
 /** Nothing outside the transaction can see a lock, so this records the order its statements left in. */
@@ -358,7 +430,7 @@ describe('AssignmentsService — one lock order, Test before its rows', () => {
       body({ baseConfigSectionId: section.id, assigneeId, role: ASSIGNMENT_ROLES.PROOFREADER });
     await assignments.assign(test.id, reading(first.id), first.id);
     const order: string[] = [];
-    const watched = new AssignmentsService(watchingLocks(order), admins);
+    const watched = new AssignmentsService(watchingLocks(order), admins, NO_CLAIMS);
 
     await watched.assign(test.id, reading(second.id), second.id);
 
@@ -396,7 +468,7 @@ describe('AssignmentsService — a hand-over reads the role as it is under the l
         };
       },
     });
-    const racing = new AssignmentsService(reopenedMidway, admins);
+    const racing = new AssignmentsService(reopenedMidway, admins, NO_CLAIMS);
 
     const next = await racing.assign(test.id, reading(second.id), second.id);
 
@@ -893,7 +965,7 @@ describe('AssignmentsService — mine', () => {
         baseConfigSectionId: reasoning.id,
         assigneeId: typist.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-05',
+        dueAt: dueIn(0),
       }),
       typist.id,
     );
@@ -903,14 +975,14 @@ describe('AssignmentsService — mine', () => {
         baseConfigSectionId: english.id,
         assigneeId: typist.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-09',
+        dueAt: dueIn(4),
       }),
       typist.id,
     );
 
     const byTest = await queue(assignments, typist.id, { testId: railway.id });
     const bySection = await queue(assignments, typist.id, { baseConfigSectionId: reasoning.id });
-    const byDue = await queue(assignments, typist.id, { dueFrom: '2026-10-06' });
+    const byDue = await queue(assignments, typist.id, { dueFrom: dueIn(1) });
 
     assert.deepEqual(
       byTest.map((row) => row.sectionName),
@@ -1001,7 +1073,7 @@ describe('AssignmentsService — section progress', () => {
         baseConfigSectionId: section.id,
         assigneeId: typist.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-05',
+        dueAt: dueIn(0),
       }),
       typist.id,
     );
@@ -1020,7 +1092,7 @@ describe('AssignmentsService — section progress', () => {
     assert.equal(rows.length, 1);
     assert.deepEqual(
       [rows[0]?.typing?.assignmentId, rows[0]?.typing?.assigneeName, rows[0]?.typing?.dueAt],
-      [typing.id, 'Priya', '2026-10-05T18:29:59.999Z'],
+      [typing.id, 'Priya', endOf(dueIn(0))],
     );
     assert.deepEqual(
       [rows[0]?.reading?.assignmentId, rows[0]?.reading?.assigneeName],
@@ -1148,7 +1220,7 @@ describe('AssignmentsService — section progress', () => {
         baseConfigSectionId: shared.id,
         assigneeId: priya.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-05',
+        dueAt: dueIn(0),
       }),
       priya.id,
     );
@@ -1158,7 +1230,7 @@ describe('AssignmentsService — section progress', () => {
         baseConfigSectionId: shared.id,
         assigneeId: arjun.id,
         role: ASSIGNMENT_ROLES.PROOFREADER,
-        dueAt: '2026-10-20',
+        dueAt: dueIn(15),
       }),
       arjun.id,
     );
@@ -1168,13 +1240,13 @@ describe('AssignmentsService — section progress', () => {
         baseConfigSectionId: late.id,
         assigneeId: arjun.id,
         role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: '2026-10-09',
+        dueAt: dueIn(4),
       }),
       arjun.id,
     );
 
     const readByArjun = await progress(assignments, { assigneeId: [arjun.id] });
-    const thatWeek = await progress(assignments, { dueFrom: '2026-10-05', dueTo: '2026-10-06' });
+    const thatWeek = await progress(assignments, { dueFrom: dueIn(0), dueTo: dueIn(1) });
 
     assert.deepEqual(
       readByArjun.map((one) => one.sectionName),
@@ -1257,8 +1329,8 @@ describe('AssignmentsService — the section a row is on', () => {
 });
 
 describe('AssignmentsService — finalizing', () => {
-  /** Re-reading is the same fact restated, so the stamp MOVES — that is what re-covers a paper. */
-  it('sets finalizedAt, and moves it when the section is marked again', async () => {
+  /** The failure this prevents: a repeat release moving an on-time finish past its due day. */
+  it('sets finalizedAt once: a release repeated leaves the finish where the first put it', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     const test = await framed(catalog);
@@ -1280,11 +1352,7 @@ describe('AssignmentsService — finalizing', () => {
     const second = await assignments.finalize(created.id);
 
     assert.ok(first.finalizedAt);
-    assert.ok(second.finalizedAt);
-    assert.ok(
-      new Date(second.finalizedAt) >= new Date(first.finalizedAt),
-      'a second reading never predates the first',
-    );
+    assert.equal(second.finalizedAt, first.finalizedAt);
   });
 });
 
@@ -1658,11 +1726,36 @@ describe('AssignmentsService — a due date', () => {
 
     const typing = await assignments.assign(
       test.id,
-      body({ baseConfigSectionId: section.id, assigneeId: typist.id, dueAt: '2026-10-09' }),
+      body({ baseConfigSectionId: section.id, assigneeId: typist.id, dueAt: dueIn(1) }),
       typist.id,
     );
 
-    assert.equal(typing.dueAt, '2026-10-09T18:29:59.999Z');
+    assert.equal(typing.dueAt, endOf(dueIn(1)));
+  });
+
+  /** The failure this prevents: a section handed out already overdue, by a client that skipped the picker's minimum. */
+  it('refuses a due day before today under Due date, and takes today', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const due = (dueAt: string) =>
+      assignments.assign(
+        test.id,
+        body({ baseConfigSectionId: section.id, assigneeId: typist.id, dueAt }),
+        typist.id,
+      );
+
+    await assert.rejects(
+      () => due(dueIn(-1)),
+      (error: unknown) =>
+        AppException.is(error) &&
+        error.code === ErrorCodes.VALIDATION_ERROR &&
+        Boolean(error.fieldErrors?.dueAt),
+    );
+    assert.equal((await due(dueIn(0))).dueAt, endOf(dueIn(0)));
   });
 });
 

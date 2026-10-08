@@ -8,8 +8,12 @@ import {
   SEND_BACK_REASONS,
   DIFFICULTY_LEVEL,
   ErrorCodes,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  createAssignmentSchema,
   plainTextOf,
   questionDraftSchema,
+  todayISO,
   type AssignmentRole,
   type QuestionDraftInput,
 } from '@iace/contracts';
@@ -38,6 +42,7 @@ import {
 const TYPIST = randomUUID();
 const READER = randomUUID();
 const CHIEF = randomUUID();
+const NEXT = randomUUID();
 
 const prisma = testPrisma();
 
@@ -49,17 +54,19 @@ async function build() {
     [TYPIST]: 'Anita',
     [READER]: 'Bhaskar',
     [CHIEF]: 'Chandra',
+    [NEXT]: 'Nikhil',
   });
   const audit = new AuditContext();
   const questions = new QuestionsService(prisma, audit, new FakeStorage() as never);
   const redis = new FakeRedis();
   const admins = new AdminsService(prisma, audit, new FakeEventBus().asService());
-  const assignments = new AssignmentsService(prisma, admins);
+  const assignments = new AssignmentsService(prisma, admins, redis.asService());
   const storage = new FakeStorage() as never;
   const imports = new QuestionImportService(prisma, storage, new AuditService(prisma, storage));
   return {
     redis,
     questions,
+    assignments,
     work: new SectionWorkService(prisma, redis.asService(), questions, assignments, imports),
   };
 }
@@ -236,6 +243,74 @@ describe('the section edit lock', () => {
     await markDone(section, written);
 
     redis.advanceSeconds(EDIT_LOCK_TTL_SEC + 1);
+
+    const fixed = await work.edit(
+      pairOf(section),
+      written.id,
+      draft({ stem: { en: 'The reader’s fix' } }),
+      viewer(READER),
+    );
+    assert.equal(fixed.id, written.id);
+  });
+});
+
+describe('the section edit lock — given up when the section changes hands', () => {
+  /** The failure this prevents: a new typist kept out for fifteen minutes by the claim of the one they replaced. */
+  it('gives the earlier holder’s claim up when their role passes to somebody new', async () => {
+    const { work, assignments } = await build();
+    const section = await aSection();
+    await work.create(pairOf(section), draft(), viewer(TYPIST));
+    await prisma.adminFeaturePermission.create({
+      data: {
+        adminId: NEXT,
+        featureKey: FEATURE_KEYS.QUESTION_AUTHORING,
+        level: PERMISSION_LEVELS.WRITE,
+      },
+    });
+
+    await assignments.assign(
+      section.testId,
+      createAssignmentSchema.parse({
+        baseConfigSectionId: section.sectionId,
+        assigneeId: NEXT,
+        role: ASSIGNMENT_ROLES.TYPIST,
+        dueAt: todayISO(),
+      }),
+      CHIEF,
+    );
+
+    const written = await work.create(
+      pairOf(section),
+      draft({ stem: { en: 'What is 10% of 150?' } }),
+      viewer(NEXT),
+    );
+    assert.equal(written.author?.id, NEXT);
+  });
+
+  /** The failure this prevents: a reader handed a section back by its owner's rewording, and kept out of it by that owner's claim. */
+  it('gives an owner’s claim up when their rewording hands the section back to its reader', async () => {
+    const { work } = await build();
+    const section = await aSection();
+    await prisma.baseConfigSection.update({
+      where: { id: section.sectionId },
+      data: { questionCount: 1 },
+    });
+    const written = await work.create(pairOf(section), draft(), viewer(TYPIST));
+    await markDone(section, written);
+    await work.handedOver(pairOf(section), viewer(TYPIST));
+    await work.check(pairOf(section), written.id, viewer(READER));
+    await work.release(pairOf(section), viewer(READER));
+    const owner = {
+      ...viewer(CHIEF),
+      permissions: { [FEATURE_KEYS.TEST_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
+    };
+
+    await work.edit(
+      pairOf(section),
+      written.id,
+      draft({ stem: { en: 'What is 25% of 200?' } }),
+      owner,
+    );
 
     const fixed = await work.edit(
       pairOf(section),

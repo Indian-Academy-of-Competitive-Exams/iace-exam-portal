@@ -25,10 +25,12 @@ import {
 import { AdminsService } from '../src/admins/admins.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
 import { AuditContext } from '../src/audit';
+import type { AuthenticatedUser } from '../src/common/security';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { QuestionsController } from '../src/questions/questions.controller';
 import { QuestionsService } from '../src/questions/questions.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
-import { FakeEventBus, FakeStorage } from '../test/support/fakes';
+import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BANK,
   fourOptions,
@@ -450,6 +452,35 @@ describe('QuestionsService.update — what versioning is for', () => {
   });
 });
 
+describe('QuestionsService.update — what a save leaves alone, and what it names', () => {
+  /** The failure this prevents: every save from an editor with no code field erasing the question's code. */
+  it('keeps the code on a save that names none, and clears it only when told to', async () => {
+    const { questions } = await build();
+    const created = await questions.create(draft({ questionCode: 'QA-7' }), ADMIN);
+
+    const saved = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
+    assert.equal(saved.questionCode, 'QA-7');
+
+    const cleared = await questions.update(created.id, draft({ questionCode: null }), ADMIN);
+    assert.equal(cleared.questionCode, null);
+  });
+
+  /** The failure this prevents: a History line reading as two uuids nobody can tell apart. */
+  it('records the subject and topic a question moved between by name', async () => {
+    const { questions, audit } = await build();
+    const created = await questions.create(draft(), ADMIN);
+
+    const { changed } = await recording(audit, () =>
+      questions.update(created.id, draft(ELSEWHERE), ADMIN),
+    );
+
+    assert.deepEqual(changed?.subject, { from: 'QUANTITATIVE APTITUDE', to: 'GENERAL AWARENESS' });
+    assert.deepEqual(changed?.topic, { from: 'ARITHMETIC', to: 'HISTORY' });
+    assert.equal(changed?.subjectId, undefined);
+    assert.equal(changed?.topicId, undefined);
+  });
+});
+
 describe('QuestionsService.update — a working copy is rewritten, not appended', () => {
   /** A draft is a working copy: saving it ten times must not leave ten versions to read through. */
   it('rewrites the one version a draft already has', async () => {
@@ -861,6 +892,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
     const assignments = new AssignmentsService(
       prisma,
       new AdminsService(prisma, new AuditContext(), new FakeEventBus().asService()),
+      new FakeRedis().asService(),
     );
 
     await questions.update(questionId, draft({ stem: REWORDED }), ADMIN);
@@ -1477,6 +1509,56 @@ async function assignedFor(questionId: string): Promise<string> {
   });
   return test.id;
 }
+
+describe('QuestionsController — a section’s work in progress is not the bank’s to change', () => {
+  const BANK_ADMIN = { id: ADMIN } as AuthenticatedUser;
+  const onItsSection = (error: unknown) =>
+    conflict(error) && (error as Error).message.includes('Database tier section');
+
+  /** The failure this prevents: a bank admin rewriting or deleting a typist's draft under them. */
+  it('refuses the bank’s edit, archive and delete while its test has a section unfinished', async () => {
+    const { questions, audit } = await build([{ id: 'typed' }]);
+    const bank = new QuestionsController(questions, audit);
+    await assignedFor(idFor('typed'));
+
+    await assert.rejects(() => bank.update(idFor('typed'), draft(), BANK_ADMIN), onItsSection);
+    await assert.rejects(() => bank.archive(idFor('typed')), onItsSection);
+    await assert.rejects(() => bank.remove(idFor('typed')), onItsSection);
+
+    assert.equal((await questionRow(idFor('typed'))).status, QUESTION_STATUS.ACTIVE);
+  });
+
+  it('takes the bank’s edit once every section of its test is finished', async () => {
+    const { questions, audit } = await build([{ id: 'typed' }]);
+    const bank = new QuestionsController(questions, audit);
+    const testId = await assignedFor(idFor('typed'));
+    await prisma.questionAssignment.updateMany({
+      where: { testId },
+      data: { finalizedAt: new Date() },
+    });
+
+    const saved = await bank.update(idFor('typed'), draft({ stem: REWORDED }), BANK_ADMIN);
+
+    assert.equal(saved.id, idFor('typed'));
+    await bank.archive(idFor('typed'));
+    assert.equal((await questionRow(idFor('typed'))).status, QUESTION_STATUS.ARCHIVED);
+  });
+
+  /** The failure this prevents: a question on a test offered over an open section, which its section's page no longer changes either. */
+  it('takes the bank’s edit once its test has been offered, whatever was left open', async () => {
+    const { questions, audit } = await build([{ id: 'typed' }]);
+    const bank = new QuestionsController(questions, audit);
+    const testId = await assignedFor(idFor('typed'));
+    await prisma.test.update({
+      where: { id: testId },
+      data: { finalizedAt: new Date(), status: TEST_STATUS.ACTIVE },
+    });
+
+    const saved = await bank.update(idFor('typed'), draft({ stem: REWORDED }), BANK_ADMIN);
+
+    assert.equal(saved.id, idFor('typed'));
+  });
+});
 
 describe('QuestionsService.list — a test’s own authoring, and the rest of the bank', () => {
   /** The failure this prevents: hunting the twenty written for this test among thousands. */

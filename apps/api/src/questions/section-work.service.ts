@@ -29,11 +29,11 @@ import {
   type SendBackBody,
   type WorkTimeTotal,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
-import { assertSourceChosen } from '../common/paper-edit';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
+import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
 import { RedisService } from '../redis/redis.service';
 import { releaseSectionEditLock, sectionEditingBy, takeSectionEditLock } from '../common/edit-lock';
-import { AssignmentsService } from '../assignments';
+import { AssignmentsService, assertJobOpen, jobOpen } from '../assignments';
 import { stemPreviewOf } from './question-core';
 import { QuestionImportService } from './question-import.service';
 import { reachableTest } from './question-query';
@@ -314,7 +314,12 @@ export class SectionWorkService {
       id: viewer.id,
       isSuperAdmin: viewer.isSuperAdmin,
     });
-    return this.questions.update(questionId, draft, viewer.id);
+    const saved = await this.questions.update(questionId, draft, viewer.id);
+    // A rewording that sends a released section back to its reader gives the claim up with it.
+    if (context.reader?.finalizedAt && (await jobOpen(this.prisma, context.reader.id))) {
+      await releaseSectionEditLock(this.redis, pair, viewer.id);
+    }
+    return saved;
   }
 
   /** A typist's own mistake, taken back; `questions.remove` still refuses one a paper holds. */
@@ -377,28 +382,32 @@ export class SectionWorkService {
   /** The reader's tick: looked at, and passed. */
   async check(pair: Pair, questionId: string, viewer: SectionViewer): Promise<SectionWork> {
     const context = await this.load(pair, viewer);
-    this.requireReading(context);
+    const reading = this.requireReading(context);
     await this.requireOnPaper(pair, questionId);
-    const review = await this.reviewRow(pair.testId, questionId);
-    if (isOpenSendBack(review)) throw new AppException(ErrorCodes.CONFLICT, WITH_TYPIST_MESSAGE);
 
     const checked = { checkedAt: new Date(), checkedById: viewer.id };
-    await this.prisma.questionReview.upsert({
-      where: { testId_questionId: { testId: pair.testId, questionId } },
-      create: { ...pair, questionId, ...checked },
-      update: checked,
+    await this.reviewing(reading, async (tx) => {
+      const review = await reviewRow(tx, pair.testId, questionId);
+      if (isOpenSendBack(review)) throw new AppException(ErrorCodes.CONFLICT, WITH_TYPIST_MESSAGE);
+      await tx.questionReview.upsert({
+        where: { testId_questionId: { testId: pair.testId, questionId } },
+        create: { ...pair, questionId, ...checked },
+        update: checked,
+      });
     });
     return this.passedOn(context);
   }
 
   async uncheck(pair: Pair, questionId: string, viewer: SectionViewer): Promise<SectionWork> {
     const context = await this.load(pair, viewer);
-    this.requireReading(context);
+    const reading = this.requireReading(context);
     await this.requireOnPaper(pair, questionId);
-    await this.prisma.questionReview.updateMany({
-      where: { testId: pair.testId, questionId },
-      data: { checkedAt: null, checkedById: null },
-    });
+    await this.reviewing(reading, (tx) =>
+      tx.questionReview.updateMany({
+        where: { testId: pair.testId, questionId },
+        data: { checkedAt: null, checkedById: null },
+      }),
+    );
     return this.workOf(context);
   }
 
@@ -410,7 +419,7 @@ export class SectionWorkService {
     viewer: SectionViewer,
   ): Promise<SectionWork> {
     const context = await this.load(pair, viewer);
-    this.requireReading(context);
+    const reading = this.requireReading(context);
     if (!context.typist) throw new AppException(ErrorCodes.CONFLICT, NO_TYPIST_MESSAGE);
     await this.requireOnPaper(pair, questionId);
 
@@ -424,11 +433,13 @@ export class SectionWorkService {
       checkedAt: null,
       checkedById: null,
     };
-    await this.prisma.questionReview.upsert({
-      where: { testId_questionId: { testId: pair.testId, questionId } },
-      create: { ...pair, questionId, ...sent },
-      update: sent,
-    });
+    await this.reviewing(reading, (tx) =>
+      tx.questionReview.upsert({
+        where: { testId_questionId: { testId: pair.testId, questionId } },
+        create: { ...pair, questionId, ...sent },
+        update: sent,
+      }),
+    );
     return this.passedOn(context);
   }
 
@@ -441,15 +452,30 @@ export class SectionWorkService {
     }
     if (context.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
     await this.requireOnPaper(pair, questionId);
-    const review = await this.reviewRow(pair.testId, questionId);
-    if (!isOpenSendBack(review)) {
-      throw new AppException(ErrorCodes.CONFLICT, NOT_SENT_BACK_MESSAGE);
-    }
-    await this.prisma.questionReview.update({
-      where: { testId_questionId: { testId: pair.testId, questionId } },
-      data: { fixedAt: new Date(), fixedById: viewer.id },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      // The row a send-back takes too, so the one read here is the one this answers.
+      await beginDraftPaperEdit(tx, pair.testId, OFFERED_MESSAGE);
+      const review = await reviewRow(tx, pair.testId, questionId);
+      if (!isOpenSendBack(review)) {
+        throw new AppException(ErrorCodes.CONFLICT, NOT_SENT_BACK_MESSAGE);
+      }
+      await tx.questionReview.update({
+        where: { testId_questionId: { testId: pair.testId, questionId } },
+        data: { fixedAt: new Date(), fixedById: viewer.id },
+      });
+    }, TX_LIMITS.SHORT);
     return this.passedOn(context);
+  }
+
+  /** A reader's write takes its turn on the test's row, and is refused there once a release has landed. */
+  private async reviewing(
+    reading: Assignment,
+    write: (tx: Prisma.TransactionClient) => Promise<unknown>,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await assertJobOpen(tx, reading.id);
+      await write(tx);
+    }, TX_LIMITS.SHORT);
   }
 
   private async load(pair: Pair, viewer: SectionViewer): Promise<Context> {
@@ -478,14 +504,14 @@ export class SectionWorkService {
     const active = rows.filter((row) => row.replacedAt === null);
     const own = rows.filter((row) => row.assigneeId === viewer.id);
     const mine = own.find((row) => row.replacedAt === null) ?? own.at(-1) ?? null;
+    const owns = can(viewer, FEATURE_KEYS.TEST_MANAGEMENT);
     // Not theirs reads as not there: a feature key is not a seat on this section.
-    if (!mine && !can(viewer, FEATURE_KEYS.TEST_MANAGEMENT)) {
-      throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    }
+    if (!mine && !owns) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
     assertSourceChosen(test);
 
     let seat: SectionSeat = SECTION_SEATS.OWNER;
-    if (mine)
+    // A test owner whose own seat has passed on reads the section as its owner again.
+    if (mine && !(mine.replacedAt && owns))
       seat = mine.role === ASSIGNMENT_ROLES.TYPIST ? SECTION_SEATS.TYPIST : SECTION_SEATS.READER;
 
     return {
@@ -599,7 +625,7 @@ export class SectionWorkService {
     return found;
   }
 
-  private requireReading(context: Context): void {
+  private requireReading(context: Context): Assignment {
     const own = heldNow(context);
     if (own?.role !== ASSIGNMENT_ROLES.PROOFREADER) {
       throw new AppException(ErrorCodes.FORBIDDEN, READERS_ONLY_MESSAGE);
@@ -607,6 +633,7 @@ export class SectionWorkService {
     if (context.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
     if (!own.handedAt) throw new AppException(ErrorCodes.CONFLICT, NOT_HANDED_MESSAGE);
     if (own.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, RELEASED_MESSAGE);
+    return own;
   }
 
   private async requireOnPaper(pair: Pair, questionId: string): Promise<void> {
@@ -616,13 +643,10 @@ export class SectionWorkService {
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
   }
-
-  private reviewRow(testId: string, questionId: string) {
-    return this.prisma.questionReview.findUnique({
-      where: { testId_questionId: { testId, questionId } },
-    });
-  }
 }
+
+const reviewRow = (tx: Prisma.TransactionClient, testId: string, questionId: string) =>
+  tx.questionReview.findUnique({ where: { testId_questionId: { testId, questionId } } });
 
 /** The owner's seat and a super admin read every seat's time; a typist and a reader read their own. */
 const seesEverySeat = (context: Context): boolean =>
@@ -643,13 +667,14 @@ function actingAs(context: Context, role: AssignmentRole): Assignment {
   throw new AppException(ErrorCodes.FORBIDDEN, only);
 }
 
-/** A typing job still open: held, on a typed paper, and not yet done. */
+/** A typing job still open: held, on a typed paper not yet offered, and not yet done. */
 function typingRow(context: Context): Assignment {
   const row = actingAs(context, ASSIGNMENT_ROLES.TYPIST);
   if (row.replacedAt) throw new AppException(ErrorCodes.FORBIDDEN, NO_LONGER_TYPING_MESSAGE);
   if (context.test.paperSource !== PAPER_SOURCES.FRAMED) {
     throw new AppException(ErrorCodes.CONFLICT, NOTHING_TO_TYPE_MESSAGE);
   }
+  if (context.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
   if (row.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, SECTION_HANDED_OVER_MESSAGE);
   return row;
 }

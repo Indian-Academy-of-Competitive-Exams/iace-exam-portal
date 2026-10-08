@@ -25,6 +25,7 @@ import {
 } from '../common/importing';
 import { type ExportSheet } from '../common/exporting';
 import { formRefusal } from '../common/form-refusal';
+import { assertJobOpen } from '../assignments';
 import { AuditService } from '../audit';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -137,12 +138,34 @@ export class QuestionImportService {
         row.action === 'create' && row.draft !== null,
     );
 
+    const result: QuestionImportResult = {
+      ...planning.summary,
+      created: creatable.length,
+      skipped: planning.summary.total - creatable.length,
+    };
+
     let created: { id: string }[];
     try {
       await this.storePictures(creatable);
 
       // Interactive, not an array of promises: every question is three statements — the row, its first version, and the pointer between them — and all of them share one transaction.
       created = await this.prisma.$transaction(async (tx) => {
+        if (into.section) await assertJobOpen(tx, into.section.assignmentId);
+        // Claimed before any row is written: of two commits that both read the run open, the second waits here and finds it taken.
+        const claimed = await tx.importLog.updateMany({
+          where: { id: log.id, status: { not: IMPORT_LOG_STATUS.COMMITTED } },
+          data: {
+            total: planning.summary.total,
+            created: result.created,
+            // `failed` stays 0: a commit that returned reached every row, and a row it chose not to write is skipped.
+            skipped: result.skipped,
+            status: IMPORT_LOG_STATUS.COMMITTED,
+            finishedAt: new Date(),
+            errors: fileErrorsOf(planning),
+          },
+        });
+        if (claimed.count !== 1) throw new AppException(ErrorCodes.CONFLICT, ALREADY_IMPORTED);
+
         const rows: { id: string }[] = [];
         for (const row of creatable) {
           const built = buildContent(row.draft);
@@ -180,32 +203,13 @@ export class QuestionImportService {
       this.logger.error(`Row actions for import ${log.id} were not recorded`, error);
     }
 
-    const result: QuestionImportResult = {
-      ...planning.summary,
-      created: creatable.length,
-      skipped: planning.summary.total - creatable.length,
-    };
-
-    await this.prisma.importLog.update({
-      where: { id: log.id },
-      data: {
-        total: planning.summary.total,
-        created: result.created,
-        // `failed` stays 0: a commit that returned reached every row, and a row it chose not to write is skipped.
-        skipped: result.skipped,
-        status: IMPORT_LOG_STATUS.COMMITTED,
-        finishedAt: new Date(),
-        errors: fileErrorsOf(planning),
-      },
-    });
-
     return result;
   }
 
-  /** A commit that died closes its run the way the roster importer's does: FAILED, with the rows it never reached and why, rather than PREVIEWED for ever. */
+  /** A commit that died closes its run the way the roster importer's does: FAILED, with the rows it never reached and why, rather than PREVIEWED for ever. A run another commit imported stays imported. */
   private async closeFailedRun(logId: string, failed: number, error: unknown): Promise<void> {
-    await this.prisma.importLog.update({
-      where: { id: logId },
+    await this.prisma.importLog.updateMany({
+      where: { id: logId, status: { not: IMPORT_LOG_STATUS.COMMITTED } },
       data: {
         failed,
         status: IMPORT_LOG_STATUS.FAILED,

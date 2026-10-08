@@ -43,6 +43,7 @@ import {
 import { mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
 import {
+  SECTION_WORK_IN_PROGRESS,
   drawableFor,
   buildContent,
   languagesIn,
@@ -53,7 +54,7 @@ import {
 import { questionOrderBy, questionWhere, reachableTest } from './question-query';
 import { type AuthoringCount, type ExportedQuestion } from './question-export';
 import { taxonomyForIds } from './taxonomy-context';
-import { uncheckReworded } from '../assignments';
+import { assertJobOpen, uncheckReworded } from '../assignments';
 import { answerKeyIn, optionsIn } from '../common/prisma-json';
 
 const QUESTION_INCLUDE = {
@@ -99,8 +100,8 @@ type WithVersion = Pick<QuestionExportRow, 'currentVersion'>;
 /** The COLUMNS an edit can change. What the question says is flattened beside them, leaf by leaf. */
 export const AUDITED_QUESTION_FIELDS = [
   'type',
-  'subjectId',
-  'topicId',
+  'subject',
+  'topic',
   'difficulty',
   'questionCode',
   'status',
@@ -213,6 +214,21 @@ export class QuestionsService {
     return this.served(toDetail(await this.require(id)));
   }
 
+  /** Asked by the bank's own writes: a section's work is changed on its page until its test is finished. */
+  async assertNotSectionWork(id: string): Promise<void> {
+    const held = await this.prisma.question.findFirst({
+      where: { id, ...SECTION_WORK_IN_PROGRESS },
+      select: { assignment: QUESTION_INCLUDE.assignment },
+    });
+    if (!held?.assignment) return;
+
+    const { test, baseConfigSection } = held.assignment;
+    throw new AppException(
+      ErrorCodes.CONFLICT,
+      `This question is still being written for ${baseConfigSection.name} of ${test.title ?? 'Untitled test'}, so it is changed on that section's page.`,
+    );
+  }
+
   /** The chain, newest first, and which papers pin each link — what says who sat which wording. */
   async versions(id: string): Promise<QuestionVersionSummary[]> {
     await this.require(id);
@@ -263,6 +279,7 @@ export class QuestionsService {
     await this.assertNotDuplicate(built.stemHash, null);
 
     const row = await this.prisma.$transaction(async (tx) => {
+      if (options.assignmentId) await assertJobOpen(tx, options.assignmentId);
       const question = await tx.question.create({
         data: {
           ...this.columnsOf(draft, built),
@@ -548,7 +565,8 @@ export class QuestionsService {
       subjectId: draft.subjectId,
       topicId: draft.topicId ?? null,
       difficulty: draft.difficulty,
-      questionCode: draft.questionCode ?? null,
+      // Absent keeps the stored code, null clears it: no editor shows the code, so none may erase it.
+      questionCode: draft.questionCode,
       tags: draft.tags,
       stemHash: built.stemHash,
       stemHashVersion: built.stemHashVersion,
@@ -680,8 +698,8 @@ function questionDiff(before: QuestionRow, after: QuestionRow): FieldDiff | null
 function auditFieldsOf(row: QuestionRow): Record<string, unknown> {
   return {
     type: row.type,
-    subjectId: row.subjectId,
-    topicId: row.topicId,
+    subject: row.subject.name,
+    topic: row.topic?.name ?? null,
     difficulty: row.difficulty,
     questionCode: row.questionCode,
     status: row.status,

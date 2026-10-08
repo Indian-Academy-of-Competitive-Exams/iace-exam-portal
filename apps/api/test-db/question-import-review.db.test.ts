@@ -18,7 +18,13 @@ import { type PrismaService } from '../src/prisma/prisma.service';
 import { QuestionImportController } from '../src/questions/question-import.controller';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import { FakeStorage } from '../test/support/fakes';
-import { BANK, makeQuestionBank, resetDatabase, testPrisma } from './support/database';
+import {
+  BANK,
+  makeBankQuestion,
+  makeQuestionBank,
+  resetDatabase,
+  testPrisma,
+} from './support/database';
 
 const ADMIN = randomUUID();
 const OTHER_ADMIN = randomUUID();
@@ -202,6 +208,73 @@ describe('QuestionImportService — correcting a previewed row', () => {
     await assert.rejects(
       imports.saveRow(importLogId, 99, first.draft, ADMIN),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    );
+  });
+});
+
+/** What the review window posts back: the question as its editor holds it, which has no code field. */
+const asEdited = ({ questionCode: _code, ...draft }: QuestionDraft): QuestionDraft => draft;
+
+describe('QuestionImportService — a corrected row and its Question Code', () => {
+  /** The failure this prevents: a row corrected on screen imported without the code its sheet gave it. */
+  it('imports a corrected row with the code its sheet carries', async () => {
+    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
+    const imports = service();
+    const { importLogId } = await imports.preview(
+      sheet({ ...ROW, question_code: 'qa-7', correct_option: '' }),
+      ADMIN,
+    );
+    const [skipped] = await imports.drafts(importLogId, ADMIN);
+    assert.ok(skipped);
+
+    await imports.saveRow(importLogId, 2, asEdited(fixed(skipped.draft)), ADMIN);
+    await imports.commit(importLogId, { actorId: ADMIN });
+
+    const written = await prisma.question.findFirstOrThrow({ select: { questionCode: true } });
+    assert.equal(written.questionCode, 'QA-7');
+  });
+
+  /** The failure this prevents: any correction quietly dropping a taken code and importing the row without it. */
+  it('keeps a row whose code is taken skipped after a correction to something else', async () => {
+    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
+    const holder = randomUUID();
+    await makeBankQuestion(prisma, { id: holder, subjectId: BANK.QUANT });
+    await prisma.question.update({ where: { id: holder }, data: { questionCode: 'QA-7' } });
+    const imports = service();
+    const { importLogId } = await imports.preview(sheet({ ...ROW, question_code: 'QA-7' }), ADMIN);
+    const [taken] = await imports.drafts(importLogId, ADMIN);
+    assert.ok(taken);
+
+    const plan = await imports.saveRow(importLogId, 2, asEdited(fixed(taken.draft)), ADMIN);
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.deepEqual(
+      plan.rows[0]?.issues.map((issue) => issue.field),
+      ['questionCode'],
+    );
+  });
+});
+
+describe('QuestionImportService — a run is imported once', () => {
+  /** The failure this prevents: two commits both passing the already-imported check, the loser closing the winner's run FAILED. */
+  it('imports once when two commits of one run land together', async () => {
+    const { imports, importLogId } = await previewed();
+
+    const outcomes = await Promise.allSettled([
+      imports.commit(importLogId, { actorId: ADMIN }),
+      imports.commit(importLogId, { actorId: ADMIN }),
+    ]);
+
+    const refused = outcomes.flatMap((outcome) =>
+      outcome.status === 'rejected' ? [outcome.reason as unknown] : [],
+    );
+    assert.equal(refused.length, 1, 'one of the two is told the file is already imported');
+    assert.ok(AppException.is(refused[0]) && refused[0].code === ErrorCodes.CONFLICT);
+    assert.equal(await prisma.question.count(), 1);
+    const log = await prisma.importLog.findUniqueOrThrow({ where: { id: importLogId } });
+    assert.deepEqual(
+      { status: log.status, created: log.created, failed: log.failed },
+      { status: IMPORT_LOG_STATUS.COMMITTED, created: 1, failed: 0 },
     );
   });
 });
