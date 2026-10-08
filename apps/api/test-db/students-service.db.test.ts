@@ -116,15 +116,17 @@ async function serviceWith(over: Bench = {}) {
   const events = new FakeEventBus();
   const sender = new FakeMessageSender();
   const auditContext = new AuditContext();
+  const storage = new FakeStorage();
   return {
     exams,
     programs,
     events,
     sender,
     auditContext,
+    storage,
     service: new StudentsService(
       over.client ?? prisma,
-      new FakeStorage() as unknown as StorageService,
+      storage as unknown as StorageService,
       exams.asService(),
       new BranchesService(prisma, new AuditContext()),
       over.realPrograms ? new ProgramsService(prisma, auditContext) : programs.asService(),
@@ -384,6 +386,109 @@ describe('StudentsService.create — the type is the caller’s, never the servi
         }),
       refusedOn('programs'),
     );
+  });
+});
+
+describe('StudentsService.create — a number taken a moment ago', () => {
+  const body = { mobile: '9876543210', studentType: STUDENT_TYPE.NON_IACE };
+
+  /** The failure this prevents: the live-unique index answering "That already exists" with no field to put it under. */
+  it('reads "Already registered" under the mobile field when the number went between the check and the write', async () => {
+    let taken = false;
+    const takeOnce = async () => {
+      if (taken) return;
+      taken = true;
+      await makeStudent(prisma, { mobile: body.mobile });
+    };
+    const { service } = await serviceWith({
+      ...noStudentYet,
+      client: afterEachStudentRead(takeOnce),
+    });
+
+    await assert.rejects(() => service.create(body), refusedOn('mobile', ErrorCodes.CONFLICT));
+    assert.equal(await prisma.student.count(), 1);
+  });
+});
+
+describe('StudentsService — an erased student takes no further writes', () => {
+  const ERASED = { deletedAt: new Date(), anonymizedAt: new Date(), isActive: false };
+  const notFound = (error: unknown) =>
+    AppException.is(error) && error.code === ErrorCodes.NOT_FOUND;
+
+  /** The failure this prevents: a name typed back onto a tombstone, or sign-in "restored" on it. */
+  it('refuses an edit, the sign-in switch and the test block, and changes nothing', async () => {
+    const { service } = await serviceWith({ student: { fullName: null, ...ERASED } });
+
+    await assert.rejects(
+      () => service.update(STUDENT, { fullName: 'Asha', profile: { motherName: 'Lakshmi' } }),
+      notFound,
+    );
+    await assert.rejects(() => service.setActive(STUDENT, true), notFound);
+    await assert.rejects(() => service.setTestBlocked(STUDENT, true), notFound);
+
+    const kept = await row();
+    assert.deepEqual([kept.fullName, kept.isActive, kept.isTestBlocked], [null, false, false]);
+    assert.equal(await prisma.studentProfile.count(), 0);
+  });
+
+  /** The failure this prevents: an upload in flight as the erasure lands, its key left on the tombstone and its file in storage. */
+  it('refuses a document for an erased student, and takes the uploaded file back out of storage', async () => {
+    const { service, storage } = await serviceWith({ student: { fullName: null, ...ERASED } });
+    const key = `students/${STUDENT}/photo-1.jpg`;
+    await storage.upload(key, Buffer.from('a face'));
+
+    await assert.rejects(() => service.assertExists(STUDENT), notFound);
+    await assert.rejects(() => service.saveDocumentKey(STUDENT, 'photoUrl', key), notFound);
+
+    assert.equal(await prisma.studentProfile.count(), 0);
+    assert.deepEqual([...storage.objects.keys()], []);
+  });
+
+  /** A form opened before the erasure, saved as the erasure lands: the write itself has to refuse. */
+  it('writes nothing when the erasure lands between the read and the write', async () => {
+    let armed = false;
+    const eraseOnce = async () => {
+      if (!armed) return;
+      armed = false;
+      await prisma.student.update({
+        where: { id: STUDENT },
+        data: { fullName: null, ...ERASED },
+      });
+    };
+    const { service } = await serviceWith({
+      student: { fullName: 'Asha' },
+      client: afterEachStudentRead(eraseOnce),
+    });
+    const writes = [
+      () => service.update(STUDENT, { fullName: 'Asha Rani' }),
+      () => service.setActive(STUDENT, true),
+      () => service.setTestBlocked(STUDENT, true),
+    ];
+
+    for (const write of writes) {
+      await prisma.student.update({ where: { id: STUDENT }, data: { deletedAt: null } });
+      armed = true;
+      await assert.rejects(write);
+      const kept = await row();
+      assert.deepEqual([kept.fullName, kept.isActive, kept.isTestBlocked], [null, false, false]);
+    }
+  });
+});
+
+describe('StudentsService.update — an exam added again is told again', () => {
+  const enrolmentNotices = () => prisma.notification.count({ where: { studentId: STUDENT } });
+
+  /** The failure this prevents: a key naming the exam, so the second enrolment was swallowed as a replay of the first. */
+  it('tells the student each time an exam is added, and not when a save adds none', async () => {
+    const { service } = await serviceWith({ student: { enrolledExams: [] } });
+
+    await service.update(STUDENT, { enrolledExams: ['SSC CGL'] });
+    await service.update(STUDENT, { enrolledExams: ['SSC CGL'] });
+    assert.equal(await enrolmentNotices(), 1, 'saved again with nothing added');
+
+    await service.update(STUDENT, { enrolledExams: [] });
+    await service.update(STUDENT, { enrolledExams: ['SSC CGL'] });
+    assert.equal(await enrolmentNotices(), 2, 'taken off and added again');
   });
 });
 
@@ -716,7 +821,39 @@ describe('StudentsService — driven live, the diff an admin edit contributes', 
       service.update(STUDENT, { fullName: 'Asha Rani', profile: { motherName: 'Lakshmi' } }),
     );
 
-    assert.deepEqual(changed, { fullName: { from: 'Asha', to: 'Asha Rani' } });
+    assert.deepEqual(Object.keys(changed ?? {}).sort(), ['fullName', 'motherName']);
+  });
+
+  /** The log outlives an erasure, so it says a personal field moved and never what it holds. */
+  it('names each profile field that moved, and carries none of their values', async () => {
+    const { service, auditContext } = await serviceWith();
+    await prisma.studentProfile.create({
+      data: { studentId: STUDENT, motherName: 'Lakshmi', email: 'asha@example.com' },
+    });
+    const profile = {
+      motherName: 'Lakshmi',
+      fatherName: 'Ravi',
+      dob: '2004-05-01',
+      email: null,
+      address: '12 Tank Bund Road',
+      gender: 'FEMALE' as const,
+    };
+
+    const changed = await diffOf(auditContext, () => service.update(STUDENT, { profile }));
+    const again = await diffOf(auditContext, () => service.update(STUDENT, { profile }));
+
+    assert.deepEqual(Object.keys(changed ?? {}).sort(), [
+      'address',
+      'dob',
+      'email',
+      'fatherName',
+      'gender',
+    ]);
+    const logged = JSON.stringify(changed);
+    for (const value of ['Ravi', '2004', 'asha@example.com', 'Tank Bund', 'FEMALE']) {
+      assert.ok(!logged.includes(value), `${value} must not reach the audit log`);
+    }
+    assert.equal(again, null);
   });
 
   /** Re-activating an active student once filed a change from true to true — a row asserting nothing happened. */
@@ -893,6 +1030,41 @@ describe('StudentsService.changeMobile — who they sign in as', () => {
       detail.formerMobiles.map((former) => former.mobile),
       [NEW, OLD],
     );
+  });
+
+  /** The failure this prevents: the number they sign in with now, listed beside itself as a previous one. */
+  it('leaves the number they hold now out of their previous ones after a change back', async () => {
+    const { service } = await serviceWith({ student: { mobile: OLD } });
+    await service.changeMobile(STUDENT, NEW, ADMIN);
+
+    const detail = await service.changeMobile(STUDENT, OLD, ADMIN);
+
+    assert.deepEqual(
+      detail.formerMobiles.map((former) => former.mobile),
+      [NEW],
+    );
+    const found = await service.list(searchFor(NEW));
+    assert.deepEqual(
+      found.items.map((item) => item.id),
+      [STUDENT],
+    );
+  });
+
+  /** The mobile field and the importer read a prefix off; a number pasted into the search box is the same number. */
+  it('finds a student by their number however its prefix and spacing were pasted', async () => {
+    const { service } = await serviceWith({ student: { mobile: OLD, fullName: 'Asha Rani' } });
+    await makeStudent(prisma, { mobile: '9000000002', fullName: 'Bala' });
+    const idsFor = async (q: string) =>
+      (await service.list(searchFor(q))).items.map((item) => item.id);
+
+    for (const pasted of [`+91${OLD}`, `+91 ${OLD}`, `91${OLD}`, `0${OLD}`, '98765 43210']) {
+      assert.deepEqual(await idsFor(pasted), [STUDENT], pasted);
+    }
+    assert.deepEqual(await idsFor('asha 98765'), [STUDENT], 'a name and part of a number');
+    assert.deepEqual(await idsFor('6543'), [STUDENT], 'part of a number');
+
+    await service.changeMobile(STUDENT, NEW, ADMIN);
+    assert.deepEqual(await idsFor(`+91 ${OLD}`), [STUDENT], 'a previous number, with its prefix');
   });
 
   it('refuses a number a live student signs in with, and their own, and moves nothing', async () => {

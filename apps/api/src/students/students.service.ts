@@ -13,6 +13,7 @@ import {
   readinessOf,
   type EnrolmentStanding,
   type ExamCourse,
+  type FieldDiff,
   type Gender,
   type CreateStudentBody,
   type Paginated,
@@ -62,6 +63,17 @@ export const AUDITED_STUDENT_FIELDS = [
   'isActive',
   'isTestBlocked',
 ] as const;
+
+/** The profile columns the same save writes. Each is personal, so the diff names the field and withholds what it holds. */
+const AUDITED_PROFILE_FIELDS = [
+  'motherName',
+  'fatherName',
+  'dob',
+  'email',
+  'address',
+  'gender',
+] as const;
+const WITHHELD = '[withheld]';
 
 /** The single column each toggle route moves — the same `fieldDiff` definition of "changed". */
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
@@ -179,10 +191,9 @@ export class StudentsService {
     return {
       ...this.toSummary(student, own > 0),
       events: student.eventCandidacies.map((candidacy) => candidacy.event),
-      formerMobiles: student.mobileHistory.map((row) => ({
-        mobile: row.mobile,
-        replacedAt: row.createdAt.toISOString(),
-      })),
+      formerMobiles: student.mobileHistory
+        .filter((row) => row.mobile !== student.mobile)
+        .map((row) => ({ mobile: row.mobile, replacedAt: row.createdAt.toISOString() })),
       currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
       profile: student.profile ? await this.toProfileView(student.profile) : null,
@@ -266,19 +277,23 @@ export class StudentsService {
       input.currentBranchId ?? null,
     );
 
-    const student = await this.prisma.student.create({
-      data: {
-        mobile: input.mobile,
-        fullName: input.fullName ?? null,
-        studentType: input.studentType,
-        enrolledExams: input.enrolledExams ?? [],
-        enrolledCourses: input.enrolledCourses ?? [],
-        programs: input.programs ?? [],
-        currentBranchId,
-      },
-    });
-
-    return this.detail(student.id);
+    const data = {
+      mobile: input.mobile,
+      fullName: input.fullName ?? null,
+      studentType: input.studentType,
+      enrolledExams: input.enrolledExams ?? [],
+      enrolledCourses: input.enrolledCourses ?? [],
+      programs: input.programs ?? [],
+      currentBranchId,
+    };
+    try {
+      const student = await this.prisma.student.create({ data, select: { id: true } });
+      return await this.detail(student.id);
+    } catch (error) {
+      // The number went between the check above and this write; the live-unique index chose.
+      if (isUniqueViolation(error)) throw mobileTaken();
+      throw error;
+    }
   }
 
   /** Every target a patch names has to still be usable before any of it is written. */
@@ -338,8 +353,7 @@ export class StudentsService {
 
   /** A patch: an omitted key is left alone, an explicit null clears the field. */
   async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
-    const student = await this.prisma.student.findFirst({ where: { id } });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    const student = await this.requireLive(id);
 
     await this.assertPatchUsable(student, input);
     const currentBranchId = await this.branchAfter(student, input);
@@ -367,7 +381,11 @@ export class StudentsService {
     const before = auditFieldsOf(student);
     // The save and the word to the student commit together, so a crash cannot leave one without the other.
     const updated = await this.prisma.$transaction(async (tx) => {
-      const row = await tx.student.update({ where: { id }, data: updatedColumns });
+      const row = await tx.student.update({
+        where: { id, deletedAt: null },
+        data: updatedColumns,
+        include: { profile: true },
+      });
 
       // Only what was ADDED: an un-enrolment is not news, and the whole array is not what changed.
       const added = addedTo(before.enrolledExams, auditFieldsOf(row).enrolledExams);
@@ -377,21 +395,26 @@ export class StudentsService {
           type: NOTIFICATION_TYPE.ENROLLMENT_ADDED,
           title: 'You have been enrolled in a new exam',
           body: `Added: ${added.join(', ')}.`,
-          dedupeKey: `enrolment:${added.join(',')}`,
+          // Named for this write, not the exam: one taken off and added again is news again.
+          dedupeKey: `enrolment:${added.join(',')}:${row.updatedAt.toISOString()}`,
         });
       }
       return row;
     }, TX_LIMITS.SHORT);
 
-    const after = auditFieldsOf(updated);
-    this.auditContext.setChanged(fieldDiff(before, after, AUDITED_STUDENT_FIELDS));
+    const columns = fieldDiff(before, auditFieldsOf(updated), AUDITED_STUDENT_FIELDS);
+    const profile = profileChanges(student.profile, updated.profile);
+    this.auditContext.setChanged(columns || profile ? { ...columns, ...profile } : null);
 
     return this.detail(id);
   }
 
-  /** Confirms there is a student to act on, without reading anything about them. */
+  /** Confirms there is a live student to act on, without reading anything about them. */
   async assertExists(id: string): Promise<void> {
-    const student = await this.prisma.student.findUnique({ where: { id }, select: { id: true } });
+    const student = await this.prisma.student.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true },
+    });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
   }
 
@@ -400,28 +423,26 @@ export class StudentsService {
     return this.prisma.student.count({ where: { enrolledExams: { has: code } } });
   }
 
-  /** Points a profile at a stored document; a student who is not there is refused by the write itself. */
+  /** Points a profile at a stored document; a student who is gone or erased is refused by the write itself, and the file goes with the refusal. */
   async saveDocumentKey(id: string, column: ProfileDocumentColumn, key: string): Promise<void> {
     try {
       await this.prisma.student.update({
-        where: { id },
+        where: { id, deletedAt: null },
         data: { profile: { upsert: { create: { [column]: key }, update: { [column]: key } } } },
       });
     } catch (error) {
-      if (isRecordNotFound(error)) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-      throw error;
+      if (!isRecordNotFound(error)) throw error;
+      // Uploaded before this write, and now nothing points at it: an erasure that already ran will not come back for it.
+      await this.storage.remove(key);
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
     }
   }
 
   /** Deactivation is reversible and keeps history; there is no hard delete. */
   async setActive(id: string, isActive: boolean): Promise<StudentDetail> {
-    const student = await this.prisma.student.findUnique({
-      where: { id },
-      select: { id: true, isActive: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    const student = await this.requireLive(id);
 
-    await this.prisma.student.update({ where: { id }, data: { isActive } });
+    await this.prisma.student.update({ where: { id, deletedAt: null }, data: { isActive } });
     this.auditContext.setChanged(
       fieldDiff(student, { ...student, isActive }, AUDITED_ACTIVE_FIELDS),
     );
@@ -432,12 +453,7 @@ export class StudentsService {
 
   /** Who they sign in as. The old number is kept to find them by, and every session they held ends. */
   async changeMobile(id: string, mobile: string, changedById: string): Promise<StudentDetail> {
-    // Live only: an erased student's tombstone is not a number to move.
-    const student = await this.prisma.student.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true, mobile: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    const student = await this.requireLive(id);
     if (student.mobile === mobile) {
       throw new AppException(ErrorCodes.CONFLICT, 'That is already their mobile number', {
         fieldErrors: { [MOBILE_FIELD]: ['Already their number'] },
@@ -476,13 +492,9 @@ export class StudentsService {
 
   /** Sign-in is untouched: they keep their history and their session, and cannot start a test. */
   async setTestBlocked(id: string, isTestBlocked: boolean): Promise<StudentDetail> {
-    const student = await this.prisma.student.findFirst({
-      where: { id },
-      select: { id: true, isTestBlocked: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    const student = await this.requireLive(id);
 
-    await this.prisma.student.update({ where: { id }, data: { isTestBlocked } });
+    await this.prisma.student.update({ where: { id, deletedAt: null }, data: { isTestBlocked } });
     this.auditContext.setChanged(
       fieldDiff(student, { ...student, isTestBlocked }, AUDITED_TEST_BLOCKED_FIELDS),
     );
@@ -492,6 +504,16 @@ export class StudentsService {
   // ==========================================================================
   // Internals
   // ==========================================================================
+
+  /** Where every write to one student starts: an erased student's tombstone takes no more of them. */
+  private async requireLive(id: string) {
+    const student = await this.prisma.student.findFirst({
+      where: { id, deletedAt: null },
+      include: { profile: true },
+    });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    return student;
+  }
 
   /** `mobile` is unique only among live rows, so this is a filtered read, not a lookup by key. */
   private findLiveByMobile(
@@ -583,6 +605,24 @@ function auditFieldsOf(row: AuditedStudentColumns): AuditedStudentColumns {
     isActive: row.isActive,
     isTestBlocked: row.isTestBlocked,
   };
+}
+
+type AuditedProfileColumns = Partial<Record<(typeof AUDITED_PROFILE_FIELDS)[number], unknown>>;
+
+/** Which profile fields a save moved — set, cleared or changed — and never a value: the audit log outlives an erasure. */
+export function profileChanges(
+  before: AuditedProfileColumns | null,
+  after: AuditedProfileColumns | null,
+): FieldDiff | null {
+  const moved = fieldDiff(before, after ?? {}, AUDITED_PROFILE_FIELDS);
+  if (!moved) return null;
+  const withheld = (value: unknown) => (value === null ? null : WITHHELD);
+  return Object.fromEntries(
+    Object.entries(moved).map(([field, { from, to }]) => [
+      field,
+      { from: withheld(from), to: withheld(to) },
+    ]),
+  );
 }
 
 function addedTo(before: string[], after: string[]): string[] {

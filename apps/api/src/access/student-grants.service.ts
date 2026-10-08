@@ -39,6 +39,9 @@ const GRANT_COLUMNS: ExportColumn<GrantRow>[] = [
   { header: 'Granted by', width: 28, value: (row) => row.grantedBy },
 ];
 
+/** What a grant or a revoke files against the student: the series it gave or took, by name. */
+const SERIES_FIELD = 'series';
+
 export const BLOCKED_GRANT_MESSAGE =
   'That student is blocked from tests. Lift the block before granting them a series.';
 
@@ -116,7 +119,7 @@ export class StudentGrantsService {
 
     const series = await this.prisma.testSeries.findUnique({
       where: { id: input.testSeriesId },
-      select: { id: true },
+      select: { name: true },
     });
     if (!series) {
       const message = 'No such series';
@@ -125,49 +128,51 @@ export class StudentGrantsService {
       });
     }
 
-    const key = { studentId, testSeriesId: input.testSeriesId };
-    // One transaction, so the read that decides "is this new" cannot lose a race with a second grant.
-    await this.prisma.$transaction(async (tx) => {
-      const already = await tx.studentGrant.findUnique({
-        where: { studentId_testSeriesId: key },
-        select: { testSeriesId: true },
+    const granted = await this.prisma.$transaction(async (tx) => {
+      // Granting twice is not an error, and the insert itself says whether this one was new: two landing together write one row.
+      const [made] = await tx.studentGrant.createManyAndReturn({
+        data: [{ studentId, testSeriesId: input.testSeriesId, createdById }],
+        skipDuplicates: true,
+        select: { createdAt: true },
       });
-
-      // Granting twice is not an error: the roster it came from is often re-read.
-      await tx.studentGrant.upsert({
-        where: { studentId_testSeriesId: key },
-        create: { ...key, createdById },
-        update: {},
-      });
+      if (!made) return false;
 
       // Only what the grant CHANGED is told: re-reading a roster must not ring the bell again.
-      if (!already) {
-        await this.notifications.tell(tx, {
-          studentId,
-          type: NOTIFICATION_TYPE.GRANT_ADDED,
-          title: 'A test series was added to your account',
-          body: 'Your institute has given you access to it.',
-          dedupeKey: `grant:${input.testSeriesId}`,
-          testSeriesId: input.testSeriesId,
-        });
-      }
+      await this.notifications.tell(tx, {
+        studentId,
+        type: NOTIFICATION_TYPE.GRANT_ADDED,
+        title: 'A test series was added to your account',
+        body: 'Your institute has given you access to it.',
+        // Named for this grant row, not the series: one taken back and granted again is news again.
+        dedupeKey: `grant:${input.testSeriesId}:${made.createdAt.toISOString()}`,
+        testSeriesId: input.testSeriesId,
+      });
+      return true;
     }, TX_LIMITS.SHORT);
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
     this.auditContext.setEntityId(studentId);
+    if (granted) this.auditContext.setChanged({ [SERIES_FIELD]: { from: null, to: series.name } });
   }
 
   async revoke(studentId: string, testSeriesId: string): Promise<void> {
     await this.requireStudent(studentId);
 
-    await this.prisma.studentGrant.deleteMany({ where: { studentId, testSeriesId } });
+    const taken = await this.prisma.studentGrant.deleteMany({ where: { studentId, testSeriesId } });
 
     this.auditContext.setEntityId(studentId);
+    if (taken.count === 0) return;
+    const series = await this.prisma.testSeries.findUnique({
+      where: { id: testSeriesId },
+      select: { name: true },
+    });
+    this.auditContext.setChanged({ [SERIES_FIELD]: { from: series?.name ?? null, to: null } });
   }
 
+  /** Live only: an erased student's tombstone is granted nothing and has nothing taken back. */
   private async requireStudent(id: string): Promise<{ isTestBlocked: boolean }> {
     const student = await this.prisma.student.findFirst({
-      where: { id },
+      where: { id, deletedAt: null },
       select: { isTestBlocked: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');

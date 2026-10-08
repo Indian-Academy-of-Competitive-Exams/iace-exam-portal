@@ -10,6 +10,7 @@ import { StorageService } from '../storage/storage.service';
 import { anonymizedProfile, anonymizedStudent } from './anonymize';
 
 const NO_STUDENT = 'No such student';
+const ALREADY_ERASED = 'That student has already been erased';
 
 /** The two columns that hold an S3 key rather than a value, and so outlive the row unless removed. */
 type DocumentKeys = { photoUrl: string | null; tenthMarksheetUrl: string | null };
@@ -33,16 +34,19 @@ export class StudentPrivacyService {
       },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_STUDENT);
-    if (student.anonymizedAt) {
-      throw new AppException(ErrorCodes.CONFLICT, 'That student has already been erased');
-    }
+    if (student.anonymizedAt) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ERASED);
 
     // Before the row, never after: an erasure that answered success must not have left the files behind.
     await this.forgetDocuments(student.profile);
 
     const at = new Date();
     const attemptsKept = await this.prisma.$transaction(async (tx) => {
-      await tx.student.update({ where: { id: studentId }, data: anonymizedStudent(at) });
+      // Guarded by what was read, so of two erasures landing together one writes and one is refused.
+      const erased = await tx.student.updateMany({
+        where: { id: studentId, anonymizedAt: null },
+        data: anonymizedStudent(at),
+      });
+      if (erased.count === 0) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ERASED);
       await tx.studentProfile.updateMany({ where: { studentId }, data: anonymizedProfile() });
       // An old number names them as surely as the current one does.
       await tx.studentMobileHistory.deleteMany({ where: { studentId } });

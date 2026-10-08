@@ -1,5 +1,10 @@
 import { Prisma } from '@prisma/client';
-import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
+import {
+  STUDENT_SORTS,
+  normaliseMobile,
+  type StudentListQuery,
+  type StudentSort,
+} from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
 import { everyTermMatches, termsOf } from '../common/search-terms';
 import { HOLDS_OWN_ACCESS } from './own-access';
@@ -11,12 +16,18 @@ export type FormerHolders = ReadonlyMap<string, string[]>;
 const NOBODY: FormerHolders = new Map();
 const FULL_MOBILE = /^\d{10}$/;
 
+/** A whole number pasted with its prefix or spacing is the one term the mobile field would have stored. */
+function searchOf(search: string | undefined): string | undefined {
+  const mobile = normaliseMobile(search ?? '');
+  return FULL_MOBILE.test(mobile) ? mobile : search;
+}
+
 /** Read ahead of the roster query: as ids, an old number costs the search none of its own indexes. */
 export async function formerHoldersOf(
   prisma: Pick<Prisma.TransactionClient, 'studentMobileHistory'>,
   search: string | undefined,
 ): Promise<FormerHolders> {
-  const numbers = termsOf(search).filter((term) => FULL_MOBILE.test(term));
+  const numbers = termsOf(searchOf(search)).filter((term) => FULL_MOBILE.test(term));
   if (numbers.length === 0) return NOBODY;
 
   const rows = await prisma.studentMobileHistory.findMany({
@@ -59,7 +70,7 @@ export function studentWhere(
 
   if (query.q?.trim()) {
     always.push(
-      everyTermMatches<Prisma.StudentWhereInput>(query.q, (term) => [
+      everyTermMatches<Prisma.StudentWhereInput>(searchOf(query.q), (term) => [
         { mobile: { contains: term } },
         { fullName: { contains: term, mode: 'insensitive' } },
         ...(formerHolders.has(term) ? [{ id: { in: formerHolders.get(term) } }] : []),

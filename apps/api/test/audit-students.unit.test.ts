@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { fieldDiff, STUDENT_TYPE } from '@iace/contracts';
-import { AUDITED_STUDENT_FIELDS } from '../src/students/students.service';
+import { AUDITED_STUDENT_FIELDS, profileChanges } from '../src/students/students.service';
 
 /** The audited columns of one student, as the service reads the row before a write. */
 const student = {
@@ -38,5 +38,20 @@ describe('the student audit diff', () => {
   /** A save that changed nothing must write no diff, or the log fills with empty rows. */
   it('reports nothing for a save that changed nothing', () => {
     assert.equal(fieldDiff(student, { ...student }, AUDITED_STUDENT_FIELDS as never), null);
+  });
+
+  /** The log outlives an erasure, so a personal field is named as moved and what it held is not written. */
+  it('names a profile field that was set, changed or cleared, and withholds its value', () => {
+    const before = { motherName: 'Lakshmi', dob: new Date('2004-05-01'), email: 'a@iace.test' };
+    const after = { motherName: 'Lakshmi', dob: new Date('2004-05-02'), gender: 'FEMALE' };
+
+    const diff = profileChanges(before, { ...after, email: null });
+
+    assert.deepEqual(Object.keys(diff ?? {}).sort(), ['dob', 'email', 'gender']);
+    assert.equal(diff?.email?.to, null);
+    assert.equal(diff?.gender?.from, null);
+    assert.doesNotMatch(JSON.stringify(diff), /2004|iace\.test|FEMALE/);
+    assert.equal(profileChanges(before, before), null);
+    assert.equal(profileChanges(null, null), null);
   });
 });
