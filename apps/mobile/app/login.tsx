@@ -177,8 +177,10 @@ function CodeStep({
         <Alert>Development sender. Your code is {challenge.devCode}</Alert>
       ) : null}
 
+      {/* One request at a time: an answer to one the student moved on from would still sign in, or pull the step back. */}
       <Button
         loading={verify.isPending}
+        disabled={again.isPending}
         onPress={form.handleSubmit((values) => verify.mutate(values))}
       >
         Sign in
@@ -187,23 +189,29 @@ function CodeStep({
       <Button
         variant="ghost"
         size="sm"
-        disabled={!again.canResend}
+        disabled={!again.canResend || verify.isPending}
         loading={again.isPending}
         onPress={again.resend}
       >
         {again.label}
       </Button>
 
-      <BackButton onPress={onBack}>Use a different number</BackButton>
+      <BackButton disabled={verify.isPending || again.isPending} onPress={onBack}>
+        Use a different number
+      </BackButton>
     </View>
   );
 }
 
 // ---------------------------------------------------------------------------
 
-function BackButton({ onPress, children }: Readonly<{ onPress: () => void; children: string }>) {
+function BackButton({
+  onPress,
+  disabled,
+  children,
+}: Readonly<{ onPress: () => void; disabled?: boolean; children: string }>) {
   return (
-    <Button variant="ghost" size="sm" onPress={onPress}>
+    <Button variant="ghost" size="sm" disabled={disabled} onPress={onPress}>
       {children}
     </Button>
   );

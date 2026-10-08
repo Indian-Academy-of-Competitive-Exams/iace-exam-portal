@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createAppQueryClient } from '@iace/app-kit';
 import * as SplashScreen from 'expo-splash-screen';
+import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
 import { alertOnce } from '../src/lib/alert-once';
 import { hydrate } from '../src/lib/api';
 import { AuthProvider, useAuth } from '../src/providers/auth';
@@ -50,15 +51,38 @@ export default function RootLayout() {
   );
 }
 
+const WHOLE_SCREEN = 'flex-1 items-center justify-center bg-background px-6';
+
 /** Every route is registered under a guard; a route with no guard stays reachable either way. */
 function Navigation() {
-  const { identity, isLoading } = useAuth();
+  const { identity, isLoading, isUnreachable, retry } = useAuth();
   usePushDevice(Boolean(identity));
   const insets = useSafeAreaInsets();
   const pageColor = useTokenColor('--background');
   const headerColor = useTokenColor('--surface');
   const headerInk = useTokenColor('--foreground');
-  if (isLoading) return null;
+  const spinner = useTokenColor('--muted-foreground');
+
+  if (isLoading) {
+    return (
+      <View className={WHOLE_SCREEN}>
+        <ActivityIndicator color={spinner} />
+      </View>
+    );
+  }
+
+  // A session is held and the server did not answer: nobody signed out, so this is not the sign-in screen.
+  if (isUnreachable) {
+    return (
+      <View className={WHOLE_SCREEN}>
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.FAILURE}
+          title="Could not reach the server"
+          onRetry={retry}
+        />
+      </View>
+    );
+  }
 
   // A pushed page ends above the home indicator; the tab bar and the exam hold that space themselves.
   const page = {

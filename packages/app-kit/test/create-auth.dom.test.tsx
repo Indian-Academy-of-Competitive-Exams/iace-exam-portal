@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider, onlineManager, useQuery } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
@@ -9,7 +9,9 @@ import {
   type AuthIdentity,
   type AuthSessionResponse,
 } from '@iace/contracts';
-import { createAuth, type AuthState } from '../src/create-auth';
+import { createBrowserTokenStore } from '../browser';
+import { createAuth, SIGN_OUT_WAIT_MS, type AuthState } from '../src/create-auth';
+import { type SignOutReason, type SignOutSignal } from '../src/sign-out-signal';
 import { createTokenStore, type KeyValueStorage, type TokenStore } from '../src/token-store';
 import { fakeStorage } from './support/fake-storage';
 
@@ -142,14 +144,19 @@ const NO_SIGNAL = { emit: () => undefined, subscribe: () => () => undefined };
 const refusal = (httpStatus: number) => new AppException(ErrorCodes.INTERNAL, 'x', { httpStatus });
 
 /** A session whose identity read the test answers, and the state a screen is handed for it. */
-function sessionAnswering(me: () => Promise<AuthIdentity>, store: TokenStore) {
+function sessionAnswering(
+  me: () => Promise<AuthIdentity>,
+  store: TokenStore,
+  logout: () => Promise<void> = () => Promise.resolve(),
+  signOutSignal: SignOutSignal = NO_SIGNAL,
+) {
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
   const auth = createAuth<AuthIdentity>({
     actor: 'STUDENT',
     queryKey: ['auth', 'me'],
     tokenStore: store,
-    signOutSignal: NO_SIGNAL,
-    endpoints: { me, logout: () => Promise.resolve() },
+    signOutSignal,
+    endpoints: { me, logout },
   });
   let state: AuthState<AuthIdentity> | undefined;
   function Probe() {
@@ -226,6 +233,119 @@ describe('a session whose server does not answer', () => {
 
     assert.equal(read().identity, null);
     assert.equal(read().isUnreachable, false);
+  });
+});
+
+const student = () => Promise.resolve({ actor: 'STUDENT' } as AuthIdentity);
+const unanswered = () => new Promise<never>(() => undefined);
+
+describe('signing out', () => {
+  /** The failure this prevents: a phone with no signal left on a signed-in screen after Sign out was confirmed. */
+  it('clears the device once the wait runs out on a server that never answers', async (t) => {
+    // Mocked before anything mounts: a real timer set earlier could not be cleared under the mock.
+    mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => mock.timers.reset());
+    const store = heldToken('iace.test.hung');
+    const read = sessionAnswering(unanswered, store, unanswered);
+
+    const signedOut = read().signOut();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.notEqual(store.get(), null, 'the server is given its chance to answer first');
+
+    await act(async () => {
+      mock.timers.tick(SIGN_OUT_WAIT_MS);
+      await signedOut;
+    });
+
+    assert.equal(store.get(), null);
+    assert.equal(read().isLoading, false);
+  });
+
+  it('clears the device when the server refuses the sign-out', async () => {
+    const store = heldToken('iace.test.refused-out');
+    const read = sessionAnswering(student, store, () => Promise.reject(refusal(401)));
+    await waitFor(() => assert.equal(read().identity?.actor, 'STUDENT'));
+
+    await act(() => read().signOut());
+
+    assert.equal(store.get(), null);
+    assert.equal(read().identity, null);
+  });
+});
+
+const tokens = { accessToken: 'a', refreshToken: 'r', expiresInSec: 900 };
+const heardEmptied = (key: string) => window.dispatchEvent(new StorageEvent('storage', { key }));
+
+describe('a session another browser replaced', () => {
+  /** The failure this prevents: the tab the server did not tell landing on sign-in with no word of why. */
+  it('says why in a tab that only heard the store empty', async () => {
+    const KEY = 'iace.test.replaced';
+    const store = createBrowserTokenStore(KEY);
+    store.set(tokens);
+    const read = sessionAnswering(student, store);
+    await waitFor(() => assert.equal(read().identity?.actor, 'STUDENT'));
+
+    act(() => {
+      createBrowserTokenStore(KEY).clear({ replacedBy: 'MOBILE' });
+      heardEmptied(KEY);
+    });
+
+    assert.equal(read().identity, null);
+    assert.deepEqual(read().signedOutReason, { replacedBy: 'MOBILE' });
+  });
+
+  /** A tab that missed the write learns from its own next request, which has no token left to be told why. */
+  it('says why in a tab whose own request found the store already emptied', async () => {
+    const KEY = 'iace.test.late';
+    const store = createBrowserTokenStore(KEY);
+    store.set(tokens);
+    const heard = new Set<(reason?: SignOutReason) => void>();
+    const signal: SignOutSignal = {
+      emit: (reason) => heard.forEach((handler) => handler(reason)),
+      subscribe: (handler) => {
+        heard.add(handler);
+        return () => heard.delete(handler);
+      },
+    };
+    const read = sessionAnswering(student, store, undefined, signal);
+    await waitFor(() => assert.equal(read().identity?.actor, 'STUDENT'));
+
+    createBrowserTokenStore(KEY).clear({ replacedBy: 'MOBILE' });
+    act(() => signal.emit());
+
+    assert.equal(read().identity, null);
+    assert.deepEqual(read().signedOutReason, { replacedBy: 'MOBILE' });
+  });
+
+  it('still says why after a reload, and stops once someone signs in', () => {
+    const KEY = 'iace.test.reloaded';
+    createBrowserTokenStore(KEY).clear({ replacedBy: 'WEB' });
+
+    const read = sessionAnswering(student, createBrowserTokenStore(KEY));
+    assert.deepEqual(read().signedOutReason, { replacedBy: 'WEB' });
+
+    act(() => read().signIn({ tokens, identity: { actor: 'STUDENT' } } as AuthSessionResponse));
+
+    assert.equal(read().signedOutReason, null);
+    assert.equal(createBrowserTokenStore(KEY).endedBy?.(), null);
+  });
+
+  it('gives no reason for a sign-out made by choice in another tab', async () => {
+    const KEY = 'iace.test.chosen';
+    const store = createBrowserTokenStore(KEY);
+    store.set(tokens);
+    const read = sessionAnswering(student, store);
+    await waitFor(() => assert.equal(read().identity?.actor, 'STUDENT'));
+
+    act(() => {
+      createBrowserTokenStore(KEY).clear();
+      heardEmptied(KEY);
+    });
+
+    assert.equal(read().identity, null);
+    assert.equal(read().signedOutReason, null);
   });
 });
 

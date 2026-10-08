@@ -1,3 +1,4 @@
+import { clientKindSchema } from '@iace/contracts';
 import {
   createTokenStore,
   type KeyValueStorage,
@@ -38,8 +39,32 @@ export const browserSignOutSignal: SignOutSignal = {
 
 /** The token store every web SPA wants, with only its storage key to choose. */
 export function createBrowserTokenStore(storageKey: string): TokenStore {
+  const held = createTokenStore(storageKey, browserStorage);
+  const reasonKey = `${storageKey}.ended`;
+
   return {
-    ...createTokenStore(storageKey, browserStorage),
+    ...held,
+    set: (tokens) => {
+      held.set(tokens);
+      browserStorage.removeItem(reasonKey);
+    },
+    // The reason is written first: another tab reads it the moment it hears the token go.
+    clear: (reason) => {
+      try {
+        if (reason) browserStorage.setItem(reasonKey, reason.replacedBy ?? '');
+      } catch {
+        // A storage that will not take the reason must still let go of the token.
+      }
+      held.clear();
+    },
+    endedBy: () => {
+      try {
+        const kind = browserStorage.getItem(reasonKey);
+        return kind === null ? null : { replacedBy: clientKindSchema.safeParse(kind).data ?? null };
+      } catch {
+        return null;
+      }
+    },
     // The storage event reaches every tab but the one that wrote; a null key is the whole storage cleared.
     subscribe: (onChange) => {
       const listener = (event: StorageEvent) => {

@@ -33,10 +33,14 @@ function coreOf(options: AppClientOptions): ApiClientOptions {
     headers: clientHeaders(client),
     getAccessToken: () => tokenStore.get()?.accessToken ?? null,
     getRefreshToken: () => tokenStore.get()?.refreshToken ?? null,
-    onTokensRefreshed: (tokens) => tokenStore.set(tokens),
+    // A refresh answered after the session was cleared here must not put one back.
+    onTokensRefreshed: (tokens) => {
+      if (tokenStore.get() !== null) tokenStore.set(tokens);
+    },
     onUnauthorized: (cause) => {
-      tokenStore.clear();
-      signOutSignal.emit(signOutReasonOf(cause));
+      const reason = signOutReasonOf(cause);
+      tokenStore.clear(reason);
+      signOutSignal.emit(reason);
     },
   };
 }

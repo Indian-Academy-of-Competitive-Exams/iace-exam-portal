@@ -184,7 +184,8 @@ function CodeStep({
           </Alert>
         ) : null}
 
-        <Button type="submit" loading={verify.isPending}>
+        {/* One request at a time: an answer to one the student moved on from would still sign in, or pull the step back. */}
+        <Button type="submit" loading={verify.isPending} disabled={again.isPending}>
           Sign in
         </Button>
 
@@ -192,14 +193,16 @@ function CodeStep({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={!again.canResend}
+          disabled={!again.canResend || verify.isPending}
           loading={again.isPending}
           onClick={again.resend}
         >
           {again.label}
         </Button>
 
-        <BackButton onClick={onBack}>Use a different number</BackButton>
+        <BackButton disabled={verify.isPending || again.isPending} onClick={onBack}>
+          Use a different number
+        </BackButton>
       </form>
     </CardStep>
   );
@@ -243,10 +246,11 @@ function MobileField<TValues extends FieldValues>({
 
 function BackButton({
   onClick,
+  disabled,
   children,
-}: Readonly<{ onClick: () => void; children: React.ReactNode }>) {
+}: Readonly<{ onClick: () => void; disabled?: boolean; children: React.ReactNode }>) {
   return (
-    <Button type="button" variant="ghost" size="sm" onClick={onClick}>
+    <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onClick}>
       <ArrowLeft aria-hidden />
       {children}
     </Button>

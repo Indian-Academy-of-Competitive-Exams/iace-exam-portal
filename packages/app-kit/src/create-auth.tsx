@@ -52,6 +52,21 @@ function meRetryDelayMs(random: () => number = Math.random): number {
   return ME_RETRY_BASE_MS * (1 + random());
 }
 
+/** How long a sign-out waits on a best-effort call before this device is cleared regardless. */
+export const SIGN_OUT_WAIT_MS = 4_000;
+
+/** Settles when `work` does or the wait runs out, whichever is first, and never rejects: what follows goes ahead either way. */
+export function settledWithin(work: Promise<unknown>, waitMs: number): Promise<void> {
+  return new Promise((done) => {
+    const timer = setTimeout(done, waitMs);
+    const settled = () => {
+      clearTimeout(timer);
+      done();
+    };
+    work.then(settled, settled);
+  });
+}
+
 /** One session implementation for every SPA, parameterised by the identity type. */
 export function createAuth<TIdentity extends AuthIdentity, TExtra extends object = object>(
   options: CreateAuthOptions<TIdentity, TExtra>,
@@ -68,7 +83,9 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
 
     /** Whether a token exists, in React state — the store is outside React, so writing to it notifies nothing that renders. */
     const [hasToken, setHasToken] = useState(() => tokenStore.get() !== null);
-    const [signedOutReason, setSignedOutReason] = useState<SignOutReason | null>(null);
+    const [signedOutReason, setSignedOutReason] = useState<SignOutReason | null>(
+      () => tokenStore.endedBy?.() ?? null,
+    );
     /** How many times another tab has put a different person under this one; each remounts every screen. */
     const [swaps, setSwaps] = useState(0);
 
@@ -115,8 +132,11 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     useEffect(
       () =>
         tokenStore.subscribe?.(() => {
-          if (tokenStore.get() === null) forget();
-          else void adopt();
+          if (tokenStore.get() !== null) return void adopt();
+          // The tab the server told left why beside the emptied key, for the ones it did not.
+          const reason = tokenStore.endedBy?.();
+          if (reason) setSignedOutReason(reason);
+          forget();
         }),
       [forget, adopt],
     );
@@ -125,8 +145,10 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     useEffect(
       () =>
         signOutSignal.subscribe((reason) => {
+          // Told nothing itself, this tab reads what the one that was told left beside the emptied key.
+          const why = reason ?? tokenStore.endedBy?.();
           // A later sign-out with no reason must not erase why the first one happened.
-          if (reason) setSignedOutReason(reason);
+          if (why) setSignedOutReason(why);
           clearSession();
         }),
       [clearSession],
@@ -144,11 +166,8 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     );
 
     const signOut = useCallback(async () => {
-      try {
-        await endpoints.logout();
-      } catch {
-        // Already invalid server-side; clear locally anyway.
-      }
+      // Refused, failed or never answered, this device is cleared all the same.
+      await settledWithin(endpoints.logout(), SIGN_OUT_WAIT_MS);
       clearSession();
     }, [clearSession]);
 
