@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Trash2 } from 'lucide-react';
 import {
   FEATURE_KEYS,
@@ -30,6 +30,7 @@ import {
   ROUTES,
   TEST_SERIES_KIND_LABELS,
   TEST_SERIES_KIND_HINTS,
+  seriesQueryKey,
 } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import { ExamMultiPicker, ExamStageMultiPicker } from '../../components/exam-picker';
@@ -185,12 +186,17 @@ function BranchReach({ series }: Readonly<{ series: TestSeriesSummary }>) {
   );
 }
 
-/** Names what would refuse the delete, so the dialog is not a guess the server then corrects. */
-function deleteDescription(series: TestSeriesSummary): string {
-  if (series.testCount > 0) {
-    return `${plural(series.testCount, 'test')} are offered through ${series.name}, and deleting it would take away the only route to them, so the server will refuse. Move them to another series first.`;
+/** Names what would refuse the delete, or what goes with it, so the dialog is not a guess the server then corrects. */
+function deleteDescription({ name, testCount, grantCount }: TestSeriesSummary): string {
+  if (testCount > 0) {
+    const [are, them] = testCount === 1 ? ['is', 'it'] : ['are', 'them'];
+    return `${plural(testCount, 'test')} ${are} offered through ${name}, and deleting it would take away the only route to ${them}, so the server will refuse. Move ${them} to another series first.`;
   }
-  return `No test is offered through ${series.name}. It is still refused if another series waits on this one before it opens. Every branch's row for it goes with it, and this cannot be undone.`;
+  const grants =
+    grantCount > 0
+      ? ` ${plural(grantCount, 'student')} granted it directly ${grantCount === 1 ? 'loses' : 'lose'} that grant.`
+      : '';
+  return `No test is offered through ${name}.${grants} This cannot be undone.`;
 }
 
 function SeriesRowActions({
@@ -200,6 +206,14 @@ function SeriesRowActions({
 }: Readonly<{ series: TestSeriesSummary; canWrite: boolean; onChanged: () => void }>) {
   const [asking, setAsking] = useState(false);
   const close = () => setAsking(false);
+
+  // Read again as the dialog opens: the row's own counts are as old as the list.
+  const counted = useQuery({
+    queryKey: seriesQueryKey(series.id),
+    queryFn: () => api.admin.testSeries.detail(series.id),
+    enabled: asking,
+    staleTime: 0,
+  });
 
   const remove = useMutation({
     meta: { success: `${series.name} deleted.` },
@@ -233,9 +247,9 @@ function SeriesRowActions({
         open={asking}
         onOpenChange={(open) => !open && close()}
         destructive
-        loading={remove.isPending}
+        loading={remove.isPending || counted.isFetching}
         title={`Delete ${series.name}?`}
-        description={deleteDescription(series)}
+        description={deleteDescription(counted.data ?? series)}
         confirmLabel="Delete series"
         onConfirm={() => remove.mutate()}
       />

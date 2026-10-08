@@ -3,7 +3,7 @@ import { Pencil } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { AppException, EXPORT_KINDS, type TestSeriesDetail } from '@iace/contracts';
+import { AppException, ErrorCodes, EXPORT_KINDS, type TestSeriesDetail } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
@@ -115,6 +115,10 @@ function refusesTheForm(error: unknown): boolean {
   return fieldErrors !== undefined && SERVER_FIELDS.some((field) => fieldErrors[field]);
 }
 
+/** A branch toggle moves the series' stamp and none of these, so only a change to one of them makes the form stale. */
+const sameFormFields = (left: TestSeriesDetail, right: TestSeriesDetail): boolean =>
+  SERVER_FIELDS.every((field) => left[field] === right[field]);
+
 function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -124,13 +128,19 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
   const [tab, setTab] = useState<SeriesTab>(SERIES_TAB.DETAILS);
 
   const form = useForm<SeriesFormValues>({ defaultValues: valuesOf(detail) });
+  // The record the form's values were read from: a save built on an older one is the server's to refuse.
+  const [opened, setOpened] = useState(detail);
+  const fresh = detail && opened && sameFormFields(detail, opened) ? detail : opened;
 
   const save = useMutation({
     // Silent: the form's own banner and fields say what went wrong, so a toast would say it twice.
     meta: { silent: true },
     mutationFn: (values: SeriesFormValues) =>
       detail
-        ? api.admin.testSeries.update(detail.id, bodyOf(values))
+        ? api.admin.testSeries.update(detail.id, {
+            ...bodyOf(values),
+            expectedUpdatedAt: fresh?.updatedAt,
+          })
         : api.admin.testSeries.create(bodyOf(values)),
     onSuccess: async (saved) => {
       toast.success(existing ? 'Series saved.' : 'Series created.');
@@ -142,11 +152,16 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
       if (!existing) return navigate(ROUTES.TEST_SERIES_DETAIL(saved.id));
       // The saved values become the ones Cancel returns to; without this the next Save undoes this one.
       form.reset(valuesOf(saved));
+      setOpened(saved);
       setIsEditing(false);
     },
     onError: (error) => {
       applyFieldErrors(error, form.setError, SERVER_FIELDS);
       if (refusesTheForm(error)) setTab(SERIES_TAB.DETAILS);
+      // Refused as out of date: read it again, so Cancel returns to the series as it stands.
+      if (detail && AppException.is(error) && error.code === ErrorCodes.CONFLICT) {
+        void queryClient.invalidateQueries({ queryKey: seriesQueryKey(detail.id) });
+      }
     },
   });
 
@@ -160,6 +175,14 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
     save.reset();
     setStage(stageOf(detail));
     setIsEditing(false);
+  };
+
+  /** Editing starts from the series as it stands now, not as it was when the screen opened. */
+  const edit = () => {
+    form.reset(valuesOf(detail));
+    setStage(stageOf(detail));
+    setOpened(detail);
+    setIsEditing(true);
   };
 
   const title = seriesTitle(detail, isEditing);
@@ -221,7 +244,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesDetail | null }>)
                   />
                 ) : null}
                 {isEditing ? null : (
-                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Button variant="outline" size="sm" onClick={edit}>
                     <Pencil aria-hidden />
                     Edit series
                   </Button>

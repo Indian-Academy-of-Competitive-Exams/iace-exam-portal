@@ -46,10 +46,7 @@ export function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary 
 
   const enableEverywhere = useMutation({
     meta: { success: 'Switched on at every branch.' },
-    mutationFn: () =>
-      api.admin.testSeries.setBranches(series.id, {
-        branchIds: (branches.data ?? []).map((row) => row.id),
-      }),
+    mutationFn: () => api.admin.testSeries.setBranches(series.id, { everyBranch: true }),
     onSuccess: () => {
       setAskingAll(false);
       refresh();

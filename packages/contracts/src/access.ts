@@ -143,13 +143,19 @@ const testSeriesSchema = z.object({
   /** The event whose candidates are its roster. Required exactly when kind is EVENT. */
   eventId: z.string().nullable(),
   createdAt: z.string(),
+  /** Sent back as `expectedUpdatedAt`, so a save from a form opened before another edit is refused. */
+  updatedAt: z.string(),
 });
 export type TestSeries = z.infer<typeof testSeriesSchema>;
 
 /** The series as a list row: the stage it sits on and how many branches run it. */
 export const testSeriesSummarySchema = testSeriesSchema.extend({
   examStage: z.object({ id: z.string(), name: z.string(), examCode: z.string() }).nullable(),
+  /** Named here because the event picker lists active events only, and a series outlives that. */
+  eventName: z.string().nullable(),
   testCount: z.number().int(),
+  /** Direct grants, which a delete takes with the series. */
+  grantCount: z.number().int(),
   /** Branches with the series switched on, out of every branch it has a row for. */
   enabledBranchCount: z.number().int(),
   branchCount: z.number().int(),
@@ -207,7 +213,10 @@ export const createTestSeriesSchema = z.object({
 export type CreateTestSeriesInput = z.input<typeof createTestSeriesSchema>;
 export type CreateTestSeriesBody = z.infer<typeof createTestSeriesSchema>;
 
-export const updateTestSeriesSchema = createTestSeriesSchema.partial();
+export const updateTestSeriesSchema = createTestSeriesSchema.partial().extend({
+  /** The `updatedAt` the form opened on. A save that does not match it is refused, not merged. */
+  expectedUpdatedAt: z.string().optional(),
+});
 export type UpdateTestSeriesInput = z.input<typeof updateTestSeriesSchema>;
 export type UpdateTestSeriesBody = z.infer<typeof updateTestSeriesSchema>;
 
@@ -243,8 +252,11 @@ export const seriesBranchSchema = z.object({
 });
 export type SeriesBranch = z.infer<typeof seriesBranchSchema>;
 
-/** The whole list `branchIds` should hold from now on — what "switch on everywhere" sends. */
-export const updateSeriesBranchesSchema = z.object({ branchIds: z.array(z.string()) });
+/** Every branch there is, which only the server can name, or the whole list `branchIds` should hold. The flag is tried first, so it wins over a list sent beside it. */
+export const updateSeriesBranchesSchema = z.union([
+  z.object({ everyBranch: z.literal(true) }),
+  z.object({ branchIds: z.array(z.string()) }),
+]);
 export type UpdateSeriesBranchesInput = z.input<typeof updateSeriesBranchesSchema>;
 export type UpdateSeriesBranchesBody = z.infer<typeof updateSeriesBranchesSchema>;
 
@@ -476,7 +488,7 @@ export const ADMIN_SERIES_ROUTES = {
   detail: (id: string) => `/admin/test-series/${id}`,
   update: (id: string) => `/admin/test-series/${id}`,
   remove: (id: string) => `/admin/test-series/${id}`,
-  /** Read every branch and whether this series reaches it; PUT the whole `branchIds` list, PATCH one branch. */
+  /** Read every branch and whether this series reaches it; PUT every branch or a whole list, PATCH one branch. */
   branches: (id: string) => `/admin/test-series/${id}/branches`,
   /** The link, from the series' side. The tests module owns it — a test is offered THROUGH a series. */
   tests: (id: string) => `/admin/test-series/${id}/tests`,

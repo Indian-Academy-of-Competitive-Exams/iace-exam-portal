@@ -44,6 +44,7 @@ function KindTarget({
             value={eventId}
             clearable={false}
             placeholder="Choose an event"
+            selectedLabel={detail?.eventName ?? undefined}
             onChange={(value) => form.setValue('eventId', value, { shouldDirty: true })}
           />
         )}

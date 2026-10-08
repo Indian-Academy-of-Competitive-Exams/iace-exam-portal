@@ -193,6 +193,71 @@ describe('TestSeriesService — the whole branch list at once', () => {
   });
 });
 
+describe('TestSeriesService — switched on everywhere', () => {
+  /** The failure this prevents: the screen sent the list it held, and an unloaded one switched the series off everywhere. */
+  it('switches on every branch there is, including one the caller never listed', async () => {
+    const { series, auditContext } = build();
+    const [first, second] = [await makeBranch(prisma), await makeBranch(prisma)];
+    const created = await series.create(draft(await makeStage(prisma)));
+    await series.setBranches(created.id, { branchIds: [first.id] });
+
+    const { rows, logged } = await auditContext.run(async () => ({
+      rows: await series.setBranches(created.id, { everyBranch: true }),
+      logged: auditContext.current(),
+    }));
+
+    const on = new Set((await seriesRow(created.id)).branchIds);
+    assert.deepEqual(on, new Set([first.id, second.id]));
+    assert.ok(rows.every((row) => row.enabled));
+    assert.deepEqual(logged?.changed?.branchIds?.from, [first.id]);
+  });
+
+  it('refuses a series that is not STANDARD, and leaves its list empty', async () => {
+    const { series } = build();
+    await makeBranch(prisma);
+    const created = await series.create(draft(null, { kind: TEST_SERIES_KIND.FREE }));
+
+    const error = await refused(series.setBranches(created.id, { everyBranch: true }));
+
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.deepEqual((await seriesRow(created.id)).branchIds, []);
+  });
+});
+
+describe('TestSeriesService — a save from a stale form', () => {
+  /** The failure this prevents: a form opened before a rename put the old name back under "Series saved." */
+  it('is refused once the series has changed since the form opened, and the change stands', async () => {
+    const { series } = build();
+    const opened = await series.create(draft(await makeStage(prisma)));
+    await series.update(opened.id, { name: 'Renamed since' });
+
+    const error = await refused(
+      series.update(opened.id, {
+        name: opened.name,
+        sequentialTests: true,
+        expectedUpdatedAt: opened.updatedAt,
+      }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    const stored = await seriesRow(opened.id);
+    assert.deepEqual([stored.name, stored.sequentialTests], ['Renamed since', false]);
+  });
+
+  it('lands when the form holds the series as it stands', async () => {
+    const { series } = build();
+    const opened = await series.create(draft(await makeStage(prisma)));
+
+    const saved = await series.update(opened.id, {
+      sequentialTests: true,
+      expectedUpdatedAt: opened.updatedAt,
+    });
+
+    assert.equal(saved.sequentialTests, true);
+    assert.notEqual(saved.updatedAt, opened.updatedAt);
+  });
+});
+
 /** `branchIds` carries no foreign key, so a deleted branch stays on the list until the series is next written. */
 describe('TestSeriesService — a branch deleted from under a series', () => {
   it('counts and lists only the branches that are still there', async () => {

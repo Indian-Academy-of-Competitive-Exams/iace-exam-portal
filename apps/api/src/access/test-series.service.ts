@@ -26,6 +26,7 @@ import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
 import { everyTermMatches } from '../common/search-terms';
 import { byOrderThenId } from '../common/series-order';
+import { formRefusal } from '../common/form-refusal';
 
 /** What the four CHECKs on `TestSeries` refuse, in the words the form uses for the fields. */
 const KIND_PAIRING_MESSAGES = {
@@ -42,6 +43,9 @@ const KIND_PAIRING_MESSAGES = {
 } as const;
 
 const SERIES_NAME_TAKEN = 'Another series already goes by that name.';
+
+const SERIES_CHANGED_ELSEWHERE =
+  'This series changed after you opened it. Reload it to see what changed before saving.';
 
 const branchesAreStandardOnly = (count: number) =>
   `Only a standard series reaches students branch by branch. This one is switched on at ${count} ${count === 1 ? 'branch' : 'branches'} and carries a branch list no other kind can hold, so its kind cannot change.`;
@@ -61,7 +65,8 @@ const opensOutOfOrder = (later: string, earlier: string) =>
 
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
-  _count: { select: { tests: true } },
+  event: { select: { name: true } },
+  _count: { select: { tests: true, grants: true } },
 } as const satisfies Prisma.TestSeriesInclude;
 
 type SeriesRow = Prisma.TestSeriesGetPayload<{ include: typeof SERIES_INCLUDE }>;
@@ -186,6 +191,10 @@ export class TestSeriesService {
 
   async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesDetail> {
     const series = await this.requireSeries(id);
+    const opened = input.expectedUpdatedAt;
+    if (opened !== undefined && opened !== series.updatedAt.toISOString()) {
+      throw formRefusal(ErrorCodes.CONFLICT, SERIES_CHANGED_ELSEWHERE);
+    }
     await this.assertTargetsUsable(input, series);
     if (input.name !== undefined) await this.assertNameFree(input.name, id);
     const kind = input.kind ?? series.kind;
@@ -201,11 +210,13 @@ export class TestSeriesService {
     await this.assertEventUsable(input.eventId, series.eventId);
     await this.assertTestsFit(series, input);
 
-    await this.prisma.testSeries.update({
-      where: { id },
+    // Conditional on the row the rules above judged: a save that lost the race is refused, not merged.
+    const claimed = await this.prisma.testSeries.updateMany({
+      where: { id, updatedAt: series.updatedAt },
       // Past the rule above, whatever a series of another kind still lists is a branch that is gone.
-      data: { ...columnsOf(input), ...(standard ? {} : { branchIds: [] }) },
+      data: { ...columnsOf(input), ...(standard ? {} : { branchIds: [] }), updatedAt: new Date() },
     });
+    if (claimed.count !== 1) throw formRefusal(ErrorCodes.CONFLICT, SERIES_CHANGED_ELSEWHERE);
 
     const updated = await this.requireSeries(id);
     this.auditContext.setChanged(fieldDiff(series, updated, AUDITED_SERIES_FIELDS));
@@ -219,10 +230,10 @@ export class TestSeriesService {
 
     const held = await this.prisma.test.count({ where: { testSeriesId: id } });
     if (held > 0) {
-      const tests = `${held} test${held === 1 ? '' : 's'}`;
+      const one = held === 1;
       throw new AppException(
         ErrorCodes.CONFLICT,
-        `${tests} are offered through this series, and deleting it would take away the only route to them. Move them to another series first.`,
+        `${held} ${one ? 'test is' : 'tests are'} offered through this series, and deleting it would take away the only route to ${one ? 'it' : 'them'}. Move ${one ? 'it' : 'them'} to another series first.`,
       );
     }
 
@@ -245,6 +256,8 @@ export class TestSeriesService {
   /** The whole list at once — the array itself, never a delta against what is stored. */
   async setBranches(id: string, input: UpdateSeriesBranchesBody): Promise<SeriesBranch[]> {
     const series = await this.requireSeries(id);
+    if ('everyBranch' in input) return this.switchOnEverywhere(series);
+
     const chosen = [...new Set(input.branchIds)];
     this.assertKindHoldsTogether({
       kind: series.kind,
@@ -263,6 +276,32 @@ export class TestSeriesService {
     );
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
     return this.branches(id);
+  }
+
+  /** "Every branch" is read by the statement that writes it, so one made a moment ago is on the list. */
+  private async switchOnEverywhere(series: SeriesRow): Promise<SeriesBranch[]> {
+    this.assertKindHoldsTogether({
+      kind: series.kind,
+      examStageId: series.examStageId,
+      programCode: series.programCode,
+      eventId: series.eventId,
+      branchIds: [...(await this.liveBranchIds())],
+    });
+
+    const [moved] = await this.prisma.$queryRaw<{ before: string[]; after: string[] }[]>`
+      UPDATE "TestSeries" AS s
+      SET "branchIds" = (SELECT COALESCE(array_agg(b."id" ORDER BY b."name"), '{}') FROM "Branch" b),
+          "updatedAt" = now()
+      FROM (SELECT "id", "branchIds" FROM "TestSeries" WHERE "id" = ${series.id}::uuid FOR UPDATE) AS old
+      WHERE s."id" = old."id"
+      RETURNING old."branchIds" AS "before", s."branchIds" AS "after"`;
+
+    this.auditContext.setEntityId(series.id);
+    this.auditContext.setPatchDiff(
+      moved ? { branchIds: { from: moved.before, to: moved.after } } : null,
+    );
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: series.id });
+    return this.branches(series.id);
   }
 
   /** One UPDATE against the stored list, so two toggles made from the same stale screen both land. */
@@ -493,9 +532,12 @@ function toSummary(row: SeriesRow, live: ReadonlySet<string>): TestSeriesSummary
     kind: row.kind,
     branchIds,
     eventId: row.eventId,
+    eventName: row.event?.name ?? null,
     testCount: row._count.tests,
+    grantCount: row._count.grants,
     enabledBranchCount: branchIds.length,
     branchCount: live.size,
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
