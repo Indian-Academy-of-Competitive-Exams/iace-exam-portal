@@ -79,8 +79,13 @@ export class OtpService {
     { holdsAccount = true, channel }: StudentAsk = {},
   ): Promise<OtpRequestResponse> {
     const cooldownKey = redisKeys.otpCooldown(actor, identifier);
-    const remaining = await this.redis.ttl(cooldownKey);
-    if (remaining > 0) {
+    const cooldownSec = this.config.get('OTP_RESEND_COOLDOWN_SEC');
+    // Claimed in one step, before anything is spent: of two requests landing together, one sends.
+    if (
+      cooldownSec > 0 &&
+      (await this.redis.client.set(cooldownKey, '1', 'EX', cooldownSec, 'NX')) !== 'OK'
+    ) {
+      const remaining = Math.max(await this.redis.ttl(cooldownKey), 1);
       throw new AppException(
         ErrorCodes.RATE_LIMITED,
         `Please wait ${remaining}s before requesting another code`,
@@ -89,13 +94,18 @@ export class OtpService {
     }
     // Admins sign in by email OTP on every login, so only a student's paid send is metered.
     if (actor === ActorTypes.STUDENT) {
-      await this.countTowardsDay(identifier);
-      await this.assertIpDailyBudget(ip);
-      await this.assertDailyBudget(holdsAccount ? STUDENT_BUDGET : SIGNUP_BUDGET);
+      try {
+        await this.countTowardsDay(identifier);
+        await this.assertIpDailyBudget(ip);
+        await this.assertDailyBudget(holdsAccount ? STUDENT_BUDGET : SIGNUP_BUDGET);
+      } catch (error) {
+        // The day's refusal is the whole answer: it leaves no wait behind it.
+        await this.redis.del(cooldownKey);
+        throw error;
+      }
     }
 
     const ttlSec = this.config.get('OTP_TTL_SEC');
-    const cooldownSec = this.config.get('OTP_RESEND_COOLDOWN_SEC');
     const code = this.generateCode();
 
     const stored: StoredOtp = {
@@ -105,9 +115,6 @@ export class OtpService {
     await this.redis.setJson(redisKeys.otp(actor, identifier), stored, ttlSec);
     // A fresh code resets the attempt count: the old key's leftover count must not carry over.
     await this.redis.del(redisKeys.otpAttempts(actor, identifier));
-    if (cooldownSec > 0) {
-      await this.redis.client.set(cooldownKey, '1', 'EX', cooldownSec);
-    }
 
     // The cooldown stays: the day's counters are spent, and it paces a retry through an outage.
     const sentOn = await this.deliver(actor, identifier, code, ttlSec, channel).catch(
@@ -236,9 +243,7 @@ export class OtpService {
         ? [redisKeys.otp(actor, identifier), redisKeys.otpDesk(identifier)]
         : [redisKeys.otp(actor, identifier)];
     const pending = await Promise.all(keys.map((key) => this.redis.getJson<StoredOtp>(key)));
-    if (pending.every((stored) => stored === null)) {
-      throw new AppException(ErrorCodes.OTP_EXPIRED, 'Code has expired. Request a new one');
-    }
+    if (pending.every((stored) => stored === null)) throw codeExpired();
 
     const hashed = this.hash(code);
     const attemptsKey = redisKeys.otpAttempts(actor, identifier);
@@ -265,8 +270,9 @@ export class OtpService {
       });
     }
 
-    // Single use: a verified code is gone with its twin, and the next resend is immediate.
-    await this.redis.del(...keys, cooldownKey, attemptsKey);
+    // Single use: one DEL takes the code with its twin, so a verification that lost the race finds nothing to take.
+    if ((await this.redis.client.del(...keys)) === 0) throw codeExpired();
+    await this.redis.del(cooldownKey, attemptsKey);
   }
 
   /** Uniform over the full range — `randomInt` is CSPRNG-backed, unlike Math.random. */
@@ -279,6 +285,11 @@ export class OtpService {
   private hash(code: string): string {
     return createHmac('sha256', this.config.get('JWT_ACCESS_SECRET')).update(code).digest('hex');
   }
+}
+
+/** One refusal for a code that ran out and a code already spent: the two must read alike. */
+function codeExpired(): AppException {
+  return new AppException(ErrorCodes.OTP_EXPIRED, 'Code has expired. Request a new one');
 }
 
 /** The channels a student's code can go out on here, first choice first. */

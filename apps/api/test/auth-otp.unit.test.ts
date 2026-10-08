@@ -106,6 +106,37 @@ describe('OtpService — request', () => {
     await assert.doesNotReject(() => otp.request(ActorTypes.STUDENT, MOBILE));
   });
 
+  /** The failure this prevents: a double tap paying for two codes, the first dead on arrival. */
+  it('sends one code when two requests land together, and tells the other to wait', async () => {
+    const { otp, sender } = build();
+
+    const [first, second] = await Promise.allSettled([
+      otp.request(ActorTypes.STUDENT, MOBILE),
+      otp.request(ActorTypes.STUDENT, MOBILE),
+    ]);
+
+    assert.equal(first.status, 'fulfilled');
+    const refusal: unknown = second.status === 'rejected' ? second.reason : null;
+    assert.ok(AppException.is(refusal));
+    assert.equal(refusal.code, ErrorCodes.RATE_LIMITED);
+    assert.deepEqual(refusal.details, { retryAfterSec: 45 });
+    assert.equal(sender.sent.length, 1);
+    await assert.doesNotReject(() => otp.verify(ActorTypes.STUDENT, MOBILE, sender.lastCode));
+  });
+
+  it('leaves no wait behind a request the day refused', async () => {
+    const { otp, redis } = build({ OTP_MAX_PER_DAY: 1 });
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+    redis.advanceSeconds(46);
+
+    await assert.rejects(
+      () => otp.request(ActorTypes.STUDENT, MOBILE),
+      (error: unknown) => AppException.is(error) && error.details === undefined,
+    );
+
+    assert.equal(redis.snapshot()[`otp:cooldown:student:${MOBILE}`], undefined);
+  });
+
   it('keeps students and admins in separate keyspaces', async () => {
     const { otp, redis } = build();
 
@@ -233,6 +264,36 @@ describe('OtpService — verify', () => {
     assert.equal(outcomes.filter((o) => o === 'OTP_INVALID').length, 4);
     assert.equal(outcomes.filter((o) => o === 'RATE_LIMITED').length, 4);
     assert.equal(redis.snapshot()[`otp:student:${MOBILE}`], undefined);
+  });
+
+  const verifiedTogether = (otp: OtpService, codes: string[]) =>
+    Promise.all(
+      codes.map((code) =>
+        otp.verify(ActorTypes.STUDENT, MOBILE, code).then(
+          () => 'accepted',
+          (error: unknown) => (AppException.is(error) ? error.code : 'unknown'),
+        ),
+      ),
+    );
+
+  /** The failure this prevents: a double submit of one code opening two sessions. */
+  it('accepts one of two verifications landing together, and tells the other the code is spent', async () => {
+    const { otp, sender } = build();
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    const outcomes = await verifiedTogether(otp, [sender.lastCode, sender.lastCode]);
+
+    assert.deepEqual(outcomes.sort(), ['OTP_EXPIRED', 'accepted']);
+  });
+
+  it('spends the sent code and the desk code as one, so the pair landing together opens one session', async () => {
+    const { otp, sender } = build();
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+    const desk = await otp.issueDeskCode(MOBILE);
+
+    const outcomes = await verifiedTogether(otp, [sender.lastCode, desk.code]);
+
+    assert.deepEqual(outcomes.sort(), ['OTP_EXPIRED', 'accepted']);
   });
 });
 
