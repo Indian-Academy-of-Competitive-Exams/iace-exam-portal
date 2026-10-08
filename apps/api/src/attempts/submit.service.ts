@@ -102,19 +102,19 @@ export class SubmitService {
     }
   }
 
-  /** The sweeper's. A closed tab must not leave a sitting open forever. */
-  async expire(attemptId: string): Promise<SubmittedAttempt> {
-    return this.end(await this.require(attemptId));
+  /** The sweeper's, given the deadline it listed by: time given since leaves the sitting open. Force-submit gives none. */
+  async expire(attemptId: string, before?: Date): Promise<SubmittedAttempt> {
+    return this.end(await this.require(attemptId), before);
   }
 
-  private async end(attempt: AttemptRow): Promise<SubmittedAttempt> {
+  private async end(attempt: AttemptRow, before?: Date): Promise<SubmittedAttempt> {
     if (attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) return this.closeOff(attempt.id);
 
     // READ, never taken: the live state has to outlive a write that throws.
     const held = await this.state.read(attempt.id);
     let sheet = held ? await this.sheets.write(held, true) : null;
 
-    const submittedAt = await this.claim(attempt);
+    const submittedAt = await this.claim(attempt, before);
     if (!submittedAt) return this.alreadySubmitted(attempt.id);
 
     // Taken only behind the claim, so a save arriving after this is refused rather than swallowed.
@@ -147,11 +147,16 @@ export class SubmitService {
   }
 
   /** Stamped at the claim itself, where the sweeper's re-queue grace counts from; null when another call ended it. */
-  private async claim(attempt: AttemptRow): Promise<Date | null> {
+  private async claim(attempt: AttemptRow, before?: Date): Promise<Date | null> {
     const submittedAt = new Date();
     // The one gate. The request whose UPDATE still matches IN_PROGRESS wins; the other reports it.
     const claimed = await this.prisma.attempt.updateMany({
-      where: { id: attempt.id, status: ATTEMPT_STATUS.IN_PROGRESS },
+      // With a deadline asked for, in the same statement: an extension landing first matches no row.
+      where: {
+        id: attempt.id,
+        status: ATTEMPT_STATUS.IN_PROGRESS,
+        endsAt: before && { lt: before },
+      },
       data: { status: ATTEMPT_STATUS.SUBMITTED, submittedAt },
     });
     return claimed.count > 0 ? submittedAt : null;
@@ -179,7 +184,7 @@ export class SubmitService {
 
   private async alreadySubmitted(attemptId: string): Promise<SubmittedAttempt> {
     const attempt = await this.require(attemptId);
-    if (!attempt.submittedAt) {
+    if (!attempt.submittedAt && attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) {
       // Neither IN_PROGRESS nor submitted: an expired row nobody ended, which the sweeper owns.
       this.logger.warn(`Attempt ${attemptId} is ${attempt.status} with no submittedAt`);
     }

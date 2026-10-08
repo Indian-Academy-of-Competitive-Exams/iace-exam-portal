@@ -51,44 +51,43 @@ export class AttemptSweeperProcessor extends ReportingWorkerHost {
     });
   }
 
-  /** Drains the backlog in one run: the cap bounds what a read holds, not what a sweep ends. */
-  private async endStranded(): Promise<void> {
+  /** One sweep reads every expired sitting once, a page at a time: the cap bounds a read, not a sweep. */
+  private async endStranded(now: Date = new Date()): Promise<void> {
+    // The same grace a save gets, so the sweeper never ends a sitting a save could still reach.
+    const cutoff = new Date(now.getTime() - SAVE_GRACE_SEC * MS_PER_SECOND);
+    let after: Expired | null = null;
     for (;;) {
-      const candidates = await this.expired();
-      if (candidates.length === 0) return;
-
-      const stranded = await this.abandoned(candidates);
-      if (stranded.length === 0) return;
-
-      let ended = 0;
+      const page = await this.expired(cutoff, after);
+      const stranded = await this.abandoned(page, now);
       for (let at = 0; at < stranded.length; at += SWEEP_LANES) {
-        const lane = await Promise.all(
-          stranded.slice(at, at + SWEEP_LANES).map((attempt) => this.end(attempt.id)),
+        await Promise.all(
+          stranded.slice(at, at + SWEEP_LANES).map((attempt) => this.end(attempt.id, cutoff)),
         );
-        ended += lane.filter(Boolean).length;
       }
-      // Stops on a batch nothing could end, which the next read would hand back unchanged forever.
-      if (candidates.length < SWEEP_BATCH || ended === 0) return;
+      const last = page.at(-1);
+      // Paged past the last row, not re-read: a paused or refused sitting comes back unchanged.
+      if (last === undefined || page.length < SWEEP_BATCH) return;
+      after = last;
     }
   }
 
   /** A live key is a paper put down, and its TTL is the limit: having no key is the whole decision. */
-  private async abandoned(candidates: readonly { id: string }[], now: Date = new Date()) {
+  private async abandoned(candidates: readonly Expired[], now: Date): Promise<Expired[]> {
     const held = await this.state.readMany(candidates.map((row) => row.id));
+    // A key still owed a flush waits a sweep, so what it holds is in the sheet before the sitting ends.
+    const unflushed = new Set(held.size > 0 ? await this.state.dirtyIds() : []);
     return candidates.filter((row) => {
       const paused = held.get(row.id);
-      return paused === undefined || isAbandoned(paused, now);
+      return paused === undefined || (isAbandoned(paused, now) && !unflushed.has(row.id));
     });
   }
 
-  /** Through the same gate the student uses, so a race resolves to one submission. */
-  private async end(attemptId: string): Promise<boolean> {
+  /** Through the gate the student uses, by the deadline the page was read by: time given since leaves it open. */
+  private async end(attemptId: string, cutoff: Date): Promise<void> {
     try {
-      await this.submit.expire(attemptId);
-      return true;
+      await this.submit.expire(attemptId, cutoff);
     } catch (error: unknown) {
       this.logger.error(`Sweeping attempt ${attemptId} failed`, error);
-      return false;
     }
   }
 
@@ -157,12 +156,16 @@ export class AttemptSweeperProcessor extends ReportingWorkerHost {
       LIMIT ${NEVER_SCORED_BATCH_CEILING}`;
   }
 
-  /** The same grace a save gets, so the sweeper never ends a sitting a save could still reach. */
-  private async expired(now: Date = new Date()) {
-    const cutoff = new Date(now.getTime() - SAVE_GRACE_SEC * MS_PER_SECOND);
-    return this.prisma.$queryRaw<{ id: string }[]>`
-      SELECT "id" FROM "Attempt"
-      WHERE "status" = ${IN_PROGRESS} AND "endsAt" < ${cutoff}
+  /** Ordered and paged on Attempt_expiring_idx's own column, the id parting a shared deadline. */
+  private expired(cutoff: Date, after: Expired | null): Promise<Expired[]> {
+    const past =
+      after === null
+        ? Prisma.empty
+        : Prisma.sql`AND ("endsAt", "id") > (${after.endsAt}::timestamptz, ${after.id}::uuid)`;
+    return this.prisma.$queryRaw<Expired[]>`
+      SELECT "id", "endsAt" FROM "Attempt"
+      WHERE "status" = ${IN_PROGRESS} AND "endsAt" < ${cutoff} ${past}
+      ORDER BY "endsAt", "id"
       LIMIT ${SWEEP_BATCH}`;
   }
 }
@@ -175,6 +178,12 @@ const IN_PROGRESS = Prisma.raw(`'${ATTEMPT_STATUS.IN_PROGRESS}'`);
 
 /** Literal, not a parameter: a bound enum cannot prove Attempt_rescore_idx's predicate, so the planner skips it. */
 const EVALUATED = Prisma.raw(`a."status" = '${ATTEMPT_STATUS.EVALUATED}'`);
+
+/** An expired sitting as a page reads it: its deadline and id are the sweep's keyset. */
+interface Expired {
+  id: string;
+  endsAt: Date;
+}
 
 /** A sitting behind its paper: `stamp` is its own revision and the sweep's keyset, `revision` the test's. */
 interface Behind {
@@ -190,7 +199,7 @@ export const NEVER_SCORED_BATCH_CEILING = 1000;
 /** Sittings behind their paper read at a time; one sweep keeps paging until a short page. */
 export const RESCORE_PAGE = 1000;
 
-/** How many stranded sittings one read holds. A sweep keeps reading until the backlog is gone. */
+/** How many expired sittings one read holds. A sweep keeps reading until a short page. */
 export const SWEEP_BATCH = 200;
 
 /** Ended side by side rather than one after another; the last student waited for all of them. */
