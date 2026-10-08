@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ActorTypes,
   AUDIT_ACTION,
@@ -65,6 +76,14 @@ export class TaxonomyController {
     return this.taxonomy.updateSubject(id, body);
   }
 
+  @Audit(AUDIT_FEATURE.TAXONOMY_SUBJECT, AUDIT_ACTION.DELETE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Delete('subjects/:id')
+  @HttpCode(HttpStatus.OK)
+  removeSubject(@Param('id') id: string): Promise<void> {
+    return this.taxonomy.removeSubject(id);
+  }
+
   @RequiresAnyFeature(TAXONOMY_READERS, PERMISSION_LEVELS.READ)
   @Get('topics')
   listTopics(
@@ -88,5 +107,13 @@ export class TaxonomyController {
     @Body(new ZodBody(updateTopicSchema)) body: UpdateTopicBody,
   ): Promise<Topic> {
     return this.taxonomy.updateTopic(id, body);
+  }
+
+  @Audit(AUDIT_FEATURE.TAXONOMY_TOPIC, AUDIT_ACTION.DELETE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Delete('topics/:id')
+  @HttpCode(HttpStatus.OK)
+  removeTopic(@Param('id') id: string): Promise<void> {
+    return this.taxonomy.removeTopic(id);
   }
 }

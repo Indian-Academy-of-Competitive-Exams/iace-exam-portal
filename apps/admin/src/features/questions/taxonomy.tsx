@@ -1,23 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ListTree, Plus } from 'lucide-react';
+import { ListTree, Pencil, Plus, Trash2 } from 'lucide-react';
+import { type ZodType } from 'zod';
 import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   createSubjectSchema,
   createTopicSchema,
+  updateSubjectSchema,
+  updateTopicSchema,
   type CreateSubjectInput,
   type CreateTopicInput,
   type Subject,
   type Topic,
+  type UpdateSubjectBody,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen, usePageTour } from '@iace/app-kit/browser';
 import {
   Button,
+  ConfirmDialog,
   DropdownMenuItem,
   FormDialog,
   FormField,
@@ -54,7 +59,11 @@ function topicsOf(subjectId: string): string {
   return `${ROUTES.TAXONOMY}?level=${LEVELS.TOPICS}&subjectId=${subjectId}`;
 }
 
-function subjectColumns(): DataTableColumn<Subject>[] {
+function subjectColumns(
+  canWrite: boolean,
+  onRename: (subject: Subject) => void,
+  onChanged: () => void,
+): DataTableColumn<Subject>[] {
   return [
     {
       key: 'name',
@@ -86,17 +95,157 @@ function subjectColumns(): DataTableColumn<Subject>[] {
       className: 'text-right',
       // The topics list, filtered — a subject has no topic list of its own.
       cell: (row) => (
-        <RowActions label={`Actions for ${row.name}`}>
+        <TaxonomyActions
+          noun="subject"
+          name={row.name}
+          canWrite={canWrite}
+          // The row counts two of its holders; the server names the rest if it is refused.
+          held={row.topicCount > 0 || row.questionCount > 0}
+          consequence="It has no topics and no questions, so nothing is lost. It leaves every picker and cannot be brought back."
+          onRename={() => onRename(row)}
+          remove={() => api.admin.taxonomy.removeSubject(row.id)}
+          onChanged={onChanged}
+        >
           <DropdownMenuItem asChild>
             <Link to={topicsOf(row.id)}>
               <ListTree aria-hidden />
               Topics
             </Link>
           </DropdownMenuItem>
-        </RowActions>
+        </TaxonomyActions>
       ),
     },
   ];
+}
+
+/** A name or a count changed: the lists, every picker's cached query and the question rows that print them. */
+const TAXONOMY_QUERIES = [QUERY_KEYS.SUBJECTS, QUERY_KEYS.TOPICS, QUERY_KEYS.QUESTIONS] as const;
+
+function useRefreshTaxonomy() {
+  const queryClient = useQueryClient();
+  return useCallback(() => {
+    for (const queryKey of TAXONOMY_QUERIES) void queryClient.invalidateQueries({ queryKey });
+  }, [queryClient]);
+}
+
+const RENAME_FIELDS = ['name'] as const;
+
+type RenameValues = Pick<UpdateSubjectBody, 'name'>;
+
+/** A subject and a topic are renamed the same way; only the schema and the route differ. */
+function RenameDialog({
+  noun,
+  current,
+  schema,
+  save,
+  onDone,
+  onClose,
+}: Readonly<{
+  noun: 'subject' | 'topic';
+  current: string;
+  schema: ZodType<RenameValues, RenameValues>;
+  save: (name: string) => Promise<unknown>;
+  onDone: () => void;
+  onClose: () => void;
+}>) {
+  const form = useForm<RenameValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: current },
+  });
+
+  const rename = useMutation({
+    meta: {
+      success: `${noun === 'subject' ? 'Subject' : 'Topic'} renamed.`,
+      fields: RENAME_FIELDS,
+    },
+    mutationFn: (input: RenameValues) => save(input.name ?? current),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, RENAME_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      form={form}
+      onSubmit={(values) => rename.mutate(values)}
+      title={`Rename ${noun}`}
+      submitLabel={`Rename ${noun}`}
+      loading={rename.isPending}
+    >
+      <FormField form={form} name="name" label="Name">
+        {(field) => <Input {...field} autoFocus />}
+      </FormField>
+    </FormDialog>
+  );
+}
+
+/** Rename and Delete behind the one menu; a writer's, since reading the taxonomy needs neither. */
+function TaxonomyActions({
+  noun,
+  name,
+  canWrite,
+  held,
+  consequence,
+  onRename,
+  remove,
+  onChanged,
+  children,
+}: Readonly<{
+  noun: 'subject' | 'topic';
+  name: string;
+  canWrite: boolean;
+  /** Known from the row to be carried already, so Delete is left out rather than offered to be refused. */
+  held: boolean;
+  consequence: string;
+  onRename: () => void;
+  remove: () => Promise<unknown>;
+  onChanged: () => void;
+  children?: ReactNode;
+}>) {
+  const [asking, setAsking] = useState(false);
+
+  const drop = useMutation({
+    meta: { success: `${name} deleted.` },
+    mutationFn: remove,
+    onSuccess: () => {
+      setAsking(false);
+      onChanged();
+    },
+    // Closing on failure too, or the row is left asking a question already answered.
+    onError: () => setAsking(false),
+  });
+
+  return (
+    <>
+      <RowActions label={`Actions for ${name}`}>
+        {children}
+        {canWrite ? (
+          <DropdownMenuItem onSelect={onRename}>
+            <Pencil aria-hidden />
+            Rename
+          </DropdownMenuItem>
+        ) : null}
+        {canWrite && !held ? (
+          <DropdownMenuItem destructive onSelect={() => setAsking(true)}>
+            <Trash2 aria-hidden />
+            Delete
+          </DropdownMenuItem>
+        ) : null}
+      </RowActions>
+
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={(open) => !open && setAsking(false)}
+        destructive
+        loading={drop.isPending}
+        title={`Delete ${name}?`}
+        description={consequence}
+        confirmLabel={`Delete ${noun}`}
+        onConfirm={() => drop.mutate()}
+      />
+    </>
+  );
 }
 
 /** Two levels of one taxonomy, so one nav row and a tab each rather than two menu entries. */
@@ -184,7 +333,14 @@ const SUBJECT_FILTERS = [
 ] as const;
 
 function SubjectsList() {
-  const columns = useMemo(() => subjectColumns(), []);
+  const { can } = useAuth();
+  const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const [renaming, setRenaming] = useState<Subject | null>(null);
+  const refresh = useRefreshTaxonomy();
+  const columns = useMemo(
+    () => subjectColumns(canWrite, setRenaming, refresh),
+    [canWrite, refresh],
+  );
 
   const subjects = useListScreen({
     queryKey: QUERY_KEYS.SUBJECTS,
@@ -194,17 +350,34 @@ function SubjectsList() {
   });
 
   return (
-    <ListView
-      list={subjects}
-      filters={SUBJECT_FILTERS}
-      columns={columns}
-      rowKey={(row) => row.id}
-      empty={{
-        title: 'No subjects yet',
-        hint: 'Add the first one. Questions are filed under it.',
-      }}
-      emptyFiltered="No subjects match that search"
-    />
+    <>
+      {/* Mounted only while a row is being renamed and keyed by it, or it opens on the last row's name. */}
+      {renaming ? (
+        <RenameDialog
+          key={renaming.id}
+          noun="subject"
+          current={renaming.name}
+          schema={updateSubjectSchema}
+          save={(name) => api.admin.taxonomy.updateSubject(renaming.id, { name })}
+          onDone={() => {
+            setRenaming(null);
+            refresh();
+          }}
+          onClose={() => setRenaming(null)}
+        />
+      ) : null}
+      <ListView
+        list={subjects}
+        filters={SUBJECT_FILTERS}
+        columns={columns}
+        rowKey={(row) => row.id}
+        empty={{
+          title: 'No subjects yet',
+          hint: 'Add the first one. Questions are filed under it.',
+        }}
+        emptyFiltered="No subjects match that search"
+      />
+    </>
   );
 }
 
@@ -253,7 +426,11 @@ function NewSubjectDialog({
 // Topics
 // ============================================================================
 
-function topicColumns(): DataTableColumn<Topic>[] {
+function topicColumns(
+  canWrite: boolean,
+  onRename: (topic: Topic) => void,
+  onChanged: () => void,
+): DataTableColumn<Topic>[] {
   return [
     {
       key: 'name',
@@ -268,6 +445,27 @@ function topicColumns(): DataTableColumn<Topic>[] {
       cell: (row) => <TruncatedText>{row.subject.name}</TruncatedText>,
     },
     { key: 'questions', header: 'Questions', numeric: true, cell: (row) => row.questionCount },
+    ...(canWrite
+      ? [
+          {
+            key: 'actions',
+            className: 'text-right',
+            cell: (row: Topic) => (
+              <TaxonomyActions
+                noun="topic"
+                name={row.name}
+                canWrite
+                // The row counts its questions; the server names a draw setting if one still uses it.
+                held={row.questionCount > 0}
+                consequence="It has no questions, so nothing is lost. It leaves every picker and cannot be brought back."
+                onRename={() => onRename(row)}
+                remove={() => api.admin.taxonomy.removeTopic(row.id)}
+                onChanged={onChanged}
+              />
+            ),
+          },
+        ]
+      : []),
   ];
 }
 
@@ -283,7 +481,11 @@ const TOPIC_FILTERS = [
 ] as const;
 
 function TopicsList() {
-  const columns = useMemo(() => topicColumns(), []);
+  const { can } = useAuth();
+  const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const [renaming, setRenaming] = useState<Topic | null>(null);
+  const refresh = useRefreshTaxonomy();
+  const columns = useMemo(() => topicColumns(canWrite, setRenaming, refresh), [canWrite, refresh]);
 
   const topics = useListScreen({
     queryKey: QUERY_KEYS.TOPICS,
@@ -296,14 +498,30 @@ function TopicsList() {
   });
 
   return (
-    <ListView
-      list={topics}
-      filters={TOPIC_FILTERS}
-      columns={columns}
-      rowKey={(row) => row.id}
-      empty="No topics here yet"
-      emptyFiltered="No topics match those filters"
-    />
+    <>
+      {renaming ? (
+        <RenameDialog
+          key={renaming.id}
+          noun="topic"
+          current={renaming.name}
+          schema={updateTopicSchema}
+          save={(name) => api.admin.taxonomy.updateTopic(renaming.id, { name })}
+          onDone={() => {
+            setRenaming(null);
+            refresh();
+          }}
+          onClose={() => setRenaming(null)}
+        />
+      ) : null}
+      <ListView
+        list={topics}
+        filters={TOPIC_FILTERS}
+        columns={columns}
+        rowKey={(row) => row.id}
+        empty="No topics here yet"
+        emptyFiltered="No topics match those filters"
+      />
+    </>
   );
 }
 

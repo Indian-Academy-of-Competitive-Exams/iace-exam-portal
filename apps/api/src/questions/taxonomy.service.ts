@@ -37,6 +37,18 @@ interface SubjectCounts {
 /** A row nothing points at yet — a subject or topic created a statement ago. */
 const NOTHING_YET: SubjectCounts = { topics: 0, questions: 0 };
 
+function counted(count: number, noun: string): string | null {
+  if (count === 0) return null;
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** Said in the refusal: every holder that still has a hand on the row, each with its count. */
+function stillUsedBy(name: string, holders: (string | null)[]): string | null {
+  const held = holders.filter((part): part is string => part !== null);
+  if (held.length === 0) return null;
+  return `${name} is still used by ${held.join(', ')}. Re-file or remove those first.`;
+}
+
 /** What each taxonomy level's audit diff covers — one `AuditFeature` value per level. */
 export const AUDITED_SUBJECT_FIELDS = ['name', 'code'] as const;
 export const AUDITED_TOPIC_FIELDS = ['name'] as const;
@@ -124,6 +136,17 @@ export class TaxonomyService {
   async updateSubject(id: string, body: UpdateSubjectBody): Promise<Subject> {
     const subject = await this.requireSubject(id);
 
+    if (body.name !== undefined) {
+      const taken = await this.prisma.subject.findFirst({
+        where: { name: body.name, id: { not: id } },
+      });
+      if (taken) {
+        throw new AppException(ErrorCodes.CONFLICT, `${body.name} already exists`, {
+          fieldErrors: { name: [`${body.name} already exists`] },
+        });
+      }
+    }
+
     const changes = {
       ...(body.name === undefined ? {} : { name: body.name }),
       ...(body.code === undefined ? {} : { code: body.code }),
@@ -140,6 +163,29 @@ export class TaxonomyService {
     );
 
     return toSubject(updated, (await this.subjectCounts([id])).get(id) ?? NOTHING_YET);
+  }
+
+  /** Deleted only while nothing carries it: each holder is counted, and the refusal names them. */
+  async removeSubject(id: string): Promise<void> {
+    const subject = await this.requireSubject(id);
+
+    const where = { subjectId: id };
+    const [topics, questions, sections, statistics] = await Promise.all([
+      this.prisma.topic.count({ where }),
+      this.prisma.question.count({ where }),
+      this.prisma.baseConfigSection.count({ where }),
+      this.prisma.studentSubjectStat.count({ where }),
+    ]);
+
+    const blocker = stillUsedBy(subject.name, [
+      counted(topics, 'topic'),
+      counted(questions, 'question'),
+      counted(sections, 'base configuration section'),
+      counted(statistics, 'student subject statistic'),
+    ]);
+    if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
+
+    await this.prisma.subject.delete({ where: { id } });
   }
 
   // ==========================================================================
@@ -219,6 +265,36 @@ export class TaxonomyService {
     );
 
     return toTopic(updated, (await this.topicCounts([id])).get(id) ?? 0);
+  }
+
+  /** Deleted only while nothing carries it: the questions filed under it, and the draw settings that name it. */
+  async removeTopic(id: string): Promise<void> {
+    const topic = await this.requireTopic(id);
+
+    const [questions, draws] = await Promise.all([
+      this.prisma.question.count({ where: { topicId: id } }),
+      this.testsDrawingFrom(id),
+    ]);
+
+    const blocker = stillUsedBy(topic.name, [
+      counted(questions, 'question'),
+      counted(draws, 'test that draws from it'),
+    ]);
+    if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
+
+    await this.prisma.topic.delete({ where: { id } });
+  }
+
+  /** A draw setting keeps topic ids inside JSON, where no foreign key can see them. */
+  private async testsDrawingFrom(topicId: string): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT count(*) AS count FROM "Test"
+      WHERE jsonb_path_exists(
+        "questionPoolFilter",
+        '$.sections.*.topicIds[*] ? (@ == $topic)',
+        jsonb_build_object('topic', ${topicId}::text)
+      )`;
+    return Number(row?.count ?? 0);
   }
 
   // ==========================================================================
