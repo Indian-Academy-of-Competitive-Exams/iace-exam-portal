@@ -71,8 +71,8 @@ export const TESTS_AND_SERIES_TOUR: readonly TourStep[] = [
   },
   {
     target: TOUR_ANCHORS.FILTERS,
-    title: 'One set of filters, both lists',
-    body: 'The exam and the search carry across when you switch tabs, so neither list is left narrowed by the other.',
+    title: 'Each tab starts unfiltered',
+    body: 'Switching tabs clears the search and the exam, so neither list is left narrowed by the other.',
   },
 ];
 
@@ -132,12 +132,12 @@ export const LIVE_OPS_TOUR: readonly TourStep[] = [
   {
     target: TOUR_ANCHORS.TABS,
     title: 'A sitting through its life',
-    body: 'Running, submitted and marked — the same test read at three points, while it is happening.',
+    body: 'Active now, Past deadline and Landed — the same test read at three points, while it is happening.',
   },
   {
     target: TOUR_TARGETS.LIVE_PICKER,
     title: 'Which test you are watching',
-    body: 'Pick the paper and the branch; the board counts live from the database rather than from a snapshot.',
+    body: 'Pick the paper; the board counts live from the database rather than from a snapshot.',
   },
 ];
 
