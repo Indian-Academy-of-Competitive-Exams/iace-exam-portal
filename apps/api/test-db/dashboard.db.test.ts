@@ -6,6 +6,7 @@ import {
   DEFAULT_EXAM_COURSE,
   DIFFICULTY_LEVEL,
   FEATURE_KEYS,
+  PAPER_SOURCES,
   PERMISSION_LEVELS,
   QUESTION_STATUS,
   START_GRACE_MS,
@@ -199,7 +200,8 @@ describe('DashboardService.overview — a band nobody may see is never even coun
 /** One test, with `open` sections still being worked and `done` ones already marked finished. */
 async function assignedSections(open: number, done: number) {
   const catalog = await makeCatalog(prisma);
-  const test = await makeTest(prisma, catalog);
+  // Typed, so its typist has a Done to give: a picked paper's is owed nothing.
+  const test = await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.FRAMED });
   const assignee = await makeAdmin(prisma);
   for (let i = 0; i < open + done; i += 1) {
     const section = await makeSection(prisma, catalog, { name: `Section ${i}`, order: i + 1 });

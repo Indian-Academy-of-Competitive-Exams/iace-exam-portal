@@ -2105,6 +2105,7 @@ describe('AssignmentsService — an admin’s own summary', () => {
     const summary = await assignments.summary(typist.id);
     const [mine] = await queue(assignments, typist.id);
 
+    assert.equal(summary?.roles[0]?.assigned, 0, 'no Done to give is not a section left undone');
     assert.equal(summary?.roles[0]?.overdue, 0);
     assert.deepEqual(summary?.next, []);
     assert.equal(mine?.standing, null);

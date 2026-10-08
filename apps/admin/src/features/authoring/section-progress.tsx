@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  PAPER_SOURCES,
   instituteDayLabel,
   type SectionProgressRow,
   type SectionRoleProgress,
@@ -41,6 +42,8 @@ function progressVariant(written: number, target: number): BadgeProps['variant']
 /** A section fact: the questions written under either role, against the section's own target. */
 function SectionProgress({ row }: Readonly<{ row: SectionProgressRow }>) {
   const { writtenCount, sectionQuestionCount } = row;
+  // A picked paper is drawn from the bank, so nothing is written for it and a count would read as none done.
+  if (row.paperSource === PAPER_SOURCES.PICKED) return <TruncatedText>{null}</TruncatedText>;
 
   return (
     <Badge variant={progressVariant(writtenCount, sectionQuestionCount)}>
@@ -54,8 +57,11 @@ function stateOf(
   held: SectionRoleProgress,
   doneLabel: string,
   written: number,
+  fixesOnly: boolean,
 ): { label: string; variant: BadgeProps['variant'] } {
   if (held.finalizedAt) return { label: doneLabel, variant: 'success' };
+  // Nothing to start and no Done to give, so neither idle nor unfinished: My sections calls it the same.
+  if (fixesOnly) return { label: 'Corrections', variant: 'neutral' };
   return held.secondsSpent > 0 || written > 0
     ? { label: 'In progress', variant: 'info' }
     : { label: 'Not started', variant: 'neutral' };
@@ -66,12 +72,15 @@ function RoleCell({
   held,
   doneLabel,
   written = 0,
+  fixesOnly = false,
   href,
 }: Readonly<{
   held: SectionRoleProgress | null;
   doneLabel: string;
   /** Questions that count as this role's own start; a reader starts by reading, so theirs is none. */
   written?: number;
+  /** A picked paper's typist types nothing: they fix what its reader sends back. */
+  fixesOnly?: boolean;
   href: string | null;
 }>) {
   // The paper's source gives this role nothing to do — a picked paper is drawn, never typed.
@@ -82,7 +91,7 @@ function RoleCell({
   }
 
   const name = <TruncatedText>{held.assigneeName}</TruncatedText>;
-  const state = stateOf(held, doneLabel, written);
+  const state = stateOf(held, doneLabel, written, fixesOnly);
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -156,6 +165,7 @@ function columnsOf(adminId: string): DataTableColumn<SectionProgressRow>[] {
           held={row.typing}
           doneLabel="Written"
           written={row.writtenCount}
+          fixesOnly={row.paperSource === PAPER_SOURCES.PICKED}
           href={sectionHref(row, row.typing, adminId)}
         />
       ),

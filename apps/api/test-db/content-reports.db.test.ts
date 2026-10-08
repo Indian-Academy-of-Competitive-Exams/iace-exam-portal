@@ -5,6 +5,7 @@ import {
   AppException,
   DIFFICULTY_LEVEL,
   ErrorCodes,
+  PAPER_SOURCES,
   QUESTION_STATUS,
   REPORT_KEYS,
   SEND_BACK_REASONS,
@@ -127,6 +128,17 @@ describe('the overdue sections', () => {
       dueAt: new Date(Date.now() + DAY_MS),
       section: 3,
     });
+    await prisma.test.update({
+      where: { id: paper.testId },
+      data: { paperSource: PAPER_SOURCES.FRAMED },
+    });
+    // A picked paper's typist has no Done to give, so a day gone by is not theirs to be late for.
+    const picked = await makePaper(prisma, { sections: ['Picked'], questions: ['Maths'] });
+    await prisma.test.update({
+      where: { id: picked.testId },
+      data: { paperSource: PAPER_SOURCES.PICKED },
+    });
+    await assign(picked, who, ASSIGNMENT_ROLES.TYPIST, { dueAt: late });
 
     const rows = tableOf(await read(REPORT_KEYS.OVERDUE_ASSIGNMENTS, {}), 'Overdue');
 

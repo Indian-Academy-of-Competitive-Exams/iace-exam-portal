@@ -188,6 +188,8 @@ export const sectionProgressRowSchema = z.object({
   testTitle: z.string().nullable(),
   baseConfigSectionId: z.string(),
   sectionName: z.string(),
+  /** Picked gives the typing seat corrections only: nothing to start, and no Done to give. */
+  paperSource: paperSourceSchema.nullable(),
   /** Questions written under ANY assignment on this section, against the section's own target. */
   writtenCount: z.number().int(),
   sectionQuestionCount: z.number().int(),

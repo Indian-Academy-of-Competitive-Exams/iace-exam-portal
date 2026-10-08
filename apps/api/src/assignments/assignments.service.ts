@@ -50,7 +50,7 @@ import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { uncheckedOn } from './unread-questions';
-import { OWED_WHERE, doneOpen, owed, readOpen, standingOf } from './assignment-gates';
+import { OWED_WHERE, doneOpen, finishes, owed, readOpen, standingOf } from './assignment-gates';
 import { formRefusal } from '../common/form-refusal';
 import { everyTermMatches } from '../common/search-terms';
 import { countsBy } from '../common/relation-counts';
@@ -592,7 +592,8 @@ export class AssignmentsService {
       return [
         {
           role,
-          assigned: held.length,
+          // Only what has a finish to give: a picked paper's typist is not behind on a Done they cannot make.
+          assigned: held.filter(finishes).length,
           completed: held.filter((row) => row.finalizedAt !== null).length,
           onTime: standing(DUE_STANDINGS.ON_TIME),
           overdue: standing(DUE_STANDINGS.OVERDUE),
@@ -997,6 +998,7 @@ function sectionRow(test: QueueTest, section: QueueSection): SectionProgressRow 
     testTitle: test.title,
     baseConfigSectionId: section.id,
     sectionName: section.name,
+    paperSource: test.paperSource,
     ...NO_COUNTS,
     sectionQuestionCount: section.questionCount,
     typing: roleProgress(test, section, ASSIGNMENT_ROLES.TYPIST),

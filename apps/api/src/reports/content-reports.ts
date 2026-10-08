@@ -18,6 +18,7 @@ import {
   type ReportQueryOf,
   type SendBackReason,
 } from '@iace/contracts';
+import { OWED_WHERE } from '../assignments';
 import { EXPORT_DATE_FORMATS, exportInstant, type ExportColumn } from '../common/exporting';
 import { stemPreviewOf } from '../questions';
 import { aboutPeriod, periodOf } from './period';
@@ -181,7 +182,7 @@ const overdueColumns = (now: number): ExportColumn<Overdue>[] => [
 const overdueAssignments: OpenBuilder = async ({ prisma }) => {
   const now = new Date();
   const late = await prisma.questionAssignment.findMany({
-    where: { finalizedAt: null, replacedAt: null, dueAt: { lt: now } },
+    where: { ...OWED_WHERE, dueAt: { lt: now } },
     orderBy: { dueAt: 'asc' },
     select: {
       role: true,

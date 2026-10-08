@@ -26,7 +26,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit';
-import { AssignmentsService } from '../assignments';
+import { AssignmentsService, OWED_WHERE } from '../assignments';
 import { type AuthenticatedUser } from '../common/security';
 import { bandsFor, type DashboardBands } from './dashboard-bands';
 
@@ -118,9 +118,9 @@ export class DashboardService {
     return { coverage, ...(openAssignments > 0 ? { openAssignments } : {}) };
   }
 
-  /** "Under review" is derived, never stored: an assignment nobody has finalised is work still owed. */
+  /** "Under review" is derived, never stored: what a holder who can finish has not, as the queue counts it. */
   private openAssignments(): Promise<number> {
-    return this.prisma.questionAssignment.count({ where: { finalizedAt: null, replacedAt: null } });
+    return this.prisma.questionAssignment.count({ where: OWED_WHERE });
   }
 
   private async coverage(): Promise<DashboardCoverage[]> {
