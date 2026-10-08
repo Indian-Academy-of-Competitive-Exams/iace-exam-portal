@@ -1,14 +1,23 @@
 /** The two things a candidate may re-read mid-sitting: the whole paper, and the rules. */
-import { contentLanguageOf } from '@iace/contracts';
-import { ANSWER_STATE_LABELS, htmlOf, shownLanguages, type ExamView } from '@iace/app-kit';
+import { contentLanguageOf, EXAM_TEMPLATE, TEST_UI } from '@iace/contracts';
+import { htmlOf, shownLanguages, type ExamView } from '@iace/app-kit';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, RichContent } from '@iace/ui';
-import { PALETTE_LEGEND } from '../../../../lib/constants';
+import { PaperRules } from '../../default-instructions';
+import { PaletteLegend } from '../../question-palette';
+import { isSectional } from '../../use-instructions';
+import { PaperWatermark, type ExamSlotProps } from './slots';
+
+interface PanelProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
 
 export function PaperPanel({
   view,
+  config,
   open,
   onOpenChange,
-}: Readonly<{ view: ExamView; open: boolean; onOpenChange: (open: boolean) => void }>) {
+}: Readonly<ExamSlotProps & PanelProps>) {
   const language = shownLanguages(view.languages, view.languageMode)[0];
 
   return (
@@ -35,15 +44,19 @@ export function PaperPanel({
             </li>
           ))}
         </ol>
+
+        {/* On the dialog, not in its list: a mark inside a scroller covers one screenful and scrolls away. */}
+        <PaperWatermark view={view} config={config} />
       </DialogContent>
     </Dialog>
   );
 }
 
 export function RulesPanel({
+  view,
   open,
   onOpenChange,
-}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void }>) {
+}: Readonly<{ view: ExamView } & PanelProps>) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -51,31 +64,17 @@ export function RulesPanel({
           <DialogTitle>Instructions</DialogTitle>
         </DialogHeader>
 
-        <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto text-sm leading-relaxed text-exam-ink">
-          <p>
-            The clock is the server&apos;s. It keeps running if you leave this screen, and the paper
-            ends by itself when it reaches zero — you do not have to submit for that to happen.
-          </p>
-          <p>The palette marks every question with one of these:</p>
-          <ul className="flex flex-col gap-1.5">
-            {PALETTE_LEGEND.map((entry) => (
-              <li key={entry.state} className="text-exam-ink-muted">
-                <span className="font-medium text-exam-ink">
-                  {ANSWER_STATE_LABELS[entry.state]}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p>
-            <span className="font-medium">Save &amp; next</span> keeps your answer and moves on.{' '}
-            <span className="font-medium">Mark for review &amp; next</span> keeps it and flags the
-            question to come back to — a flagged answer is still marked.{' '}
-            <span className="font-medium">Clear response</span> removes your answer entirely.
-          </p>
-          <p>
-            An option is kept the moment you choose it, so moving to another question from the
-            palette keeps it too.
-          </p>
+        <div
+          // Portalled out of the shell, so the legend names the skin itself or its swatches have no colour.
+          data-exam-template={EXAM_TEMPLATE.DEFAULT.toLowerCase()}
+          className="relative flex max-h-[60vh] flex-col gap-4 overflow-y-auto"
+        >
+          <PaperRules
+            forwardOnly={view.forwardOnly}
+            sectional={isSectional(view.sections)}
+            omr={view.testUi === TEST_UI.OMR}
+          />
+          <PaletteLegend forwardOnly={view.forwardOnly} />
         </div>
       </DialogContent>
     </Dialog>

@@ -43,18 +43,25 @@ export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProp
         />
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <div className="relative min-h-0 flex-1 overflow-y-auto p-exam">
+          {/* The mark sits on this frame, not in the scroller, where it would cover one screenful and scroll away. */}
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            <div
+              // Keyed, so the next question opens at its top and not at the last one's offset.
+              key={view.question?.questionId}
+              className="relative min-h-0 flex-1 overflow-y-auto p-exam"
+            >
+              <article className="flex min-w-0 flex-col gap-exam-gap">
+                <QuestionPanel view={view} config={config} />
+                <Options view={view} config={config} />
+              </article>
+            </div>
             {onPaper ? <PaperWatermark view={view} config={config} /> : null}
-            <article className="flex min-w-0 flex-col gap-exam-gap">
-              <QuestionPanel view={view} config={config} />
-              <Options view={view} config={config} />
-            </article>
           </div>
 
           {isDesktop ? (
             <aside
               className={cn(
-                'w-72 shrink-0 border-exam-border p-exam',
+                'relative min-h-0 w-72 shrink-0 overflow-y-auto border-exam-border p-exam',
                 config.palettePosition === 'LEFT' ? 'order-first border-r' : 'order-last border-l',
               )}
             >
@@ -97,10 +104,12 @@ export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProp
 
       <PaperPanel
         view={view}
+        config={config}
         open={panel === 'PAPER'}
         onOpenChange={(open) => setPanel(open ? 'PAPER' : null)}
       />
       <RulesPanel
+        view={view}
         open={panel === 'RULES'}
         onOpenChange={(open) => setPanel(open ? 'RULES' : null)}
       />

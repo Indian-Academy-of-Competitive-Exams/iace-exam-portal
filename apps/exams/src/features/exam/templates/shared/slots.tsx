@@ -4,7 +4,12 @@
  * Nothing here holds state: every value and every callback comes off the view.
  */
 import { Calculator, Eraser, FileText, Flag, Info, LayoutGrid, Maximize, Send } from 'lucide-react';
-import { TEST_UI, type ExamTemplateConfig, type PaletteCounts } from '@iace/contracts';
+import {
+  ANSWER_STATES,
+  TEST_UI,
+  type ExamTemplateConfig,
+  type PaletteCounts,
+} from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -24,7 +29,6 @@ import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
 import { QuestionStem } from '../../question-stem';
 import { SectionTimer } from '../../section-timer';
-import { PALETTE_LEGEND } from '../../../../lib/constants';
 
 /** Every slot is handed the same view, so a skin changes how the sitting LOOKS, never what it does. */
 export interface ExamSlotProps {
@@ -107,8 +111,8 @@ function Timer({ view: { timer }, config }: Readonly<ExamSlotProps>) {
 /** What a section costs so far, without opening it — the one thing its tab cannot show. */
 function sectionTally(counts: PaletteCounts): string {
   // The same five states the palette draws, so the tab and the grid never disagree.
-  return PALETTE_LEGEND.filter((entry) => counts[entry.state] > 0)
-    .map((entry) => `${counts[entry.state]} ${ANSWER_STATE_LABELS[entry.state].toLowerCase()}`)
+  return ANSWER_STATES.filter((state) => counts[state] > 0)
+    .map((state) => `${counts[state]} ${ANSWER_STATE_LABELS[state].toLowerCase()}`)
     .join(' · ');
 }
 
@@ -252,8 +256,12 @@ export function BottomBar({ view }: Readonly<ExamSlotProps>) {
   );
 }
 
-export function PaperWatermark({ view, config }: Readonly<ExamSlotProps>) {
+export function PaperWatermark({
+  view,
+  config,
+  className,
+}: Readonly<ExamSlotProps & { className?: string }>) {
   if (config.watermark === 'NONE' || !view.watermark) return null;
 
-  return <Watermark text={view.watermark} />;
+  return <Watermark text={view.watermark} className={className} />;
 }
