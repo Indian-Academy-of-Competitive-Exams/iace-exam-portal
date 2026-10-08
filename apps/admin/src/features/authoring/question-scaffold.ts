@@ -76,6 +76,8 @@ export interface AuthoringHeader {
   difficulty: DifficultyLevel;
   /** As typed: a comma-separated line, kept for every question saved from this session. */
   tags: string;
+  /** Only the bank editor holds one; absent, an editor neither shows a code nor sends it. */
+  questionCode?: string;
 }
 
 const emptyLanguage = (options: number): LanguageContent => ({
@@ -257,6 +259,9 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
     subjectId: header.subjectId,
     topicId: header.topicId || null,
     difficulty: header.difficulty,
+    ...(header.questionCode === undefined
+      ? {}
+      : { questionCode: header.questionCode.trim() || null }),
     tags: tagsIn(header.tags),
     stem: localized((language) => state.content[language].stem),
     solution: localized((language) => state.content[language].solution),
@@ -314,6 +319,11 @@ function answerLineOf(question: QuestionDetail, correct: number): string {
 
 const htmlOf = (nodes: { text: string }[] | undefined): string =>
   (nodes ?? []).map((node) => node.text).join('');
+
+/** What the next question of a batch starts with: the settings stay, a question's own code does not. */
+export function carriedHeader(header: AuthoringHeader): AuthoringHeader {
+  return header.questionCode === undefined ? header : { ...header, questionCode: '' };
+}
 
 export function headerOf(question: QuestionDetail): AuthoringHeader {
   return {

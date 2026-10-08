@@ -196,6 +196,9 @@ export const COURSE_ITEMS = EXAM_COURSES.map((course) => ({
   label: courseLabel(course),
 }));
 
+/** The key a question's code travels under, on the draft and in the server's refusal. */
+export const QUESTION_CODE_FIELD = 'questionCode';
+
 /** What a question's state is called on screen. */
 export const QUESTION_STATUS_LABELS: Readonly<Record<QuestionStatus, string>> = {
   ACTIVE: 'Active',

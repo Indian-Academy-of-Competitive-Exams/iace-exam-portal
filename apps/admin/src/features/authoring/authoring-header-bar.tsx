@@ -9,7 +9,7 @@ import {
   type DifficultyLevel,
   type QuestionType,
 } from '@iace/contracts';
-import { Combobox, Input, SegmentedControl, cn } from '@iace/ui';
+import { Combobox, Input, SegmentedControl, UPPERCASE_CODE, cn } from '@iace/ui';
 import { ANSWER_MODE_LABELS, QUESTION_TYPE_LABELS } from '../../lib/constants';
 import { TOUR_TARGETS } from '../../lib/tours';
 import { SubjectPicker, TopicPicker } from '../../components/taxonomy-picker';
@@ -36,6 +36,7 @@ export function AuthoringHeaderBar({
   lead,
   subjectLocked = false,
   disabled = false,
+  codeError,
   onHeaderChange,
   onStateChange,
 }: Readonly<{
@@ -48,6 +49,8 @@ export function AuthoringHeaderBar({
   subjectLocked?: boolean;
   /** Not the viewer's to change, or held by somebody else: the settings show, and take nothing. */
   disabled?: boolean;
+  /** The server's refusal of the question code, shown beside it. */
+  codeError?: string;
   onHeaderChange: (next: AuthoringHeader) => void;
   onStateChange: (next: AuthoringState) => void;
 }>) {
@@ -97,6 +100,24 @@ export function AuthoringHeaderBar({
             onChange={(event) => onHeaderChange({ ...header, tags: event.target.value })}
           />
         </Slot>
+
+        {header.questionCode === undefined ? null : (
+          <Slot caption="Question code">
+            <Input
+              value={header.questionCode}
+              placeholder="Optional"
+              aria-label="Question code"
+              invalid={codeError !== undefined}
+              className={cn(FIELD, UPPERCASE_CODE, 'w-auto min-w-32 max-w-40')}
+              onChange={(event) => onHeaderChange({ ...header, questionCode: event.target.value })}
+            />
+            {codeError ? (
+              <span role="alert" className="text-xs text-destructive">
+                {codeError}
+              </span>
+            ) : null}
+          </Slot>
+        )}
 
         <Slot caption="Difficulty">
           <Combobox

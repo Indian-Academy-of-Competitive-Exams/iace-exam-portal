@@ -3,8 +3,10 @@ import { BookOpen, Pencil } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AppException,
   DIFFICULTY_LABELS,
   DIFFICULTY_LEVEL,
+  ErrorCodes,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   QUESTION_STATUS,
@@ -13,6 +15,7 @@ import { Badge, Button, ConfirmDialog } from '@iace/ui';
 import { api } from '../../lib/api';
 import {
   QUERY_KEYS,
+  QUESTION_CODE_FIELD,
   QUESTION_STATUS_LABELS,
   QUESTION_STATUS_VARIANT,
   ROUTES,
@@ -26,6 +29,18 @@ import {
   type WorkspaceSource,
 } from '../authoring/authoring-workspace';
 import { headerOf, stateOf, toDraft } from '../authoring/question-scaffold';
+
+const CODE_TAKEN = 'Another question already has that code';
+
+/** A code the bank already holds comes back as the bare unique-index refusal; it is put on the code's own field. */
+function codeRefusal(error: unknown): unknown {
+  if (!AppException.is(error) || error.code !== ErrorCodes.CONFLICT) return error;
+  const target = (error.details as { target?: unknown } | undefined)?.target;
+  if (!Array.isArray(target) || !target.includes(QUESTION_CODE_FIELD)) return error;
+  return new AppException(ErrorCodes.CONFLICT, CODE_TAKEN, {
+    fieldErrors: { [QUESTION_CODE_FIELD]: [CODE_TAKEN] },
+  });
+}
 
 /** The bank's own question, read or corrected on the same page every section is authored on. */
 export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boolean }>) {
@@ -81,7 +96,7 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
             queryFn: () => api.admin.questions.detail(key),
           });
           return {
-            header: headerOf(question),
+            header: { ...headerOf(question), questionCode: question.questionCode ?? '' },
             state: stateOf(question),
             stamp: question.updatedAt,
           };
@@ -97,7 +112,7 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
         } catch (error) {
           // Read again, so reopening the edit starts from what the bank holds and not the copy just refused.
           void queryClient.invalidateQueries({ queryKey: questionQueryKey(key) });
-          throw error;
+          throw codeRefusal(error);
         }
         await settle();
         navigate(ROUTES.QUESTION(key));
@@ -108,9 +123,19 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
         id || readOnly
           ? undefined
           : {
-              header: { subjectId: '', topicId: '', difficulty: DIFFICULTY_LEVEL.MEDIUM, tags: '' },
+              header: {
+                subjectId: '',
+                topicId: '',
+                difficulty: DIFFICULTY_LEVEL.MEDIUM,
+                tags: '',
+                questionCode: '',
+              },
               save: async (held) => {
-                await api.admin.questions.create(toDraft(held.state, held.header));
+                await api.admin.questions
+                  .create(toDraft(held.state, held.header))
+                  .catch((error: unknown) => {
+                    throw codeRefusal(error);
+                  });
                 await settle();
               },
             },

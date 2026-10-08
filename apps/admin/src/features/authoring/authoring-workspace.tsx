@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { Keyboard, ListChecks, Maximize2, Minimize2, Save, X } from 'lucide-react';
 import {
+  AppException,
   DEFAULT_LANGUAGE,
   DIFFICULTY_LEVEL,
   LANGUAGE_LABELS,
@@ -12,12 +13,14 @@ import {
 import { Badge, Button, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { usePageTour } from '@iace/app-kit/browser';
+import { QUESTION_CODE_FIELD } from '../../lib/constants';
 import { AUTHORING_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { AuthoringHeaderBar } from './authoring-header-bar';
 import { Legend, QuestionNotLoaded, useFocusMode } from './authoring-chrome';
 import { QuestionPanes } from './question-panes';
 import {
   SCRIPT_OF,
+  carriedHeader,
   emptyState,
   stateFrom,
   toDraft,
@@ -91,6 +94,13 @@ const BLANK_HEADER: AuthoringHeader = {
   difficulty: DIFFICULTY_LEVEL.MEDIUM,
   tags: '',
 };
+
+/** The fields the bar shows an error on, so a refusal landing wholly on them is not also toasted. */
+const SAVE_FIELDS = [QUESTION_CODE_FIELD] as const;
+
+/** The server's refusal of the code, when that is what a save was refused for. */
+const codeErrorOf = (error: unknown): string | undefined =>
+  AppException.is(error) ? error.fieldErrors?.[QUESTION_CODE_FIELD]?.[0] : undefined;
 
 const sameHeld = (a: Held, b: Held): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -256,13 +266,13 @@ export function AuthoringWorkspace({
   const rebuild = (key: string) => view(key, (current) => ({ ...current, box: current.box + 1 }));
 
   const save = useMutation({
-    meta: { success: 'Question saved.' },
+    meta: { success: 'Question saved.', fields: SAVE_FIELDS },
     mutationFn: ({ key, held }: { key: string; held: Held }) =>
       key === NEW_CARD && source.create ? source.create.save(held) : source.save(key, held),
     onSuccess: (_result, { key, held }) => {
       setEdits(({ [key]: _saved, ...rest }) => rest);
       if (key === NEW_CARD) {
-        setLastNew({ header: held.header, type: held.state.type });
+        setLastNew({ header: carriedHeader(held.header), type: held.state.type });
         rebuild(NEW_CARD);
       } else {
         step(1);
@@ -270,6 +280,7 @@ export function AuthoringWorkspace({
     },
   });
 
+  const codeError = codeErrorOf(save.error);
   const draft = useMemo(() => (shown ? toDraft(shown.state, shown.header) : null), [shown]);
   const duplicate = useDuplicate(source.checkDuplicates ? draft : null, isNew ? '' : active);
   const issues = useIssues(draft, shown?.header);
@@ -312,7 +323,12 @@ export function AuthoringWorkspace({
           state={shown.state}
           subjectLocked={source.subjectLocked}
           disabled={!editable}
-          onHeaderChange={(next) => edit(active, (current) => ({ ...current, header: next }))}
+          codeError={codeError}
+          onHeaderChange={(next) => {
+            // A refusal of the code is answered by changing it, so it goes the moment anything is typed.
+            if (codeError) save.reset();
+            edit(active, (current) => ({ ...current, header: next }));
+          }}
           onStateChange={(next) => {
             edit(active, (current) => ({ ...current, state: next }));
             rebuild(active);
