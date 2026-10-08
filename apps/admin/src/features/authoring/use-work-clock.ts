@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AppException, WORK_TIME_REPORT_MAX_SECONDS } from '@iace/contracts';
+import { WORK_TIME_REPORT_MAX_SECONDS } from '@iace/contracts';
 import { api } from '../../lib/api';
 import { NEW_CARD } from './authoring-workspace';
-import { WorkClock } from './work-clock';
+import { WorkClock, reportTime } from './work-clock';
 
 const SECOND_MS = 1000;
 
@@ -24,20 +24,21 @@ export function useWorkClock(testId: string, sectionId: string, watched: string 
     return () => clearInterval(ticking);
   }, [clock]);
 
-  const report = useCallback(() => {
-    // The blank card is held back: there is no question to count it against until its save names one.
-    for (const [key, seconds] of clock.take(WORK_TIME_REPORT_MAX_SECONDS, NEW_CARD)) {
-      api.admin.sectionWork.spend(testId, sectionId, key, { seconds }).catch((error: unknown) => {
-        // A refusal is final — the question is gone, or the seat is — so only a request that never landed is kept.
-        if (!AppException.is(error)) clock.giveBack(key, seconds);
-      });
-    }
-  }, [clock, testId, sectionId]);
+  const report = useCallback(
+    (keepalive = false) => {
+      // The blank card is held back: there is no question to count it against until its save names one.
+      reportTime(clock, WORK_TIME_REPORT_MAX_SECONDS, NEW_CARD, (key, seconds) =>
+        api.admin.sectionWork.spend(testId, sectionId, key, { seconds }, { keepalive }),
+      );
+    },
+    [clock, testId, sectionId],
+  );
 
   useEffect(() => {
-    const reporting = setInterval(report, REPORT_EVERY_MS);
+    const reporting = setInterval(() => report(), REPORT_EVERY_MS);
     const onHide = () => {
-      if (document.visibilityState === 'hidden') report();
+      // On keepalive: a tab hidden because it is closing cancels an ordinary request.
+      if (document.visibilityState === 'hidden') report(true);
     };
     document.addEventListener('visibilitychange', onHide);
     return () => {

@@ -46,7 +46,7 @@ import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
 import { pageArgs, paged } from '../common/pagination';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { uncheckedOn } from './unread-questions';
-import { doneOpen, owed, readOpen, standingOf } from './assignment-gates';
+import { OWED_WHERE, doneOpen, owed, readOpen, standingOf } from './assignment-gates';
 import { formRefusal } from '../common/form-refusal';
 import { everyTermMatches } from '../common/search-terms';
 import { countsBy } from '../common/relation-counts';
@@ -476,7 +476,7 @@ export class AssignmentsService {
     const due = dueBounds(query);
     const where: Prisma.QuestionAssignmentWhereInput = {
       assigneeId: adminId,
-      ...(query.outstanding ? { finalizedAt: null, replacedAt: null } : {}),
+      ...(query.outstanding ? OWED_WHERE : {}),
       ...(query.role ? { role: query.role } : {}),
       ...(query.testId ? { testId: query.testId } : {}),
       ...(query.baseConfigSectionId ? { baseConfigSectionId: query.baseConfigSectionId } : {}),
@@ -1118,6 +1118,7 @@ function toAssignment(
     canMarkDone: doneOpen(row),
     canMarkRead: readOpen(row),
     testOffered: row.test.finalizedAt !== null,
+    paperSource: row.test.paperSource,
     handedAt: row.handedAt?.toISOString() ?? null,
     replacedAt: row.replacedAt?.toISOString() ?? null,
     sectionDropped: row.replacedAt !== null && !inScope(row),

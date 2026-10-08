@@ -3,7 +3,7 @@ import { adminRoleSchema } from './admins';
 import { civilDate, csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { dateOnlySchema, todayISO } from './students';
-import { difficultyMixSchema } from './tests';
+import { difficultyMixSchema, paperSourceSchema } from './tests';
 
 // ============================================================================
 // Authoring assignments. A section of a test's paper assigned to a typist and
@@ -59,6 +59,8 @@ export const assignmentSchema = z.object({
   removable: z.boolean().nullable(),
   /** The test has been offered: its paper is frozen, and no section of it is anybody's to change. */
   testOffered: z.boolean(),
+  /** A typist on a picked paper only fixes what is sent back: no Done to give, and nothing owed. */
+  paperSource: paperSourceSchema.nullable(),
   /** The section's own target — a section fact, same as `writtenCount`. */
   sectionQuestionCount: z.number().int(),
   /** The test's own draw spec for this section. Absent means every difficulty, not zero of each. */
@@ -86,7 +88,7 @@ export const assignmentWithTestSchema = assignmentSchema.extend({
 export type AssignmentWithTest = z.infer<typeof assignmentWithTestSchema>;
 
 export const mineAssignmentsQuerySchema = paginationQuerySchema.extend({
-  /** Unfinalized only. */
+  /** Still owed only: unfinished by a holder who can finish it, on a test not yet offered. */
   outstanding: optionalBooleanQuery(),
   /** Absent reads both roles; a role's own queue always sends its own. */
   role: assignmentRoleSchema.optional(),

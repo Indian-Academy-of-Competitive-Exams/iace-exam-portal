@@ -1,4 +1,5 @@
 import { REVIEW_STATES, type ReviewState } from '@iace/contracts';
+import { isWorthAskingAgain } from '@iace/app-kit';
 
 /** Whether a question waits on the viewer: sent back for its typist, not yet passed for its reader. */
 export function awaitsViewer(
@@ -70,6 +71,20 @@ export class WorkClock {
     }
     this.bases.delete(from);
     for (const listener of this.listeners) listener();
+  }
+}
+
+/** Hands what is unreported to `send`; a refusal is final, and a report that got no answer waits for the next. */
+export function reportTime(
+  clock: WorkClock,
+  most: number,
+  skip: string,
+  send: (key: string, seconds: number) => Promise<unknown>,
+): void {
+  for (const [key, seconds] of clock.take(most, skip)) {
+    send(key, seconds).catch((error: unknown) => {
+      if (isWorthAskingAgain(error)) clock.giveBack(key, seconds);
+    });
   }
 }
 

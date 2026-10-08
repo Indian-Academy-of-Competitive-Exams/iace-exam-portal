@@ -633,9 +633,12 @@ function CardActions({
           <CheckCheck aria-hidden />
           {checked ? 'Checked' : 'Check'}
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => setSending(true)}>
-          Send back
-        </Button>
+        {/* Left out with nobody to take it: the server refuses a send-back on a section with no typist. */}
+        {work.typist ? (
+          <Button type="button" size="sm" variant="outline" onClick={() => setSending(true)}>
+            Send back
+          </Button>
+        ) : null}
         {sending ? (
           <SendBackDialog
             work={work}

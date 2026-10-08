@@ -601,13 +601,14 @@ export class SectionWorkService {
     if (context.viewer.isSuperAdmin) return true;
 
     const own = typingOrHeld(context);
+    const sentBack = question.review.state === REVIEW_STATES.SENT_BACK;
     if (own?.role === ASSIGNMENT_ROLES.TYPIST) {
-      if (question.review.state === REVIEW_STATES.SENT_BACK) return true;
+      if (sentBack) return true;
       const typing = context.test.paperSource === PAPER_SOURCES.FRAMED && !own.finalizedAt;
       if (typing && question.typed) return true;
     }
     if (own?.role === ASSIGNMENT_ROLES.PROOFREADER) {
-      if (own.handedAt && !own.finalizedAt && question.order !== null) return true;
+      if (own.handedAt && !own.finalizedAt && question.order !== null && !sentBack) return true;
     }
     return context.ownerWrites && withOwner(context);
   }

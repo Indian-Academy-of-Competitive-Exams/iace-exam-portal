@@ -271,6 +271,32 @@ describe('SectionWorkService — who may change a question, and when', () => {
     );
   });
 
+  /** The failure this prevents: a reader typing into a card that reads "With the typist", and taking the claim the typist needs. */
+  it('keeps a reader out of a question they sent back until it is marked fixed', async () => {
+    const { work } = await build();
+    const { pair, typed, onPaper, typistDone } = await aSection();
+    const question = await typed();
+    await onPaper(question);
+    await typistDone();
+    const readerMayEdit = async () =>
+      (await work.one(pair, viewer(READER))).questions.find((row) => row.questionId === question.id)
+        ?.editable;
+    const reworded = draft({ stem: { en: 'What is 20% of 160?' } });
+
+    await work.sendBack(pair, question.id, { reason: SEND_BACK_REASONS.SPELLING }, viewer(READER));
+
+    assert.equal(await readerMayEdit(), false);
+    await assert.rejects(
+      () => work.edit(pair, question.id, reworded, viewer(READER)),
+      refusedWith(ErrorCodes.FORBIDDEN),
+    );
+
+    await work.fixed(pair, question.id, viewer(TYPIST));
+
+    assert.equal(await readerMayEdit(), true);
+    await work.edit(pair, question.id, reworded, viewer(READER));
+  });
+
   it('keeps a test owner out until the section is back with them', async () => {
     const { work } = await build();
     const { pair, test, reading, onPaper, typistDone } = await aSection();

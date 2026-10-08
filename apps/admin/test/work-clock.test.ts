@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { REVIEW_STATES } from '@iace/contracts';
-import { awaitsViewer, WorkClock } from '../src/features/authoring/work-clock';
+import { AppException, ErrorCodes, REVIEW_STATES } from '@iace/contracts';
+import { awaitsViewer, reportTime, WorkClock } from '../src/features/authoring/work-clock';
 
 const ticks = (clock: WorkClock, count: number) => {
   for (let at = 0; at < count; at += 1) clock.tick();
@@ -64,6 +64,32 @@ describe('the clock on a question', () => {
     assert.equal(clock.shown('q9', 0), 90);
     assert.equal(clock.shown('new', 0), 0);
     assert.deepEqual(clock.take(3600, 'new'), [['q9', 90]]);
+  });
+});
+
+describe('a report the server did not take', () => {
+  const answering = (httpStatus: number) => () =>
+    Promise.reject(new AppException(ErrorCodes.INTERNAL, 'refused', { httpStatus }));
+
+  const reportedWith = async (httpStatus: number) => {
+    const clock = new WorkClock();
+    clock.watch('q1');
+    ticks(clock, 60);
+    reportTime(clock, 3600, 'new', answering(httpStatus));
+    await new Promise((resolve) => setImmediate(resolve));
+    return clock.take(3600);
+  };
+
+  /** The failure this prevents: a minute typed offline, or a report met by a 500, dropped for good. */
+  it('keeps the seconds of one that never landed, was throttled, or met a server fault', async () => {
+    assert.deepEqual(await reportedWith(0), [['q1', 60]]);
+    assert.deepEqual(await reportedWith(429), [['q1', 60]]);
+    assert.deepEqual(await reportedWith(500), [['q1', 60]]);
+  });
+
+  it('lets go of one the server refused, since the question or the seat is gone', async () => {
+    assert.deepEqual(await reportedWith(403), []);
+    assert.deepEqual(await reportedWith(404), []);
   });
 });
 

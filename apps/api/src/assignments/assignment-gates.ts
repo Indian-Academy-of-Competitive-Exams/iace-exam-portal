@@ -76,6 +76,14 @@ export const owed = (row: GatedRow): boolean =>
   row.test.finalizedAt === null &&
   finishes(row);
 
+/** `owed` as a filter, so a queue's Outstanding and a row's standing cannot disagree. */
+export const OWED_WHERE: Prisma.QuestionAssignmentWhereInput = {
+  replacedAt: null,
+  finalizedAt: null,
+  test: { finalizedAt: null },
+  OR: [{ role: ASSIGNMENT_ROLES.PROOFREADER }, { test: { paperSource: PAPER_SOURCES.FRAMED } }],
+};
+
 /** Where a row stands against its due day; null where nothing is owed on it and nothing was finished. */
 export function standingOf(
   row: GatedRow & { dueAt: Date | null },

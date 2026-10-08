@@ -793,12 +793,14 @@ export function adminClient(core: ApiCore) {
         sectionId: string,
         questionId: string,
         input: WorkTimeInput,
+        extra: { keepalive?: boolean } = {},
       ): Promise<WorkTimeTotal> =>
         write(
           'POST',
           ADMIN_SECTION_WORK_ROUTES.time(testId, sectionId, questionId),
           workTimeTotalSchema,
           input,
+          extra,
         ),
 
       fixed: (testId: string, sectionId: string, questionId: string): Promise<SectionWork> =>

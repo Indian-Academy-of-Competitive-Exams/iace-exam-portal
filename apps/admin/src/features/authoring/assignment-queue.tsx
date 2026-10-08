@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   ASSIGNMENT_ROLES,
   FEATURE_KEYS,
+  PAPER_SOURCES,
   PERMISSION_LEVELS,
   clockText,
   instituteDayLabel,
@@ -36,6 +37,10 @@ import { DueStandingBadge } from '../../components/due-standing-badge';
 
 const isTypist = (role: AssignmentRole) => role === ASSIGNMENT_ROLES.TYPIST;
 
+/** A picked paper's typist types nothing: they fix what its reader sends back, and have no Done to give. */
+const fixesOnly = (row: AssignmentWithTest): boolean =>
+  isTypist(row.role) && row.paperSource === PAPER_SOURCES.PICKED;
+
 const rowHref = (row: AssignmentWithTest): string =>
   isTypist(row.role)
     ? ROUTES.TYPING_SECTION(row.testId, row.baseConfigSectionId)
@@ -49,6 +54,7 @@ function progressVariant(written: number, target: number): BadgeProps['variant']
 /** Written against the section's own target — the same fact the editor shows while writing. */
 function SectionProgress({ row }: Readonly<{ row: AssignmentWithTest }>) {
   const { writtenCount, sectionQuestionCount } = row;
+  if (fixesOnly(row)) return <TruncatedText>{null}</TruncatedText>;
 
   return (
     <Badge variant={progressVariant(writtenCount, sectionQuestionCount)}>
@@ -67,6 +73,7 @@ interface RowMoves {
 function stateOf(row: AssignmentWithTest): { label: string; variant: BadgeProps['variant'] } {
   if (row.sectionDropped) return { label: 'Section dropped', variant: 'neutral' };
   if (row.replacedAt) return { label: 'Passed on', variant: 'neutral' };
+  if (fixesOnly(row)) return { label: 'Corrections', variant: 'neutral' };
   if (isTypist(row.role)) {
     return row.finalizedAt
       ? { label: 'Done', variant: 'success' }

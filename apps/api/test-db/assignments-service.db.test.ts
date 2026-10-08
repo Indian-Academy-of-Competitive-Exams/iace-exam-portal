@@ -825,6 +825,34 @@ describe('AssignmentsService — mine', () => {
     assert.equal(outstanding[0]?.baseConfigSectionId, sectionB.id);
   });
 
+  /** The failure this prevents: a picked paper's typist, who has no Done to give, outstanding for ever. */
+  it('counts nothing outstanding for a typist on a picked paper, or for anybody once the test is offered', async () => {
+    const { assignments } = build();
+    const catalog = await makeCatalog(prisma);
+    const section = await makeSection(prisma, catalog);
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const seat = body({ baseConfigSectionId: section.id, assigneeId: typist.id });
+    const typed = await framed(catalog, { title: 'Typed' });
+    const offered = await framed(catalog, { title: 'Offered' });
+    const picked = await makeTest(prisma, catalog, {
+      title: 'Picked',
+      paperSource: PAPER_SOURCES.PICKED,
+    });
+    for (const test of [typed, offered, picked]) await assignments.assign(test.id, seat, typist.id);
+    await prisma.test.update({ where: { id: offered.id }, data: { finalizedAt: new Date() } });
+
+    const outstanding = await queue(assignments, typist.id, { outstanding: 'true' });
+    const all = await queue(assignments, typist.id);
+
+    assert.deepEqual(
+      outstanding.map((row) => row.testId),
+      [typed.id],
+    );
+    assert.equal(all.length, 3);
+    assert.equal(all.find((row) => row.testId === picked.id)?.paperSource, PAPER_SOURCES.PICKED);
+  });
+
   /** The failure this prevents: a queue offering Mark read before the section reached its reader, or Done on a picked paper. */
   it('offers Done on a typed section alone, and Mark read only once the section is handed over', async () => {
     const { assignments } = build();
