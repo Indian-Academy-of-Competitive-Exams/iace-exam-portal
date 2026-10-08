@@ -363,4 +363,21 @@ describe('editing from the authoring screen', () => {
     assert.equal(question.status, QUESTION_STATUS.ACTIVE);
     assert.equal(await prisma.questionVersion.count(), 1);
   });
+
+  /** The failure this prevents: a second tab, or a bank admin's rewording, overwritten from the editor's older read. */
+  it('refuses a save built on an older read, and takes the next one on the stamp a save answered with', async () => {
+    const authoring = await build();
+    const { question: opened } = await authoring.create(draft(), MINE);
+    const reworded = (stem: string, expectedUpdatedAt: string) =>
+      authoring.update(opened.id, draft({ stem: { en: stem }, expectedUpdatedAt }), MINE);
+
+    const first = await reworded('What is 20% of 250?', opened.updatedAt);
+    await assert.rejects(
+      () => reworded('What is 20% of 350?', opened.updatedAt),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    const second = await reworded('What is 20% of 450?', first.question.updatedAt);
+
+    assert.equal(second.question.stemPreview, 'What is 20% of 450?');
+  });
 });

@@ -3,8 +3,10 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Keyboard, Maximize2, Minimize2, Save } from 'lucide-react';
 import {
+  AppException,
   DEFAULT_LANGUAGE,
   DIFFICULTY_LEVEL,
+  ErrorCodes,
   FEATURE_KEYS,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
@@ -81,11 +83,14 @@ function Editor({ id }: Readonly<{ id: string | undefined }>) {
 
   // A saved question as last read or saved; a new one is kept in the browser instead, so it has none.
   const [clean, setClean] = useState<string | null>(null);
+  // The stamp of that read or save, not of a later re-read: the box still holds what came with it.
+  const [stamp, setStamp] = useState<string>();
   useFilledOnce(editing.data, (question) => {
     const read: Sent = { header: headerOf(question), state: stateOf(question) };
     setHeader(read.header);
     setState(read.state);
     setClean(JSON.stringify(read));
+    setStamp(question.updatedAt);
     setLanguage(DEFAULT_LANGUAGE);
     rebuildBox();
   });
@@ -100,8 +105,11 @@ function Editor({ id }: Readonly<{ id: string | undefined }>) {
   const duplicate = useDuplicate(draft, editingId);
   const { issues, checks } = useChecked(draft, header, state, duplicate);
 
-  const save = useSaveQuestion(editingId, (sent) => {
-    if (editingId) return setClean(JSON.stringify(sent));
+  const save = useSaveQuestion(editingId, stamp, (sent, question) => {
+    if (editingId) {
+      setStamp(question.updatedAt);
+      return setClean(JSON.stringify(sent));
+    }
     // The header survives: the next fifty questions are the same subject at the same level.
     setState(emptyState(sent.state.type));
     rebuildBox();
@@ -265,20 +273,31 @@ function EditorActions({
 }
 
 /** Saving is all the server hears: a new question, or the draft this editor was opened on. */
-function useSaveQuestion(questionId: string, onSaved: (sent: Sent) => void) {
+function useSaveQuestion(
+  questionId: string,
+  stamp: string | undefined,
+  onSaved: (sent: Sent, question: QuestionDetail) => void,
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
     meta: { success: questionId ? 'Question saved.' : 'Question saved. Next one.' },
     mutationFn: ({ header, state }: Sent) => {
       const draft = toDraft(state, header);
+      // An edit carries the stamp it was read on: built on an older read it is refused, not written over a newer one.
       return questionId
-        ? api.admin.authoring.update(questionId, draft)
+        ? api.admin.authoring.update(questionId, { ...draft, expectedUpdatedAt: stamp })
         : api.admin.authoring.create(draft);
     },
-    onSuccess: async (_result, sent) => {
-      onSaved(sent);
+    onSuccess: async ({ question }, sent) => {
+      onSaved(sent, question);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });
+    },
+    onError: (error) => {
+      // Read again, so reopening the editor starts from what is saved and not the copy just refused.
+      if (questionId && AppException.is(error) && error.code === ErrorCodes.CONFLICT) {
+        void queryClient.invalidateQueries({ queryKey: authoringQuestionQueryKey(questionId) });
+      }
     },
   });
 }
