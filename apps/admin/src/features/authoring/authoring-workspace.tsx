@@ -172,7 +172,7 @@ export function AuthoringWorkspace({
     (key === NEW_CARD || Boolean(source.cards.find((card) => card.key === key)?.editable));
   const editable = editableCard(active);
   // A card that was not read has nothing to save; with others beside it the button still moves on.
-  const typing = editable && !(activeBase.isError && !activeBase.data);
+  const typing = editable && !activeBase.isLoadingError;
 
   const held = useRef(active);
   useEffect(() => {

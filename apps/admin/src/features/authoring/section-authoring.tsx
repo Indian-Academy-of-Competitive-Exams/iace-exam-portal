@@ -440,6 +440,18 @@ function editingElsewhere(work: SectionWork | undefined, viewerId: string | unde
   return editingBy.fullName ?? 'Another admin';
 }
 
+/** What a stood-down seat is told: the section passed to somebody else, or left the test. */
+function stoodDownText(work: SectionWork): string {
+  const dropped = work.history.some(
+    (row) => row.id === work.seatAssignmentId && row.sectionDropped,
+  );
+  if (!dropped) return 'This section has passed to somebody else. You can still read it.';
+  // Leaving the test's scope deletes the section's paper, so only a typist's own drafts are left to read.
+  return work.questions.length === 0
+    ? 'This section left the test, and its paper went with it.'
+    : 'This section left the test. You can still read it.';
+}
+
 function contextOf(
   work: SectionWork,
 ): { variant: 'info' | 'success' | 'warning'; text: string } | null {
@@ -451,23 +463,7 @@ function contextOf(
   }
   // A stood-down last typist still fixes their drafts, so "you can still read it" would be wrong.
   if (work.seatReplaced && !work.questions.some((question) => question.editable)) {
-    const dropped = work.history.some(
-      (row) => row.id === work.seatAssignmentId && row.sectionDropped,
-    );
-    if (!dropped) {
-      return {
-        variant: 'info',
-        text: 'This section has passed to somebody else. You can still read it.',
-      };
-    }
-    // Leaving the test's scope deletes the section's paper, so only a typist's own drafts are left to read.
-    return {
-      variant: 'info',
-      text:
-        work.questions.length === 0
-          ? 'This section left the test, and its paper went with it.'
-          : 'This section left the test. You can still read it.',
-    };
+    return { variant: 'info', text: stoodDownText(work) };
   }
   const reader = work.reader;
   if (work.seat === SECTION_SEATS.READER) {

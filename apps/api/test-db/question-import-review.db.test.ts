@@ -269,7 +269,9 @@ describe('QuestionImportService — a run is imported once', () => {
       outcome.status === 'rejected' ? [outcome.reason as unknown] : [],
     );
     assert.equal(refused.length, 1, 'one of the two is told the file is already imported');
-    assert.ok(AppException.is(refused[0]) && refused[0].code === ErrorCodes.CONFLICT);
+    const [refusal] = refused;
+    assert.ok(AppException.is(refusal));
+    assert.equal(refusal.code, ErrorCodes.CONFLICT);
     assert.equal(await prisma.question.count(), 1);
     const log = await prisma.importLog.findUniqueOrThrow({ where: { id: importLogId } });
     assert.deepEqual(

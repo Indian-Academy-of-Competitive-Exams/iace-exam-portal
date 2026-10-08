@@ -237,29 +237,7 @@ export class ImportsService {
     const placement = placementOf(row, studentType);
 
     if (row.existingStudentId) {
-      const id = row.existingStudentId;
-      const update = this.prisma.student.update({
-        // Live only: a student erased since the plan takes none of this row back onto their tombstone.
-        where: { id, deletedAt: null },
-        data: {
-          // An empty name column means "no opinion", not "clear the name".
-          ...(row.fullName === null ? {} : { fullName: row.fullName }),
-          ...placement,
-          // The branch follows the sheet, and only a NON_IACE row reaches here without one.
-          ...(row.currentBranchId === null ? { currentBranch: { disconnect: true } } : {}),
-          ...(profile ? { profile: { upsert: { create: profile, update: profile } } } : {}),
-        },
-      });
-      const append = this.accessAppend(id, row, held);
-      const writes: Prisma.PrismaPromise<unknown>[] = append ? [update, append] : [update];
-      try {
-        // Together or not at all: a row is never left with its name written and its enrolments not.
-        await this.prisma.$transaction(writes);
-      } catch (error) {
-        if (isRecordNotFound(error) && !(await this.isLive(id))) return null;
-        throw error;
-      }
-      return { entityId: id, action: AUDIT_ACTION.UPDATE };
+      return this.updateRow(row.existingStudentId, row, { placement, profile }, held);
     }
 
     try {
@@ -278,6 +256,37 @@ export class ImportsService {
     } catch (error) {
       return this.writeRow({ ...row, existingStudentId: await this.holderOf(mobile, error) });
     }
+  }
+
+  /** A row for a student already here: what the sheet says of them and the access it adds. Null when they were erased since the plan. */
+  private async updateRow(
+    id: string,
+    row: StudentImportRow,
+    { placement, profile }: RowWrite,
+    held?: HeldAccess,
+  ): Promise<RowAction | null> {
+    const update = this.prisma.student.update({
+      // Live only: a student erased since the plan takes none of this row back onto their tombstone.
+      where: { id, deletedAt: null },
+      data: {
+        // An empty name column means "no opinion", not "clear the name".
+        ...(row.fullName === null ? {} : { fullName: row.fullName }),
+        ...placement,
+        // The branch follows the sheet, and only a NON_IACE row reaches here without one.
+        ...(row.currentBranchId === null ? { currentBranch: { disconnect: true } } : {}),
+        ...(profile ? { profile: { upsert: { create: profile, update: profile } } } : {}),
+      },
+    });
+    const append = this.accessAppend(id, row, held);
+    const writes: Prisma.PrismaPromise<unknown>[] = append ? [update, append] : [update];
+    try {
+      // Together or not at all: a row is never left with its name written and its enrolments not.
+      await this.prisma.$transaction(writes);
+    } catch (error) {
+      if (isRecordNotFound(error) && !(await this.isLive(id))) return null;
+      throw error;
+    }
+    return { entityId: id, action: AUDIT_ACTION.UPDATE };
   }
 
   /** Who holds a number a create just lost to: registered since the plan, so the row is theirs. Anything else is rethrown. */
@@ -531,9 +540,15 @@ function placementOf(row: StudentImportRow, studentType: StudentType) {
   };
 }
 
+/** What both of a row's writes are built from. */
+interface RowWrite {
+  placement: ReturnType<typeof placementOf>;
+  profile: ReturnType<typeof profileData>;
+}
+
 /** What a planned row holds beyond what the student held when the plan was made. */
-function addedTo<T>(held: readonly T[] = [], planned: readonly T[]): T[] {
-  return planned.filter((value) => !held.includes(value));
+function addedTo<T>(held: readonly T[] | undefined, planned: readonly T[]): T[] {
+  return planned.filter((value) => !held?.includes(value));
 }
 
 /** The profile columns this row filled in, or null when it filled in none. */

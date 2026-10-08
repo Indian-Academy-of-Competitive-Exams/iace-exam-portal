@@ -229,6 +229,12 @@ const RUN: Record<Move, (id: string) => Promise<unknown>> = {
   DELETE: (id) => api.admin.questions.remove(id),
 };
 
+/** The one menu item that takes a question off the shelf or puts it back. */
+const SHELVE_ITEMS = {
+  ARCHIVE: { label: 'Archive', Icon: Archive },
+  UNARCHIVE: { label: 'Unarchive', Icon: ArchiveRestore },
+} as const;
+
 function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
@@ -261,6 +267,8 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
   };
 
   const prompt = asking ? PROMPTS[asking] : null;
+  const shelve = isArchived ? 'UNARCHIVE' : 'ARCHIVE';
+  const Shelve = SHELVE_ITEMS[shelve];
 
   return (
     <>
@@ -286,10 +294,10 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
               <DropdownMenuItem
                 destructive={!isArchived}
                 disabled={act.isPending}
-                onSelect={() => ask(isArchived ? 'UNARCHIVE' : 'ARCHIVE')}
+                onSelect={() => ask(shelve)}
               >
-                {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
-                {isArchived ? 'Unarchive' : 'Archive'}
+                <Shelve.Icon aria-hidden />
+                {Shelve.label}
               </DropdownMenuItem>
             )}
 

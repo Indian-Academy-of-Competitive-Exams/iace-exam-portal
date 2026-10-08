@@ -248,7 +248,8 @@ describe('AuthService — a student signs in with a code', () => {
     ]);
 
     assert.equal(won.status, 'fulfilled');
-    assert.ok(lost.status === 'rejected' && failsWith(ErrorCodes.OTP_EXPIRED)(lost.reason));
+    assert.ok(lost.status === 'rejected');
+    assert.ok(failsWith(ErrorCodes.OTP_EXPIRED)(lost.reason));
     assert.equal(await prisma.student.count(), 1);
     assert.equal(sessionKeys(ctx).length, 1);
   });

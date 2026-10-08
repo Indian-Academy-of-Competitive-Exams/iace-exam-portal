@@ -625,6 +625,7 @@ describe('AttemptsService — a reload racing another move of the deadline', () 
     const { row, key, gained, banked } = await settled();
     assert.equal(key, row);
     assert.equal(gained, banked, 'the deadline moved by what was banked, once');
-    assert.ok(banked >= SILENT_MS - GRACE_MS && banked < SILENT_MS, `banked ${banked}ms`);
+    assert.ok(banked >= SILENT_MS - GRACE_MS, `banked ${banked}ms`);
+    assert.ok(banked < SILENT_MS, `banked ${banked}ms`);
   });
 });

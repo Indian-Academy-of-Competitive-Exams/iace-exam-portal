@@ -114,7 +114,7 @@ export function usePagedPicker<T>(options: {
       isLoading: pages.isLoading,
       isLoadingMore: pages.isLoadingMore,
       isError: pages.isError,
-      onRetry: () => void pages.retry(),
+      onRetry: pages.retry,
     },
   };
 }

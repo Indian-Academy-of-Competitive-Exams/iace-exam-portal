@@ -256,9 +256,10 @@ function readBranch(
 }
 
 /** A course named in several words, however a sheet joined them: "AP/TS POLICE" carries a list separator. */
+const WORD_GAP = String.raw`[\s/_]+`;
 const WORDED_COURSES = EXAM_COURSES.filter((course) => course.includes('_')).map((course) => ({
   course,
-  written: new RegExp(String.raw`\b${course.replaceAll('_', String.raw`[\s/_]+`)}\b`, 'gi'),
+  written: new RegExp(String.raw`\b${course.replaceAll('_', WORD_GAP)}\b`, 'gi'),
 }));
 
 /** The courses this row names, and the ones that are not courses at all. */

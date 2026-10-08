@@ -572,9 +572,7 @@ describe('a selection that runs from one slot into another', () => {
   /** The failure this prevents: Backspace took every word of both slots, selected or not. */
   it('loses to Backspace only the words it covers', () => {
     const box = selected('20%', 'five');
-    act(() => {
-      fireEvent.keyDown(box, { key: 'Backspace' });
-    });
+    fireEvent.keyDown(box, { key: 'Backspace' });
 
     assert.deepEqual(bodies(), ['What is', 'five', 'thirty', 'B']);
     assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'answer']);
@@ -583,9 +581,7 @@ describe('a selection that runs from one slot into another', () => {
 
   it('empties a slot it covers whole, and keeps the rest of the last one', () => {
     const box = selected('20%', 'rty');
-    act(() => {
-      fireEvent.keyDown(box, { key: 'Delete' });
-    });
+    fireEvent.keyDown(box, { key: 'Delete' });
 
     assert.deepEqual(bodies(), ['What is', '', 'rty', 'B']);
     assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'answer']);
@@ -595,13 +591,11 @@ describe('a selection that runs from one slot into another', () => {
   it('is cut: the words leave the box and are on the clipboard', () => {
     const box = selected('20%', 'five');
     const clipboard = new Map<string, string>();
-    act(() => {
-      fireEvent.cut(box, {
-        clipboardData: {
-          clearData: () => clipboard.clear(),
-          setData: (type: string, value: string) => clipboard.set(type, value),
-        },
-      });
+    fireEvent.cut(box, {
+      clipboardData: {
+        clearData: () => clipboard.clear(),
+        setData: (type: string, value: string) => clipboard.set(type, value),
+      },
     });
 
     assert.deepEqual(bodies(), ['What is', 'five', 'thirty', 'B']);
@@ -625,13 +619,11 @@ describe('a selection that runs from one slot into another', () => {
   it('leaves a cut inside one slot to the editor', () => {
     const box = selected('20%', 'of');
     const clipboard = new Map<string, string>();
-    act(() => {
-      fireEvent.cut(box, {
-        clipboardData: {
-          clearData: () => clipboard.clear(),
-          setData: (type: string, value: string) => clipboard.set(type, value),
-        },
-      });
+    fireEvent.cut(box, {
+      clipboardData: {
+        clearData: () => clipboard.clear(),
+        setData: (type: string, value: string) => clipboard.set(type, value),
+      },
     });
 
     assert.deepEqual(bodies(), ['What is of 150?', 'twenty five', 'thirty', 'B']);
@@ -755,9 +747,7 @@ describe('a picture that is still uploading', () => {
       const file = new File(['x'], name, { type: 'image/png' });
       return { kind: 'file', type: file.type, getAsFile: () => file };
     });
-    await act(async () => {
-      fireEvent.paste(box, { clipboardData: { items: pasted, getData: () => '' } });
-    });
+    fireEvent.paste(box, { clipboardData: { items: pasted, getData: () => '' } });
     await screen.findAllByRole('button', { name: 'Remove image' });
 
     assert.deepEqual(blocksOf('option:2'), ['figure', 'figure', 'figure', 'line']);

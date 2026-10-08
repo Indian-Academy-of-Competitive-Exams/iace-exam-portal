@@ -54,13 +54,13 @@ export interface FilterState {
 
 /** The web keeps this in the URL; a phone has none, so the screen holds it. */
 export function useFilterState(filters: readonly FilterSpec[]): FilterState {
-  const [chosen, setValues] = useState<FilterValues>({});
+  const [chosen, setChosen] = useState<FilterValues>({});
 
   const setFilter = useCallback((key: string, value: FilterValue) => {
-    setValues((held) => ({ ...held, [key]: value }));
+    setChosen((held) => ({ ...held, [key]: value }));
   }, []);
 
-  const clearFilters = useCallback(() => setValues({}), []);
+  const clearFilters = useCallback(() => setChosen({}), []);
 
   const values = useMemo(() => offeredValues(chosen, filters), [chosen, filters]);
   const activeCount = useMemo(() => activeFilterCount(values, filters), [values, filters]);

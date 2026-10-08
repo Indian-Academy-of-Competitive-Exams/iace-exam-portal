@@ -119,6 +119,33 @@ function SheetTour() {
   return null;
 }
 
+/** Asked before a move leaves typed-in cards behind: neither the preview nor Import has them. */
+function DiscardUnsaved({
+  leaving,
+  unsaved,
+  onCancel,
+  onDiscard,
+}: Readonly<{
+  leaving: Leaving | null;
+  unsaved: number;
+  onCancel: () => void;
+  onDiscard: (to: Leaving) => void;
+}>) {
+  if (!leaving) return null;
+  const have = unsaved === 1 ? 'has' : 'have';
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => !open && onCancel()}
+      destructive
+      title="Discard the unsaved changes?"
+      description={`${plural(unsaved, 'question')} on this page ${have} changes that were not saved. ${LEAVING[leaving].drops}`}
+      confirmLabel={LEAVING[leaving].confirmLabel}
+      onConfirm={() => onDiscard(leaving)}
+    />
+  );
+}
+
 // Preview, then commit — bad rows don't block the good ones; the file uploads once and commit just names the run the preview opened.
 export function ImportQuestionsPage() {
   const { testId, sectionId } = useParams<{ testId?: string; sectionId?: string }>();
@@ -207,20 +234,15 @@ export function ImportQuestionsPage() {
           }
         />
 
-        {leaving ? (
-          <ConfirmDialog
-            open
-            onOpenChange={(open) => !open && setLeaving(null)}
-            destructive
-            title="Discard the unsaved changes?"
-            description={`${plural(unsaved, 'question')} on this page ${unsaved === 1 ? 'has' : 'have'} changes that were not saved. ${LEAVING[leaving].drops}`}
-            confirmLabel={LEAVING[leaving].confirmLabel}
-            onConfirm={() => {
-              setLeaving(null);
-              moves[leaving]();
-            }}
-          />
-        ) : null}
+        <DiscardUnsaved
+          leaving={leaving}
+          unsaved={unsaved}
+          onCancel={() => setLeaving(null)}
+          onDiscard={(to) => {
+            setLeaving(null);
+            moves[to]();
+          }}
+        />
       </>
     );
   }

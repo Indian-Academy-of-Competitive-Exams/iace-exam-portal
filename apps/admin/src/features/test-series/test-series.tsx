@@ -192,9 +192,10 @@ function deleteDescription({ name, testCount, grantCount }: TestSeriesSummary): 
     const [are, them] = testCount === 1 ? ['is', 'it'] : ['are', 'them'];
     return `${plural(testCount, 'test')} ${are} offered through ${name}, and deleting it would take away the only route to ${them}, so the server will refuse. Move ${them} to another series first.`;
   }
+  const lose = grantCount === 1 ? 'loses' : 'lose';
   const grants =
     grantCount > 0
-      ? ` ${plural(grantCount, 'student')} granted it directly ${grantCount === 1 ? 'loses' : 'lose'} that grant.`
+      ? ` ${plural(grantCount, 'student')} granted it directly ${lose} that grant.`
       : '';
   return `No test is offered through ${name}.${grants} This cannot be undone.`;
 }

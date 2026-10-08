@@ -448,6 +448,18 @@ function EditorBanners({
   );
 }
 
+/** The sections a removed session held and where they went; null when it held none. */
+function displacedNote(
+  sessions: ConfigFormValues['modules'],
+  index: number,
+  moved: number,
+): string | null {
+  const first = sessions.find((_, at) => at !== index);
+  if (!first || moved === 0) return null;
+  const removed = sessions[index]?.name || `Session ${index + 1}`;
+  return `${removed} held ${plural(moved, 'section')}, now in ${first.name || 'the first session'}.`;
+}
+
 function ConfigEditor({
   detail,
   isEditing,
@@ -462,10 +474,11 @@ function ConfigEditor({
   const { identity, can } = useAuth();
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const existing = detail !== null;
+  const saveLabel = existing ? 'Save configuration' : 'Create configuration';
   // A locked config can never be edited, so it is the one that never leaves read-only.
   const locked = detail?.locked ?? false;
   const editingBy = detail?.editingBy ?? null;
-  const elsewhere = editingBy && editingBy.adminId !== identity?.id ? editingBy : null;
+  const elsewhere = editingBy?.adminId === identity?.id ? null : editingBy;
   const [asking, setAsking] = useState(false);
   const [promoting, setPromoting] = useState<ConfigFormValues | null>(null);
   const [losingDefault, setLosingDefault] = useState<string | null>(null);
@@ -540,17 +553,12 @@ function ConfigEditor({
     const sessions = form.getValues('modules');
     const before = form.getValues('sections');
     const moved = sectionsInSession(before, index).length;
-    const first = sessions.find((_, at) => at !== index);
 
     modules.remove(index);
     sectionsAfterSessionRemoved(before, index).forEach((section, at) =>
       form.setValue(`sections.${at}.moduleOrder`, section.moduleOrder, { shouldDirty: true }),
     );
-    setDisplaced(
-      first && moved > 0
-        ? `${sessions[index]?.name || `Session ${index + 1}`} held ${plural(moved, 'section')}, now in ${first.name || 'the first session'}.`
-        : null,
-    );
+    setDisplaced(displacedNote(sessions, index, moved));
   };
 
   const issues = sectionIssuesOf(save.error);
@@ -597,7 +605,7 @@ function ConfigEditor({
               Cancel
             </Button>
             <Button type="submit" loading={save.isPending || form.formState.isSubmitting}>
-              {existing ? 'Save configuration' : 'Create configuration'}
+              {saveLabel}
             </Button>
           </>
         ) : null

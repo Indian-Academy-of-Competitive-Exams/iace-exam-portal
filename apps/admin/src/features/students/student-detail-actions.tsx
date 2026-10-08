@@ -85,6 +85,42 @@ function ChangeMobileDialog({
   );
 }
 
+/** The tests switch's words, by where it stands now. */
+const TESTS_SWITCH = {
+  BLOCKED: {
+    action: 'Allow tests',
+    done: 'Tests allowed again.',
+    title: (name: string) => `Allow ${name} to sit tests again?`,
+    description:
+      'They can start tests again straight away, on everything their enrolments and grants reach. Nothing was lost while it was on.',
+  },
+  ALLOWED: {
+    action: 'Block from tests',
+    done: 'Blocked from tests.',
+    title: (name: string) => `Block ${name} from tests?`,
+    description:
+      'They can still sign in and see every test they have already sat, and their results. They cannot start a new one until this is lifted. A session they already have open is not signed out.',
+  },
+} as const;
+
+/** The sign-in switch's words, by where it stands now. */
+const SIGN_IN_SWITCH = {
+  ACTIVE: {
+    action: 'Suspend sign-in',
+    done: 'Sign-in suspended.',
+    title: (name: string) => `Suspend sign-in for ${name}?`,
+    description:
+      'They are signed out on every device straight away, and cannot sign in again until this is restored. Their record, attempts and results are kept.',
+  },
+  SUSPENDED: {
+    action: 'Restore sign-in',
+    done: 'Sign-in restored.',
+    title: (name: string) => `Restore sign-in for ${name}?`,
+    description:
+      'They can sign in again. Whether they may sit a test is the other switch, and this does not change it.',
+  },
+} as const;
+
 /** Everything done TO a student rather than recorded about them, each behind its own confirm. */
 export function ActionsTab({
   detail,
@@ -102,6 +138,8 @@ export function ActionsTab({
   const isSuperAdmin = useAuth().identity?.isSuperAdmin ?? false;
   const { id, isActive, isTestBlocked } = detail;
   const name = detail.fullName ?? detail.mobile;
+  const tests = TESTS_SWITCH[isTestBlocked ? 'BLOCKED' : 'ALLOWED'];
+  const signIn = SIGN_IN_SWITCH[isActive ? 'ACTIVE' : 'SUSPENDED'];
 
   const applyUpdate = (updated: StudentDetail) => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS, refetchType: 'none' });
@@ -109,9 +147,7 @@ export function ActionsTab({
   };
 
   const setTestBlocked = useMutation({
-    meta: {
-      success: (): string => (isTestBlocked ? 'Tests allowed again.' : 'Blocked from tests.'),
-    },
+    meta: { success: (): string => tests.done },
     mutationFn: (next: boolean) => api.admin.students.setTestBlocked(id, { isTestBlocked: next }),
     onError: () => setBlockConfirm(false),
     onSuccess: (updated) => {
@@ -121,9 +157,7 @@ export function ActionsTab({
   });
 
   const setActive = useMutation({
-    meta: {
-      success: (): string => (isActive ? 'Sign-in suspended.' : 'Sign-in restored.'),
-    },
+    meta: { success: (): string => signIn.done },
     mutationFn: (next: boolean) => api.admin.students.setActive(id, next),
     onError: () => setSignInConfirm(false),
     onSuccess: (updated) => {
@@ -179,7 +213,7 @@ export function ActionsTab({
               loading={setTestBlocked.isPending}
               onClick={() => setBlockConfirm(true)}
             >
-              {isTestBlocked ? 'Allow tests' : 'Block from tests'}
+              {tests.action}
             </Button>
           }
         />
@@ -247,7 +281,7 @@ export function ActionsTab({
               loading={setActive.isPending}
               onClick={() => setSignInConfirm(true)}
             >
-              {isActive ? 'Suspend sign-in' : 'Restore sign-in'}
+              {signIn.action}
             </Button>
           }
         />
@@ -295,13 +329,9 @@ export function ActionsTab({
         onOpenChange={setBlockConfirm}
         destructive={!isTestBlocked}
         loading={setTestBlocked.isPending}
-        title={isTestBlocked ? `Allow ${name} to sit tests again?` : `Block ${name} from tests?`}
-        description={
-          isTestBlocked
-            ? 'They can start tests again straight away, on everything their enrolments and grants reach. Nothing was lost while it was on.'
-            : 'They can still sign in and see every test they have already sat, and their results. They cannot start a new one until this is lifted. A session they already have open is not signed out.'
-        }
-        confirmLabel={isTestBlocked ? 'Allow tests' : 'Block from tests'}
+        title={tests.title(name)}
+        description={tests.description}
+        confirmLabel={tests.action}
         onConfirm={() => setTestBlocked.mutate(!isTestBlocked)}
       />
 
@@ -310,13 +340,9 @@ export function ActionsTab({
         onOpenChange={setSignInConfirm}
         destructive={isActive}
         loading={setActive.isPending}
-        title={isActive ? `Suspend sign-in for ${name}?` : `Restore sign-in for ${name}?`}
-        description={
-          isActive
-            ? 'They are signed out on every device straight away, and cannot sign in again until this is restored. Their record, attempts and results are kept.'
-            : 'They can sign in again. Whether they may sit a test is the other switch, and this does not change it.'
-        }
-        confirmLabel={isActive ? 'Suspend sign-in' : 'Restore sign-in'}
+        title={signIn.title(name)}
+        description={signIn.description}
+        confirmLabel={signIn.action}
         onConfirm={() => setActive.mutate(!isActive)}
       />
 
