@@ -64,7 +64,9 @@ jobs:
 
           api=false; spa=false
           # The deploy files the box reads count as the API half: they only reach it on a deploy.
-          grep -qE '^(apps/api/|packages/|prisma/|pnpm-lock\.yaml$|package\.json$|deploy/(compose\.yml|Caddyfile|prune-disk\.sh|alloy/))' <<<"$FILES" && api=true
+          # Only the two packages the API imports — ui and app-kit are the SPAs' alone, and a
+          # screen change should not rebuild an image and restart the API.
+          grep -qE '^(apps/api/|packages/(contracts|config)/|prisma/|pnpm-lock\.yaml$|package\.json$|deploy/(compose\.yml|Caddyfile|prune-disk\.sh|alloy/))' <<<"$FILES" && api=true
           grep -qE '^(apps/exams|apps/admin|packages|deploy/publish-spas\.sh)/?' <<<"$FILES" && spa=true
           echo "api=$api" >> "$GITHUB_OUTPUT"
           echo "spa=$spa" >> "$GITHUB_OUTPUT"
