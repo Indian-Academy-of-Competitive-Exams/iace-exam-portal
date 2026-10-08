@@ -416,10 +416,14 @@ push is a worse version of a check that takes five seconds before the commit exi
 - **Hot-path writes** — `no-hot-path-db-write.js`: the live sitting path may not write Postgres.
 - **Destructive actions and screen prose** — `confirm-destructive.js`, `no-narration.js` and
   `react-conventions.js` hold the UI rules that types cannot.
-- **CI gates** — format → deps:check → lint → typecheck → test → build, each running even if an
-  earlier one failed, so one push reports every problem. A second job applies every migration to a
+- **CI gates** — format → deps:check → env:check → lint → typecheck → test → build, each running
+  even if an earlier one failed, so one push reports every problem. A second job applies every migration to a
   scratch database from scratch, checks the result still matches `schema.prisma`, and then runs
   `pnpm test:db` against a database of its own.
+- **Env keys** — `pnpm env:check`: the API's env schema is the list of keys. `.env.example` names
+  all of them plus what a developer's machine alone sets; `deploy/.env.example` names all of them
+  minus those, plus what a box alone sets. A real file beside either (`.env`, `deploy/.env.staging`
+  and the like), where one exists, must name exactly its template's keys. Names only are read.
 - **Doc drift** — `pnpm docs:check`: a name a doc backticks must exist in the schema or the
   TypeScript source, and a `docs/03 §N` citation must land on a section that exists. It is the one
   item here that is **not** a gate: it runs on a weekly schedule and blocks no commit and no push,

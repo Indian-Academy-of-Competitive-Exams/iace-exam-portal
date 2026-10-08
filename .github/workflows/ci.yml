@@ -74,6 +74,11 @@ jobs:
         if: '!cancelled()'
         run: pnpm deps:check
 
+      # A key the API reads and a template does not name is found at boot on a box, not in review.
+      - name: Environment templates
+        if: '!cancelled()'
+        run: pnpm env:check
+
       - name: Lint
         if: '!cancelled()'
         run: pnpm lint

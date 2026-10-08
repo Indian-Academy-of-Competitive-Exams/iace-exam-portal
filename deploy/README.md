@@ -47,7 +47,7 @@ difference between a three-minute recovery and rebuilding secrets by hand at the
 moment:
 
 ```bash
-aws ssm put-parameter --name /examprep/staging/env --type SecureString --overwrite --value file://deploy/.env
+aws ssm put-parameter --name /examprep/staging/env --type SecureString --tier Advanced --overwrite --value file://deploy/.env
 ```
 
 On a new box, one command brings the environment with it:
@@ -56,8 +56,9 @@ On a new box, one command brings the environment with it:
 aws ssm get-parameter --name /examprep/staging/env --with-decryption --query Parameter.Value --output text > deploy/.env
 ```
 
-A Standard-tier parameter caps at **4 KB**, so strip the comments before pushing or pay $0.05 a
-month for the Advanced tier. Nothing reads SSM at runtime — the API validates `process.env` and
+A Standard-tier parameter caps at **4 KB**, and a filled-in file is past that even with its
+comments stripped, so it is pushed to the Advanced tier ($0.05 a month), which caps at **8 KB**.
+`pnpm env:check` compares the file's keys with `deploy/.env.example` before you push it. Nothing reads SSM at runtime — the API validates `process.env` and
 nothing else, so the box boots whether or not AWS answers.
 
 **No S3 key pair on a real box.** Leave `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` unset and

@@ -18,6 +18,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md,yml,yaml}\"",
     "deps:check": "syncpack lint",
+    "env:check": "node scripts/check-env.mjs",
     "deps:fix": "syncpack fix",
     "docs:check": "node scripts/check-docs.mjs",
     "clean": "turbo run clean && rm -rf node_modules",
