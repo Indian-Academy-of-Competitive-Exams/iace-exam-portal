@@ -10,6 +10,7 @@ import {
   type AnswerChange,
   type AttemptStatus,
 } from '@iace/contracts';
+import { AttemptResolutionService } from '../src/attempts/attempt-resolution.service';
 import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptSweeperProcessor } from '../src/attempts/attempt-sweeper.processor';
@@ -17,11 +18,13 @@ import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ScoringQueue } from '../src/attempts/scoring-queue';
 import { SubmitService } from '../src/attempts/submit.service';
+import { AuditContext } from '../src/audit';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { QUEUE_NAMES, scoringJobId } from '../src/queue/queues';
 import { FakeMetrics, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import {
   RIGHT_OPTION,
+  makeAdmin,
   makePaper,
   makeStudent,
   resetDatabase,
@@ -112,6 +115,7 @@ async function build(over: { endsAt?: Date; status?: AttemptStatus; submittedAt?
     q1,
     q2,
     hooks,
+    redis,
     state,
     queue,
     scoring,
@@ -470,6 +474,113 @@ describe('a save that races the submit', () => {
     // A key outliving its sitting would go on accepting saves for the whole 12h TTL.
     assert.equal(await built.state.read(built.attemptId), null);
   });
+});
+
+describe('a key put back from Postgres while the sitting is being ended', () => {
+  /** The live key as a state service sees it when `ending` lands right after it has read the sitting as live. */
+  function rebuilding(built: Built, ending: () => Promise<unknown>): AttemptStateService {
+    let pending = true;
+    const client = new Proxy(prisma, {
+      get(target, key: string | symbol) {
+        if (key !== 'attempt') return Reflect.get(target, key) as unknown;
+        return new Proxy(target.attempt, {
+          get(delegate, method: string | symbol) {
+            if (method !== 'findUnique') return Reflect.get(delegate, method) as unknown;
+            return async (args: Prisma.AttemptFindUniqueArgs) => {
+              const row = await delegate.findUnique(args);
+              if (pending) {
+                pending = false;
+                await ending();
+              }
+              return row;
+            };
+          },
+        });
+      },
+    });
+    return new AttemptStateService(client, built.redis.asService(), new PaperSheetService(prisma));
+  }
+
+  const submitting = (built: Built) => () => built.submit.submit(built.student, built.attemptId);
+
+  const voiding = (built: Built) => async () => {
+    const support = new AttemptResolutionService(
+      prisma,
+      built.state,
+      built.sheets,
+      built.submit,
+      new RollupQueue(new FakeQueue().asQueue()),
+      new AuditContext(),
+    );
+    const adminId = (await makeAdmin(prisma)).id;
+    await support.void(
+      built.attemptId,
+      { reason: 'Sat by someone else', regrantRanked: false },
+      adminId,
+    );
+  };
+
+  const saving = (state: AttemptStateService, built: Built) =>
+    state.save(built.student, built.attemptId, { revision: 1, answers: [built.change()] }, NOW);
+
+  const rebuilds: Record<string, (state: AttemptStateService, built: Built) => Promise<unknown>> = {
+    'a save': saving,
+    'a reloaded screen reading its state': (state, built) =>
+      state.current(built.student, built.attemptId, NOW),
+    'a resume': (state, built) => state.resume(built.live, 'tab_a', NOW),
+    'a support reset': (state, built) => state.reestablish(built.student, built.attemptId),
+  };
+
+  const refusedAsEnded = (error: unknown) =>
+    AppException.is(error) && error.code === ErrorCodes.CONFLICT;
+
+  for (const [what, rebuild] of Object.entries(rebuilds)) {
+    /** The failure this prevents: a fresh key behind a handed-in sitting, taking saves nobody will ever write. */
+    it(`refuses ${what} that put the key back as the submit landed, and leaves no key`, async () => {
+      const built = await build();
+
+      await assert.rejects(
+        () => rebuild(rebuilding(built, submitting(built)), built),
+        refusedAsEnded,
+      );
+
+      assert.equal(await built.state.read(built.attemptId), null);
+      assert.deepEqual(await built.state.dirtyIds(), []);
+    });
+  }
+
+  it('refuses a save that put the key back as a void landed, and leaves no key', async () => {
+    const built = await build();
+
+    await assert.rejects(() => saving(rebuilding(built, voiding(built)), built), refusedAsEnded);
+
+    assert.equal(await built.state.read(built.attemptId), null);
+    assert.equal((await attemptRow(built.attemptId)).status, ATTEMPT_STATUS.VOIDED);
+  });
+
+  for (const status of [ATTEMPT_STATUS.EVALUATED, ATTEMPT_STATUS.VOIDED]) {
+    /** The failure this prevents: a late submit writing a stray key over answers the scorer already marked. */
+    it(`drops a stray key behind a sitting that is ${status} rather than writing it over the sheet`, async () => {
+      const built = await build();
+      await answered(built);
+      await prisma.attempt.update({
+        where: { id: built.attemptId },
+        data: { status, submittedAt: NOW },
+      });
+      const sheet = () =>
+        prisma.attemptSheet.findUniqueOrThrow({
+          where: { attemptId: built.attemptId },
+          select: { answers: true },
+        });
+      const marked = await sheet();
+
+      const result = await built.submit.submit(built.student, built.attemptId);
+
+      assert.equal(result.submittedByThisCall, false);
+      assert.deepEqual(await sheet(), marked);
+      assert.equal(await built.state.read(built.attemptId), null);
+    });
+  }
 });
 
 describe('a sitting the scorer never scored', () => {

@@ -169,6 +169,11 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
     if (keys.length > 0) await this.client.del(...keys);
   }
 
+  /** Removes a key only while it still holds the bytes given, so a write that landed since is left alone. */
+  async deleteIfUnchanged(key: string, was: string): Promise<boolean> {
+    return (await this.client.eval(DELETE_IF_HELD_BY, 1, key, was)) === 1;
+  }
+
   /** Drops each member whose key still holds the bytes read, in one script — a write landing since keeps its member. */
   async removeIfUnchanged(
     setKey: string,

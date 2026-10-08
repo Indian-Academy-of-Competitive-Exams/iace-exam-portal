@@ -1,14 +1,14 @@
 /** The one writer of `AttemptSheet.answers`: seeded at start, then written whole by the flusher and at submit. */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ATTEMPT_STATUS } from '@iace/contracts';
+import { ATTEMPT_STATUS, type AttemptStatus } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { blankSheet, sheetOf, type AnswerSheet } from './answer-sheet';
 import { type HeldState } from './attempt-state';
 import { PaperSheetService } from './paper-sheet.service';
 
-const whileLive = (attemptId: string) =>
-  Prisma.sql`EXISTS (SELECT 1 FROM "Attempt" WHERE "id" = ${attemptId}::uuid AND "status" = ${ATTEMPT_STATUS.IN_PROGRESS}::"AttemptStatus")`;
+const whileIn = (attemptId: string, status: AttemptStatus) =>
+  Prisma.sql`EXISTS (SELECT 1 FROM "Attempt" WHERE "id" = ${attemptId}::uuid AND "status" = ${status}::"AttemptStatus")`;
 
 @Injectable()
 export class AttemptSheetService {
@@ -28,23 +28,26 @@ export class AttemptSheetService {
   }
 
   /** Every live answer at once — the flusher's write while the sitting is live, and submit's last. */
-  async write(held: HeldState, onlyWhileLive: boolean): Promise<AnswerSheet> {
+  write(held: HeldState, onlyWhileLive: boolean): Promise<AnswerSheet> {
+    return this.writeWhile(held, onlyWhileLive ? ATTEMPT_STATUS.IN_PROGRESS : null);
+  }
+
+  /** The same write, landing only while the sitting is in the status named; null gates on nothing. */
+  async writeWhile(held: HeldState, status: AttemptStatus | null): Promise<AnswerSheet> {
     const paper = await this.papers.rowsOf(held.testId);
     const sheet = sheetOf(held.answers, paper, new Date(held.startedAt));
-    const gate = onlyWhileLive ? Prisma.sql`AND ${whileLive(held.attemptId)}` : Prisma.empty;
+    const gate = status ? Prisma.sql`AND ${whileIn(held.attemptId, status)}` : Prisma.empty;
     await this.prisma.$executeRaw`
       UPDATE "AttemptSheet" SET "answers" = ${JSON.stringify(sheet)}::jsonb, "updatedAt" = now()
       WHERE "attemptId" = ${held.attemptId}::uuid ${gate}`;
-    await this.writeSections(held, onlyWhileLive);
+    await this.writeSections(held, status);
     return sheet;
   }
 
   /** A composite paper has one clock and no sections, so it pays for nothing here. */
-  private async writeSections(held: HeldState, onlyWhileLive: boolean): Promise<void> {
+  private async writeSections(held: HeldState, status: AttemptStatus | null): Promise<void> {
     if (Object.keys(held.sections).length === 0) return;
-    const gate = onlyWhileLive
-      ? Prisma.sql`AND "status" = ${ATTEMPT_STATUS.IN_PROGRESS}::"AttemptStatus"`
-      : Prisma.empty;
+    const gate = status ? Prisma.sql`AND "status" = ${status}::"AttemptStatus"` : Prisma.empty;
     await this.prisma.$executeRaw`
       UPDATE "Attempt" SET "sectionState" = ${JSON.stringify(held.sections)}::jsonb
       WHERE "id" = ${held.attemptId}::uuid ${gate}`;

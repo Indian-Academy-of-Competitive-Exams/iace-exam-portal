@@ -35,6 +35,7 @@ import {
   creditMs,
   isAbandoned,
   isInTime,
+  laterOf,
   PAUSE_LIMIT_SEC,
   packHeld,
   withinReach,
@@ -70,6 +71,12 @@ export interface SittingOpened {
   session?: string;
 }
 
+/** What a resume left: the deadline its key now holds, and the away time the row has yet to be given. */
+export interface Resumed {
+  endsAt: Date;
+  creditedMs: number;
+}
+
 @Injectable()
 export class AttemptStateService {
   constructor(
@@ -80,26 +87,9 @@ export class AttemptStateService {
 
   /** Seeded when the sitting starts, so no later save has to ask Postgres whose attempt this is. */
   async open(attempt: SittingOpened, tab?: string, now: Date = new Date()): Promise<void> {
-    // The tab and its sign-in are taken together; a caller naming no tab takes neither.
-    const holder = tab === undefined ? {} : { tab, session: attempt.session };
     await this.patch(
       attempt.id,
-      (held) => {
-        // Judged inside the swap: of two sign-ins opening at once, the first to land holds it.
-        const refused = heldElsewhere(held, attempt.session, now);
-        if (refused) throw refused;
-        return {
-          ...held,
-          testId: attempt.testId,
-          startedAt: attempt.startedAt.toISOString(),
-          // Postgres is the deadline of record, so a resume's credit reaches the key that admits saves.
-          endsAt: attempt.endsAt.toISOString(),
-          // Picked up again: the clock starts counting from here, not from where it was put down.
-          lastSeenAt: now.toISOString(),
-          forwardOnly: attempt.forwardOnly,
-          ...holder,
-        };
-      },
+      (held) => handed(held, attempt, tab, now),
       () => ({
         attemptId: attempt.id,
         studentId: attempt.studentId,
@@ -111,7 +101,7 @@ export class AttemptStateService {
         answers: {},
         sections: {},
         forwardOnly: attempt.forwardOnly,
-        ...holder,
+        ...holderOf(attempt, tab),
       }),
     );
 
@@ -119,22 +109,30 @@ export class AttemptStateService {
   }
 
   /** Puts back what Postgres holds, and gives back the time the paper was not on screen. */
-  async resume(attempt: SittingOpened, tab?: string, now: Date = new Date()): Promise<Date> {
-    const held = await this.require(attempt.studentId, attempt.id);
-    if (isAbandoned(held, now)) return attempt.endsAt;
+  async resume(attempt: SittingOpened, tab?: string, now: Date = new Date()): Promise<Resumed> {
+    const left = await this.require(attempt.studentId, attempt.id);
+    if (isAbandoned(left, now)) return { endsAt: attempt.endsAt, creditedMs: 0 };
 
-    const endsAt = creditedEndsAt({ ...held, endsAt: attempt.endsAt.toISOString() }, now);
-    const sections = creditedSections(held, now);
-    const granted = creditMs(held, now);
-    await this.open({ ...attempt, endsAt }, tab, now);
-    // Banked cumulatively: however many times this sitting reloads, it cannot out-earn the cap.
-    await this.patch(attempt.id, (put) => ({
-      ...put,
-      sections,
-      creditedMs: (put.creditedMs ?? 0) + granted,
-    }));
+    let creditedMs = 0;
+    const put = await this.rebuilt(
+      attempt.id,
+      (held) => {
+        // Read off the state this swap replaces, so a second reload finds the gap already given back.
+        creditedMs = creditMs(held, now);
+        const taken = handed(held, attempt, tab, now);
+        return {
+          ...taken,
+          endsAt: creditedEndsAt({ ...held, endsAt: taken.endsAt }, now).toISOString(),
+          sections: creditedSections(held, now),
+          // Banked cumulatively: however many times this sitting reloads, it cannot out-earn the cap.
+          creditedMs: (held.creditedMs ?? 0) + creditedMs,
+        };
+      },
+      () => this.durableState(attempt.studentId, attempt.id),
+    );
+    if (tab !== undefined) await this.takeClaim(attempt.studentId, attempt.id);
     // The row is the caller's to move: this file never writes Postgres on the answer path.
-    return endsAt;
+    return { endsAt: new Date(put.endsAt), creditedMs };
   }
 
   /** Refuses a sign-in ANY sitting while the student's other one is still answering theirs. */
@@ -148,11 +146,16 @@ export class AttemptStateService {
   /** One sitting at a time per student: opening this one stands down whatever tab held the last. */
   private async takeClaim(studentId: string, attemptId: string): Promise<void> {
     const key = redisKeys.sittingClaim(studentId);
-    const previous = await this.redis.client.get(key);
-    if (previous !== null && previous !== attemptId) {
+    // Read and replaced in ONE command: of two sittings opened together, the later always sees the earlier.
+    const previous = await this.redis.client.set(key, attemptId, 'EX', STATE_TTL_SEC, 'GET');
+    if (previous === null || previous === attemptId) return;
+    try {
       await this.patch(previous, (stood) => ({ ...stood, tab: null }));
+    } catch (error) {
+      // Best effort: named as the holder again, the earlier sitting is stood down by the retry's own take.
+      await this.redis.client.set(key, previous, 'EX', STATE_TTL_SEC).catch(() => undefined);
+      throw error;
     }
-    await this.redis.client.set(key, attemptId, 'EX', STATE_TTL_SEC);
   }
 
   /** Answers with the ack, never the sheet: the screen already holds what it just sent. */
@@ -165,7 +168,7 @@ export class AttemptStateService {
   ): Promise<AttemptSaveAck> {
     // Judged inside the swap, against the same read the batch was applied to — the last try wins.
     let applied = false;
-    const next = await this.patch(
+    const next = await this.rebuilt(
       attemptId,
       async (held) => {
         // The batch that ends a sitting is its newest by definition, whatever counter a reloaded screen sent.
@@ -221,16 +224,19 @@ export class AttemptStateService {
   async reestablish(studentId: string, attemptId: string): Promise<HeldState> {
     const durable = await this.durableState(studentId, attemptId);
     // Anything the key still holds landed AFTER the last flush, so it wins over the durable copy.
-    return this.patch(
+    return this.rebuilt(
       attemptId,
       (held) => mergedOver(durable, held),
       () => durable,
     );
   }
 
-  /** The clock the student is watching. Moved here too, or the screen would count to the old one. */
+  /** The clock the student is watching follows the row out, and a late write never moves it back. */
   async pushDeadline(attemptId: string, endsAt: Date): Promise<void> {
-    await this.patch(attemptId, (held) => ({ ...held, endsAt: endsAt.toISOString() }));
+    await this.patch(attemptId, (held) => ({
+      ...held,
+      endsAt: laterOf(held.endsAt, endsAt.toISOString()),
+    }));
   }
 
   /** The seats come from the per-process paper cache, so a forward-only save still reads no Postgres once warm. */
@@ -276,6 +282,47 @@ export class AttemptStateService {
     throw new AppException(ErrorCodes.CONFLICT, BEING_ANSWERED);
   }
 
+  /** A patch that may put the key back from Postgres, checked against the row once it has. */
+  private async rebuilt(
+    attemptId: string,
+    change: (held: HeldState) => HeldState | Promise<HeldState>,
+    durable: () => HeldState | Promise<HeldState>,
+  ): Promise<HeldState> {
+    let seed: HeldState | undefined;
+    let seeded = false;
+    const put = await this.patch(
+      attemptId,
+      (held) => {
+        // Judged on every try, so it is true only when the write that landed began from the seed.
+        seeded = held === seed;
+        return change(held);
+      },
+      async () => (seed = await durable()),
+    );
+    return seeded ? this.stillLive(put) : put;
+  }
+
+  /** Read AFTER the write: an end claims the row before it takes the key, so a seed it missed sees it here. */
+  private async stillLive(put: HeldState): Promise<HeldState> {
+    const row = await this.prisma.attempt.findUnique({
+      where: { id: put.attemptId },
+      select: { status: true, endsAt: true },
+    });
+    if (row?.status !== ATTEMPT_STATUS.IN_PROGRESS) {
+      // Only the bytes this call wrote: anything saved on top since is the ending call's to take.
+      await this.redis.deleteIfUnchanged(
+        redisKeys.attemptState(put.attemptId),
+        JSON.stringify(packHeld(put)),
+      );
+      throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
+    }
+    // The row is the record: a deadline it gained while the key was being put back is followed out.
+    const endsAt = laterOf(put.endsAt, row.endsAt.toISOString());
+    if (endsAt === put.endsAt) return put;
+    await this.pushDeadline(put.attemptId, row.endsAt);
+    return { ...put, endsAt };
+  }
+
   /** What the flusher drains. Read, not taken: a mark goes only once its sitting is written. */
   async dirtyIds(): Promise<string[]> {
     return this.redis.client.smembers(redisKeys.attemptsDirty);
@@ -312,7 +359,7 @@ export class AttemptStateService {
   private async require(studentId: string, attemptId: string): Promise<HeldState> {
     const held =
       (await this.read(attemptId)) ??
-      (await this.patch(
+      (await this.rebuilt(
         attemptId,
         (found) => found,
         () => this.durableState(studentId, attemptId),
@@ -375,6 +422,33 @@ export class AttemptStateService {
   }
 }
 
+/** The tab and its sign-in are taken together; a caller naming no tab takes neither. */
+const holderOf = (attempt: SittingOpened, tab: string | undefined) =>
+  tab === undefined ? {} : { tab, session: attempt.session };
+
+/** The sitting as the tab that asked now holds it, or the refusal of a sign-in still answering it. */
+function handed(
+  held: HeldState,
+  attempt: SittingOpened,
+  tab: string | undefined,
+  now: Date,
+): HeldState {
+  // Judged inside the swap: of two sign-ins opening at once, the first to land holds it.
+  const refused = heldElsewhere(held, attempt.session, now);
+  if (refused) throw refused;
+  return {
+    ...held,
+    testId: attempt.testId,
+    startedAt: attempt.startedAt.toISOString(),
+    // Never moved back: the key may hold a credit or an extension the row read for this open had not seen.
+    endsAt: laterOf(held.endsAt, attempt.endsAt.toISOString()),
+    // Picked up again: the clock starts counting from here, not from where it was put down.
+    lastSeenAt: now.toISOString(),
+    forwardOnly: attempt.forwardOnly,
+    ...holderOf(attempt, tab),
+  };
+}
+
 /** A corrupt value reads as no key at all, which is what both callers of `patch` already repair. */
 const parsedHeld = (raw: string): HeldState | null => heldIn(parseJsonOrNull(raw));
 
@@ -400,10 +474,11 @@ function answered(
   return { ...applyBatch(held, batch, now), ...seen };
 }
 
-/** The row's own deadline stands, because an extension moves it there first. */
+/** Of the two deadlines the later stands: the key may hold a move the durable read was too early to see. */
 function mergedOver(durable: HeldState, held: HeldState): HeldState {
   return {
     ...durable,
+    endsAt: laterOf(durable.endsAt, held.endsAt),
     revision: held.revision,
     answers: { ...durable.answers, ...held.answers },
     sections: held.sections,

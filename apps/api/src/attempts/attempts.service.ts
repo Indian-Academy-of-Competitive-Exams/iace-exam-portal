@@ -14,7 +14,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
-import { AttemptStateService } from './attempt-state.service';
+import { AttemptStateService, type Resumed } from './attempt-state.service';
 import { forwardOrderOf } from './attempt-state';
 import { AttemptSheetService } from './attempt-sheet.service';
 import { isUniqueViolation } from '../common/prisma-errors';
@@ -91,12 +91,8 @@ export class AttemptsService {
     if (live && (input.resume === undefined || live.id === input.resume)) {
       const test = requireFound(found);
       // A lost key is rebuilt from Postgres before reopening, so a resume never blanks the sitting.
-      const endsAt = await this.state.resume(opened(live, test, session), input.tab);
-      // Durable too, or the sweeper would judge a resumed sitting by the deadline it walked away from.
-      if (endsAt.getTime() !== live.endsAt.getTime()) {
-        await this.prisma.attempt.update({ where: { id: live.id }, data: { endsAt } });
-      }
-      return toLiveAttempt({ ...live, endsAt }, test, false);
+      const resumed = await this.state.resume(opened(live, test, session), input.tab);
+      return toLiveAttempt({ ...live, endsAt: await this.credit(live.id, resumed) }, test, false);
     }
     // A reclaim of a sitting handed in elsewhere must land on its result, not on a fresh paper.
     if (input.resume !== undefined) throw new AppException(ErrorCodes.SITTING_ENDED);
@@ -123,6 +119,21 @@ export class AttemptsService {
       await this.state.open(opened(won, test, session), input.tab);
       return toLiveAttempt(won, test, false);
     }
+  }
+
+  /** Durable too, or the sweeper would judge a resumed sitting by the deadline it walked away from. */
+  private async credit(attemptId: string, { endsAt, creditedMs }: Resumed): Promise<Date> {
+    if (creditedMs === 0) return endsAt;
+    // Added, never written back: an extension that landed since this start read the row still stands.
+    const [row] = await this.prisma.$queryRaw<{ endsAt: Date }[]>`
+      UPDATE "Attempt"
+      SET "endsAt" = "endsAt" + ${creditedMs}::int * interval '1 millisecond', "updatedAt" = now()
+      WHERE "id" = ${attemptId}::uuid AND "status" = ${LIVE}::"AttemptStatus"
+      RETURNING "endsAt"`;
+    if (!row || row.endsAt <= endsAt) return endsAt;
+    // The row is the record: it holds a move the key has not seen, so the key follows it out.
+    await this.state.pushDeadline(attemptId, row.endsAt);
+    return row.endsAt;
   }
 
   private async create(

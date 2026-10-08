@@ -297,6 +297,11 @@ export function isAbandoned(held: HeldState, now: Date): boolean {
   return awayMs(held, now) > PAUSE_LIMIT_SEC * MS_PER_SECOND || creditSpent(held);
 }
 
+/** A deadline only ever moves out, so of two the later stands. Both are ISO, which sorts as it reads. */
+export function laterOf(a: string, b: string): string {
+  return a > b ? a : b;
+}
+
 /** The first of two instants, either of which may be absent. A missing one never wins. */
 function earliest(a: string | null | undefined, b: string | null | undefined): string | null {
   if (!a) return b ?? null;

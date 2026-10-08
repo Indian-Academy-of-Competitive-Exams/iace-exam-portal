@@ -9,6 +9,7 @@ import {
   ErrorCodes,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
+  PRESENT_GRACE_SEC,
   TEST_SCOPE,
   TEST_STATUS,
   type LanguageMode,
@@ -16,10 +17,12 @@ import {
   type TestStatus,
 } from '@iace/contracts';
 import type { AccessResolverService } from '../src/access';
+import { AttemptResolutionService } from '../src/attempts/attempt-resolution.service';
 import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptsService } from '../src/attempts/attempts.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
+import { AuditContext } from '../src/audit';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { FakeRedis } from '../test/support/fakes';
 import {
@@ -109,7 +112,7 @@ async function hall(over: Hall = {}) {
       new AttemptStateService(client, redis.asService(), new PaperSheetService(client)),
       new AttemptSheetService(client, new PaperSheetService(client)),
     );
-  return { paper, student, service: service(), serviceOn: service };
+  return { paper, student, redis, service: service(), serviceOn: service };
 }
 
 const served = (attemptId: string) => servedAnswers(prisma, attemptId);
@@ -470,5 +473,134 @@ describe('AttemptsService — a scoped test is sat on its own clock', () => {
 
     assert.equal(Date.parse(attempt.endsAt) - Date.parse(attempt.startedAt), 3600 * 1000);
     assert.equal(attempt.totalQuestions, 5);
+  });
+});
+
+describe('AttemptsService — a reload racing another move of the deadline', () => {
+  const MINUTE_MS = 60 * 1000;
+  const SILENT_MS = 10 * MINUTE_MS;
+  const GRACE_MS = PRESENT_GRACE_SEC * 1000;
+
+  /** A running sitting last heard from `silentMs` ago, and the support console over the same live key. */
+  async function reloading(silentMs: number) {
+    const built = await hall();
+    const state = new AttemptStateService(
+      prisma,
+      built.redis.asService(),
+      new PaperSheetService(prisma),
+    );
+    const { id } = await running(built.paper, built.student);
+    const row = await prisma.attempt.findUniqueOrThrow({ where: { id } });
+    await state.open(row, 'tab_a', new Date(Date.now() - silentMs));
+    const support = new AttemptResolutionService(
+      prisma,
+      state,
+      {} as never,
+      {} as never,
+      {} as never,
+      new AuditContext(),
+    );
+    const settled = async () => {
+      const held = await state.read(id);
+      const now = await prisma.attempt.findUniqueOrThrow({ where: { id } });
+      return {
+        row: now.endsAt.toISOString(),
+        key: held?.endsAt,
+        gained: now.endsAt.getTime() - row.endsAt.getTime(),
+        banked: held?.creditedMs ?? 0,
+      };
+    };
+    return { ...built, id, support, settled };
+  }
+
+  /** The real client, with `meanwhile` landing once, right after the start has read the student's sittings. */
+  function afterTheSittingsAreRead(meanwhile: () => Promise<unknown>): PrismaService {
+    let pending = true;
+    return new Proxy(prisma, {
+      get(target, key: string | symbol) {
+        if (key !== 'attempt') return Reflect.get(target, key) as unknown;
+        return new Proxy(target.attempt, {
+          get(delegate, method: string | symbol) {
+            if (method !== 'findMany') return Reflect.get(delegate, method) as unknown;
+            return async (args: Prisma.AttemptFindManyArgs) => {
+              const rows = await delegate.findMany(args);
+              if (pending) {
+                pending = false;
+                await meanwhile();
+              }
+              return rows;
+            };
+          },
+        });
+      },
+    });
+  }
+
+  for (const [title, silentMs] of [
+    ['a reload inside the grace', 0],
+    ['a reload that earns pause credit', SILENT_MS],
+  ] as const) {
+    /** The failure this prevents: the reload writing back the deadline it read, over the minutes just given. */
+    it(`keeps an extension that lands during ${title}`, async () => {
+      const { student, paper, id, support, settled, serviceOn } = await reloading(silentMs);
+      const racing = serviceOn(
+        afterTheSittingsAreRead(() => support.extend(id, { minutes: 15, reason: 'Power cut' })),
+      );
+
+      const resumed = await racing.start(student, paper.testId, { tab: 'tab_a' });
+
+      const { row, key, gained, banked } = await settled();
+      assert.equal(key, row, 'the key admits saves until the deadline the sweeper judges by');
+      assert.equal(resumed.endsAt, row);
+      assert.equal(gained, 15 * MINUTE_MS + banked, 'the minutes and the credit both count');
+      assert.equal(banked > 0, silentMs > 0);
+    });
+  }
+
+  /** The real client, with `meanwhile` landing once, right before the resume adds its credit to the row. */
+  function beforeTheRowIsCredited(meanwhile: () => Promise<unknown>): PrismaService {
+    let pending = true;
+    return new Proxy(prisma, {
+      get(target, key: string | symbol) {
+        if (key !== '$queryRaw') return Reflect.get(target, key) as unknown;
+        return async (...args: unknown[]) => {
+          if (pending) {
+            pending = false;
+            await meanwhile();
+          }
+          return (target.$queryRaw as (...values: unknown[]) => Promise<unknown>)(...args);
+        };
+      },
+    });
+  }
+
+  /** The failure this prevents: the key left on its own credit while the row holds the credit and the minutes. */
+  it('follows the row out when an extension lands between the credit to the key and to the row', async () => {
+    const { student, paper, id, support, settled, serviceOn } = await reloading(SILENT_MS);
+    const racing = serviceOn(
+      beforeTheRowIsCredited(() => support.extend(id, { minutes: 15, reason: 'Power cut' })),
+    );
+
+    const resumed = await racing.start(student, paper.testId, { tab: 'tab_a' });
+
+    const { row, key, gained, banked } = await settled();
+    assert.equal(key, row);
+    assert.equal(resumed.endsAt, row);
+    assert.equal(gained, 15 * MINUTE_MS + banked);
+  });
+
+  /** The failure this prevents: the second reload lowering the key back to the deadline it read. */
+  it('credits a pause once when two reloads land together', async () => {
+    const { service, student, paper, settled } = await reloading(SILENT_MS);
+
+    await Promise.all([
+      service.start(student, paper.testId, { tab: 'tab_a' }),
+      service.start(student, paper.testId, { tab: 'tab_a' }),
+    ]);
+
+    const { row, key, gained, banked } = await settled();
+    assert.equal(key, row);
+    assert.equal(gained, banked, 'the deadline moved by what was banked, once');
+    assert.ok(banked >= SILENT_MS - GRACE_MS && banked < SILENT_MS, `banked ${banked}ms`);
   });
 });

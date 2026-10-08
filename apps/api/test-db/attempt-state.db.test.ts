@@ -211,6 +211,18 @@ describe('AttemptStateService', () => {
     assert.ok(redis.snapshot()[`attempt:state:${attemptId}`]);
   });
 
+  /** The bug this prevents: a write that lands late, or read an older row, handing back a shorter clock. */
+  it('never moves the deadline back', async () => {
+    const { service, attemptId, live } = await build();
+    await service.open(live);
+    const earlier = new Date(ENDS_AT.getTime() - 60 * 1000);
+
+    await service.pushDeadline(attemptId, earlier);
+    await service.open({ ...live, endsAt: earlier });
+
+    assert.equal((await service.read(attemptId))?.endsAt, ENDS_AT.toISOString());
+  });
+
   /** No key is no clock to move: the row carries the new deadline, and a rebuild reads it there. */
   it('does nothing to a deadline whose live key has gone', async () => {
     const { service, attemptId } = await build();
@@ -241,6 +253,24 @@ describe('AttemptStateService', () => {
     assert.equal(held?.answers[q1]?.selectedOptionId, RIGHT_OPTION);
   });
 
+  /** The bug this prevents: a key lost between a resume's read and its write coming back as an empty paper. */
+  it('puts the answers back when the key goes missing in the middle of a resume', async () => {
+    const { service, redis, attemptId, live, q1 } = await build(true);
+    await service.open(live);
+    const key = redisKeys.attemptState(attemptId);
+    const getJson = redis.getJson.bind(redis);
+    redis.getJson = async <T>(readKey: string) => {
+      const value = await getJson<T>(readKey);
+      if (readKey === key) await redis.del(key);
+      return value;
+    };
+
+    await service.resume(live);
+    redis.getJson = getJson;
+
+    assert.deepEqual(Object.keys((await service.read(attemptId))?.answers ?? {}), [q1]);
+  });
+
   /** The bug this prevents: a Redis restart crediting the whole elapsed sitting, not just the outage. */
   it("seeds a rebuilt key's last-seen from the sheet's last flush, not the start", async () => {
     const { service, attemptId, live } = await build(true);
@@ -248,7 +278,7 @@ describe('AttemptStateService', () => {
     await prisma.attemptSheet.update({ where: { attemptId }, data: { updatedAt: lastFlush } });
 
     const backAt = new Date(lastFlush.getTime() + 6 * 60 * 1000);
-    const credited = await service.resume(live, undefined, backAt);
+    const { endsAt: credited } = await service.resume(live, undefined, backAt);
 
     // Six minutes since the last flush, less the grace: not the 36 minutes since the sitting started.
     assert.equal(credited.toISOString(), new Date(ENDS_AT.getTime() + 5 * 60 * 1000).toISOString());
@@ -284,7 +314,7 @@ describe('AttemptStateService', () => {
     const live = { id: attempt.id, studentId: student, testId: paper.testId, startedAt, endsAt };
 
     const resumedAt = new Date(lastFlush.getTime() + 2 * 60 * 1000);
-    const credited = await service.resume(live, undefined, resumedAt);
+    const { endsAt: credited } = await service.resume(live, undefined, resumedAt);
 
     // A start-based fallback would read 49 hours since start as abandoned and credit nothing.
     assert.equal(credited.toISOString(), new Date(endsAt.getTime() + 60 * 1000).toISOString());
@@ -297,7 +327,7 @@ describe('AttemptStateService', () => {
     await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
 
     const backAt = new Date('2026-09-01T07:00:00.000Z');
-    const credited = await service.resume(live, undefined, backAt);
+    const { endsAt: credited } = await service.resume(live, undefined, backAt);
 
     assert.ok(credited.getTime() > ENDS_AT.getTime());
     assert.equal((await service.read(attemptId))?.endsAt, credited.toISOString());

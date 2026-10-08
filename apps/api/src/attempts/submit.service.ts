@@ -170,8 +170,9 @@ export class SubmitService {
   /** Found already ended. Taking the state makes this the only caller that can still write it. */
   private async closeOff(attemptId: string): Promise<SubmittedAttempt> {
     const stray = await this.state.take(attemptId);
+    // Only into a sitting nobody has marked: over a scored or void sheet it would unpick the result.
     if (stray) {
-      await this.sheets.write(stray, false);
+      await this.sheets.writeWhile(stray, ATTEMPT_STATUS.SUBMITTED);
     }
     return this.alreadySubmitted(attemptId);
   }

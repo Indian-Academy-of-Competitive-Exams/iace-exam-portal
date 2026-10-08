@@ -152,6 +152,59 @@ describe('AttemptStateService — one sitting at a time, across tabs and devices
     assert.equal(refused?.code, ErrorCodes.SITTING_SET_ASIDE);
   });
 
+  /** The failure this prevents: two starts both reading the old claim, so neither stands the other down. */
+  it('leaves one of two sittings opened together holding its tab, and sets the other aside', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+
+    await Promise.all([
+      state.open(sitting('att_1'), 'tab_a'),
+      state.open(sitting('att_2'), 'tab_b'),
+    ]);
+
+    const [first, second] = [await tabOf(redis, 'att_1'), await tabOf(redis, 'att_2')];
+    assert.ok(
+      (first === null && second === 'tab_b') || (first === 'tab_a' && second === null),
+      `att_1 is held by ${String(first)} and att_2 by ${String(second)}`,
+    );
+    const [stood, tab] = first === null ? ['att_1', 'tab_a'] : ['att_2', 'tab_b'];
+    const refused = await refusal(state.save('stu_1', stood, { revision: 1, answers: [], tab }));
+    assert.equal(refused?.code, ErrorCodes.SITTING_SET_ASIDE);
+  });
+
+  /** The failure this prevents: a retry reading its own claim back, so the earlier sitting is never stood down. */
+  it('stands the earlier sitting down on the retry when the first stand-down failed', async () => {
+    const redis = new FakeRedis();
+    await serviceOn(redis).open(sitting('att_1'), 'tab_a');
+    let failing = true;
+    const failingOnce = new Proxy(redis.asService(), {
+      get(target, key) {
+        if (key !== 'replaceJson') return Reflect.get(target, key) as unknown;
+        return (written: string, ...rest: [string | null, unknown, number]) => {
+          if (!failing || written !== redisKeys.attemptState('att_1')) {
+            return target.replaceJson(written, ...rest);
+          }
+          failing = false;
+          return Promise.reject(new Error('redis went away'));
+        };
+      },
+    });
+    const state = new AttemptStateService(
+      {} as PrismaService,
+      failingOnce,
+      {} as PaperSheetService,
+    );
+
+    await assert.rejects(() => state.open(sitting('att_2'), 'tab_b'), /redis went away/);
+    await state.open(sitting('att_2'), 'tab_b');
+
+    assert.equal(await tabOf(redis, 'att_2'), 'tab_b');
+    const refused = await refusal(
+      state.save('stu_1', 'att_1', { revision: 1, answers: [], tab: 'tab_a' }),
+    );
+    assert.equal(refused?.code, ErrorCodes.SITTING_SET_ASIDE);
+  });
+
   it('takes the sitting back when the student returns to it', async () => {
     const redis = new FakeRedis();
     const state = serviceOn(redis);
@@ -360,6 +413,28 @@ describe('AttemptStateService — a sitting stays with the sign-in answering it'
 
     assert.equal(refused?.code, ErrorCodes.SITTING_HELD_ELSEWHERE);
     assert.equal((await heldOf(redis))?.session, 'app');
+  });
+});
+
+describe('AttemptStateService — pause credit, banked once', () => {
+  const OPENED_AT = new Date('2026-01-01T00:00:00.000Z');
+  const BACK_AT = new Date(OPENED_AT.getTime() + 10 * 60 * 1000);
+  const CREDIT_MS = (10 * 60 - PRESENT_GRACE_SEC) * 1000;
+
+  /** The failure this prevents: two reloads both reading the same silence and each banking it. */
+  it('gives the gap back once when two resumes read the same silence', async () => {
+    const redis = new FakeRedis();
+    const state = serviceOn(redis);
+    await state.open(sitting('att_1'), 'tab_a', OPENED_AT);
+
+    await Promise.all([
+      state.resume(sitting('att_1'), 'tab_a', BACK_AT),
+      state.resume(sitting('att_1'), 'tab_a', BACK_AT),
+    ]);
+
+    const after = await heldOf(redis);
+    assert.equal(after?.creditedMs, CREDIT_MS);
+    assert.equal(after?.endsAt, new Date(Date.parse(ENDS_AT) + CREDIT_MS).toISOString());
   });
 });
 

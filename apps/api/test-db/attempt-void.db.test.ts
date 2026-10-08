@@ -157,6 +157,38 @@ describe('voiding a sitting — archived, and taken out of everything that count
     assert.deepEqual([archived?.selectedOptionId, archived?.timeSpentSec], ['o2', 42]);
   });
 
+  /** The failure this prevents: a key left behind a marked sitting written over the answers it was marked on. */
+  it('drops a key found behind a sitting that had already ended, and leaves its sheet alone', async () => {
+    const { attemptId, testId, studentId, questionId, state, voiding } = await sitting();
+    const sheet = () =>
+      prisma.attemptSheet.findUniqueOrThrow({ where: { attemptId }, select: { answers: true } });
+    const marked = await sheet();
+    await state.open({
+      id: attemptId,
+      studentId,
+      testId,
+      startedAt: new Date(Date.now() - HOUR_MS),
+      endsAt: new Date(Date.now() + HOUR_MS),
+    });
+    await state.save(studentId, attemptId, {
+      revision: 1,
+      answers: [
+        {
+          questionId,
+          state: ANSWER_STATE.ANSWERED,
+          selectedOptionId: 'o2',
+          typedAnswer: null,
+          timeSpentSec: 42,
+        },
+      ],
+    });
+
+    await voiding();
+
+    assert.deepEqual(await sheet(), marked);
+    assert.equal(await state.read(attemptId), null);
+  });
+
   it('leaves the ranked slot spent unless the regrant was asked for', async () => {
     const { attemptId, voiding } = await sitting();
 

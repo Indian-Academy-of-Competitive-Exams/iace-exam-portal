@@ -1,5 +1,4 @@
 import { ATTEMPT_STATUS, type AttemptStatus, type FieldDiff } from '@iace/contracts';
-import { MS_PER_SECOND, SECONDS_PER_MINUTE } from '../common/time/units';
 
 /** The rules a support action is judged by — pure, so no database is needed to test them. */
 
@@ -14,7 +13,7 @@ export type SupportAction = (typeof SUPPORT_ACTIONS)[keyof typeof SUPPORT_ACTION
 
 const LIVE_ONLY = 'Only a sitting still in progress can be ';
 
-const REFUSALS: Readonly<Record<SupportAction, string>> = {
+export const REFUSALS: Readonly<Record<SupportAction, string>> = {
   [SUPPORT_ACTIONS.FORCE_SUBMIT]: `${LIVE_ONLY}submitted for a student.`,
   [SUPPORT_ACTIONS.EXTEND]: `${LIVE_ONLY}given more time.`,
   // Never backwards: putting a marked sitting back in progress would un-score a real result.
@@ -24,17 +23,10 @@ const REFUSALS: Readonly<Record<SupportAction, string>> = {
 
 /** Why this action cannot be taken on a sitting in this state, or null when it can. */
 export function resolutionBlocker(action: SupportAction, status: AttemptStatus): string | null {
-  const allowed =
-    action === SUPPORT_ACTIONS.VOID
-      ? status !== ATTEMPT_STATUS.VOIDED
-      : status === ATTEMPT_STATUS.IN_PROGRESS;
+  // Whatever was asked: a reset told to "void it instead" on a void sitting would be sent in a circle.
+  if (status === ATTEMPT_STATUS.VOIDED) return REFUSALS[SUPPORT_ACTIONS.VOID];
+  const allowed = action === SUPPORT_ACTIONS.VOID || status === ATTEMPT_STATUS.IN_PROGRESS;
   return allowed ? null : REFUSALS[action];
-}
-
-/** Counted from now once the deadline has gone, or extending a stuck sitting buys nothing. */
-export function extendedEndsAt(endsAt: Date, minutes: number, now: Date): Date {
-  const from = Math.max(endsAt.getTime(), now.getTime());
-  return new Date(from + minutes * SECONDS_PER_MINUTE * MS_PER_SECOND);
 }
 
 const SUPPORT_ACTION_FIELD = 'supportAction';

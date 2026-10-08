@@ -90,13 +90,15 @@ export class FakeRedis {
       mode?: string,
       ttlSec?: number,
       condition?: string,
-    ): Promise<'OK' | null> => {
+    ): Promise<string | null> => {
       if (condition === 'NX' && this.live(key)) return Promise.resolve(null);
+      const previous = this.text(key) ?? null;
       this.store.set(key, {
         value,
         expiresAtMs: mode === 'EX' && ttlSec ? this.nowMs + ttlSec * 1000 : null,
       });
-      return Promise.resolve('OK');
+      // GET answers with what the key held before, as the one command does on the server.
+      return Promise.resolve(condition === 'GET' ? previous : 'OK');
     },
 
     incr: (key: string): Promise<number> => {
@@ -204,6 +206,10 @@ export class FakeRedis {
 
   async del(...keys: string[]): Promise<void> {
     if (keys.length > 0) await this.client.del(...keys);
+  }
+
+  deleteIfUnchanged(key: string, was: string): Promise<boolean> {
+    return this.releaseLock(key, was);
   }
 
   /** One thread, so the compares and the removes are already atomic — the real one needs a script. */

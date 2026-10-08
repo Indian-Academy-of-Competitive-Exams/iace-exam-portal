@@ -3,13 +3,10 @@ import { describe, it } from 'node:test';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import {
   SUPPORT_ACTIONS,
-  extendedEndsAt,
   resolutionBlocker,
   supportDiff,
 } from '../src/attempts/attempt-resolution';
 import { slotsAfter } from '../src/attempts/attempt-rules';
-
-const ENDS_AT = new Date('2026-09-09T10:00:00.000Z');
 
 const LIVE_ONLY = [
   SUPPORT_ACTIONS.FORCE_SUBMIT,
@@ -33,6 +30,17 @@ describe('support actions — what may be done to a sitting', () => {
     }
   });
 
+  /** The bug this prevents: a reset on a void sitting being told to void it. */
+  it('tells every action on a void sitting that it is already void', () => {
+    const alreadyVoid = resolutionBlocker(SUPPORT_ACTIONS.VOID, ATTEMPT_STATUS.VOIDED);
+
+    for (const action of LIVE_ONLY) {
+      assert.equal(resolutionBlocker(action, ATTEMPT_STATUS.VOIDED), alreadyVoid);
+      assert.notEqual(resolutionBlocker(action, ATTEMPT_STATUS.SUBMITTED), alreadyVoid);
+      assert.notEqual(resolutionBlocker(action, ATTEMPT_STATUS.EVALUATED), alreadyVoid);
+    }
+  });
+
   it('voids a sitting in any state but one already void', () => {
     for (const status of [
       ATTEMPT_STATUS.IN_PROGRESS,
@@ -43,22 +51,6 @@ describe('support actions — what may be done to a sitting', () => {
       assert.equal(resolutionBlocker(SUPPORT_ACTIONS.VOID, status), null);
     }
     assert.notEqual(resolutionBlocker(SUPPORT_ACTIONS.VOID, ATTEMPT_STATUS.VOIDED), null);
-  });
-
-  it('adds the minutes asked for to the deadline the sitting already had', () => {
-    const stillRunning = new Date('2026-09-09T09:50:00.000Z');
-
-    assert.equal(
-      extendedEndsAt(ENDS_AT, 15, stillRunning).toISOString(),
-      '2026-09-09T10:15:00.000Z',
-    );
-  });
-
-  /** The bug this prevents: 15 minutes added to a sitting that expired an hour ago buys nothing. */
-  it('counts from now once the deadline has already gone', () => {
-    const late = new Date('2026-09-09T11:00:00.000Z');
-
-    assert.equal(extendedEndsAt(ENDS_AT, 15, late).toISOString(), '2026-09-09T11:15:00.000Z');
   });
 
   it('files the action, the sitting and the reason beside whatever moved', () => {

@@ -23,8 +23,8 @@ import { AttemptStateService } from './attempt-state.service';
 import { RollupQueue } from './rollup-queue';
 import { SubmitService } from './submit.service';
 import {
+  REFUSALS,
   SUPPORT_ACTIONS,
-  extendedEndsAt,
   resolutionBlocker,
   supportDiff,
   type SupportAction,
@@ -61,34 +61,48 @@ export class AttemptResolutionService {
   /** The same path the sweeper takes, so scoring and the fold happen exactly as on a real submit. */
   async forceSubmit(attemptId: string, body: ForceSubmitAttemptBody): Promise<ResolvedAttempt> {
     const attempt = await this.require(attemptId, SUPPORT_ACTIONS.FORCE_SUBMIT);
-    await this.submit.expire(attemptId);
+    const ended = await this.submit.expire(attemptId);
+    // Another call ended it first: this one did nothing, so it answers and files nothing.
+    if (!ended.submittedByThisCall) throw overtaken(SUPPORT_ACTIONS.FORCE_SUBMIT);
 
-    const ended = await this.require(attemptId, null);
     this.record(SUPPORT_ACTIONS.FORCE_SUBMIT, body.reason, attempt, {
       status: { from: attempt.status, to: ended.status },
     });
-    return resolved(ended, false);
+    return resolved({ ...attempt, status: ended.status }, false);
   }
 
-  /** The clock moves in both places at once: the row is durable, and Redis is what the screen reads. */
+  /** The row is the record and moves by the minutes; Redis, which the screen reads, follows it. */
   async extend(
     attemptId: string,
     body: ExtendAttemptBody,
     now: Date = new Date(),
   ): Promise<ResolvedAttempt> {
     const attempt = await this.require(attemptId, SUPPORT_ACTIONS.EXTEND);
-    // Counted from the key where there is one, like `lastAnswers` does, or an extend could shorten it.
-    const held = await this.state.read(attemptId);
-    const endsAt = extendedEndsAt(held ? new Date(held.endsAt) : attempt.endsAt, body.minutes, now);
+    // Counted from now once the deadline has gone, or extending a stuck sitting buys nothing.
+    const [moved] = await this.prisma.$queryRaw<{ from: Date; to: Date }[]>`
+      WITH held AS (
+        SELECT "id", "endsAt" FROM "Attempt"
+        WHERE "id" = ${attemptId}::uuid AND "status" = ${ATTEMPT_STATUS.IN_PROGRESS}::"AttemptStatus"
+        FOR UPDATE
+      )
+      UPDATE "Attempt" a SET
+        "endsAt" = GREATEST(h."endsAt", ${now}::timestamptz) + ${body.minutes}::int * interval '1 minute',
+        "updatedAt" = now()
+      FROM held h
+      WHERE a."id" = h."id"
+      RETURNING h."endsAt" AS "from", a."endsAt" AS "to"`;
+    if (!moved) throw overtaken(SUPPORT_ACTIONS.EXTEND);
 
-    await this.prisma.attempt.update({ where: { id: attemptId }, data: { endsAt } });
-    await this.state.pushDeadline(attemptId, endsAt);
+    await this.state.pushDeadline(attemptId, moved.to).catch((error: unknown) => {
+      // Refusing here would be retried into double the minutes: the key follows the row on its next open.
+      this.logger.error(`Attempt ${attemptId} was extended but its live key did not follow`, error);
+    });
 
     this.record(SUPPORT_ACTIONS.EXTEND, body.reason, attempt, {
-      endsAt: { from: attempt.endsAt.toISOString(), to: endsAt.toISOString() },
+      endsAt: { from: moved.from.toISOString(), to: moved.to.toISOString() },
       minutes: { from: null, to: body.minutes },
     });
-    return resolved({ ...attempt, endsAt }, false);
+    return resolved({ ...attempt, endsAt: moved.to }, false);
   }
 
   /** A lost live key, put back from the sheet — never a marked sitting put back in progress. */
@@ -113,8 +127,8 @@ export class AttemptResolutionService {
     // The ranked slot is spent by default; only a fault earns it back.
     const regranted = attempt.isGraded && body.regrantRanked;
 
-    await this.prisma.attempt.update({
-      where: { id: attemptId },
+    const voided = await this.prisma.attempt.updateMany({
+      where: { id: attemptId, status: { not: ATTEMPT_STATUS.VOIDED } },
       data: {
         status: ATTEMPT_STATUS.VOIDED,
         voidedAt: now,
@@ -124,10 +138,13 @@ export class AttemptResolutionService {
         ...(regranted ? { isGraded: false } : {}),
       },
     });
+    if (voided.count === 0) throw overtaken(SUPPORT_ACTIONS.VOID);
     // Nothing more may be saved to it, and the fallback in Postgres now refuses this sitting too.
     const stray = await this.state.take(attemptId);
-    // Archived, not deleted: what they answered since the last flush is kept, as `closeOff` keeps it.
-    if (stray) await this.sheets.write(stray, false);
+    // Archived off a sitting still being answered; behind an ended one it would unpick a marked sheet.
+    if (stray && attempt.status === ATTEMPT_STATUS.IN_PROGRESS) {
+      await this.sheets.write(stray, false);
+    }
     await this.reverse(attempt);
 
     this.record(SUPPORT_ACTIONS.VOID, body.reason, attempt, {
@@ -169,20 +186,22 @@ export class AttemptResolutionService {
     this.audit.setChanged(supportDiff(action, reason, attempt.id, moved));
   }
 
-  private async require(
-    attemptId: string,
-    action: SupportAction | null,
-  ): Promise<ResolvableAttempt> {
+  private async require(attemptId: string, action: SupportAction): Promise<ResolvableAttempt> {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
       select: RESOLVABLE_SELECT,
     });
     if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NO_SITTING);
 
-    const blocker = action === null ? null : resolutionBlocker(action, attempt.status);
+    const blocker = resolutionBlocker(action, attempt.status);
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
     return attempt;
   }
+}
+
+/** What an action answers when its own write found the sitting had left the state it read. */
+function overtaken(action: SupportAction): AppException {
+  return new AppException(ErrorCodes.CONFLICT, REFUSALS[action]);
 }
 
 function resolved(attempt: ResolvableAttempt, rankedRegranted: boolean): ResolvedAttempt {
