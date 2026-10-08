@@ -13,8 +13,8 @@ export const { AuthProvider, useAuth } = createAuth<StudentIdentity>({
   signOutSignal: browserSignOutSignal,
   endpoints: {
     me: () => api.auth.me(),
-    logout: async () => {
-      await api.auth.logout();
+    logout: async (extra) => {
+      await api.auth.logout(extra);
     },
   },
   onSignedIn: () => void rebindPushSubscription().catch(() => undefined),

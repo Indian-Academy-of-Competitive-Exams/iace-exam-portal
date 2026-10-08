@@ -127,15 +127,20 @@ export function meClient(core: ApiCore) {
     subscribeToPush: (input: PushSubscriptionInput): Promise<NoContent> =>
       write('POST', ME_ROUTES.pushSubscription, noContentSchema, input),
 
-    unsubscribeFromPush: (input: DropPushSubscriptionInput): Promise<NoContent> =>
-      write('DELETE', ME_ROUTES.pushSubscription, noContentSchema, input),
+    unsubscribeFromPush: (
+      input: DropPushSubscriptionInput,
+      extra: { signal?: AbortSignal } = {},
+    ): Promise<NoContent> =>
+      write('DELETE', ME_ROUTES.pushSubscription, noContentSchema, input, extra),
 
     /** Idempotent: the same token registering again is the same row, moved to whoever is signed in. */
     registerPushDevice: (input: PushDeviceInput): Promise<NoContent> =>
       write('POST', ME_ROUTES.pushDevice, noContentSchema, input),
 
-    dropPushDevice: (input: DropPushDeviceInput): Promise<NoContent> =>
-      write('DELETE', ME_ROUTES.pushDevice, noContentSchema, input),
+    dropPushDevice: (
+      input: DropPushDeviceInput,
+      extra: { signal?: AbortSignal } = {},
+    ): Promise<NoContent> => write('DELETE', ME_ROUTES.pushDevice, noContentSchema, input, extra),
 
     /** What the student reads before the clock starts. */
     testBrief: (testId: string): Promise<ExamBrief> =>

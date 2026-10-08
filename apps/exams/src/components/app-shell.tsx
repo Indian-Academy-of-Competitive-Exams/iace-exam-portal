@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Avatar } from '@iace/ui';
+import { settledWithin, SIGN_OUT_WAIT_MS } from '@iace/app-kit';
 import {
   AppShell as Shell,
   browserStorage,
@@ -66,11 +67,7 @@ export function AppShell() {
         headerEnd={<TourTrigger />}
         width="wide"
         homeTo={ROUTES.HOME}
-        onSignOut={() =>
-          void unsubscribeFromPush()
-            .catch(() => undefined)
-            .then(signOut)
-        }
+        onSignOut={() => void settledWithin(unsubscribeFromPush, SIGN_OUT_WAIT_MS).then(signOut)}
         userMenuItems={USER_MENU_ITEMS}
         navBadges={navBadges}
         userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}

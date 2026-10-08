@@ -21,8 +21,8 @@ export const { AuthProvider, useAuth } = createAuth<
   signOutSignal,
   endpoints: {
     me: () => api.auth.me(),
-    logout: async () => {
-      await api.auth.logout();
+    logout: async (extra) => {
+      await api.auth.logout(extra);
     },
   },
   // The guard's own rule, so the screen cannot offer a button the API refuses.

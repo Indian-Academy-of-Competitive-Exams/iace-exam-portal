@@ -55,6 +55,7 @@ export function authClient(core: ApiCore) {
     me: (): Promise<AuthIdentity> => get(AUTH_ROUTES.me, authIdentitySchema),
 
     /** The envelope's `success` is the whole answer; there is no payload. */
-    logout: (): Promise<NoContent> => write('POST', AUTH_ROUTES.logout, noContentSchema),
+    logout: (extra: { signal?: AbortSignal } = {}): Promise<NoContent> =>
+      write('POST', AUTH_ROUTES.logout, noContentSchema, undefined, extra),
   };
 }

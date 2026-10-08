@@ -147,7 +147,7 @@ const refusal = (httpStatus: number) => new AppException(ErrorCodes.INTERNAL, 'x
 function sessionAnswering(
   me: () => Promise<AuthIdentity>,
   store: TokenStore,
-  logout: () => Promise<void> = () => Promise.resolve(),
+  logout: (extra: { signal: AbortSignal }) => Promise<void> = () => Promise.resolve(),
   signOutSignal: SignOutSignal = NO_SIGNAL,
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
@@ -261,6 +261,38 @@ describe('signing out', () => {
 
     assert.equal(store.get(), null);
     assert.equal(read().isLoading, false);
+  });
+
+  /** Abandoned but still in the air, the request could be answered after the next sign-in on this device. */
+  it('cancels the request it stopped waiting for, and leaves an answered one alone', async (t) => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => mock.timers.reset());
+    const asked: AbortSignal[] = [];
+    const hung = sessionAnswering(unanswered, heldToken('iace.test.abandoned'), ({ signal }) => {
+      asked.push(signal);
+      return unanswered();
+    });
+    const answered = sessionAnswering(unanswered, heldToken('iace.test.answered'), ({ signal }) => {
+      asked.push(signal);
+      return Promise.resolve();
+    });
+
+    const gaveUp = hung().signOut();
+    await act(() => answered().signOut());
+    assert.deepEqual(
+      asked.map((signal) => signal.aborted),
+      [false, false],
+    );
+
+    await act(async () => {
+      mock.timers.tick(SIGN_OUT_WAIT_MS);
+      await gaveUp;
+    });
+
+    assert.deepEqual(
+      asked.map((signal) => signal.aborted),
+      [true, false],
+    );
   });
 
   it('clears the device when the server refuses the sign-out', async () => {

@@ -36,7 +36,8 @@ export interface CreateAuthOptions<TIdentity extends AuthIdentity, TExtra extend
   /** The two endpoints a session needs, taken from the app's typed client. */
   endpoints: {
     me: () => Promise<AuthIdentity>;
-    logout: () => Promise<void>;
+    /** The signal aborts once sign-out stops waiting; pass it to the request, or a late answer outlives the session. */
+    logout: (extra: { signal: AbortSignal }) => Promise<void>;
   };
   /** App-specific reads over the identity, merged into the context value. */
   extend?: (identity: TIdentity | null) => TExtra;
@@ -55,15 +56,22 @@ function meRetryDelayMs(random: () => number = Math.random): number {
 /** How long a sign-out waits on a best-effort call before this device is cleared regardless. */
 export const SIGN_OUT_WAIT_MS = 4_000;
 
-/** Settles when `work` does or the wait runs out, whichever is first, and never rejects: what follows goes ahead either way. */
-export function settledWithin(work: Promise<unknown>, waitMs: number): Promise<void> {
+/** Settles when `work` does or the wait runs out, whichever is first, and never rejects; work it stops waiting for is aborted, not left in the air. */
+export function settledWithin(
+  work: (signal: AbortSignal) => Promise<unknown>,
+  waitMs: number,
+): Promise<void> {
+  const abandon = new AbortController();
   return new Promise((done) => {
-    const timer = setTimeout(done, waitMs);
+    const timer = setTimeout(() => {
+      abandon.abort();
+      done();
+    }, waitMs);
     const settled = () => {
       clearTimeout(timer);
       done();
     };
-    work.then(settled, settled);
+    work(abandon.signal).then(settled, settled);
   });
 }
 
@@ -167,7 +175,7 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
 
     const signOut = useCallback(async () => {
       // Refused, failed or never answered, this device is cleared all the same.
-      await settledWithin(endpoints.logout(), SIGN_OUT_WAIT_MS);
+      await settledWithin((signal) => endpoints.logout({ signal }), SIGN_OUT_WAIT_MS);
       clearSession();
     }, [clearSession]);
 

@@ -128,13 +128,13 @@ export function rebindOncePerLoad(): Promise<void> {
 }
 
 /** Both sides, and before sign-out too: a row left behind sends this student's bell to the next one. */
-export async function unsubscribeFromPush(): Promise<void> {
+export async function unsubscribeFromPush(signal?: AbortSignal): Promise<void> {
   const subscription = await currentPushSubscription();
   if (!subscription) return;
 
   const { endpoint } = subscription;
   await subscription.unsubscribe();
-  await api.me.unsubscribeFromPush({ endpoint });
+  await api.me.unsubscribeFromPush({ endpoint }, { signal });
 }
 
 function toSubscriptionInput(subscription: PushSubscription): PushSubscriptionInput | null {

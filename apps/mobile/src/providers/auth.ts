@@ -12,8 +12,8 @@ export const { AuthProvider, useAuth } = createAuth<StudentIdentity>({
   signOutSignal,
   endpoints: {
     me: () => api.auth.me(),
-    logout: async () => {
-      await api.auth.logout();
+    logout: async (extra) => {
+      await api.auth.logout(extra);
     },
   },
   onSignedIn: () => void registerPushDevice(),

@@ -51,7 +51,7 @@ export async function dropPushDevice(): Promise<void> {
   if (token === null) return;
 
   // Refused or never answered, the row survives, and the next student to sign in on this phone takes the token over.
-  await settledWithin(api.me.dropPushDevice({ token }), SIGN_OUT_WAIT_MS);
+  await settledWithin((signal) => api.me.dropPushDevice({ token }, { signal }), SIGN_OUT_WAIT_MS);
 }
 
 async function fcmToken(): Promise<string | null> {

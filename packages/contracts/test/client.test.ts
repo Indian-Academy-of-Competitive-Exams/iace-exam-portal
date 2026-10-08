@@ -248,13 +248,13 @@ describe('typed client — 401 handling', () => {
 
   it('does not refresh on a 401 that means "wrong credential"', async () => {
     const { core, calls } = clientWith(
-      [failure(401, { code: 'PIN_INVALID', message: 'Incorrect mobile number or PIN' })],
+      [failure(401, { code: 'OTP_INVALID', message: 'Incorrect code' })],
       { access: 'valid', refresh: 'r1' },
     );
 
     await assert.rejects(core.request('/thing', { schema }), (error: unknown) => {
       assert.ok(AppException.is(error));
-      assert.equal(error.code, 'PIN_INVALID');
+      assert.equal(error.code, 'OTP_INVALID');
       return true;
     });
     // One call only: refreshing here would hide the real code and could sign a perfectly good session out.
@@ -380,6 +380,33 @@ describe('typed client — 401 handling', () => {
 
     await assert.rejects(core.request('/thing', { schema }));
     assert.equal((causes[0] as AppException | undefined)?.code, 'SESSION_REPLACED');
+  });
+});
+
+describe('typed client — a sign-out that stops waiting', () => {
+  /** Left in the air, a late 401 was retried under whichever session held the device by then. */
+  it('abandons its logout and its push-device call, so neither can be answered later', async () => {
+    const { api, calls, causes } = clientWith([HANG, HANG], { access: 'old', refresh: 'r1' });
+    const abandon = new AbortController();
+    const extra = { signal: abandon.signal };
+
+    const left = [api.auth.logout(extra), api.me.dropPushDevice({ token: 'fcm' }, extra)];
+    abandon.abort();
+
+    const ended = await Promise.race([
+      Promise.allSettled(left),
+      new Promise((resolve) => setTimeout(resolve, 200, 'still waiting')),
+    ]);
+    assert.notEqual(ended, 'still waiting');
+    assert.equal(calls.length, 2, 'no refresh and no retry follows an abandoned call');
+    assert.deepEqual(causes, []);
+  });
+
+  it('still signs out and drops the device when nobody is counting the wait', async () => {
+    const { api } = clientWith([success(null), success(null)], { access: 'valid' });
+
+    assert.equal(await api.auth.logout(), null);
+    assert.equal(await api.me.dropPushDevice({ token: 'fcm' }), null);
   });
 });
 
