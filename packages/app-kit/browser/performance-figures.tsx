@@ -24,6 +24,7 @@ import {
   placeInSpread,
   round2,
 } from '@iace/contracts';
+import { paceWord } from '../src';
 
 const UNMEASURED = '—';
 const SECONDS_PER_MINUTE = 60;
@@ -323,12 +324,7 @@ export function TimeFigure({
         <div className="flex items-start gap-6">
           <Metric size="md" label="Total" value={minutes(time.totalSec)} />
           {paceIndex === null ? null : (
-            <Metric
-              size="md"
-              label="Pace"
-              value={paceIndex}
-              unit={paceIndex > 1 ? 'slower' : 'faster'}
-            />
+            <Metric size="md" label="Pace" value={paceIndex} unit={paceWord(paceIndex)} />
           )}
         </div>
       }

@@ -9,12 +9,13 @@ import {
   type ComparisonItem,
 } from '@iace/ui';
 import { percentLabel, type CohortCurve } from '@iace/contracts';
-import { everySitting, isMarkingPending } from '@iace/app-kit';
+import { everySitting, isMarkingPending, isSittingVoided } from '@iace/app-kit';
 import { api } from '../../lib/api';
 import { performanceQuery, scoreCardQuery } from '../../lib/queries';
 import { leaderboardQueryKey } from '../../lib/constants';
 import { PageBody, ReportSkeleton, RowsSkeleton, Section } from '../../components/ui';
 import { AttemptCompare } from './attempt-compare';
+import { SittingSetAside } from './report';
 import { Podium, Standings } from '../leaderboard/board';
 
 /** Who else sat this paper. Without a cohort the benchmark swaps rather than the tab disappearing. */
@@ -34,6 +35,7 @@ export function ComparePanel() {
   const again = () => void card.refetch();
 
   if (card.isLoading) return <ReportSkeleton />;
+  if (isSittingVoided(card.error)) return <SittingSetAside />;
   // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
   if (isMarkingPending(card.error)) {
     return (

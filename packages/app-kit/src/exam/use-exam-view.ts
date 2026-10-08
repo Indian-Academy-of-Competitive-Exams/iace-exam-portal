@@ -8,6 +8,7 @@ import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
+  ATTEMPT_STATUS,
   furthestSeat,
   isReviewState,
   mayOpenQuestion,
@@ -25,6 +26,7 @@ import {
   type ExamClock,
   type ExamPaper,
   type SectionEffort,
+  type SubmittedAttempt,
 } from '@iace/contracts';
 import {
   SAVE_TIMEOUT_MS,
@@ -35,11 +37,13 @@ import {
 import { type FullscreenHandle } from './focus-guard';
 import { useAttemptState, type AnswerIntent, type AttemptStateDeps } from './use-attempt-state';
 import {
+  PAPER_LOCK,
   TIMER_KIND,
   type ExamFullscreenView,
   type ExamSubmitView,
   type ExamTimerView,
   type ExamView,
+  type PaperLock,
 } from './exam-view';
 
 /** What the engine cannot know: the autosave's own deps, whose cache key, and how this platform reports focus. */
@@ -51,7 +55,18 @@ export interface ExamEngineDeps extends AttemptStateDeps {
 /** What the sitting knows about itself the moment it ends, before anything has been marked. */
 export interface EndedSitting {
   attemptId: string;
-  sections: SectionEffort[];
+  /** The device's own tally, or null where the server kept something else: then only the result is true. */
+  sections: SectionEffort[] | null;
+}
+
+/** Only a tally the server counted the same: answers given after it ended elsewhere, or dropped as late, are not in it. */
+function keptSummary(
+  submitted: SubmittedAttempt,
+  sections: SectionEffort[],
+): SectionEffort[] | null {
+  const attempted = sections.reduce((sum, section) => sum + section.attempted, 0);
+  const kept = submitted.status !== ATTEMPT_STATUS.VOIDED && submitted.answeredCount === attempted;
+  return kept ? sections : null;
 }
 
 export interface ExamSitting {
@@ -63,6 +78,13 @@ export interface ExamSitting {
   title: string | null;
   watermark: string;
   onEnded: (sitting: EndedSitting) => void;
+}
+
+/** Why the paper takes no answer right now, soonest to clear first; null while it takes them. */
+function lockOf(waiting: boolean, goingIn: boolean, outOfTime: boolean): PaperLock | null {
+  if (waiting) return PAPER_LOCK.WAITING;
+  if (goingIn) return PAPER_LOCK.GOING_IN;
+  return outOfTime ? PAPER_LOCK.OUT_OF_TIME : null;
 }
 
 /** One hand-in and its retries, on the schedule that keeps the last of them inside the server's grace. */
@@ -93,6 +115,8 @@ export function useExamView(
   const ending = useRef(false);
   // The clock the paper ran out on, null while it has time. A ref for the same reason: a tap can beat the render.
   const ranOut = useRef<ExamClock | null>(null);
+  // The same fact for the render, which may not read the ref: it is what the skins draw shut from.
+  const [lapsed, setLapsed] = useState(false);
   const paperClock = useMemo<ExamClock>(
     () => ({ endsAt: paper.endsAt, serverNow: paper.serverNow, arrivedAt }),
     [paper.endsAt, paper.serverNow, arrivedAt],
@@ -200,13 +224,19 @@ export function useExamView(
       await focus.exit();
       onEnded({
         attemptId: submitted.attemptId,
-        sections: sectionEffort(paper.sections, paper.questions, state.answers),
+        sections: keptSummary(
+          submitted,
+          sectionEffort(paper.sections, paper.questions, state.answers),
+        ),
       });
     },
   });
 
+  // Either way this screen no longer answers the sitting, so it neither hands it in nor asks about it.
+  const stoodDown = state.takenOver || state.ended;
+
   const end = () => {
-    if (ending.current || state.takenOver) return;
+    if (ending.current || stoodDown) return;
     ending.current = true;
     submit.mutate();
   };
@@ -214,6 +244,7 @@ export function useExamView(
   // Locked whether or not the hand-in lands: a retry inside the server's grace must carry nothing given after the bell.
   const lapse = () => {
     ranOut.current = clock;
+    setLapsed(true);
     end();
   };
 
@@ -226,9 +257,11 @@ export function useExamView(
     ranOut.current = null;
     forgetFailure();
   }, [clock, failed, forgetFailure]);
+  // Out of time only while its hand-in is in the air or has failed: forgotten above, the paper draws open again.
+  if (lapsed && submit.isIdle) setLapsed(false);
 
-  // Asked when a tap lands, never at render: the clock can run out between the two.
-  const locked = () => inert || shut || ranOut.current !== null;
+  // Asked when a tap lands, never at render: the clock can run out, or the paper go in, between the two.
+  const locked = () => inert || shut || ranOut.current !== null || ending.current;
 
   const move = (to: string | null): void => {
     if (locked()) return;
@@ -237,7 +270,7 @@ export function useExamView(
   };
 
   const canOpen = (id: string): boolean =>
-    !forwardOnly || mayOpenQuestion(order, current?.questionId ?? null, id);
+    !locked() && (!forwardOnly || mayOpenQuestion(order, current?.questionId ?? null, id));
 
   // Moving between sections is a save point: a batch left behind is a section's worth of answers.
   const openSection = (next: string) => {
@@ -276,7 +309,7 @@ export function useExamView(
   const markedForReview = counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED];
   // Never a trap: dismissing holds until the NEXT exit, so a browser that refuses does not lock them out.
   const nagging =
-    !state.takenOver &&
+    !stoodDown &&
     !submit.isSuccess &&
     !submit.isPending &&
     focus.isSupported &&
@@ -358,7 +391,7 @@ export function useExamView(
 
   const submitView = useMemo<ExamSubmitView>(
     () => ({
-      asking: asking && !state.takenOver,
+      asking: asking && !stoodDown,
       isPending: submit.isPending,
       failed,
       retry: on.retry,
@@ -368,7 +401,7 @@ export function useExamView(
       cancel: on.cancel,
       confirm: on.confirm,
     }),
-    [asking, state.takenOver, submit.isPending, failed, unanswered, markedForReview, on],
+    [asking, stoodDown, submit.isPending, failed, unanswered, markedForReview, on],
   );
 
   const fullscreen = useMemo<ExamFullscreenView>(
@@ -383,7 +416,11 @@ export function useExamView(
     [nagging, focus.isFullscreen, focus.isSupported, focus.exits, on],
   );
 
+  const lock = lockOf(inert, submit.isPending || submit.isSuccess, shut || lapsed);
+
   const { answers, isSaving, hasUnsaved, hasUnsent, leave, takenOver, setAside } = state;
+  // Behind the student's own hand-in a late save says ended too: that paper is theirs, and Handed in says so.
+  const ended = state.ended && !submit.isPending && !submit.isSuccess;
   return useMemo<ExamView>(
     () => ({
       title: title ?? 'Your test',
@@ -414,6 +451,8 @@ export function useExamView(
       leave,
       takenOver,
       setAside,
+      ended,
+      locked: lock,
 
       openQuestion: on.openQuestion,
       canOpen: on.canOpen,
@@ -448,6 +487,8 @@ export function useExamView(
       leave,
       takenOver,
       setAside,
+      ended,
+      lock,
       on,
       submitView,
       fullscreen,

@@ -58,6 +58,12 @@ export const resultLine = (point: PerformancePoint): string =>
     .filter((part) => part !== null)
     .join(' · ');
 
+/** A pace index in a word: above one is slower than the field, below it faster, and exactly one is neither. */
+export function paceWord(pace: number): string {
+  if (pace === 1) return 'level';
+  return pace > 1 ? 'slower' : 'faster';
+}
+
 /** The institute's clock, never the device's — a student abroad is still on an IST morning. */
 const GREETINGS = [
   { until: 12, word: 'Good morning' },

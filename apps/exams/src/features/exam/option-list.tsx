@@ -22,6 +22,7 @@ export function OptionList({
   selectedOptionId,
   marked,
   testUi,
+  disabled = false,
   onSelect,
   onBubble,
 }: Readonly<{
@@ -31,6 +32,8 @@ export function OptionList({
   selectedOptionId: string | null;
   marked: boolean;
   testUi: TestUi;
+  /** The paper takes no answer right now: the options are drawn, and not offered. */
+  disabled?: boolean;
   onSelect: (optionId: string) => void;
   onBubble: (optionId: string, fill: number) => void;
 }>) {
@@ -51,6 +54,7 @@ export function OptionList({
               className={cn(
                 'flex items-start gap-3 rounded-exam-option border p-3 transition-colors',
                 locked ? 'cursor-default' : 'cursor-pointer',
+                disabled && 'pointer-events-none opacity-60',
                 option.id === selectedOptionId
                   ? 'border-exam-option-selected-border bg-exam-option-selected'
                   : 'border-exam-option-border bg-exam-option hover:bg-exam-surface-2',
@@ -61,7 +65,7 @@ export function OptionList({
                   className="mt-0.5"
                   label={String.fromCodePoint(65 + position)}
                   fill={fillOf(option.id)}
-                  disabled={locked}
+                  disabled={locked || disabled}
                   onFillChange={(fill) => onBubble(option.id, fill)}
                 />
               ) : (
@@ -70,6 +74,7 @@ export function OptionList({
                   name={`q-${question.questionId}`}
                   className="mt-0.5 size-4 shrink-0 accent-[--exam-option-selected-border]"
                   checked={option.id === selectedOptionId}
+                  disabled={disabled}
                   onChange={() => onSelect(option.id)}
                 />
               )}

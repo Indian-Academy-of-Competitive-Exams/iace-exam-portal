@@ -8,7 +8,13 @@ export { type SignOutReason, type SignOutSignal } from './sign-out-signal';
 export { signOutReasonOf, signedOutMessage } from './signed-out-message';
 export { createAppApiClient, createAdminAppApiClient } from './api-client';
 export { type AppApiClient } from './api-client';
-export { createAuth, type AuthState, type CreateAuthOptions } from './create-auth';
+export {
+  createAuth,
+  settledWithin,
+  SIGN_OUT_WAIT_MS,
+  type AuthState,
+  type CreateAuthOptions,
+} from './create-auth';
 export {
   createAppQueryClient,
   isWorthAskingAgain,
@@ -17,8 +23,9 @@ export {
   type AppMutationMeta,
   type Notifier,
 } from './query-client';
+export { changedValues } from './form-changes';
 export { applyFieldErrors, bannerMessage } from './form-errors';
-export { numberOr, optionalNumber } from './form-numbers';
+export { isNumberOrBlank, numberOr, optionalNumber } from './form-numbers';
 export {
   autosaveDelayMs,
   seedRevision,
@@ -52,6 +59,8 @@ export {
 } from './exam/start-sitting';
 export {
   ANSWER_STATE_LABELS,
+  PAPER_LOCK,
+  SITTING_ENDED_SAYS,
   TIMER_KIND,
   submittingSays,
   stoodDownSays,
@@ -59,10 +68,17 @@ export {
   type ExamSubmitView,
   type ExamFullscreenView,
   type ExamTimerView,
+  type PaperLock,
 } from './exam/exam-view';
 export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
 export { htmlOf, shownLanguages } from './exam/content';
-export { MARKING_TRIES, isMarkingPending, retryWhileMarking } from './marking';
+export {
+  MARKING_TRIES,
+  SITTING_VOIDED_SAYS,
+  isMarkingPending,
+  isSittingVoided,
+  retryWhileMarking,
+} from './marking';
 export {
   EFFORT_RUNNERS,
   FIELD_SAMPLE_FLOOR,
@@ -78,6 +94,7 @@ export {
   greetingFor,
   languagesOf,
   negativeOf,
+  paceWord,
   resultLine,
   sectionMarksOf,
   sectionalOf,
@@ -130,6 +147,8 @@ export { LOGIN_FIELDS, resendSays, sentSays, useResendCode, type LoginStep } fro
 export { PODIUM_LABELS } from './leaderboard';
 export {
   VERDICT,
+  answerKeyText,
+  dispositionLabel,
   useBookmarks,
   verdictOf,
   type BookmarkControl,

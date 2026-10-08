@@ -40,8 +40,8 @@ export default function SubmittedScreen() {
   // Asked for while the student reads, so the result is already held when they reach the button.
   usePrefetchQuery(scoreCardAheadQuery(attemptId));
 
-  // Absent when Android killed the process in between: the result is all there is to open.
-  if (!handedIn) return <Redirect href={DETAIL_ROUTES.REPORT(attemptId)} />;
+  // No summary the server kept — the process was killed in between, or it counted the paper differently.
+  if (!handedIn?.sections) return <Redirect href={DETAIL_ROUTES.REPORT(attemptId)} />;
 
   const paper = paperEffort(handedIn.sections);
   const cohortSize = field.data?.cohortSize ?? 0;

@@ -4,6 +4,8 @@ import { Info } from 'lucide-react';
 import {
   Button,
   Combobox,
+  EmptyState,
+  EMPTY_STATE_KINDS,
   PageFrame,
   PageHeader,
   Tooltip,
@@ -11,7 +13,14 @@ import {
   TooltipTrigger,
 } from '@iace/ui';
 import { PageCrumbs, usePageTour } from '@iace/app-kit/browser';
-import { REPORT_TABS, everySitting, newestFirst, reportTabOf, sittingHint } from '@iace/app-kit';
+import {
+  REPORT_TABS,
+  SITTING_VOIDED_SAYS,
+  everySitting,
+  newestFirst,
+  reportTabOf,
+  sittingHint,
+} from '@iace/app-kit';
 import { type PerformancePoint } from '@iace/contracts';
 import { performanceQuery } from '../../lib/queries';
 import { NAV_ITEMS, PICKER_WIDTH, ROUTES } from '../../lib/constants';
@@ -81,6 +90,18 @@ export function ReportShell() {
           content: <Outlet />,
         })),
       }}
+    />
+  );
+}
+
+/** What every tab draws for a sitting the institute set aside: nothing will be marked, so nothing retries. */
+export function SittingSetAside() {
+  return (
+    <EmptyState
+      kind={EMPTY_STATE_KINDS.REFUSED}
+      title={SITTING_VOIDED_SAYS.title}
+      // ui-copy-ok: consequence
+      hint={SITTING_VOIDED_SAYS.hint}
     />
   );
 }

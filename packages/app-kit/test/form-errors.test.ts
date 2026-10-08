@@ -36,6 +36,20 @@ describe('applyFieldErrors', () => {
     assert.equal(set.dob, 'A date of birth cannot be in the future');
   });
 
+  /** The failure this prevents: a section's blank name shown under the configuration's own Name. */
+  it('keeps a row error on its row, never on a flat field that shares its last word', () => {
+    const set: Record<string, string> = {};
+    applyFieldErrors(
+      failure({ 'sections.1.name': ['Give the section a name'] }),
+      ((field: string, error: { message?: string }) => {
+        set[field] = error.message ?? '';
+      }) as never,
+      ['name', 'sections.0.name', 'sections.1.name'] as never,
+    );
+
+    assert.deepEqual(set, { 'sections.1.name': 'Give the section a name' });
+  });
+
   it('ignores an error for a field this form does not have', () => {
     const set: Record<string, string> = {};
     applyFieldErrors(
@@ -77,6 +91,17 @@ describe('bannerMessage', () => {
 
   it('counts a nested path as mapped when the form has its leaf', () => {
     assert.equal(isFullyFieldMapped(failure({ 'profile.dob': ['bad'] }), ['dob']), true);
+  });
+
+  /** The failure this prevents: a session's refusal counted as shown because the paper has a field of that name. */
+  it('speaks for a row error no input owns, whatever flat field shares its last word', () => {
+    const refused = failure(
+      { 'modules.0.durationSec': ['A clock cannot be negative'] },
+      'Not valid',
+    );
+
+    assert.equal(bannerMessage(refused, ['durationSec']), 'Not valid');
+    assert.equal(bannerMessage(refused, ['modules.0.durationSec']), null);
   });
 
   it('falls back to something sayable for an error it does not recognise', () => {

@@ -7,6 +7,7 @@ import {
   Card,
   RichContent,
   SectionHeading,
+  StatRow,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -22,6 +23,8 @@ import {
   type LanguageMode,
 } from '@iace/contracts';
 import {
+  answerKeyText,
+  dispositionLabel,
   htmlOf,
   shownLanguages,
   VERDICT,
@@ -36,6 +39,8 @@ const VERDICT_LABEL: Readonly<Record<Verdict, string>> = {
   [VERDICT.WRONG]: 'Incorrect',
   [VERDICT.LEFT]: 'Unattempted',
 };
+
+const DASH = '—';
 
 const VERDICT_SEAT: Readonly<Record<Verdict, string>> = {
   [VERDICT.RIGHT]: 'border-success bg-success/15 text-success',
@@ -137,6 +142,8 @@ export function ReviewQuestion({
 }>) {
   const shown = shownLanguages(languages, languageMode);
   const verdict = verdictOf(question);
+  const disposition = dispositionLabel(question);
+  const options = question.options ?? [];
 
   return (
     <div className="flex min-h-0 flex-col gap-4 rounded-lg border border-border p-4">
@@ -148,6 +155,7 @@ export function ReviewQuestion({
           <Badge variant={verdict === VERDICT.RIGHT ? 'success' : 'neutral'}>
             {VERDICT_LABEL[verdict]}
           </Badge>
+          {disposition ? <Badge variant="info">{disposition}</Badge> : null}
           <Badge variant="neutral">
             {question.marksAwarded ?? 0} / {question.marks}
           </Badge>
@@ -163,32 +171,25 @@ export function ReviewQuestion({
         />
       ))}
 
-      <ol className="flex flex-col gap-2">
-        {(question.options ?? []).map((option, seat) => (
-          <li key={option.id}>
-            <ReviewOption
-              seat={seat}
-              html={shown
-                .map((language) => htmlOf(option.text[contentLanguageOf(language)]))
-                .join('')}
-              chosen={option.id === question.selectedOptionId}
-              correct={option.isCorrect}
-            />
-          </li>
-        ))}
-      </ol>
-
-      {question.content?.en?.solution ? (
-        <div className="flex flex-col gap-2 border-t border-border pt-4">
-          <SectionHeading title="Solution" level={3} />
-          {shown.map((language) => (
-            <RichContent
-              key={language}
-              html={htmlOf(question.content?.[contentLanguageOf(language)]?.solution)}
-            />
+      {options.length > 0 ? (
+        <ol className="flex flex-col gap-2">
+          {options.map((option, seat) => (
+            <li key={option.id}>
+              <ReviewOption
+                seat={seat}
+                html={shown
+                  .map((language) => htmlOf(option.text[contentLanguageOf(language)]))
+                  .join('')}
+                chosen={option.id === question.selectedOptionId}
+                correct={option.isCorrect}
+              />
+            </li>
           ))}
-        </div>
+        </ol>
       ) : null}
+
+      <TypedAnswer question={question} shown={shown} />
+      <Solution question={question} shown={shown} />
 
       {/* The palette jumps anywhere; these two walk the paper the way it was sat. */}
       <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
@@ -201,6 +202,45 @@ export function ReviewQuestion({
           <ChevronRight aria-hidden />
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** A typed question has no option to mark, so what was typed and what it was compared against are said. */
+function TypedAnswer({
+  question,
+  shown,
+}: Readonly<{ question: ReviewedQuestion; shown: readonly LanguageCode[] }>) {
+  const key = answerKeyText(question, shown.map(contentLanguageOf));
+  if (question.typedAnswer === null && key === null) return null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <StatRow label="Your answer" value={question.typedAnswer ?? DASH} />
+      <StatRow label="Correct answer" value={key ?? DASH} />
+    </div>
+  );
+}
+
+/** A question nobody wrote a solution for, in the languages shown, draws no block headed Solution. */
+function Solution({
+  question,
+  shown,
+}: Readonly<{ question: ReviewedQuestion; shown: readonly LanguageCode[] }>) {
+  const written = shown
+    .map((language) => ({
+      language,
+      html: htmlOf(question.content?.[contentLanguageOf(language)]?.solution),
+    }))
+    .filter((block) => block.html !== '');
+  if (written.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-4">
+      <SectionHeading title="Solution" level={3} />
+      {written.map((block) => (
+        <RichContent key={block.language} html={block.html} />
+      ))}
     </div>
   );
 }

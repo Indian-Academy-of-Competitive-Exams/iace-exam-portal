@@ -3,10 +3,15 @@ import { type FieldValues, type Path, type UseFormSetError } from 'react-hook-fo
 
 /** Bridges the API's `fieldErrors` into react-hook-form; keys the form doesn't know, and the `_` catch-all, fall through to `bannerMessage` rather than being dropped. */
 
-/** The server keys by full path (`profile.dob`); a form registers the leaf (`dob`). */
+/** The server keys by full path (`profile.dob`); a form registers the leaf (`dob`). A key under an array index (`sections.0.name`) has no leaf: it belongs to that row alone. */
+function leafOf(key: string): string | undefined {
+  const parts = key.split('.');
+  return parts.some((part) => /^\d+$/.test(part)) ? undefined : parts.at(-1);
+}
+
 function messagesFor(fieldErrors: Record<string, string[]>, field: string): string[] | undefined {
   if (fieldErrors[field]) return fieldErrors[field];
-  const match = Object.keys(fieldErrors).find((key) => key.split('.').at(-1) === field);
+  const match = Object.keys(fieldErrors).find((key) => leafOf(key) === field);
   return match ? fieldErrors[match] : undefined;
 }
 
@@ -29,7 +34,7 @@ export function isFullyFieldMapped(error: unknown, fields: readonly string[]): b
   const keys = Object.keys(error.fieldErrors);
   return (
     keys.length > 0 &&
-    keys.every((key) => fields.includes(key) || fields.includes(key.split('.').at(-1) ?? key))
+    keys.every((key) => fields.includes(key) || fields.includes(leafOf(key) ?? key))
   );
 }
 

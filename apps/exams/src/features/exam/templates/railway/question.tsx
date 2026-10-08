@@ -39,12 +39,15 @@ export function RailwayOptions({
   languages,
   languageMode,
   selectedOptionId,
+  disabled,
   onSelect,
 }: Readonly<{
   question: ExamQuestion;
   languages: readonly LanguageCode[];
   languageMode: LanguageMode;
   selectedOptionId: string | null;
+  /** The paper takes no answer right now: the options are drawn, and not offered. */
+  disabled: boolean;
   onSelect: (optionId: string) => void;
 }>) {
   const shown = shownLanguages(languages, languageMode);
@@ -58,6 +61,7 @@ export function RailwayOptions({
             className="rdobtn"
             name={`q-${question.questionId}`}
             checked={option.id === selectedOptionId}
+            disabled={disabled}
             onChange={() => onSelect(option.id)}
           />
           <span>

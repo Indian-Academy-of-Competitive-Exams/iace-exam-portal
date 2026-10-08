@@ -9,6 +9,7 @@ import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import {
   HELD_ELSEWHERE_SAYS,
   isHeldElsewhere,
+  SITTING_ENDED_SAYS,
   stoodDownSays,
   useExamView,
   type EndedSitting,
@@ -97,7 +98,8 @@ export function ExamPage() {
     <ExamHall
       paper={paper.data.paper}
       arrivedAt={paper.data.arrivedAt}
-      startedByThisCall={attempt.data.startedByThisCall}
+      // A paper whose read failed before is opened as a resume: the sitting may have ended while it waited.
+      startedByThisCall={attempt.data.startedByThisCall && paper.errorUpdateCount === 0}
       title={attempt.data.testTitle}
       // The one thing on the paper that leads back to a person: there is no enrolment number.
       watermark={student?.mobile ?? ''}
@@ -128,6 +130,31 @@ function ExamHall(
     answerQueue: { storage: browserSessionStorage, keyPrefix: STORAGE_KEYS.QUEUED_ANSWERS },
   });
   const releaseLeave = useLeaveGuard(view.hasUnsent, view.leave);
+  const navigate = useNavigate();
+
+  if (view.ended) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.REFUSED}
+          title={SITTING_ENDED_SAYS.title}
+          /* ui-copy-ok: consequence — what was answered after it ended is in no result */
+          hint={SITTING_ENDED_SAYS.hint}
+          action={
+            <Button
+              onClick={() => {
+                void focus.exit();
+                // `replace`: Back must never re-enter a paper that has ended.
+                navigate(ROUTES.REPORT(sitting.paper.attemptId), { replace: true });
+              }}
+            >
+              See your result
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   if (view.takenOver) {
     const says = stoodDownSays(view);

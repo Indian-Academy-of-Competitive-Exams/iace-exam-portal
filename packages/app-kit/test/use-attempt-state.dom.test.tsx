@@ -407,6 +407,64 @@ test('a save refused as taken over stops saving and says so', async (t) => {
   assert.equal(calls.length, 1, 'a tab that lost the sitting does not fight for it');
 });
 
+/** The failure this prevents: a paper ended elsewhere reading as "Not saved yet", and answered on until the bell. */
+test('a save refused because the sitting has ended stops for good and keeps nothing to send', async (t) => {
+  const calls: unknown[] = [];
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async (_id: string, body: unknown) => {
+        calls.push(body);
+        throw new AppException(ErrorCodes.SITTING_ENDED);
+      },
+    },
+  } as unknown as AppApiClient;
+  const storage = fakeStorage();
+  const deps = depsFor(api, storage);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  await act(async () => void (await result.current.flush()));
+  assert.equal(result.current.ended, true);
+  assert.equal(result.current.takenOver, false, 'nothing here can be continued');
+  assert.equal(result.current.hasUnsaved, false, 'not a save that may yet land');
+  assert.equal(result.current.hasUnsent(), false);
+  assert.equal(
+    storage.getItem(QUEUE_KEY),
+    null,
+    'nothing is kept for a sitting that takes no more',
+  );
+
+  act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
+  act(() => result.current.resume());
+  await act(async () => void (await result.current.flush()));
+  assert.equal(result.current.answers.q2, undefined, 'no answer is taken after it');
+  assert.equal(calls.length, 1, 'and nothing more is sent');
+});
+
+/** A save refused for being late is not an ended sitting: time may yet be added, so the paper and its queue stay. */
+test('a save refused with a plain conflict keeps its answers and does not end the sitting', async (t) => {
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async () => {
+        throw new AppException(ErrorCodes.CONFLICT);
+      },
+    },
+  } as unknown as AppApiClient;
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(unmount);
+
+  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
+  await act(async () => void (await result.current.flush()));
+
+  assert.equal(result.current.ended, false);
+  assert.equal(result.current.hasUnsaved, true);
+  assert.equal(result.current.hasUnsent(), true);
+});
+
 /** One sitting as the server holds it, answered from whichever tab holds the claim; the others are refused. */
 function sharedSitting() {
   const held = {
@@ -580,6 +638,41 @@ test('a seed the server refused is not asked again, and does not hold the paper 
   });
   assert.equal(asked, 1);
   assert.equal(result.current.sectionsSettled, true, 'the sitting is answerable anyway');
+});
+
+/** The failure this prevents: retrying "Your paper did not load" on a sitting ended elsewhere, into a live paper. */
+test('a reopened paper whose sitting has ended says so from its first read, and never saves', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  let saves = 0;
+  const api = {
+    me: {
+      attemptState: async () => {
+        throw new AppException(ErrorCodes.SITTING_ENDED);
+      },
+      saveAttemptState: async () => {
+        saves += 1;
+        return { revision: 0 };
+      },
+    },
+  } as unknown as AppApiClient;
+  const deps = depsFor(api);
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  assert.equal(result.current.ended, true);
+
+  await act(async () => {
+    mock.timers.tick(61_000);
+    await Promise.resolve();
+  });
+  assert.equal(saves, 0, 'not even the idle beat');
 });
 
 /** The failure this prevents: a full store killing autosave for the rest of the sitting. */
@@ -1102,6 +1195,39 @@ test('a heartbeat the server refuses stands the tab down without reporting unsav
 
   assert.equal(result.current.takenOver, true);
   assert.equal(result.current.hasUnsaved, false);
+});
+
+/** An idle screen learns the sitting ended from the beat it already sends: no push, and no second beat. */
+test('a heartbeat refused because the sitting has ended is the last thing this screen sends', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  let beats = 0;
+  const api = {
+    me: {
+      attemptState: attemptStateStub,
+      saveAttemptState: async () => {
+        beats += 1;
+        throw new AppException(ErrorCodes.SITTING_ENDED);
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+  await act(async () => void (await Promise.resolve()));
+
+  for (let tick = 0; tick < 3; tick += 1) {
+    await act(async () => {
+      mock.timers.tick(31_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  assert.equal(result.current.ended, true);
+  assert.equal(result.current.hasUnsaved, false);
+  assert.equal(beats, 1);
 });
 
 /** The failure this prevents: a laptop waking from sleep sending a beat that spends the pause its reload would get back. */

@@ -10,9 +10,10 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
-import { isMarkingPending, minutes } from '@iace/app-kit';
+import { isMarkingPending, isSittingVoided, minutes } from '@iace/app-kit';
 import { round2, type SectionalStanding } from '@iace/contracts';
 import { scoreCardQuery } from '../../lib/queries';
+import { SittingSetAside } from './report';
 import { PageBody, ReportSkeleton, Section } from '../../components/ui';
 
 const DASH = '—';
@@ -32,6 +33,7 @@ export function SubjectPanel() {
   const again = () => void card.refetch();
 
   if (card.isLoading) return <ReportSkeleton />;
+  if (isSittingVoided(card.error)) return <SittingSetAside />;
   // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
   if (isMarkingPending(card.error)) {
     return (

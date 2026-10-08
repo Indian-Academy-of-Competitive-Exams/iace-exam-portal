@@ -6,6 +6,20 @@ import { shouldRetryRead } from './query-client';
 export const isMarkingPending = (error: unknown): boolean =>
   AppException.is(error) && error.code === ErrorCodes.CONFLICT;
 
+/** A sitting the institute set aside is never marked: its read is refused for good, so nothing retries it. */
+export const isSittingVoided = (error: unknown): boolean =>
+  AppException.is(error) && error.code === ErrorCodes.SITTING_VOIDED;
+
+/** Either way there is no result to draw, and the screen says which itself rather than a banner. */
+export const hasNoResult = (error: unknown): boolean =>
+  isMarkingPending(error) || isSittingVoided(error);
+
+/** The set-aside screen's words, the same on both apps. */
+export const SITTING_VOIDED_SAYS = {
+  title: 'This sitting was set aside',
+  hint: 'It carries no marks and no rank.',
+} as const;
+
 /** How often a marked paper's read asks again by itself before it says the marks are not in. */
 export const MARKING_TRIES = 3;
 

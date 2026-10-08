@@ -23,7 +23,7 @@ import {
   Watermark,
   cn,
 } from '@iace/ui';
-import { ANSWER_STATE_LABELS, TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { ANSWER_STATE_LABELS, PAPER_LOCK, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { ExamTimer } from '../../exam-timer';
 import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
@@ -63,6 +63,9 @@ export function Header({
       <div className="flex items-center gap-1 sm:gap-3">
         {view.hasUnsaved ? <Badge variant="warning">Not saved yet</Badge> : null}
         {view.isSaving ? <Spinner size="sm" label="Saving" /> : null}
+        {view.locked === PAPER_LOCK.WAITING ? (
+          <Spinner size="sm" label="Opening your paper" />
+        ) : null}
         {onOpenPaper ? (
           <Button type="button" variant="ghost" size="sm" onClick={onOpenPaper}>
             <FileText aria-hidden />
@@ -129,7 +132,7 @@ export function SectionBar({
           const trigger = (
             <TabsTrigger
               value={section.id}
-              disabled={!view.reachable.includes(section.id)}
+              disabled={view.locked !== null || !view.reachable.includes(section.id)}
               className={SWITCH[config.sectionSwitch]}
             >
               {section.name}
@@ -184,6 +187,7 @@ export function Options({ view }: Readonly<ExamSlotProps>) {
       selectedOptionId={view.selectedOptionId}
       marked={view.marked}
       testUi={view.testUi}
+      disabled={view.locked !== null}
       onSelect={view.chooseOption}
       onBubble={view.bubbleAnswer}
     />
@@ -208,6 +212,9 @@ export function Palette({
 }
 
 export function BottomBar({ view }: Readonly<ExamSlotProps>) {
+  // Drawn shut, not removed: the bar keeps its shape while the paper waits, goes in or is out of time.
+  const off = view.locked !== null;
+
   return (
     <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-exam-border px-exam py-3">
       {view.submit.failed ? (
@@ -220,22 +227,34 @@ export function BottomBar({ view }: Readonly<ExamSlotProps>) {
       ) : null}
       {/* On a bubble sheet the ink carries all three: a part fill flags it, a full one saves and moves. */}
       {view.testUi === TEST_UI.OMR ? (
-        <Button type="button" size="sm" onClick={view.nextQuestion}>
+        <Button type="button" size="sm" disabled={off} onClick={view.nextQuestion}>
           Next
         </Button>
       ) : (
         <>
           {view.forwardOnly ? null : (
-            <Button type="button" variant="outline" size="sm" onClick={view.markAndNext}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={off}
+              onClick={view.markAndNext}
+            >
               <Flag aria-hidden />
               Mark for review &amp; next
             </Button>
           )}
-          <Button type="button" variant="ghost" size="sm" onClick={view.clearResponse}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={off}
+            onClick={view.clearResponse}
+          >
             <Eraser aria-hidden />
             Clear response
           </Button>
-          <Button type="button" size="sm" onClick={view.nextQuestion}>
+          <Button type="button" size="sm" disabled={off} onClick={view.nextQuestion}>
             Save &amp; next
           </Button>
         </>
@@ -247,6 +266,7 @@ export function BottomBar({ view }: Readonly<ExamSlotProps>) {
         size="sm"
         className="ml-auto"
         loading={view.submit.isPending}
+        disabled={off}
         onClick={view.submit.ask}
       >
         <Send aria-hidden />

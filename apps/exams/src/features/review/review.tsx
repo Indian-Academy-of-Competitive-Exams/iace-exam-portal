@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { isMarkingPending, useBookmarks } from '@iace/app-kit';
+import { isMarkingPending, isSittingVoided, useBookmarks } from '@iace/app-kit';
 import { EmptyState, EMPTY_STATE_KINDS } from '@iace/ui';
 import { BlockSkeleton } from '../../components/ui';
 import { LANGUAGE_MODE } from '@iace/contracts';
 import { api } from '../../lib/api';
 import { solutionsQuery } from '../../lib/queries';
+import { SittingSetAside } from '../performance/report';
 import { ReviewPaper } from './review-paper';
 
 /** One section at a time: its questions carry the student's own answers, the marks and the key. */
@@ -38,8 +39,9 @@ export function SolutionPanel() {
   );
 }
 
-/** No paper to draw: marking still queued is not a failure, and a failure carries its retry. */
+/** No paper to draw: set aside or marking still queued is not a failure, and a failure carries its retry. */
 function PaperAbsence({ error, onRetry }: Readonly<{ error: unknown; onRetry: () => void }>) {
+  if (isSittingVoided(error)) return <SittingSetAside />;
   return isMarkingPending(error) ? (
     <EmptyState title="No marks yet" onRetry={onRetry} />
   ) : (

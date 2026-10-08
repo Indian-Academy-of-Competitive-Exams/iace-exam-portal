@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AppException, ErrorCodes } from '@iace/contracts';
-import { MARKING_TRIES, isMarkingPending, retryWhileMarking } from '../src/marking';
+import {
+  MARKING_TRIES,
+  isMarkingPending,
+  isSittingVoided,
+  retryWhileMarking,
+} from '../src/marking';
 
 describe('reading a score card the marking job has not reached', () => {
   /** Nothing polls on the student's behalf now, so arriving early is ordinary, not a failure. */
@@ -33,5 +38,17 @@ describe('asking again for a paper the marking job has not reached', () => {
     assert.equal(retryWhileMarking(0, new Error('network down')), true);
     assert.equal(retryWhileMarking(1, new Error('network down')), false);
     assert.equal(retryWhileMarking(0, new AppException(ErrorCodes.NOT_FOUND)), false);
+  });
+});
+
+describe('reading a sitting that was set aside', () => {
+  const voided = new AppException(ErrorCodes.SITTING_VOIDED);
+
+  /** The failure this prevents: three quiet retries, then "No marks yet" over a Retry that can never work. */
+  it('is its own refusal, never marking still queued, and is not asked for again', () => {
+    assert.equal(isSittingVoided(voided), true);
+    assert.equal(isMarkingPending(voided), false);
+    assert.equal(retryWhileMarking(0, voided), false);
+    assert.equal(isSittingVoided(new AppException(ErrorCodes.CONFLICT)), false);
   });
 });

@@ -69,6 +69,20 @@ export function stoodDownSays({ setAside, hasUnsent }: Pick<ExamView, 'setAside'
       };
 }
 
+/** The ended screen's words, the same on both apps: what happened, and which answers stand. */
+export const SITTING_ENDED_SAYS = {
+  title: 'This test has ended',
+  hint: 'Answers saved before it ended are kept; nothing given after it was.',
+} as const;
+
+/** Why a paper on screen takes no answer right now, so a skin draws its controls as they are: shut. */
+export const PAPER_LOCK = {
+  WAITING: 'WAITING',
+  GOING_IN: 'GOING_IN',
+  OUT_OF_TIME: 'OUT_OF_TIME',
+} as const;
+export type PaperLock = (typeof PAPER_LOCK)[keyof typeof PAPER_LOCK];
+
 export const TIMER_KIND = { SECTION: 'SECTION', PAPER: 'PAPER' } as const;
 
 /** The one clock on screen, chosen by the engine: a skin draws the kind it is handed. */
@@ -128,6 +142,10 @@ export interface ExamView {
   takenOver: boolean;
   /** Stopped because another of the student's tests was opened, not because this one went elsewhere. */
   setAside: boolean;
+  /** The sitting ended somewhere else: nothing more is taken or sent, and there is nothing to continue. */
+  ended: boolean;
+  /** Why no answer is taken right now — its saved state is awaited, it is going in, or its time is spent — else null. */
+  locked: PaperLock | null;
 
   openQuestion: (questionId: string) => void;
   /** Whether that seat still opens — a screen draws the refusal rather than finding out by click. */

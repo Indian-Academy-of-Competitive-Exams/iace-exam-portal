@@ -52,6 +52,10 @@ export const isTakenOver = (error: unknown): boolean =>
 const isSetAside = (error: unknown): boolean =>
   AppException.is(error) && error.code === ErrorCodes.SITTING_SET_ASIDE;
 
+/** A refusal because the sitting is over: handed in elsewhere, ended by the institute, or set aside. */
+const isEnded = (error: unknown): boolean =>
+  AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED;
+
 const queueKeyFor = ({ keyPrefix }: AnswerQueue, attemptId: string) => `${keyPrefix}.${attemptId}`;
 
 const answersFrom = (queued: readonly AnswerChange[]): Record<string, LiveAnswer> =>
@@ -75,6 +79,8 @@ export interface AttemptStateHandle {
   takenOver: boolean;
   /** It stopped because another of the student's tests was opened, not because this one went elsewhere. */
   setAside: boolean;
+  /** True once the server said the sitting is over: nothing more is taken, sent or kept to send. */
+  ended: boolean;
   /** Stops saving and says why; what is unsent stays on this device, and goes up if the student continues here. */
   standDown: () => void;
   /** What happened, in the screen's words. Time on the question is this hook's bookkeeping. */
@@ -138,15 +144,17 @@ export function useAttemptState(
     answersFrom(queue.changes()),
   );
   const [sections, setSections] = useState<Record<string, SectionProgress>>({});
-  // False until the GET below settles: before it, a screen cannot tell "never opened" from "not yet known".
-  const [sectionsSettled, setSectionsSettled] = useState(false);
+  // False until the GET below settles: before it, "never opened" is not yet known. A sitting begun here has none to wait for.
+  const [sectionsSettled, setSectionsSettled] = useState(startedByThisCall);
   const [clock, setClock] = useState<ExamClock | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [takenOver, setTakenOver] = useState(false);
   const [setAside, setSetAside] = useState(false);
+  const [ended, setEnded] = useState(false);
   const stopped = useRef(false);
-  const heldElsewhere = useRef(false);
+  // This screen answers no more, whatever resumes: the sitting is held elsewhere, or over.
+  const stoodDown = useRef(false);
 
   // What the screen draws, current mid-handler: a state updater may not have run when the next write reads it.
   const answersNow = useRef<Record<string, LiveAnswer>>(answers);
@@ -166,11 +174,42 @@ export function useAttemptState(
     setAnswers(next);
   }, []);
 
+  // Either refusal keeps the queue: continued here, it is resent as it stands.
+  const standDown = useCallback((forAnotherTest = false) => {
+    stopped.current = true;
+    stoodDown.current = true;
+    setSetAside(forAnotherTest);
+    setTakenOver(true);
+  }, []);
+
+  const unsaved = useCallback((value: boolean) => {
+    lastSaveFailed.current = value;
+    setHasUnsaved(value);
+  }, []);
+
+  // Unlike a stand-down there is nothing to continue, so nothing is kept to send.
+  const endHere = useCallback(() => {
+    stopped.current = true;
+    stoodDown.current = true;
+    queue.clear();
+    unsaved(false);
+    setEnded(true);
+  }, [queue, unsaved]);
+
+  // The sitting is over, or answering moved to another tab or device: this one stops rather than fighting it.
+  const refused = useCallback(
+    (error: unknown) => {
+      if (isEnded(error)) endHere();
+      else if (isTakenOver(error)) standDown();
+      else if (isSetAside(error)) standDown(true);
+    },
+    [endHere, standDown],
+  );
+
   // Seeded from the server until it lands: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
     // A sitting this screen just started holds no answers and no open section, so there is nothing to ask for.
     if (fresh.current) {
-      setSectionsSettled(true);
       seeded.current = true;
       return;
     }
@@ -191,8 +230,9 @@ export function useAttemptState(
         },
         (error: unknown) => {
           if (!live) return;
-          // Never a dead paper: the sitting goes on with what this device holds, and a save is still the server's to refuse.
+          // Never a dead paper: the sitting goes on with what this device holds, unless this read says it is over.
           setSectionsSettled(true);
+          refused(error);
           if (isWorthAskingAgain(error)) again = setTimeout(seed, autosaveDelayMs());
         },
       );
@@ -201,29 +241,7 @@ export function useAttemptState(
       live = false;
       clearTimeout(again);
     };
-  }, [attemptId, commit]);
-
-  // Either refusal keeps the queue: continued here, it is resent as it stands.
-  const standDown = useCallback((forAnotherTest = false) => {
-    stopped.current = true;
-    heldElsewhere.current = true;
-    setSetAside(forAnotherTest);
-    setTakenOver(true);
-  }, []);
-
-  const unsaved = useCallback((value: boolean) => {
-    lastSaveFailed.current = value;
-    setHasUnsaved(value);
-  }, []);
-
-  // Answering moved to another tab or device: this one stops rather than fighting it.
-  const refused = useCallback(
-    (error: unknown) => {
-      if (isTakenOver(error)) standDown();
-      else if (isSetAside(error)) standDown(true);
-    },
-    [standDown],
-  );
+  }, [attemptId, commit, refused]);
 
   const failed = useCallback(
     (error: unknown) => {
@@ -334,7 +352,7 @@ export function useAttemptState(
   );
 
   const resume = useCallback(() => {
-    stopped.current = heldElsewhere.current;
+    stopped.current = stoodDown.current;
   }, []);
 
   // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
@@ -365,7 +383,7 @@ export function useAttemptState(
 
   const record = useCallback(
     (change: AnswerChange) => {
-      if (heldElsewhere.current) return;
+      if (stoodDown.current) return;
       queue.put(change);
       const drawn = answersNow.current;
       commit({ ...drawn, [change.questionId]: answerOf(change, drawn[change.questionId]) });
@@ -418,6 +436,7 @@ export function useAttemptState(
 
   const markSection = useCallback(
     (sectionId: string, progress: SectionProgress) => {
+      if (stoodDown.current) return;
       setSections((held) => ({ ...held, [sectionId]: { ...held[sectionId], ...progress } }));
       queue.putSection(sectionId, progress);
     },
@@ -458,6 +477,7 @@ export function useAttemptState(
     hasUnsaved,
     takenOver,
     setAside,
+    ended,
     standDown,
     answer,
     open,

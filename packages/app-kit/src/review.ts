@@ -1,10 +1,37 @@
 /** A marked paper under review on both clients: their own answer, the marks and the key, in one read. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ScoreCardQuestion, type SolutionQuestion } from '@iace/contracts';
+import {
+  PAPER_QUESTION_STATUS,
+  type PaperQuestionStatus,
+  type QuestionLanguage,
+  type ScoreCardQuestion,
+  type SolutionQuestion,
+} from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { bookmarksInAttemptQueryKey, savedQueryKey } from './student-queries';
 
 export type ReviewedQuestion = ScoreCardQuestion & Partial<SolutionQuestion>;
+
+const DISPOSITION_LABELS: Readonly<Record<PaperQuestionStatus, string | null>> = {
+  [PAPER_QUESTION_STATUS.ACTIVE]: null,
+  [PAPER_QUESTION_STATUS.DROPPED]: 'Dropped',
+  [PAPER_QUESTION_STATUS.BONUS]: 'Bonus',
+};
+
+/** Why a question's marks do not follow its verdict, said beside them; null for a question marked as set. */
+export const dispositionLabel = (question: Pick<ScoreCardQuestion, 'disposition'>): string | null =>
+  DISPOSITION_LABELS[question.disposition];
+
+/** What a typed answer was compared against: in a language shown where one holds it, else in any, as marking accepts any. */
+export function answerKeyText(
+  question: Pick<ReviewedQuestion, 'answerKey'>,
+  shown: readonly QuestionLanguage[],
+): string | null {
+  const answers = question.answerKey?.answers;
+  if (!answers) return null;
+  const said = [...shown.map((language) => answers[language]), ...Object.values(answers)];
+  return said.find(Boolean) ?? null;
+}
 
 /** How a question went, which is what colours a palette cell and the marker beside an option. */
 export const VERDICT = { RIGHT: 'RIGHT', WRONG: 'WRONG', LEFT: 'LEFT' } as const;

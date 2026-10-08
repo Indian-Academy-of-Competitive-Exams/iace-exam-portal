@@ -5,6 +5,7 @@
  */
 import { ANSWER_STATE, isStateShown, type AnswerState } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
+import { Spinner } from '@iace/ui';
 import { LEGEND_ORDER, STATE_LABEL } from './states';
 
 /** The legend spells this one out further; a column header does not have the width. */
@@ -54,7 +55,7 @@ export function RailwaySubmitSummary({ view }: Readonly<{ view: ExamView }>) {
 
       <p className="rw-ask">Do you want to submit the online exam</p>
 
-      <div className="rw-ask-buttons flex justify-center gap-3">
+      <div className="rw-ask-buttons flex items-center justify-center gap-3">
         <button
           type="button"
           className="rw-ask-btn"
@@ -63,9 +64,15 @@ export function RailwaySubmitSummary({ view }: Readonly<{ view: ExamView }>) {
         >
           Yes
         </button>
-        <button type="button" className="rw-ask-btn" onClick={submit.cancel}>
+        <button
+          type="button"
+          className="rw-ask-btn"
+          disabled={submit.isPending}
+          onClick={submit.cancel}
+        >
           No
         </button>
+        {submit.isPending ? <Spinner size="sm" label="Submitting" /> : null}
       </div>
     </div>
   );

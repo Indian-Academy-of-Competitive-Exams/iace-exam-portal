@@ -11,6 +11,11 @@ export function optionalNumber(raw: string): number | null {
   return trimmed === '' || !Number.isFinite(value) ? null : value;
 }
 
+/** False for the third answer only, which is what a field's own validation refuses. */
+export function isNumberOrBlank(raw: string): boolean {
+  return raw.trim() === '' || optionalNumber(raw) !== null;
+}
+
 /** For a field whose blank has a meaning of its own, like a count that starts at zero. */
 export function numberOr(raw: string, fallback: number): number {
   return optionalNumber(raw) ?? fallback;

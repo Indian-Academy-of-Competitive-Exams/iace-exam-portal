@@ -27,8 +27,15 @@ import {
   type QuestionReport,
   type QuestionReportRow,
 } from '@iace/contracts';
-import { isMarkingPending, QUESTION_REPORT_FILTERS } from '@iace/app-kit';
+import {
+  dispositionLabel,
+  isMarkingPending,
+  isSittingVoided,
+  paceWord,
+  QUESTION_REPORT_FILTERS,
+} from '@iace/app-kit';
 import { questionReportQuery } from '../../lib/queries';
+import { SittingSetAside } from './report';
 import { ReportSkeleton, StatBand } from '../../components/ui';
 
 const DASH = '—';
@@ -50,6 +57,7 @@ export function QuestionReportPanel() {
   const again = () => void report.refetch();
 
   if (report.isLoading) return <ReportSkeleton />;
+  if (isSittingVoided(report.error)) return <SittingSetAside />;
   // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
   if (isMarkingPending(report.error)) {
     return (
@@ -122,7 +130,7 @@ function Body({
         <Metric
           label="Pace"
           value={report.paceIndex ?? DASH}
-          unit={paceUnit(report.paceIndex)}
+          unit={report.paceIndex === null ? undefined : paceWord(report.paceIndex)}
           size="sm"
         />
         <Metric label="Sittings" value={report.cohortSize} size="sm" />
@@ -232,7 +240,13 @@ function columnsFor(): DataTableColumn<QuestionReportRow>[] {
       header: 'Result',
       cell: (row) => {
         const held = resultOf(row);
-        return <Badge variant={held.variant}>{held.label}</Badge>;
+        const disposition = dispositionLabel(row);
+        return (
+          <span className="flex items-center gap-2">
+            <Badge variant={held.variant}>{held.label}</Badge>
+            {disposition ? <Badge variant="info">{disposition}</Badge> : null}
+          </span>
+        );
       },
     },
     { key: 'yourMarks', header: 'Marks', numeric: true, cell: (row) => row.marksAwarded ?? DASH },
@@ -316,12 +330,6 @@ function correctAnswer(row: QuestionReportRow): string {
 }
 
 const clock = (seconds: number) => (seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m`);
-
-/** Above one is slower than the field, below it faster; the unit says which without a sentence. */
-function paceUnit(pace: number | null): string | undefined {
-  if (pace === null) return undefined;
-  return pace > 1 ? 'slower' : 'faster';
-}
 
 const asPercent = (ratio: number | null) => (ratio === null ? null : ratio * 100);
 

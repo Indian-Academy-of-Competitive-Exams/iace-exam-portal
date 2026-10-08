@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
+  ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
   NAVIGATION_POLICY,
@@ -19,14 +20,17 @@ import {
   type SectionProgress,
 } from '@iace/contracts';
 import {
+  PAPER_LOCK,
   TIMER_KIND,
   useExamView,
   type AppApiClient,
+  type EndedSitting,
   type ExamEngineDeps,
   type FullscreenHandle,
 } from '../src';
 import {
   autosaveDelayMs,
+  FINISH_WAIT_MS,
   SAVE_TIMEOUT_MS,
   SUBMIT_TIMEOUT_MS,
   submitRetryDelayMs,
@@ -113,7 +117,7 @@ function apiWith(
 function mounted(
   api: AppApiClient,
   sitting: ExamPaper = paper(),
-  onEnded = () => {},
+  onEnded: (ended: EndedSitting) => void = () => {},
   startedByThisCall = false,
 ) {
   const deps = depsFor(api);
@@ -425,6 +429,7 @@ test('a paper this screen just started takes an answer at once', (t) => {
   const { result, unmount } = mounted(api, started, () => {}, true);
   t.after(unmount);
 
+  assert.equal(result.current.locked, null, 'nothing is waited for on a paper just started');
   act(() => result.current.chooseOption('opt-early'));
 
   assert.equal(result.current.answers['sec1-q1']?.selectedOptionId, 'opt-early');
@@ -445,6 +450,8 @@ test('a reopened paper takes no answer, move or submit until its saved state has
   act(() => result.current.submit.ask());
   assert.equal(result.current.question?.questionId, 'sec1-q1', 'the seat did not move');
   assert.equal(result.current.submit.asking, false, 'nothing is counted off a paper not yet drawn');
+  assert.equal(result.current.locked, PAPER_LOCK.WAITING, 'and the screen is told why');
+  assert.equal(result.current.canOpen('sec1-q2'), false, 'so no seat is drawn as open');
 
   const saved = {
     state: ANSWER_STATE.ANSWERED_MARKED,
@@ -461,6 +468,7 @@ test('a reopened paper takes no answer, move or submit until its saved state has
   assert.deepEqual(result.current.answers['sec1-q1'], saved, 'what the server held is drawn whole');
   assert.equal(result.current.hasUnsent(), false);
 
+  assert.equal(result.current.locked, null);
   act(() => result.current.chooseOption('opt-now'));
   act(() => result.current.submit.ask());
   assert.equal(result.current.selectedOptionId, 'opt-now', 'from here the paper is live');
@@ -765,8 +773,12 @@ function apiGatedSave() {
   };
 }
 
-async function seated(api: AppApiClient, sitting: ExamPaper) {
-  const held = mounted(api, sitting);
+async function seated(
+  api: AppApiClient,
+  sitting: ExamPaper,
+  onEnded?: (ended: EndedSitting) => void,
+) {
+  const held = mounted(api, sitting, onEnded);
   await act(async () => {
     await settle();
   });
@@ -1237,6 +1249,7 @@ test('once the paper’s clock has run out nothing more is taken, and a retry ha
     await settle();
   });
   assert.equal(result.current.submit.failed, true);
+  assert.equal(result.current.locked, PAPER_LOCK.OUT_OF_TIME, 'and the screen is told why');
 
   act(() => result.current.chooseOption('opt-late'));
   act(() => result.current.openQuestion('sec1-q2'));
@@ -1288,6 +1301,7 @@ test('time added to a paper that had run out opens it again and takes the failur
   await advance(31_000);
 
   assert.equal(result.current.submit.failed, false, 'nothing is owed on a paper with time left');
+  assert.equal(result.current.locked, null);
   act(() => result.current.chooseOption('opt-b'));
   assert.equal(result.current.selectedOptionId, 'opt-b', 'and it takes answers again');
 });
@@ -1439,4 +1453,233 @@ test('a hand-in is retried at 1, 2 and 4 seconds while the tab is hidden', async
   }
 
   assert.deepEqual(leftBy, [1, 2, 3, 4]);
+});
+
+/** The failure this prevents: an option tapped while the paper goes in, drawn and queued, then wiped when it lands. */
+test('nothing is answered, moved or opened while the paper is going in, and the view says so', async (t) => {
+  let refuse: (error: unknown) => void = () => {};
+  const { api, submits } = apiThatSubmits(
+    () =>
+      new Promise((_resolve, reject) => {
+        refuse = reject;
+      }),
+  );
+  const { result, unmount } = await seated(api, twoInSectionOne());
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-before'));
+  assert.equal(result.current.locked, null, 'an open paper is held by nothing');
+  await act(async () => {
+    result.current.submit.confirm();
+    await settle();
+  });
+  assert.equal(result.current.locked, PAPER_LOCK.GOING_IN);
+  assert.equal(result.current.canOpen('sec1-q2'), false, 'so no seat is drawn as open');
+
+  act(() => result.current.chooseOption('opt-during'));
+  act(() => result.current.clearResponse());
+  act(() => result.current.openQuestion('sec1-q2'));
+  act(() => result.current.openSection('sec2'));
+  assert.equal(result.current.selectedOptionId, 'opt-before', 'the option on screen did not move');
+  assert.equal(result.current.question?.questionId, 'sec1-q1', 'nor did the palette');
+  assert.equal(result.current.sectionId, 'sec1', 'nor the section');
+
+  await act(async () => {
+    refuse(new AppException(ErrorCodes.INTERNAL, 'refused', { httpStatus: 400 }));
+    await settle();
+  });
+  assert.equal(result.current.locked, null, 'a hand-in that failed with time left opens the paper');
+  act(() => result.current.chooseOption('opt-after'));
+  assert.equal(result.current.selectedOptionId, 'opt-after');
+  assert.deepEqual(
+    submits[0]?.last?.answers.map((change) => change.selectedOptionId),
+    ['opt-before'],
+    'the hand-in carried what was answered before it, and nothing since',
+  );
+});
+
+/** The failure this prevents: a paper ended by the institute, or handed in elsewhere, answered on until its bell. */
+test('a save refused because the sitting has ended stands the paper down, and its clock hands nothing in', async (t) => {
+  let submits = 0;
+  const api = {
+    me: {
+      attemptState: async () => ({ answers: {}, sections: {}, revision: 0 }),
+      saveAttemptState: async () => {
+        throw new AppException(ErrorCodes.SITTING_ENDED, 'ended', { httpStatus: 409 });
+      },
+      submitAttempt: async () => {
+        submits += 1;
+        return { attemptId: 'attempt-1' };
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = await seated(api, onePaperClock());
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-a'));
+  await act(async () => {
+    result.current.openSection('sec2');
+    await settle();
+  });
+  assert.equal(result.current.ended, true);
+  assert.equal(result.current.takenOver, false, 'there is nothing here to continue');
+  assert.equal(result.current.hasUnsaved, false);
+  assert.equal(result.current.hasUnsent(), false, 'so leaving the page asks nothing');
+
+  act(() => result.current.submit.ask());
+  assert.equal(result.current.submit.asking, false);
+  await act(async () => {
+    result.current.timer.onExpire();
+    await settle();
+  });
+  assert.equal(submits, 0, 'nothing more is sent, not even the hand-in');
+});
+
+/** The hand-in's reply for a paper answered once, as the server kept it. */
+const handInReply = (over: Record<string, unknown> = {}) => ({
+  attemptId: 'attempt-1',
+  status: ATTEMPT_STATUS.SUBMITTED,
+  submittedAt: '2026-09-01T06:00:00.000Z',
+  submittedByThisCall: true,
+  answeredCount: 1,
+  ...over,
+});
+
+/** One paper answered once and handed in; what the screen is given to draw when the server replies. */
+async function endedWith(t: TestContext, reply: unknown): Promise<EndedSitting | undefined> {
+  const { api } = apiThatSubmits(() => Promise.resolve(reply));
+  let ended: EndedSitting | undefined;
+  const { result, unmount } = await seated(api, twoInSectionOne(), (sitting) => (ended = sitting));
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-a'));
+  await act(async () => {
+    result.current.submit.confirm();
+    await settle();
+  });
+  return ended;
+}
+
+test('a hand-in the server counted as this device did is given its own summary to draw', async (t) => {
+  // The second is a retry whose first try landed: the same paper, ended by an earlier call of this screen's.
+  for (const reply of [handInReply(), handInReply({ submittedByThisCall: false })]) {
+    const ended = await endedWith(t, reply);
+
+    assert.equal(ended?.attemptId, 'attempt-1');
+    assert.deepEqual(
+      ended?.sections?.map((section) => [section.id, section.attempted, section.total]),
+      [
+        ['sec1', 1, 2],
+        ['sec2', 0, 1],
+        ['sec3', 0, 1],
+      ],
+    );
+  }
+});
+
+/** The failure this prevents: Handed in drawing answers the server never kept, above what the score card will show. */
+test('a hand-in the server counted differently, or set aside, is given no figures of its own', async (t) => {
+  const kept = [
+    handInReply({ answeredCount: 0, submittedByThisCall: false }),
+    handInReply({ answeredCount: 2 }),
+    handInReply({ status: ATTEMPT_STATUS.VOIDED, submittedByThisCall: false }),
+  ];
+  for (const reply of kept) {
+    const ended = await endedWith(t, reply);
+
+    assert.equal(ended?.attemptId, 'attempt-1', 'the screen is still sent on to the result');
+    assert.equal(ended?.sections, null);
+  }
+});
+
+/** The failure this prevents: a section stamped after the stand-down, so reloading the notice asks about unsaved changes. */
+test('a sectional paper reopened after its sitting ended holds nothing unsent', async (t) => {
+  const api = {
+    me: {
+      attemptState: async () => {
+        throw new AppException(ErrorCodes.SITTING_ENDED, 'ended', { httpStatus: 409 });
+      },
+      saveAttemptState: async () => ({ revision: 0, applied: true }),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = await seated(api, paper());
+  t.after(unmount);
+
+  assert.equal(result.current.ended, true);
+  assert.equal(
+    result.current.hasUnsent(),
+    false,
+    'no section is stamped on a sitting that is over',
+  );
+});
+
+/** The student's own hand-in gone past a save still in the air, whose answer then says the sitting has ended. */
+async function overtakenByOwnHandIn(t: TestContext) {
+  // Every autosave 20s apart, so one is in the air when the paper is confirmed.
+  t.mock.method(Math, 'random', () => 0);
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const gate = {
+    refuseSave: (_error: unknown) => {},
+    land: (_reply: unknown) => {},
+    refuseHandIn: (_error: unknown) => {},
+  };
+  const api = {
+    me: {
+      attemptState: async () => ({ answers: {}, sections: {}, revision: 0 }),
+      saveAttemptState: () =>
+        new Promise((_resolve, reject) => {
+          gate.refuseSave = reject;
+        }),
+      submitAttempt: () =>
+        new Promise((resolve, reject) => {
+          gate.land = resolve;
+          gate.refuseHandIn = reject;
+        }),
+    },
+  } as unknown as AppApiClient;
+  let handedIn = 0;
+  const { result, unmount } = mounted(api, onePaperClock(), () => (handedIn += 1));
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+  await act(async () => {
+    await settle();
+  });
+
+  act(() => result.current.chooseOption('opt-a'));
+  await advance(autosaveDelayMs(Math.random));
+  act(() => result.current.submit.confirm());
+  // The hand-in waits this long on the save, then goes without it.
+  await advance(FINISH_WAIT_MS + 1_000);
+  assert.equal(result.current.submit.isPending, true);
+
+  await act(async () => {
+    gate.refuseSave(new AppException(ErrorCodes.SITTING_ENDED, 'ended', { httpStatus: 409 }));
+    await settle();
+  });
+  return { result, gate, handedIn: () => handedIn };
+}
+
+/** The failure this prevents: "This test has ended" flashing over a paper the student has just handed in. */
+test('a save refused as ended behind the student’s own hand-in does not say the test ended', async (t) => {
+  const { result, gate, handedIn } = await overtakenByOwnHandIn(t);
+  assert.equal(result.current.ended, false, 'the paper going in is this screen’s own');
+
+  await act(async () => {
+    gate.land(handInReply());
+    await settle();
+  });
+  assert.equal(result.current.ended, false);
+  assert.equal(handedIn(), 1, 'and Handed in opens as for any hand-in');
+});
+
+test('once that hand-in fails for good, the ended sitting is said', async (t) => {
+  const { result, gate } = await overtakenByOwnHandIn(t);
+
+  await act(async () => {
+    gate.refuseHandIn(new AppException(ErrorCodes.INTERNAL, 'refused', { httpStatus: 400 }));
+    await settle();
+  });
+  assert.equal(result.current.ended, true);
 });

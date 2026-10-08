@@ -44,8 +44,8 @@ export function SubmittedPage() {
   // Asked for while the student reads, so the result is already held when they reach the button.
   usePrefetchQuery(scoreCardAheadQuery(attemptId));
 
-  // Reached without the sitting's own summary — a reload, an old link: the result is all there is.
-  if (!handedIn) return <Navigate to={ROUTES.REPORT(attemptId)} replace />;
+  // No summary the server kept — an old link, or a paper it counted differently: the result is all there is.
+  if (!handedIn?.sections) return <Navigate to={ROUTES.REPORT(attemptId)} replace />;
 
   const paper = paperEffort(handedIn.sections);
   const cohortSize = field.data?.cohortSize ?? 0;

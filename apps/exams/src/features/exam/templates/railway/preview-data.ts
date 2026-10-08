@@ -149,6 +149,8 @@ export function previewView(): ExamView {
     leave: noop,
     takenOver: false,
     setAside: false,
+    ended: false,
+    locked: null,
 
     openQuestion: noop,
     canOpen: () => true,

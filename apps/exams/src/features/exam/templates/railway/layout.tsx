@@ -31,8 +31,9 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
     view.openQuestion(questionId);
     if (phone) setPaletteOpen(false);
   };
-  // The original answers Submit by taking the question area over and folding the palette away.
-  const asking = view.submit.asking;
+  // The original answers Submit by taking the question area over and folding the palette away; it stays while the paper goes in.
+  const asking = view.submit.asking || view.submit.isPending;
+  const off = view.locked !== null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -88,7 +89,7 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
               >
                 <button
                   type="button"
-                  disabled={!view.reachable.includes(section.id)}
+                  disabled={off || !view.reachable.includes(section.id)}
                   onClick={() => view.openSection(section.id)}
                 >
                   {section.name}
@@ -137,14 +138,19 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
 
           <div className={cn('rw-buttons flex items-center gap-2', asking && 'hidden')}>
             {view.forwardOnly ? null : (
-              <button type="button" className="btn" onClick={view.markAndNext}>
+              <button type="button" className="btn" disabled={off} onClick={view.markAndNext}>
                 Mark for Review &amp; Next
               </button>
             )}
-            <button type="button" className="btn" onClick={view.clearResponse}>
+            <button type="button" className="btn" disabled={off} onClick={view.clearResponse}>
               Clear Response
             </button>
-            <button type="button" className="savenext ml-auto" onClick={view.nextQuestion}>
+            <button
+              type="button"
+              className="savenext ml-auto"
+              disabled={off}
+              onClick={view.nextQuestion}
+            >
               Save &amp; Next
             </button>
           </div>
@@ -180,7 +186,7 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
 
           {/* Pinned, so it holds its place however far the grid above it scrolls. */}
           <div className="palettebottom flex justify-center">
-            <button type="button" className="rw-submit" onClick={view.submit.ask}>
+            <button type="button" className="rw-submit" disabled={off} onClick={view.submit.ask}>
               Submit
             </button>
           </div>
@@ -222,6 +228,7 @@ function RailwayPaper({ view }: Readonly<{ view: ExamView }>) {
         languages={view.languages}
         languageMode={view.languageMode}
         selectedOptionId={view.selectedOptionId}
+        disabled={view.locked !== null}
         onSelect={view.chooseOption}
       />
     </>

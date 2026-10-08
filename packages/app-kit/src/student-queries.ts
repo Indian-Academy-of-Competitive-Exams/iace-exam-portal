@@ -3,7 +3,7 @@ import { queryOptions } from '@tanstack/react-query';
 import { type LanguageCode } from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { isBriefRefused } from './catalog';
-import { isMarkingPending, retryWhileMarking } from './marking';
+import { hasNoResult, isMarkingPending, retryWhileMarking } from './marking';
 import { type DownloadAsk } from './report-downloads';
 
 /** The signed-in student's identity. */
@@ -86,7 +86,7 @@ export const testPaperQueryKey = (testId: string, languages: readonly string[]) 
   [ME, 'test-paper', testId, [...languages].sort((a, b) => a.localeCompare(b)).join(',')] as const;
 
 /** What every read of a MARKED paper shares: it waits on the queue quietly, then draws its own refusal. */
-const AWAITS_MARKING = { retry: retryWhileMarking, meta: { silent: isMarkingPending } } as const;
+const AWAITS_MARKING = { retry: retryWhileMarking, meta: { silent: hasNoResult } } as const;
 
 /** The reads several screens share, over whichever client the app built; each screen draws its own expected refusal. */
 export function createStudentQueries(api: AppApiClient) {
