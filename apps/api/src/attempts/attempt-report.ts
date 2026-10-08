@@ -1,7 +1,22 @@
 /** What a finished sitting is worth to the student who sat it, worked out without a database. */
 import { type Prisma } from '@prisma/client';
-import { round2, type AttemptSectionScore, type ScoreCardSection } from '@iace/contracts';
+import {
+  AppException,
+  ATTEMPT_STATUS,
+  ErrorCodes,
+  round2,
+  type AttemptSectionScore,
+  type AttemptStatus,
+  type ScoreCardSection,
+} from '@iace/contracts';
 import { MS_PER_SECOND } from '../common/time/units';
+
+/** Why a sitting that is not marked has no result to read: set aside for good, or only not marked yet. */
+export function noResultFor(status: AttemptStatus, notMarkedYet: string): AppException {
+  return status === ATTEMPT_STATUS.VOIDED
+    ? new AppException(ErrorCodes.SITTING_VOIDED)
+    : new AppException(ErrorCodes.CONFLICT, notMarkedYet);
+}
 
 /** A `Decimal?` column on its way into JSON. Never let the Decimal itself reach a payload. */
 export const numberOrNull = (value: Prisma.Decimal | null): number | null =>

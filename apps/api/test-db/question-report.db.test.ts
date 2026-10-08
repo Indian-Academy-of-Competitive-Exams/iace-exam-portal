@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
+  ATTEMPT_STATUS,
+  AppException,
   COHORT_COMPARISON_FLOOR,
   DIFFICULTY_LEVEL,
+  ErrorCodes,
   QUESTION_TYPE,
   TEST_SCOPE,
   questionReportSchema,
@@ -325,6 +328,34 @@ describe('QuestionReportService — the sittings it names', () => {
 
     assert.equal(report.cohortSize, 2);
     assert.equal(report.cohortSize, standing?.cohortSize);
+  });
+});
+
+describe('QuestionReportService — the sitting it will not report on', () => {
+  const refusedWith = (code: string) => (error: unknown) =>
+    AppException.is(error) && error.code === code;
+
+  /** The failure this prevents: a voided sitting reading as marking still queued, behind a Retry that cannot work. */
+  it('says a voided sitting was set aside, and an unmarked one only that it is not marked', async () => {
+    const paper = await makePaper(prisma, { questions: ['Reasoning'] });
+    const student = await makeStudent(prisma);
+    const sitting = { paper, studentId: student.id, chosen: [RIGHT_OPTION] };
+    const unmarked = await sitPaper(prisma, sitting);
+    const voided = await sitPaper(prisma, {
+      ...sitting,
+      attemptNo: 2,
+      isGraded: false,
+      status: ATTEMPT_STATUS.VOIDED,
+    });
+
+    await assert.rejects(
+      () => service.forAttempt(student.id, voided.id),
+      refusedWith(ErrorCodes.SITTING_VOIDED),
+    );
+    await assert.rejects(
+      () => service.forAttempt(student.id, unmarked.id),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
   });
 });
 

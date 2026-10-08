@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   ANSWER_STATE,
+  ATTEMPT_STATUS,
   ErrorCodes,
   PAPER_QUESTION_STATUS,
   PERFORMANCE_SCOPES,
@@ -252,6 +253,23 @@ describe('the Score Card', () => {
     );
   });
 
+  /** The failure this prevents: a voided sitting reading as marking still queued, behind a Retry that cannot work. */
+  it('refuses a voided sitting as set aside, within the refusal budget', async () => {
+    const { studentId, attemptId } = await mine(await paper(), {
+      marked: false,
+      status: ATTEMPT_STATUS.VOIDED,
+    });
+
+    const queries = await queriesOf((client) =>
+      assert.rejects(
+        () => analytics(client).scoreCard(studentId, attemptId),
+        refusedWith(ErrorCodes.SITTING_VOIDED),
+      ),
+    );
+
+    assert.ok(queries <= QUERY_BUDGET.REFUSAL, `one refusal cost ${queries} queries`);
+  });
+
   /** The acceptance for a drop: every sitting that attempted it moves, and equal marks rank on time. */
   it('re-ranks the cohort when a dropped question levels two students on marks', async () => {
     const onPaper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning', 'Reasoning'] });
@@ -399,6 +417,18 @@ describe('the Solution Report', () => {
     await assert.rejects(
       () => reports().solutions(studentId, attemptId, {}),
       refusedWith(ErrorCodes.CONFLICT),
+    );
+  });
+
+  it('refuses a voided sitting as set aside, not as unmarked', async () => {
+    const { studentId, attemptId } = await reviewed({
+      marked: false,
+      status: ATTEMPT_STATUS.VOIDED,
+    });
+
+    await assert.rejects(
+      () => reports().solutions(studentId, attemptId, {}),
+      refusedWith(ErrorCodes.SITTING_VOIDED),
     );
   });
 

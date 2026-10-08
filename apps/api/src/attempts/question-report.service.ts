@@ -20,7 +20,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService } from './leaderboard.service';
 import { answeredRows, type ServedAnswer } from './answer-sheet';
-import { elapsedSeconds } from './attempt-report';
+import { elapsedSeconds, noResultFor } from './attempt-report';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { optionCountsIn, pValueOf } from './rollup-fold';
 import { answerKeyIn, optionsIn, scopeRefOf } from '../common/prisma-json';
@@ -142,10 +142,10 @@ export class QuestionReportService {
   private async refuse(studentId: string, attemptId: string): Promise<never> {
     const theirs = await this.prisma.attempt.findFirst({
       where: { id: attemptId, studentId },
-      select: { id: true },
+      select: { status: true },
     });
     if (theirs === null) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
+    throw noResultFor(theirs.status, NOT_MARKED);
   }
 
   private assemble(

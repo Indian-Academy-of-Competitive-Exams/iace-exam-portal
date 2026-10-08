@@ -295,7 +295,7 @@ describe('SubmitService', () => {
           { revision: 9, answers: [built.change()] },
           NOW,
         ),
-      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT,
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED,
     );
   });
 
@@ -376,6 +376,26 @@ describe('AttemptSweeperProcessor', () => {
 
     assert.equal((await attemptRow(built.attemptId)).status, ATTEMPT_STATUS.SUBMITTED);
     assert.equal(built.queue.jobs.length, 1);
+  });
+});
+
+describe('SubmitService — an end asked for by the deadline', () => {
+  /** The failure this prevents: time given after the sweep listed a sitting, swallowed by its end. */
+  it('leaves a sitting whose deadline has moved past the one it was listed by', async () => {
+    const built = await build({ endsAt: LATE });
+    await answered(built);
+    const listedBy = new Date();
+    built.hooks.beforeClaim = async () => {
+      delete built.hooks.beforeClaim;
+      await prisma.attempt.update({ where: { id: built.attemptId }, data: { endsAt: SOON } });
+    };
+
+    const result = await built.submit.expire(built.attemptId, listedBy);
+
+    assert.equal(result.submittedByThisCall, false);
+    assert.equal((await attemptRow(built.attemptId)).status, ATTEMPT_STATUS.IN_PROGRESS);
+    assert.ok(await built.state.read(built.attemptId), 'the key it is answered through stays');
+    assert.equal(built.queue.jobs.length, 0);
   });
 });
 
@@ -532,7 +552,7 @@ describe('a key put back from Postgres while the sitting is being ended', () => 
   };
 
   const refusedAsEnded = (error: unknown) =>
-    AppException.is(error) && error.code === ErrorCodes.CONFLICT;
+    AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED;
 
   for (const [what, rebuild] of Object.entries(rebuilds)) {
     /** The failure this prevents: a fresh key behind a handed-in sitting, taking saves nobody will ever write. */

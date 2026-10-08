@@ -137,6 +137,7 @@ describe('AttemptStateService', () => {
     );
   });
 
+  /** Not SITTING_ENDED: this sitting is still running and can be given time, so the screen keeps its paper. */
   it('refuses a save that arrives after the clock and its grace', async () => {
     const { service, student, attemptId, live } = await build();
     await service.open(live);
@@ -166,6 +167,24 @@ describe('AttemptStateService', () => {
     const rebuilt = await service.current(student, attemptId, NOW);
     assert.equal(Object.keys(rebuilt.answers).length, 0);
   });
+
+  for (const status of [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.VOIDED]) {
+    /** The failure this prevents: a paper ended elsewhere reading as a network fault, and answered on. */
+    it(`tells a save, an idle beat and a reload that a ${status} sitting has ended`, async () => {
+      const { service, student, attemptId, live, change } = await build();
+      await service.open(live);
+      await prisma.attempt.update({ where: { id: attemptId }, data: { status } });
+      await service.take(attemptId);
+
+      const asks = [
+        () => service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW),
+        () => service.save(student, attemptId, { revision: 1, answers: [] }, NOW),
+        () => service.current(student, attemptId, NOW),
+      ];
+      for (const ask of asks) await assert.rejects(ask, refusedWith(ErrorCodes.SITTING_ENDED));
+      assert.equal(await service.read(attemptId), null, 'and no key is put back for it');
+    });
+  }
 
   /** The failure this prevents: a support reset handing the student back an empty paper. */
   it('puts a lost live key back from the answers already written', async () => {

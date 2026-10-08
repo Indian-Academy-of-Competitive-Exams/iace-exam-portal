@@ -29,7 +29,7 @@ import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { PaperSheetService, type SolutionPaperRow } from './paper-sheet.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import { percentageOf } from './attempt-report';
+import { noResultFor, percentageOf } from './attempt-report';
 import { answerKeyIn, optionsIn, scopeRefOf } from '../common/prisma-json';
 
 const NOT_YOURS = 'No such sitting';
@@ -136,7 +136,7 @@ export class AttemptReportService {
     });
     if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
     if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
-      throw new AppException(ErrorCodes.CONFLICT, NOT_REVIEWABLE);
+      throw noResultFor(attempt.status, NOT_REVIEWABLE);
     }
 
     const config = attempt.test.baseConfig;

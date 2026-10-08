@@ -52,6 +52,7 @@ const PATCH_TRIES = 5;
 const NOT_YOURS = 'No such attempt';
 const BEING_ANSWERED = 'This sitting is being written to right now. Try again in a moment.';
 const ALREADY_ENDED = 'This sitting has ended, so nothing more can be saved to it.';
+const OUT_OF_TIME = 'This sitting is out of time, so nothing more can be saved to it.';
 /** One sitting as a flush pass read it: the bytes, and what they say (null when the key has gone). */
 export interface FlushRead {
   attemptId: string;
@@ -314,7 +315,7 @@ export class AttemptStateService {
         redisKeys.attemptState(put.attemptId),
         JSON.stringify(packHeld(put)),
       );
-      throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
+      throw new AppException(ErrorCodes.SITTING_ENDED, ALREADY_ENDED);
     }
     // The row is the record: a deadline it gained while the key was being put back is followed out.
     const endsAt = laterOf(put.endsAt, row.endsAt.toISOString());
@@ -389,7 +390,7 @@ export class AttemptStateService {
       throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
     }
     if (attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) {
-      throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
+      throw new AppException(ErrorCodes.SITTING_ENDED, ALREADY_ENDED);
     }
 
     // A sat paper is frozen, so the rows PaperSheetService already holds for it are safe to reuse.
@@ -466,7 +467,8 @@ function answered(
   now: Date,
 ): HeldState {
   yours(held, studentId);
-  if (!isInTime(held, now)) throw new AppException(ErrorCodes.CONFLICT, ALREADY_ENDED);
+  // CONFLICT, not SITTING_ENDED: past its grace the sitting still runs, and may yet be given time.
+  if (!isInTime(held, now)) throw new AppException(ErrorCodes.CONFLICT, OUT_OF_TIME);
   const refused = sittingRefusal(held, batch.tab);
   if (refused) throw refused;
   // Stale or not, a batch from the tab holding it is that tab being here.

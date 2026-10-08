@@ -34,7 +34,13 @@ import { servedSheet, type ServedAnswer } from './answer-sheet';
 import { SHEET_ROW_SELECT, hold } from './paper-sheet.service';
 import { requireStudent } from './require-student';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import { elapsedSeconds, marksBySection, percentageOf, sectionsWithScores } from './attempt-report';
+import {
+  elapsedSeconds,
+  marksBySection,
+  noResultFor,
+  percentageOf,
+  sectionsWithScores,
+} from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 import { timeUseOf } from './attempt-analytics';
 import { NO_TOPPER, topperOf } from './topper';
@@ -293,10 +299,10 @@ export class PerformanceAnalyticsService {
   private async refuseCard(studentId: string, attemptId: string): Promise<never> {
     const theirs = await this.prisma.attempt.findFirst({
       where: { id: attemptId, studentId },
-      select: { id: true },
+      select: { status: true },
     });
     if (theirs === null) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
+    throw noResultFor(theirs.status, NOT_MARKED);
   }
 
   /** The anchor's figures alone: the other sittings only ever give the trajectory their marks. */
