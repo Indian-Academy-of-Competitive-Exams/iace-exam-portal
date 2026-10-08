@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { type Prisma } from '@prisma/client';
 import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
@@ -17,6 +18,7 @@ import {
   STUDENT_TYPE,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { isRecordNotFound, isUniqueViolation } from '../common/prisma-errors';
 import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
@@ -35,9 +37,23 @@ import {
 import { type ExportSheet } from '../common/exporting';
 import { toDateColumn } from '../common/time/institute-day';
 
+interface RowAction {
+  entityId: string;
+  action: AuditAction;
+}
+
+/** The access lists a student held when the run was planned. */
+type HeldAccess = Pick<StudentImportRow, 'enrolledCourses' | 'enrolledExams' | 'programs'>;
+
+/** Why a row the plan meant to write was skipped at the write: the student went between the two. */
+const ERASED_MEANWHILE =
+  'This student was erased while the import was running, so nothing in this row was written.';
+
 /** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
 interface RunOutcome {
-  rowActions: { entityId: string; action: AuditAction }[];
+  rowActions: RowAction[];
+  /** A row the plan passed and the write refused, by its line in the sheet. Kept on the run. */
+  rowErrors: { line: number; error: string }[];
   /** `skipped` is every row the run did not write; `failed` is only what a run that died never reached. */
   counts: { created: number; updated: number; skipped: number; failed: number };
 }
@@ -81,7 +97,12 @@ export class ImportsService {
         for (const row of plan.rows) {
           if (row.action === 'skip' || !row.mobile) continue;
 
-          const done = await this.writeRow(row);
+          const done = await this.writeRow(row, context.existingByMobile.get(row.mobile));
+          if (!done) {
+            outcome.counts.skipped += 1;
+            outcome.rowErrors.push({ line: row.line, error: ERASED_MEANWHILE });
+            continue;
+          }
           if (done.action === AUDIT_ACTION.CREATE) outcome.counts.created += 1;
           else outcome.counts.updated += 1;
           outcome.rowActions.push(done);
@@ -89,8 +110,8 @@ export class ImportsService {
       },
     );
 
-    const { created, updated } = run.counts;
-    return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
+    const { created, updated, skipped } = run.counts;
+    return { ...plan.summary, created, updated, skipped };
   }
 
   /** Writes nothing. The event has to exist, so a stale page cannot fill a deleted roster. */
@@ -121,34 +142,22 @@ export class ImportsService {
       actorId,
       { skipped: plan.summary.invalid },
       async (outcome) => {
-        for (const row of plan.rows) {
-          if (row.action === 'skip' || !row.mobile) continue;
+        try {
+          for (const row of plan.rows) {
+            if (row.action === 'skip' || !row.mobile) continue;
 
-          if (row.existingStudentId) {
-            studentIds.push(row.existingStudentId);
-            outcome.counts.updated += 1;
-            outcome.rowActions.push({
-              entityId: row.existingStudentId,
-              action: AUDIT_ACTION.UPDATE,
-            });
-            continue;
+            const done: RowAction = row.existingStudentId
+              ? { entityId: row.existingStudentId, action: AUDIT_ACTION.UPDATE }
+              : await this.createCandidate(row.mobile, row.fullName);
+            if (done.action === AUDIT_ACTION.CREATE) outcome.counts.created += 1;
+            else outcome.counts.updated += 1;
+            studentIds.push(done.entityId);
+            outcome.rowActions.push(done);
           }
-
-          const student = await this.prisma.student.create({
-            data: {
-              mobile: row.mobile,
-              fullName: row.fullName,
-              // Outside the institute and at no centre of ours: the event is the whole of their access.
-              studentType: STUDENT_TYPE.NON_IACE,
-            },
-          });
-          outcome.counts.created += 1;
-          studentIds.push(student.id);
-          outcome.rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
+        } finally {
+          // Even when a row threw: an account this run created and left off the roster reaches nothing. Through the service that owns `EventCandidate` (docs/03 §5).
+          await this.events.addCandidates(eventId, studentIds);
         }
-
-        // Through the service that owns `EventCandidate` (docs/03 §5).
-        await this.events.addCandidates(eventId, studentIds);
       },
     );
 
@@ -204,42 +213,110 @@ export class ImportsService {
     return { ...plan.summary, enrolled: run.counts.updated, skipped };
   }
 
-  /** One row's write, and what the audit trail should call it. */
-  private async writeRow(
-    row: StudentImportRow,
-  ): Promise<{ entityId: string; action: AuditAction }> {
+  /** A number we did not know becomes a NON_IACE account; one registered since the plan only joins, as it would have. */
+  private async createCandidate(mobile: string, fullName: string | null): Promise<RowAction> {
+    try {
+      const student = await this.prisma.student.create({
+        // Outside the institute and at no centre of ours: the event is the whole of their access.
+        data: { mobile, fullName, studentType: STUDENT_TYPE.NON_IACE },
+      });
+      return { entityId: student.id, action: AUDIT_ACTION.CREATE };
+    } catch (error) {
+      return { entityId: await this.holderOf(mobile, error), action: AUDIT_ACTION.UPDATE };
+    }
+  }
+
+  /** One row's write, and what the audit trail should call it. Null when the student it names was erased since the plan. */
+  private async writeRow(row: StudentImportRow, held?: HeldAccess): Promise<RowAction | null> {
     const { mobile, studentType } = row;
     if (mobile === null || studentType === null) {
       throw new Error(`Row ${row.line} reached the commit without a mobile or a student type`);
     }
 
     const profile = profileData(row);
-    const access = accessOf(row, studentType);
+    const placement = placementOf(row, studentType);
 
     if (row.existingStudentId) {
-      await this.prisma.student.update({
-        where: { id: row.existingStudentId },
+      const id = row.existingStudentId;
+      const update = this.prisma.student.update({
+        // Live only: a student erased since the plan takes none of this row back onto their tombstone.
+        where: { id, deletedAt: null },
         data: {
           // An empty name column means "no opinion", not "clear the name".
           ...(row.fullName === null ? {} : { fullName: row.fullName }),
-          ...access,
+          ...placement,
           // The branch follows the sheet, and only a NON_IACE row reaches here without one.
           ...(row.currentBranchId === null ? { currentBranch: { disconnect: true } } : {}),
           ...(profile ? { profile: { upsert: { create: profile, update: profile } } } : {}),
         },
       });
-      return { entityId: row.existingStudentId, action: AUDIT_ACTION.UPDATE };
+      const append = this.accessAppend(id, row, held);
+      const writes: Prisma.PrismaPromise<unknown>[] = append ? [update, append] : [update];
+      try {
+        // Together or not at all: a row is never left with its name written and its enrolments not.
+        await this.prisma.$transaction(writes);
+      } catch (error) {
+        if (isRecordNotFound(error) && !(await this.isLive(id))) return null;
+        throw error;
+      }
+      return { entityId: id, action: AUDIT_ACTION.UPDATE };
     }
 
-    const student = await this.prisma.student.create({
-      data: {
-        mobile,
-        fullName: row.fullName,
-        ...access,
-        ...(profile ? { profile: { create: profile } } : {}),
-      },
-    });
-    return { entityId: student.id, action: AUDIT_ACTION.CREATE };
+    try {
+      const student = await this.prisma.student.create({
+        data: {
+          mobile,
+          fullName: row.fullName,
+          ...placement,
+          enrolledCourses: row.enrolledCourses,
+          enrolledExams: row.enrolledExams,
+          programs: row.programs,
+          ...(profile ? { profile: { create: profile } } : {}),
+        },
+      });
+      return { entityId: student.id, action: AUDIT_ACTION.CREATE };
+    } catch (error) {
+      return this.writeRow({ ...row, existingStudentId: await this.holderOf(mobile, error) });
+    }
+  }
+
+  /** Who holds a number a create just lost to: registered since the plan, so the row is theirs. Anything else is rethrown. */
+  private async holderOf(mobile: string, error: unknown): Promise<string> {
+    const holder = isUniqueViolation(error)
+      ? await this.prisma.student.findFirst({
+          where: { mobile, deletedAt: null },
+          select: { id: true },
+        })
+      : null;
+    if (!holder) throw error;
+    return holder.id;
+  }
+
+  /** A not-found on the update is the erasure only if the student is no longer live; a branch removed mid-run reads the same. */
+  private async isLive(id: string): Promise<boolean> {
+    return (await this.prisma.student.count({ where: { id, deletedAt: null } })) > 0;
+  }
+
+  /** The statement that appends what the sheet brought and they do not hold as it runs, unrun; null when the sheet brought nothing new. */
+  private accessAppend(
+    id: string,
+    row: StudentImportRow,
+    held?: HeldAccess,
+  ): Prisma.PrismaPromise<number> | null {
+    const courses = addedTo(held?.enrolledCourses, row.enrolledCourses);
+    const exams = addedTo(held?.enrolledExams, row.enrolledExams);
+    const programs = addedTo(held?.programs, row.programs);
+    if (courses.length + exams.length + programs.length === 0) return null;
+
+    return this.prisma.$executeRaw`
+      UPDATE "Student" SET
+        "enrolledCourses" = "enrolledCourses" || ARRAY(
+          SELECT c FROM unnest(${courses}::"ExamCourse"[]) AS c WHERE c <> ALL("enrolledCourses")),
+        "enrolledExams" = "enrolledExams" || ARRAY(
+          SELECT e FROM unnest(${exams}::text[]) AS e WHERE e <> ALL("enrolledExams")),
+        "programs" = "programs" || ARRAY(
+          SELECT p FROM unnest(${programs}::text[]) AS p WHERE p <> ALL("programs"))
+      WHERE "id" = ${id}::uuid`;
   }
 
   private async planCandidates(table: CsvTable): Promise<CandidateImportPlan> {
@@ -355,6 +432,7 @@ export class ImportsService {
     const logId = await this.openRun(plan.summary.total, plan.fileErrors, actorId);
     const outcome: RunOutcome = {
       rowActions: [],
+      rowErrors: [],
       counts: { created: 0, updated: 0, skipped: 0, failed: 0, ...counts },
     };
 
@@ -416,21 +494,22 @@ export class ImportsService {
       this.logger.error(`Row actions for import ${logId} were not recorded`, error);
     }
 
+    const errors = {
+      ...(failure && failure.fileErrors.length > 0 ? { fileErrors: failure.fileErrors } : {}),
+      ...(written.rowErrors.length > 0 ? { rowErrors: written.rowErrors } : {}),
+      ...(failure
+        ? {
+            message: failure.error instanceof Error ? failure.error.message : String(failure.error),
+          }
+        : {}),
+    };
     await this.prisma.importLog.update({
       where: { id: logId },
       data: {
         ...written.counts,
         status,
         finishedAt: new Date(),
-        ...(failure
-          ? {
-              errors: {
-                ...(failure.fileErrors.length > 0 ? { fileErrors: failure.fileErrors } : {}),
-                message:
-                  failure.error instanceof Error ? failure.error.message : String(failure.error),
-              },
-            }
-          : {}),
+        ...(Object.keys(errors).length > 0 ? { errors } : {}),
       },
     });
   }
@@ -445,14 +524,16 @@ function rosterErrorRows(
 }
 
 /** By relation, not the raw FK: Prisma refuses an unchecked id beside the nested profile write. */
-function accessOf(row: StudentImportRow, studentType: StudentType) {
+function placementOf(row: StudentImportRow, studentType: StudentType) {
   return {
     studentType,
     ...(row.currentBranchId ? { currentBranch: { connect: { id: row.currentBranchId } } } : {}),
-    enrolledCourses: row.enrolledCourses,
-    enrolledExams: row.enrolledExams,
-    programs: row.programs,
   };
+}
+
+/** What a planned row holds beyond what the student held when the plan was made. */
+function addedTo<T>(held: readonly T[] = [], planned: readonly T[]): T[] {
+  return planned.filter((value) => !held.includes(value));
 }
 
 /** The profile columns this row filled in, or null when it filled in none. */

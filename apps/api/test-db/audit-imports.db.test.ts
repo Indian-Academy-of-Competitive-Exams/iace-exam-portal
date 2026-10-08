@@ -38,6 +38,7 @@ type ImportsServiceInternals = {
     status: string,
     written: {
       rowActions: readonly { entityId: string; action: AuditAction }[];
+      rowErrors: readonly { line: number; error: string }[];
       counts: { created: number; updated: number; skipped: number; failed: number };
     },
     actorId: string,
@@ -383,7 +384,7 @@ describe('ImportsService — a failed close preserves what openRun already recor
     await (importsOn() as unknown as ImportsServiceInternals).closeRun(
       opened.id,
       IMPORT_LOG_STATUS.FAILED,
-      { rowActions: [], counts: { created: 0, updated: 0, skipped: 0, failed: 0 } },
+      { rowActions: [], rowErrors: [], counts: { created: 0, updated: 0, skipped: 0, failed: 0 } },
       ADMIN,
       { fileErrors, error: new Error('db exploded') },
     );

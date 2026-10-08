@@ -13,9 +13,14 @@ export function looksLikeWorkbook(buffer: Buffer): boolean {
   return buffer.subarray(0, ZIP_MAGIC.length).equals(ZIP_MAGIC);
 }
 
+/** A PDF opens with this and often carries no zero byte for the sniff below to find. */
+const PDF_MAGIC = Buffer.from('%PDF-');
+
 /** Whether the bytes are some other binary format wearing a .xlsx name. */
 function looksBinary(buffer: Buffer): boolean {
-  return buffer.subarray(0, 512).includes(0x00);
+  return (
+    buffer.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC) || buffer.subarray(0, 512).includes(0x00)
+  );
 }
 
 const END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
@@ -116,12 +121,14 @@ async function readWorkbookTable(buffer: Buffer, options: ReadSheetOptions): Pro
     );
   }
 
-  // The first sheet unless the caller names one it generated itself. Asking an admin exporting from their own system which sheet to read is a question they cannot answer, and guessing by name would break the moment somebody renamed it.
+  // The first sheet the admin can see, unless the caller names one it generated itself. Asking an admin exporting from their own system which sheet to read is a question they cannot answer, and guessing by name would break the moment somebody renamed it.
   const named = options.preferSheet?.toLowerCase();
   const sheet =
     (named
       ? workbook.worksheets.find((worksheet) => worksheet.name.toLowerCase() === named)
-      : undefined) ?? workbook.worksheets[0];
+      : undefined) ??
+    workbook.worksheets.find((worksheet) => worksheet.state === 'visible') ??
+    workbook.worksheets[0];
   if (!sheet) throw new AppException(ErrorCodes.VALIDATION_ERROR, 'That workbook has no sheets');
 
   const headerRow = sheet.getRow(1);

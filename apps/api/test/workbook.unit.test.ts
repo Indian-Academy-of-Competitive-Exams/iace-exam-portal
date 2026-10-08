@@ -127,6 +127,21 @@ describe('readUploadedTable — Excel', () => {
 
     assert.equal(table.rows.length, 1);
   });
+
+  /** The roster is the sheet the admin can see; a hidden lookup tab in front of it is not what they uploaded. */
+  it('reads the first sheet that is visible, past a hidden one in front of it', async () => {
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet('Lists', { state: 'hidden' }).addRow(['branch']);
+    wb.addWorksheet('Lookups', { state: 'veryHidden' }).addRow(['exam']);
+    const roster = wb.addWorksheet('Roster');
+    roster.addRow(['mobile']);
+    roster.addRow(['9876543210']);
+
+    const table = await readUploadedTable(Buffer.from(await wb.xlsx.writeBuffer()));
+
+    assert.deepEqual(table.headers, ['mobile']);
+    assert.equal(table.rows[0]?.values.mobile, '9876543210');
+  });
 });
 
 describe('readUploadedTable — what it accepts', () => {
@@ -165,6 +180,16 @@ describe('readUploadedTable — what it accepts', () => {
         assert.match(error.message, /not a spreadsheet/i);
         return true;
       },
+    );
+  });
+
+  /** A PDF often has no zero byte in its first 512, so it used to be read as a CSV and blamed for missing columns. */
+  it('refuses a PDF as not a spreadsheet', async () => {
+    const pdf = Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+
+    await assert.rejects(
+      () => readUploadedTable(pdf),
+      (error: unknown) => AppException.is(error) && /not a spreadsheet/i.test(error.message),
     );
   });
 
