@@ -6,19 +6,10 @@ import {
   DIFFICULTY_LEVEL,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
-  validateQuestion,
   type QuestionLanguage,
+  type QuestionType,
 } from '@iace/contracts';
-import {
-  Badge,
-  Button,
-  Skeleton,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  cn,
-  mathErrorIn,
-} from '@iace/ui';
+import { Badge, Button, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { usePageTour } from '@iace/app-kit/browser';
 import { AUTHORING_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
@@ -29,12 +20,12 @@ import {
   SCRIPT_OF,
   emptyState,
   stateFrom,
-  taxonomyFor,
   toDraft,
   type AuthoringHeader,
   type AuthoringState,
 } from './question-scaffold';
-import { useChecked, useDuplicate, useIssues } from './use-question-checks';
+import { useUnsavedPrompt } from './use-unsaved-prompt';
+import { issuesOf, useChecked, useDuplicate, useIssues } from './use-question-checks';
 
 /** What the box says. Held as an edit only while it differs from the saved one: that is what "unsaved" means. */
 export interface Held {
@@ -104,8 +95,7 @@ const BLANK_HEADER: AuthoringHeader = {
 const sameHeld = (a: Held, b: Held): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 const invalid = (held: Held): boolean =>
-  validateQuestion(toDraft(held.state, held.header), taxonomyFor(held.header), mathErrorIn).length >
-  0;
+  issuesOf(toDraft(held.state, held.header), held.header).length > 0;
 
 /** Cards either side of the one in view that keep a live editor; the rest are placeholders. */
 const LIVE_AROUND = 1;
@@ -124,7 +114,7 @@ export function AuthoringWorkspace({
   title,
   saveLabel,
   extraActions,
-  onDirtyChange,
+  onUnsavedChange,
   panel,
 }: Readonly<{
   source: WorkspaceSource;
@@ -136,8 +126,8 @@ export function AuthoringWorkspace({
   saveLabel: string;
   /** Beside Save in the bottom bar. */
   extraActions?: React.ReactNode;
-  /** Told while a card holds edits, so the page can ask before a move leaves them behind. */
-  onDirtyChange?: (dirty: boolean) => void;
+  /** Told how many cards hold edits, so the page can ask before a move leaves them behind. */
+  onUnsavedChange?: (cards: number) => void;
   panel?: WorkspacePanel;
 }>) {
   const queryClient = useQueryClient();
@@ -146,14 +136,16 @@ export function AuthoringWorkspace({
     () => [...source.cards.map((card) => card.key), ...(source.create ? [NEW_CARD] : [])],
     [source],
   );
-  // The next question is the same subject at the same level: a save keeps the header it was typed under.
-  const [newHeader, setNewHeader] = useState<AuthoringHeader | null>(null);
+  // The next question is the same subject, level and type: a save keeps what it was typed under.
+  const [lastNew, setLastNew] = useState<{ header: AuthoringHeader; type: QuestionType } | null>(
+    null,
+  );
   const blank = useMemo(
     (): Held => ({
-      header: newHeader ?? source.create?.header ?? BLANK_HEADER,
-      state: emptyState(),
+      header: lastNew?.header ?? source.create?.header ?? BLANK_HEADER,
+      state: emptyState(lastNew?.type),
     }),
-    [newHeader, source.create?.header],
+    [lastNew, source.create?.header],
   );
 
   const [edits, setEdits] = useState<Record<string, Held>>({});
@@ -270,7 +262,7 @@ export function AuthoringWorkspace({
     onSuccess: (_result, { key, held }) => {
       setEdits(({ [key]: _saved, ...rest }) => rest);
       if (key === NEW_CARD) {
-        setNewHeader(held.header);
+        setLastNew({ header: held.header, type: held.state.type });
         rebuild(NEW_CARD);
       } else {
         step(1);
@@ -282,8 +274,9 @@ export function AuthoringWorkspace({
   const duplicate = useDuplicate(source.checkDuplicates ? draft : null, isNew ? '' : active);
   const issues = useIssues(draft, shown?.header);
   const dirty = active in edits;
-  const anyDirty = Object.keys(edits).length > 0;
-  useEffect(() => onDirtyChange?.(anyDirty), [anyDirty, onDirtyChange]);
+  const unsaved = Object.keys(edits).length;
+  useEffect(() => onUnsavedChange?.(unsaved), [unsaved, onUnsavedChange]);
+  useUnsavedPrompt(unsaved > 0);
   const canSave =
     !editable || !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
 
@@ -291,7 +284,7 @@ export function AuthoringWorkspace({
     const held = edits[active];
     if (!held || !editable) return step(1);
     // The button reads issues that lag the last keystroke, so the save judges what it is about to send.
-    if (invalid(held)) return;
+    if (save.isPending || invalid(held)) return;
     save.mutate({ key: active, held });
   };
 

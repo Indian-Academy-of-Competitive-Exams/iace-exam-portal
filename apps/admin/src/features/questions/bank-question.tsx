@@ -7,10 +7,18 @@ import {
   DIFFICULTY_LEVEL,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  QUESTION_STATUS,
 } from '@iace/contracts';
-import { Button, ConfirmDialog } from '@iace/ui';
+import { Badge, Button, ConfirmDialog } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS, ROUTES, heldQuestionQueryKey, questionQueryKey } from '../../lib/constants';
+import {
+  QUERY_KEYS,
+  QUESTION_STATUS_LABELS,
+  QUESTION_STATUS_VARIANT,
+  ROUTES,
+  heldQuestionQueryKey,
+  questionQueryKey,
+} from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import {
   AuthoringWorkspace,
@@ -26,7 +34,7 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
   const queryClient = useQueryClient();
   const canWrite = useAuth().can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
-  const [dirty, setDirty] = useState(false);
+  const [unsaved, setUnsaved] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const toReading = useCallback(() => navigate(ROUTES.QUESTION(id ?? '')), [id, navigate]);
 
@@ -50,6 +58,11 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
         <span className="text-sm font-semibold">{question?.questionCode ?? 'Question'}</span>
         {filed ? (
           <span className="max-w-[28rem] truncate text-xs text-muted-foreground">{filed}</span>
+        ) : null}
+        {question?.status === QUESTION_STATUS.ARCHIVED ? (
+          <Badge variant={QUESTION_STATUS_VARIANT[question.status]}>
+            {QUESTION_STATUS_LABELS[question.status]}
+          </Badge>
         ) : null}
       </span>
     );
@@ -75,11 +88,17 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
         },
       }),
       save: async (key, held) => {
-        // Refused if it moved since this page read it: an edit made elsewhere is not overwritten.
-        await api.admin.questions.update(key, {
-          ...toDraft(held.state, held.header),
-          expectedUpdatedAt: held.stamp,
-        });
+        try {
+          // Refused if it moved since this page read it: an edit made elsewhere is not overwritten.
+          await api.admin.questions.update(key, {
+            ...toDraft(held.state, held.header),
+            expectedUpdatedAt: held.stamp,
+          });
+        } catch (error) {
+          // Read again, so reopening the edit starts from what the bank holds and not the copy just refused.
+          void queryClient.invalidateQueries({ queryKey: questionQueryKey(key) });
+          throw error;
+        }
         await settle();
         navigate(ROUTES.QUESTION(key));
       },
@@ -106,14 +125,14 @@ export function BankQuestionPage({ readOnly = false }: Readonly<{ readOnly?: boo
         source={source}
         startAt={id ?? null}
         saveLabel={id ? 'Save' : 'Save and next'}
-        onDirtyChange={setDirty}
+        onUnsavedChange={setUnsaved}
         extraActions={
           id && canWrite ? (
             <Button
               asChild={readOnly}
               variant="outline"
               size="sm"
-              onClick={readOnly ? undefined : () => (dirty ? setLeaving(true) : toReading())}
+              onClick={readOnly ? undefined : () => (unsaved > 0 ? setLeaving(true) : toReading())}
             >
               {readOnly ? (
                 <Link to={ROUTES.QUESTION_EDIT(id)}>

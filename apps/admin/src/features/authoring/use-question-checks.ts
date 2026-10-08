@@ -46,21 +46,24 @@ export function useDuplicate(draft: QuestionDraft | null, editingId: string): st
     queryFn: () =>
       api.admin.authoring.duplicate(current?.draft as QuestionDraft, editingId || undefined),
     enabled: current !== null && hasText(current.draft.stem[DEFAULT_LANGUAGE] ?? ''),
+    // Advisory, and asked again on every pause: the save is what refuses a copy, so a failed ask says nothing.
+    meta: { silent: true },
+    retry: false,
   });
 
   return current ? (found.data?.duplicateOf?.stemPreview ?? null) : null;
 }
 
-/** Debounced: a strict KaTeX render of every formula in every language is not a per-keystroke cost. */
+/** The rules as they stand this instant, for a save that cannot wait on the debounce. */
+export const issuesOf = (draft: QuestionDraft | null, header: AuthoringHeader | undefined) =>
+  draft && header ? validateQuestion(draft, taxonomyFor(header), mathErrorIn) : [];
+
+/** Judged once at first sight, then debounced: a strict KaTeX render of every formula is not a per-keystroke cost. */
 export function useIssues(draft: QuestionDraft | null, header: AuthoringHeader | undefined) {
-  const [issues, setIssues] = useState<ReturnType<typeof validateQuestion>>([]);
+  const [issues, setIssues] = useState(() => issuesOf(draft, header));
 
   useEffect(() => {
-    const timer = setTimeout(
-      () =>
-        setIssues(draft && header ? validateQuestion(draft, taxonomyFor(header), mathErrorIn) : []),
-      PREVIEW_DEBOUNCE_MS,
-    );
+    const timer = setTimeout(() => setIssues(issuesOf(draft, header)), PREVIEW_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [draft, header]);
 

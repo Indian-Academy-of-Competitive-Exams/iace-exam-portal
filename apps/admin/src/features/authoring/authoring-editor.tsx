@@ -10,9 +10,7 @@ import {
   LANGUAGE_ORDER,
   PERMISSION_LEVELS,
   hasText,
-  type AuthoringSaveResult,
   type QuestionDetail,
-  type QuestionDraft,
   type QuestionLanguage,
 } from '@iace/contracts';
 import { Button, LoadingState, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
@@ -25,7 +23,8 @@ import { useAuth } from '../../providers/auth';
 import { AuthoringHeaderBar } from './authoring-header-bar';
 import { Legend, QuestionNotLoaded, useFocusMode } from './authoring-chrome';
 import { QuestionPanes } from './question-panes';
-import { useChecked, useDuplicate } from './use-question-checks';
+import { useUnsavedPrompt } from './use-unsaved-prompt';
+import { issuesOf, useChecked, useDuplicate } from './use-question-checks';
 import {
   emptyState,
   headerOf,
@@ -45,8 +44,16 @@ interface Saved {
   romanised: boolean;
 }
 
+/** What a save sends, and what the box then holds with nothing unsaved in it. */
+type Sent = Pick<Saved, 'header' | 'state'>;
+
+/** A fresh editor for each address: one question's text never shows, or saves, under another's. */
 export function AuthoringEditorPage() {
   const { id } = useParams<{ id?: string }>();
+  return <Editor key={id ?? ''} id={id} />;
+}
+
+function Editor({ id }: Readonly<{ id: string | undefined }>) {
   const { identity, can } = useAuth();
   // Below WRITE the question is its author's to read, and the box takes nothing.
   const canWrite = can(FEATURE_KEYS.QUESTION_AUTHORING, PERMISSION_LEVELS.WRITE);
@@ -72,9 +79,13 @@ export function AuthoringEditorPage() {
     enabled: editingId !== '',
   });
 
+  // A saved question as last read or saved; a new one is kept in the browser instead, so it has none.
+  const [clean, setClean] = useState<string | null>(null);
   useFilledOnce(editing.data, (question) => {
-    setHeader(headerOf(question));
-    setState(stateOf(question));
+    const read: Sent = { header: headerOf(question), state: stateOf(question) };
+    setHeader(read.header);
+    setState(read.state);
+    setClean(JSON.stringify(read));
     setLanguage(DEFAULT_LANGUAGE);
     rebuildBox();
   });
@@ -89,17 +100,26 @@ export function AuthoringEditorPage() {
   const duplicate = useDuplicate(draft, editingId);
   const { issues, checks } = useChecked(draft, header, state, duplicate);
 
-  const save = useSaveQuestion(editingId, draft, () => {
-    if (editingId) return;
+  const save = useSaveQuestion(editingId, (sent) => {
+    if (editingId) return setClean(JSON.stringify(sent));
     // The header survives: the next fifty questions are the same subject at the same level.
-    setState(emptyState(state.type));
+    setState(emptyState(sent.state.type));
     rebuildBox();
   });
+  const unsaved = useMemo(
+    () => clean !== null && JSON.stringify({ header, state } satisfies Sent) !== clean,
+    [clean, header, state],
+  );
+  useUnsavedPrompt(unsaved);
 
   // A question that was not read leaves the box blank on its id, and a save from there would overwrite it.
   const loaded = editingId === '' || editing.data !== undefined;
   const typing = canWrite && loaded;
   const canSave = typing && issues.length === 0 && duplicate === null && !save.isPending;
+  const saveNow = () => {
+    // The button reads issues that lag the last keystroke, so the save judges what it is about to send.
+    if (issuesOf(draft, header).length === 0) save.mutate({ header, state });
+  };
 
   const cycleLanguage = useCallback(() => {
     setLanguage((current) => {
@@ -160,7 +180,7 @@ export function AuthoringEditorPage() {
               onRegions={onRegions}
               onCycleLanguage={cycleLanguage}
               onLanguageChange={switchLanguage}
-              onSave={() => save.mutate()}
+              onSave={saveNow}
             />
           ) : (
             <Unread error={editing.error} onRetry={() => void editing.refetch()} />
@@ -171,7 +191,7 @@ export function AuthoringEditorPage() {
       <Legend
         actions={
           typing ? (
-            <Button type="button" size="sm" disabled={!canSave} onClick={() => save.mutate()}>
+            <Button type="button" size="sm" disabled={!canSave} onClick={saveNow}>
               <Save aria-hidden />
               {id ? 'Save' : 'Save and next'}
             </Button>
@@ -245,21 +265,19 @@ function EditorActions({
 }
 
 /** Saving is all the server hears: a new question, or the draft this editor was opened on. */
-function useSaveQuestion(
-  questionId: string,
-  draft: QuestionDraft,
-  onSaved: (result: AuthoringSaveResult) => void,
-) {
+function useSaveQuestion(questionId: string, onSaved: (sent: Sent) => void) {
   const queryClient = useQueryClient();
 
   return useMutation({
     meta: { success: questionId ? 'Question saved.' : 'Question saved. Next one.' },
-    mutationFn: () =>
-      questionId
+    mutationFn: ({ header, state }: Sent) => {
+      const draft = toDraft(state, header);
+      return questionId
         ? api.admin.authoring.update(questionId, draft)
-        : api.admin.authoring.create(draft),
-    onSuccess: async (result) => {
-      onSaved(result);
+        : api.admin.authoring.create(draft);
+    },
+    onSuccess: async (_result, sent) => {
+      onSaved(sent);
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHORING });
     },
   });

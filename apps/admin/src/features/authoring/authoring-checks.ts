@@ -15,6 +15,7 @@ export function checksFor(
 
   const structure = failing(
     'ENGLISH_STEM_REQUIRED',
+    'TRANSLATION_WITHOUT_STEM',
     'OPTION_COUNT_INVALID',
     'OPTION_TEXT_REQUIRED',
     'OPTION_TEXT_DUPLICATE',

@@ -144,8 +144,9 @@ export function stateFrom(
   language: QuestionLanguage,
   regions: readonly ScaffoldRegion[],
 ): AuthoringState {
+  const isMcq = state.type === QUESTION_TYPE.SINGLE_MCQ;
   const options = regions.filter((region) => region.key.startsWith(OPTION_PREFIX));
-  const optionCount = state.type === QUESTION_TYPE.SINGLE_MCQ ? options.length : 0;
+  const optionCount = isMcq ? options.length : 0;
   const find = (key: string) => regions.find((region) => region.key === key)?.html ?? '';
 
   const content = { ...state.content };
@@ -155,14 +156,13 @@ export function stateFrom(
       { length: optionCount },
       (_, index) => existing.options[index] ?? '',
     );
+    const shown = code === language ? options.map((region) => region.html) : resized;
+    // A typed answer shows no options: what a switch of type left behind waits for the switch back.
+    const kept = { ...existing, options: isMcq ? shown : existing.options };
     content[code] =
       code === language
-        ? {
-            stem: find(REGION_KEYS.STEM),
-            options: options.map((region) => region.html),
-            solution: find(REGION_KEYS.SOLUTION),
-          }
-        : { ...existing, options: resized };
+        ? { ...kept, stem: find(REGION_KEYS.STEM), solution: find(REGION_KEYS.SOLUTION) }
+        : kept;
   }
 
   return { ...state, optionCount, answer: find(REGION_KEYS.ANSWER), content };
@@ -328,7 +328,7 @@ export function headerOf(question: QuestionDetail): AuthoringHeader {
 export function stateOfDraft(draft: QuestionDraft): AuthoringState {
   const isMcq = draft.type === QUESTION_TYPE.SINGLE_MCQ;
   const seats = isMcq
-    ? Math.max(MCQ_OPTION_COUNT, ...draft.options.map((option) => option.position))
+    ? Math.max(MCQ_OPTION_MIN, ...draft.options.map((option) => option.position))
     : 0;
   const textAt = (seat: number, language: QuestionLanguage) =>
     draft.options.find((option) => option.position === seat)?.text[language] ?? '';

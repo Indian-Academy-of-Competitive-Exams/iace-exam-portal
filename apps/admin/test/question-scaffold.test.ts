@@ -4,6 +4,7 @@ import {
   ANSWER_MODE,
   DIFFICULTY_LEVEL,
   MCQ_OPTION_MAX,
+  MCQ_OPTION_MIN,
   TAGS_MAX,
   QUESTION_TYPE,
   questionDraftSchema,
@@ -20,6 +21,7 @@ import {
   tagsIn,
   regionsFor,
   stateFrom,
+  stateOfDraft,
   taxonomyFor,
   toDraft,
   withOptionCount,
@@ -230,5 +232,51 @@ describe('the option run', () => {
     assert.equal(grown.content.hi.options.length, 5);
     assert.equal(answerIndexOf(grown.answer, grown.optionCount), 4);
     assert.equal(questionDraftSchema.parse(toDraft(grown, HEADER)).options[4]?.isCorrect, true);
+  });
+});
+
+describe('a question switched to a typed answer', () => {
+  /** The failure this prevents: four typed options emptied by the first keystroke under the other type. */
+  it('keeps the options of every language for the switch back, and sends none', () => {
+    const hindi = ['<p>२५</p>', '<p>३०</p>', '<p>३५</p>', '<p>४०</p>'];
+    const before = typed();
+    const switched: AuthoringState = {
+      ...before,
+      type: QUESTION_TYPE.TEXT_FIELD,
+      optionCount: 0,
+      answer: '',
+      content: { ...before.content, hi: { ...before.content.hi, options: hindi } },
+    };
+
+    const after = stateFrom(switched, 'en', [
+      { key: REGION_KEYS.STEM, label: '', html: '<p>What is 20% of 150?</p>' },
+      { key: REGION_KEYS.ANSWER, label: 'Answer', html: '<p>30</p>' },
+      { key: REGION_KEYS.SOLUTION, label: 'Explanation', html: '' },
+    ]);
+
+    assert.deepEqual(after.content.en.options, before.content.en.options);
+    assert.deepEqual(after.content.hi.options, hindi);
+    assert.equal(after.optionCount, 0);
+    assert.deepEqual(toDraft(after, HEADER).options, []);
+  });
+});
+
+describe('a previewed import row in the box', () => {
+  const rowWith = (seats: number): QuestionDraft => {
+    const draft = toDraft(typed(), HEADER);
+    return { ...draft, options: draft.options.slice(0, seats) };
+  };
+
+  /** The failure this prevents: a valid three-option row opening with a fourth, empty, failing seat. */
+  it('opens with the options its row has', () => {
+    const state = stateOfDraft(rowWith(3));
+
+    assert.equal(state.optionCount, 3);
+    assert.equal(state.content.en.options.length, 3);
+    assert.deepEqual(validateQuestion(toDraft(state, HEADER), taxonomyFor(HEADER)), []);
+  });
+
+  it('never opens with fewer seats than a question may have', () => {
+    assert.equal(stateOfDraft(rowWith(1)).optionCount, MCQ_OPTION_MIN);
   });
 });

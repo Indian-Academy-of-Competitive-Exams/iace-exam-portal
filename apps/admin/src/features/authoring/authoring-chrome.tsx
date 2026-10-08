@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
 import { EmptyState, EMPTY_STATE_KINDS, Kbd } from '@iace/ui';
@@ -84,12 +84,12 @@ export function useFocusMode() {
   const immersive = focusedAt !== null && fullscreen.exits === focusedAt;
   useWorkspace(immersive);
 
+  // One way out for the toggle and for a page that goes away while immersive: the browser leaves with the chrome.
+  const { exit } = fullscreen;
+  useEffect(() => (immersive ? () => void exit() : undefined), [immersive, exit]);
+
   const toggle = () => {
-    if (immersive) {
-      setFocusedAt(null);
-      void fullscreen.exit();
-      return;
-    }
+    if (immersive) return setFocusedAt(null);
     setFocusedAt(fullscreen.exits);
     void fullscreen.enter();
   };
