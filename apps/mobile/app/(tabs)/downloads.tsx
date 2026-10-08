@@ -77,7 +77,7 @@ export default function DownloadsScreen() {
       ) : null}
 
       {ask === null ? (
-        <NoSitting waiting={trend.isLoading} failed={trend.isError} retry={trend.refetch} />
+        <NoSitting waiting={trend.isLoading} failed={trend.isLoadingError} retry={trend.refetch} />
       ) : (
         <>
           <Figures ask={ask} />

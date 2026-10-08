@@ -77,7 +77,7 @@ export default function TestsScreen() {
       ListEmptyComponent={
         <CatalogBody
           isLoading={catalog.isLoading}
-          isError={catalog.isError}
+          isError={catalog.isLoadingError}
           onRetry={catalog.refetch}
           emptiness={emptiness}
         />

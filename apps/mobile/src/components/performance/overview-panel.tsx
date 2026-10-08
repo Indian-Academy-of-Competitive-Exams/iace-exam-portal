@@ -50,7 +50,7 @@ export function OverviewPanel() {
   return (
     <RefreshScroll refreshing={overview.isRefetching} onRefresh={refresh}>
       {overview.isLoading ? <OverviewSkeleton /> : null}
-      {overview.isError ? (
+      {overview.isLoadingError ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
           title="Your performance did not load"

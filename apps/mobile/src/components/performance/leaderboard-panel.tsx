@@ -47,7 +47,7 @@ export function LeaderboardPanel() {
 
       {paper === '' ? <NotAskedYet trend={trend} /> : null}
       {paper !== '' && board.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
-      {paper !== '' && board.isError ? (
+      {paper !== '' && board.isLoadingError ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
           title="This board did not load"
@@ -72,7 +72,7 @@ export function LeaderboardPanel() {
 /** No board is asked for until the tests it would list are known, and "none" only once they are. */
 function NotAskedYet({ trend }: Readonly<{ trend: UseQueryResult<unknown> }>) {
   if (trend.isLoading) return <Skeleton className="h-64 rounded-xl" />;
-  if (trend.isError) {
+  if (trend.isLoadingError) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}

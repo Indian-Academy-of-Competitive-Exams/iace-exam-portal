@@ -52,7 +52,7 @@ export function ActiveDevices() {
     );
   }
 
-  if (sessions.isError) {
+  if (sessions.isLoadingError) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}
