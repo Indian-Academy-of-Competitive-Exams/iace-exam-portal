@@ -7,7 +7,7 @@ export { StatRow } from './components/ui/stat-row';
 export { Metric, type MetricProps } from './components/ui/metric';
 export { MetricGroup } from './components/ui/metric-group';
 export { Stepper, STEPPER_STATES, type StepperStep } from './components/ui/stepper';
-export { Kbd } from './components/ui/kbd';
+export { KEY_NAMES, Kbd, Shortcut } from './components/ui/kbd';
 export { Label } from './components/ui/label';
 export { Field, FieldRow, ReadOnlyField, type FieldControl } from './components/ui/field';
 export { FormCombobox, FormField } from './components/ui/form-field';

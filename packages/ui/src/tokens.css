@@ -284,6 +284,7 @@
   --modal-w-sm: 25rem; /* 400 */
   --modal-w-md: 32.5rem; /* 520 */
   --modal-w-lg: 45rem; /* 720 */
+  --modal-w-xl: 80rem; /* 1280 */
   --modal-radius: var(--radius-2xl);
   --modal-pad: var(--space-6);
 

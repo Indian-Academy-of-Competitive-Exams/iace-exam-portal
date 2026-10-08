@@ -1,6 +1,6 @@
 import { QUESTION_TYPE, type ValidationIssue } from '@iace/contracts';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
-import { KEY_NAMES } from '../../lib/constants';
+import { KEY_NAMES } from '@iace/ui';
 import { type Check } from './authoring-preview';
 
 /** What the rules found, said as the checklist a typist reads top to bottom. */

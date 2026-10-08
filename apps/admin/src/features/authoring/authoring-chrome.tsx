@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { useFullscreen, useWorkspace } from '@iace/app-kit/browser';
-import { EmptyState, EMPTY_STATE_KINDS, Kbd } from '@iace/ui';
-import { KEY_NAMES } from '../../lib/constants';
+import { EmptyState, EMPTY_STATE_KINDS, KEY_NAMES, Shortcut } from '@iace/ui';
 import { TOUR_TARGETS } from '../../lib/tours';
 
 const { MOD: MOD_KEY, ALT: ALT_KEY } = KEY_NAMES;
@@ -40,20 +39,6 @@ export function Legend({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function Shortcut({
-  keys,
-  children,
-}: Readonly<{ keys: readonly string[]; children: React.ReactNode }>) {
-  return (
-    <span className="flex flex-none items-center gap-1">
-      {keys.map((key) => (
-        <Kbd key={key}>{key}</Kbd>
-      ))}
-      <span>{children}</span>
-    </span>
   );
 }
 

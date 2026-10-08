@@ -99,7 +99,7 @@ function errorIn(latex: string): string | null {
 }
 
 /** What is left when the editor's chunk will not load: the formula typed as LaTeX. */
-function LatexField({ value, onChange, invalid }: Readonly<MathFieldProps>) {
+function LatexField({ value, onChange, invalid, children }: Readonly<MathFieldProps>) {
   return (
     <>
       <Alert variant="warning">
@@ -116,6 +116,7 @@ function LatexField({ value, onChange, invalid }: Readonly<MathFieldProps>) {
           invalid={invalid}
         />
       </div>
+      {children}
     </>
   );
 }
@@ -137,14 +138,16 @@ function MathDialog({
   editing: boolean;
   onLatexChange: (latex: string) => void;
   onOpenChange: (open: boolean) => void;
-  onSubmit: () => void;
+  onSubmit: (latex: string) => void;
 }>) {
   const error = errorIn(latex);
+  const submitLabel = editing ? 'Update' : 'Insert';
+  const fit = (typed: string) => Boolean(typed.trim()) && !errorIn(typed);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        size="lg"
+        size="xl"
         // The field focuses itself once loaded; MathLive abandons a focus the dialog then moves.
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
@@ -152,23 +155,32 @@ function MathDialog({
           <DialogTitle>Equation</DialogTitle>
         </DialogHeader>
 
-        <DialogBody className="flex flex-col gap-3">
-          <React.Suspense fallback={<Skeleton className="h-80" />}>
-            <MathField value={latex} onChange={onLatexChange} invalid={Boolean(error)} />
+        {/* py-1, or the scroller's edge cuts the top of the field's focus ring. */}
+        <DialogBody className="flex flex-col gap-3 py-1">
+          <React.Suspense fallback={<Skeleton className="h-96" />}>
+            <MathField
+              value={latex}
+              onChange={onLatexChange}
+              invalid={Boolean(error)}
+              // Handed to state when it will not store, so the reason shows; Enter can beat the field's own event.
+              onSubmit={(typed) => (fit(typed) ? onSubmit(typed) : onLatexChange(typed))}
+              submitLabel={submitLabel}
+            >
+              {error ? (
+                <p role="alert" className="text-xs text-destructive">
+                  {error}
+                </p>
+              ) : null}
+            </MathField>
           </React.Suspense>
-          {error ? (
-            <p role="alert" className="text-xs text-destructive">
-              {error}
-            </p>
-          ) : null}
         </DialogBody>
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" disabled={!latex.trim() || Boolean(error)} onClick={onSubmit}>
-            {editing ? 'Update' : 'Insert'}
+          <Button type="button" disabled={!fit(latex)} onClick={() => onSubmit(latex)}>
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -237,9 +249,9 @@ export function RichTextToolbar({
     if (file && onUploadImage) insertUploaded(editor.view, file, onUploadImage, imageLimits);
   };
 
-  const submit = () => {
-    if (!math?.latex.trim()) return;
-    const { latex, pos } = math;
+  const submit = (latex: string) => {
+    if (!math || !latex.trim()) return;
+    const { pos } = math;
 
     if (pos === null) editor.chain().focus().insertInlineMath({ latex }).run();
     else {

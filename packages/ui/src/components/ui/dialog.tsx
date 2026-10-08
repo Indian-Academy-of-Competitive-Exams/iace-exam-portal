@@ -37,6 +37,7 @@ const SIZES = {
   sm: 'max-w-[--modal-w-sm]',
   md: 'max-w-[--modal-w-md]',
   lg: 'max-w-[--modal-w-lg]',
+  xl: 'max-w-[--modal-w-xl]',
   /** A window over the whole screen, the page still showing at its edge: a workspace, not a question. */
   window: 'h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-none',
 } as const;
