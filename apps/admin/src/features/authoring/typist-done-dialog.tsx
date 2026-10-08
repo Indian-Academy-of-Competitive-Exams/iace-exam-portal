@@ -205,7 +205,8 @@ function columnsOf(
 function leftoverNotice(leftover: number, deleting: number): string {
   const banked = leftover - deleting;
   const kept = `${plural(banked, 'question')} not chosen ${banked === 1 ? 'goes' : 'go'} to the bank for any test to pick.`;
-  return deleting > 0 ? `${kept} ${plural(deleting, 'question')} will be deleted.` : kept;
+  const deleted = `${plural(deleting, 'question')} will be deleted.`;
+  return [banked > 0 ? kept : '', deleting > 0 ? deleted : ''].filter(Boolean).join(' ');
 }
 
 function leavingPaperNotice(count: number): string {

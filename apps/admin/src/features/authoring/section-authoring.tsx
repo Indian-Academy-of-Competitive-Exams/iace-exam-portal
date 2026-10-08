@@ -7,6 +7,7 @@ import {
   DIFFICULTY_LEVEL,
   ErrorCodes,
   FEATURE_KEYS,
+  PAPER_SOURCES,
   PERMISSION_LEVELS,
   REVIEW_STATES,
   SECTION_SEATS,
@@ -165,7 +166,8 @@ export function SectionAuthoringPage() {
   );
 
   if (work.isLoading) return <LoadingState>Loading the section</LoadingState>;
-  if (work.error || !work.data) {
+  // Only a failed first read takes the page: a failed re-read keeps the cards and what is typed into them.
+  if (!work.data) {
     const refused = AppException.is(work.error) && work.error.code === ErrorCodes.NOT_FOUND;
     return refused ? (
       <EmptyState
@@ -258,11 +260,17 @@ function SectionWorkspace({
         },
       }),
       save: async (id, held) => {
-        // Refused if it moved since this card read it: an edit made elsewhere is not overwritten.
-        await api.admin.sectionWork.edit(testId, sectionId, id, {
-          ...toDraft(held.state, held.header),
-          expectedUpdatedAt: held.stamp,
-        });
+        try {
+          // Refused if it moved since this card read it: an edit made elsewhere is not overwritten.
+          await api.admin.sectionWork.edit(testId, sectionId, id, {
+            ...toDraft(held.state, held.header),
+            expectedUpdatedAt: held.stamp,
+          });
+        } catch (error) {
+          // A refusal may name a claim taken since the section was read: read again, the page says who holds it.
+          void onSettle();
+          throw error;
+        }
         await onSettle(id);
       },
       subjectLocked: work.sectionSubjectId !== null,
@@ -310,7 +318,14 @@ function SectionWorkspace({
 
   const title = <SectionTitle work={work} elsewhere={elsewhere} blocked={blocked} />;
   const empty = source.cards.length === 0 && !source.create;
-  const thread = <SectionThreadButton testId={testId} sectionId={sectionId} canWrite={seated} />;
+  // The thread takes its section's seats and a super admin, who holds none here.
+  const thread = (
+    <SectionThreadButton
+      testId={testId}
+      sectionId={sectionId}
+      canWrite={seated || Boolean(identity?.isSuperAdmin)}
+    />
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -439,11 +454,19 @@ function contextOf(
     const dropped = work.history.some(
       (row) => row.id === work.seatAssignmentId && row.sectionDropped,
     );
+    if (!dropped) {
+      return {
+        variant: 'info',
+        text: 'This section has passed to somebody else. You can still read it.',
+      };
+    }
+    // Leaving the test's scope deletes the section's paper, so only a typist's own drafts are left to read.
     return {
       variant: 'info',
-      text: dropped
-        ? 'This section left the test. You can still read it.'
-        : 'This section has passed to somebody else. You can still read it.',
+      text:
+        work.questions.length === 0
+          ? 'This section left the test, and its paper went with it.'
+          : 'This section left the test. You can still read it.',
     };
   }
   const reader = work.reader;
@@ -518,8 +541,10 @@ function SeatTimes({ time }: Readonly<{ time: QuestionTime }>) {
   );
 }
 
-/** A seat's whole time on the section: every seat's for the owner, and their own for whoever holds one. */
+/** A seat's whole time on the section, as My sections totals it; summed off the questions listed only where that is not sent. */
 function seatTime(work: SectionWork, seat: 'typist' | 'reader'): number | null {
+  const whole = work[seat]?.secondsSpent ?? null;
+  if (whole !== null) return whole;
   const own = work.seat === (seat === 'typist' ? SECTION_SEATS.TYPIST : SECTION_SEATS.READER);
   let total: number | null = null;
   for (const { time } of work.questions) {
@@ -537,7 +562,9 @@ function CardNotice({
   const { review } = question;
   const fixed = review.state === REVIEW_STATES.FIXED;
   const sentBack = Boolean(review.reason) && (fixed || review.state === REVIEW_STATES.SENT_BACK);
-  const warnsOfOtherTests = question.editable && work.seat !== SECTION_SEATS.TYPIST;
+  // A framed paper's typist writes questions no other test holds yet; a picked paper's fixes the bank's own.
+  const shared = work.seat !== SECTION_SEATS.TYPIST || work.paperSource === PAPER_SOURCES.PICKED;
+  const warnsOfOtherTests = question.editable && shared;
   if (!sentBack && !warnsOfOtherTests) return null;
   const reason = review.reason ? SEND_BACK_REASON_LABELS[review.reason] : '';
   const said = [`${fixed ? 'Fixed after being sent back' : 'Sent back'}: ${reason}.`, review.note];

@@ -10,6 +10,7 @@ import {
 import {
   Avatar,
   Button,
+  ConfirmDialog,
   EmptyState,
   EMPTY_STATE_KINDS,
   Sheet,
@@ -56,6 +57,20 @@ interface Composing {
 
 const BLANK: Composing = { body: '', images: [], editingId: null };
 
+/** How much of an unsent comment a confirm quotes back before it is dropped. */
+const UNSENT_QUOTE_CHARS = 80;
+
+/** What the box holds unsent, named for the confirm that would drop it. */
+function unsentOf({ body, images }: Composing): string {
+  const words = body.trim();
+  const cut = words.length > UNSENT_QUOTE_CHARS ? `${words.slice(0, UNSENT_QUOTE_CHARS)}…` : words;
+  const named = [
+    words ? `“${cut}”` : '',
+    images.length > 0 ? plural(images.length, 'picture') : '',
+  ];
+  return named.filter(Boolean).join(' and ');
+}
+
 /** The button fetches nothing: ten sections on a page would be ten reads for a number. */
 export function SectionThreadButton({
   testId,
@@ -89,6 +104,7 @@ function Thread({
   const { identity } = useAuth();
   const queryClient = useQueryClient();
   const [composing, setComposing] = useState<Composing>(BLANK);
+  const [replacing, setReplacing] = useState<SectionComment | null>(null);
 
   const thread = useQuery({
     queryKey: sectionThreadQueryKey(testId, sectionId),
@@ -111,6 +127,12 @@ function Thread({
         : api.admin.sectionWork.editComment(testId, sectionId, editingId, { body }),
     onSuccess: settle,
   });
+
+  const edit = (comment: SectionComment) =>
+    setComposing({ body: comment.body, images: [], editingId: comment.id });
+  // Unsent is a picture, or words that are not the comment being reworded as it already stands.
+  const standing = rows.find((row) => row.id === composing.editingId)?.body ?? '';
+  const unsent = composing.images.length > 0 || composing.body.trim() !== standing.trim();
 
   const foot = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -160,7 +182,12 @@ function Thread({
               key={comment.id}
               comment={comment}
               mine={comment.authorId === identity?.id}
-              onEdit={() => setComposing({ body: comment.body, images: [], editingId: comment.id })}
+              // The server takes a reword only from its author, and only while they may still write here.
+              onEdit={
+                canWrite && comment.authorId === identity?.id
+                  ? () => (unsent ? setReplacing(comment) : edit(comment))
+                  : undefined
+              }
             />
           ))}
 
@@ -177,6 +204,21 @@ function Thread({
           onSend={() => say.mutate(composing)}
         />
       ) : null}
+
+      {replacing ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => !open && setReplacing(null)}
+          destructive
+          title="Discard what is in the box?"
+          description={`It has not been sent, and editing this comment drops it: ${unsentOf(composing)}.`}
+          confirmLabel="Discard and edit"
+          onConfirm={() => {
+            edit(replacing);
+            setReplacing(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -185,7 +227,12 @@ function Message({
   comment,
   mine,
   onEdit,
-}: Readonly<{ comment: SectionComment; mine: boolean; onEdit: () => void }>) {
+}: Readonly<{
+  comment: SectionComment;
+  mine: boolean;
+  /** Absent where the viewer could not reword it. */
+  onEdit: (() => void) | undefined;
+}>) {
   return (
     <div className={cn('flex items-end gap-2', mine && 'flex-row-reverse')}>
       <Avatar name={comment.authorName} size="sm" />
@@ -201,7 +248,7 @@ function Message({
           <span>{ADMIN_ROLE_LABELS[comment.authorRole]}</span>
           <span>{SAID_AT.format(new Date(comment.createdAt))}</span>
           {comment.editedAt ? <EditedMark comment={comment} /> : null}
-          {mine ? (
+          {onEdit ? (
             <button
               type="button"
               onClick={onEdit}
@@ -255,26 +302,25 @@ function Composer({
   composing: Composing;
   sending: boolean;
   name: string | null;
-  onChange: (next: Composing) => void;
+  /** An updater, never a value: a picture lands after the render that picked it has gone stale. */
+  onChange: React.Dispatch<React.SetStateAction<Composing>>;
   onSend: () => void;
 }>) {
-  const [uploading, setUploading] = useState(false);
+  const editing = composing.editingId !== null;
   const empty = composing.body.trim() === '' && composing.images.length === 0;
 
-  const add = async (file: File | undefined) => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const image = await uploadQuestionImage(file);
-      onChange({ ...composing, images: [...composing.images, image] });
-    } finally {
-      setUploading(false);
-    }
-  };
+  // A mutation, so a picture the server refuses is announced like any other failed write.
+  const upload = useMutation({
+    mutationFn: uploadQuestionImage,
+    onSuccess: (image) =>
+      onChange((current) =>
+        current.editingId === null ? { ...current, images: [...current.images, image] } : current,
+      ),
+  });
 
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
-      {composing.editingId ? (
+      {editing ? (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing a comment. Its pictures stay as they are.</span>
           <Button variant="ghost" size="sm" onClick={() => onChange(BLANK)}>
@@ -298,10 +344,10 @@ function Composer({
                 aria-label="Remove this picture"
                 className="absolute -right-2 -top-2 bg-surface"
                 onClick={() =>
-                  onChange({
-                    ...composing,
-                    images: composing.images.filter((held) => held.key !== image.key),
-                  })
+                  onChange((current) => ({
+                    ...current,
+                    images: current.images.filter((held) => held.key !== image.key),
+                  }))
                 }
               >
                 <X aria-hidden />
@@ -316,7 +362,10 @@ function Composer({
 
         <Textarea
           value={composing.body}
-          onChange={(event) => onChange({ ...composing, body: event.target.value })}
+          onChange={(event) => {
+            const body = event.target.value;
+            onChange((current) => ({ ...current, body }));
+          }}
           placeholder="Write a comment"
           aria-label="Write a comment"
           rows={2}
@@ -327,11 +376,12 @@ function Composer({
           <span className="sr-only">Add a picture</span>
           <input
             type="file"
-            className="sr-only"
+            className="peer sr-only"
             accept={QUESTION_IMAGE_ACCEPTED_TYPES.join(',')}
-            disabled={uploading || composing.images.length >= COMMENT_MAX_IMAGES}
+            disabled={editing || upload.isPending || composing.images.length >= COMMENT_MAX_IMAGES}
             onChange={(event) => {
-              void add(event.target.files?.[0]);
+              const file = event.target.files?.[0];
+              if (file) upload.mutate(file);
               event.target.value = '';
             }}
           />
@@ -339,13 +389,20 @@ function Composer({
             className={cn(
               'inline-flex size-9 items-center justify-center rounded-md border border-border',
               'cursor-pointer text-muted-foreground hover:bg-muted',
+              'peer-disabled:pointer-events-none peer-disabled:border-disabled-border peer-disabled:bg-disabled peer-disabled:text-disabled-foreground',
             )}
           >
             <ImagePlus className="size-4" aria-hidden />
           </span>
         </label>
 
-        <Button size="icon" loading={sending} disabled={empty} onClick={onSend} aria-label="Send">
+        <Button
+          size="icon"
+          loading={sending}
+          disabled={empty || upload.isPending}
+          onClick={onSend}
+          aria-label="Send"
+        >
           <Send aria-hidden />
         </Button>
       </div>
