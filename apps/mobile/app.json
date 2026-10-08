@@ -9,6 +9,7 @@
     "icon": "./assets/icon.png",
     "android": {
       "package": "in.co.iace.mobile",
+      "allowBackup": false,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -32,6 +33,7 @@
         "expo-image-picker",
         {
           "photosPermission": "IACE uses your photos so you can add the one that goes on your hall ticket.",
+          "cameraPermission": false,
           "microphonePermission": false
         }
       ]

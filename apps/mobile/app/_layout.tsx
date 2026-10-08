@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { ActivityIndicator, Alert, useColorScheme, View } from 'react-native';
+import { Stack, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createAppQueryClient } from '@iace/app-kit';
@@ -8,6 +8,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
 import { alertOnce } from '../src/lib/alert-once';
 import { hydrate } from '../src/lib/api';
+import { linkGuard } from '../src/lib/link-guard';
+import { EXAM_PATH } from '../src/lib/nav';
 import { AuthProvider, useAuth } from '../src/providers/auth';
 import { useTokenColor } from '../src/lib/use-token-color';
 import { usePushDevice } from '../src/lib/use-push-device';
@@ -26,6 +28,28 @@ const queryClient = createAppQueryClient({
   notify: { error: raiseAlert, success: () => undefined },
 });
 
+// A link opened cold lands on its screen with the tabs beneath it, so Back never leaves the app.
+export const unstable_settings = { anchor: '(tabs)' };
+
+const WHOLE_SCREEN = 'flex-1 items-center justify-center bg-background px-6';
+
+/** Drawn outside every provider, so it may use none of them. */
+export function ErrorBoundary({ retry }: Readonly<ErrorBoundaryProps>) {
+  useEffect(() => {
+    void SplashScreen.hideAsync();
+  }, []);
+
+  return (
+    <View className={WHOLE_SCREEN}>
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Something went wrong"
+        onRetry={() => void retry()}
+      />
+    </View>
+  );
+}
+
 export default function RootLayout() {
   const [hydrated, setHydrated] = useState(false);
 
@@ -33,10 +57,6 @@ export default function RootLayout() {
   useEffect(() => {
     void hydrate().then(() => setHydrated(true));
   }, []);
-
-  useEffect(() => {
-    if (hydrated) void SplashScreen.hideAsync();
-  }, [hydrated]);
 
   if (!hydrated) return null;
 
@@ -51,8 +71,6 @@ export default function RootLayout() {
   );
 }
 
-const WHOLE_SCREEN = 'flex-1 items-center justify-center bg-background px-6';
-
 /** Every route is registered under a guard; a route with no guard stays reachable either way. */
 function Navigation() {
   const { identity, isLoading, isUnreachable, retry } = useAuth();
@@ -62,6 +80,26 @@ function Navigation() {
   const headerColor = useTokenColor('--surface');
   const headerInk = useTokenColor('--foreground');
   const spinner = useTokenColor('--muted-foreground');
+  const statusBarStyle = useColorScheme() === 'dark' ? 'light' : 'dark';
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Held until the session is known, so the first thing seen is Home, Sign in or the retry screen.
+  useEffect(() => {
+    if (!isLoading) void SplashScreen.hideAsync();
+  }, [isLoading]);
+
+  useEffect(() => {
+    linkGuard.setSitting(pathname.startsWith(EXAM_PATH));
+  }, [pathname]);
+
+  // Unreachable is neither signed in nor out, so it settles nothing.
+  useEffect(() => {
+    if (isLoading || isUnreachable) return;
+    const turnedAway = linkGuard.settle(Boolean(identity));
+    // A tick later: the stack has not yet swapped the sign-in screen for the tabs, and a push now would meet the old one.
+    if (turnedAway) setTimeout(() => router.push(turnedAway), 0);
+  }, [identity, isLoading, isUnreachable, router]);
 
   if (isLoading) {
     return (
@@ -95,14 +133,20 @@ function Navigation() {
 
   return (
     // Chevron only: iOS would otherwise label Back with the route group's name, "(tabs)".
-    <Stack screenOptions={{ headerShown: false, headerBackButtonDisplayMode: 'minimal' }}>
+    <Stack
+      screenOptions={{ headerShown: false, headerBackButtonDisplayMode: 'minimal', statusBarStyle }}
+    >
       <Stack.Protected guard={Boolean(identity)}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="series/[id]" options={page} />
         <Stack.Screen name="test/[id]/index" options={page} />
         <Stack.Screen name="test/[id]/instructions" options={page} />
         {/* No swipe back out of a running paper; Android's Back is intercepted by the screen itself. */}
-        <Stack.Screen name="exam/[testId]" options={{ gestureEnabled: false }} />
+        <Stack.Screen
+          name="exam/[testId]"
+          options={{ gestureEnabled: false }}
+          dangerouslySingular
+        />
         <Stack.Screen
           name="attempts/[attemptId]/submitted"
           options={{ ...page, headerBackVisible: false, title: 'Handed in' }}

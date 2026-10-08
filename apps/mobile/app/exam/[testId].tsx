@@ -6,7 +6,7 @@
  */
 import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { BackHandler, View } from 'react-native';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppException, ErrorCodes, type ExamQuestion } from '@iace/contracts';
 import {
@@ -89,14 +89,16 @@ export default function ExamScreen() {
 
   // Android's Back would drop a running paper; in a sitting the only way out is handing it in.
   const askToSubmit = view && !view.takenOver && !view.ended ? view.submit.ask : undefined;
-  useEffect(() => {
-    if (!askToSubmit) return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      askToSubmit();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [askToSubmit]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!askToSubmit) return;
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        askToSubmit();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [askToSubmit]),
+  );
 
   if (attempt.isError) {
     const { error } = attempt;

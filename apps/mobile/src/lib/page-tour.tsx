@@ -261,14 +261,16 @@ function Spotlight({
 
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable className="flex-1" onPress={onClose}>
-        <View className={dim} style={{ left: 0, right: 0, top: 0, height: box.y }} />
-        <View className={dim} style={{ left: 0, right: 0, top: box.y + box.height, bottom: 0 }} />
-        <View className={dim} style={{ left: 0, width: box.x, top: box.y, height: box.height }} />
-        <View
-          className={dim}
-          style={{ left: box.x + box.width, right: 0, top: box.y, height: box.height }}
-        />
+      <View className="flex-1">
+        <Pressable className="flex-1" onPress={onClose}>
+          <View className={dim} style={{ left: 0, right: 0, top: 0, height: box.y }} />
+          <View className={dim} style={{ left: 0, right: 0, top: box.y + box.height, bottom: 0 }} />
+          <View className={dim} style={{ left: 0, width: box.x, top: box.y, height: box.height }} />
+          <View
+            className={dim}
+            style={{ left: box.x + box.width, right: 0, top: box.y, height: box.height }}
+          />
+        </Pressable>
 
         <View
           className="absolute gap-1 rounded-xl border border-border bg-surface p-4"
@@ -293,7 +295,7 @@ function Spotlight({
             </View>
           </View>
         </View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }

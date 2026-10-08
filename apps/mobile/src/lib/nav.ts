@@ -18,6 +18,9 @@ export const ROUTES = {
   ACCOUNT: '/account',
 } as const;
 
+/** The sign-in screen: where a signed-out student goes instead of Home. */
+export const LOGIN_ROUTE = '/login';
+
 /** app-kit's `NavItem` types `icon` for web `lucide-react`, which RN icons do not satisfy. */
 export interface MobileNavItem {
   /** The file expo-router resolves under `app/(tabs)/` — `index` is Home. */

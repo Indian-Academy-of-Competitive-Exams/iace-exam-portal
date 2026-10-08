@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -41,7 +42,7 @@ export default function LoginScreen() {
       className="flex-1 bg-background"
     >
       <ScrollView
-        contentContainerClassName="flex-1 items-center justify-center px-5 py-10"
+        contentContainerClassName="grow items-center justify-center px-5 py-10"
         keyboardShouldPersistTaps="handled"
       >
         <Card className="w-full max-w-[26rem] gap-6 p-6">
@@ -149,6 +150,18 @@ function CodeStep({
     form.reset();
     onResent(fresh);
   });
+  const busy = verify.isPending || again.isPending;
+
+  // Back steps to the number like the button, and is held while a request is out.
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (!busy) onBack();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [busy, onBack]),
+  );
 
   return (
     <View className="gap-4">
@@ -191,7 +204,7 @@ function CodeStep({
         {again.label}
       </Button>
 
-      <BackButton disabled={verify.isPending || again.isPending} onPress={onBack}>
+      <BackButton disabled={busy} onPress={onBack}>
         Use a different number
       </BackButton>
     </View>

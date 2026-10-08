@@ -65,6 +65,7 @@ export default function TestsScreen() {
       className="bg-background"
       contentContainerStyle={CONTENT_STYLE}
       data={shelvesOf(filteredSeries, rows)}
+      keyboardShouldPersistTaps="handled"
       keyExtractor={keyOfShelf}
       renderItem={renderShelf(now, results)}
       ListHeaderComponent={
