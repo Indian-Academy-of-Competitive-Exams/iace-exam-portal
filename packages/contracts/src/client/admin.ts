@@ -150,6 +150,7 @@ import {
   testOfferingSchema,
   type AddPaperQuestionInput,
   type CreateTestInput,
+  type ReplacePaperQuestionInput,
   type SetPaperQuestionStatusInput,
   type SetTestSeriesInput,
   type SaveOfferingInput,
@@ -243,6 +244,8 @@ import {
   type SubjectListQueryInput,
   type Topic,
   type TopicListQueryInput,
+  type UpdateSubjectBody,
+  type UpdateTopicBody,
 } from '../questions';
 import {
   ADMIN_ASSIGNMENTS_ROUTES,
@@ -262,6 +265,7 @@ import {
   type AssignmentTest,
   type AssignmentTestsQueryInput,
   type AssignmentWithTest,
+  type ChangeAssignmentDueInput,
   type CreateAssignmentInput,
   type CreateSectionCommentInput,
   type EditSectionCommentInput,
@@ -607,6 +611,14 @@ export function adminClient(core: ApiCore) {
           testPaperSchema,
         ),
 
+      /** One row swapped for another question, keeping its place on the paper. */
+      replacePaperQuestion: (
+        id: string,
+        rowId: string,
+        input: ReplacePaperQuestionInput,
+      ): Promise<TestPaper> =>
+        write('PATCH', ADMIN_TEST_PAPER_ROUTES.replaceQuestion(id, rowId), testPaperSchema, input),
+
       /** Fills the rest of one section from its own spec; every hand-picked row keeps its place. */
       fillPaperSection: (id: string, sectionId: string): Promise<TestPaper> =>
         write('POST', ADMIN_TEST_PAPER_ROUTES.fillSection(id, sectionId), testPaperSchema),
@@ -644,6 +656,18 @@ export function adminClient(core: ApiCore) {
 
       createTopic: (input: CreateTopicInput): Promise<Topic> =>
         write('POST', ADMIN_TAXONOMY_ROUTES.topics, topicSchema, input),
+
+      updateSubject: (id: string, input: UpdateSubjectBody): Promise<Subject> =>
+        write('PATCH', ADMIN_TAXONOMY_ROUTES.subject(id), subjectSchema, input),
+
+      removeSubject: (id: string): Promise<NoContent> =>
+        write('DELETE', ADMIN_TAXONOMY_ROUTES.subject(id), noContentSchema),
+
+      updateTopic: (id: string, input: UpdateTopicBody): Promise<Topic> =>
+        write('PATCH', ADMIN_TAXONOMY_ROUTES.topic(id), topicSchema, input),
+
+      removeTopic: (id: string): Promise<NoContent> =>
+        write('DELETE', ADMIN_TAXONOMY_ROUTES.topic(id), noContentSchema),
     },
 
     /** A typist's own questions. Every route here is scoped to the caller by the server. */
@@ -891,6 +915,14 @@ export function adminClient(core: ApiCore) {
 
       remove: (testId: string, id: string): Promise<NoContent> =>
         write('DELETE', ADMIN_ASSIGNMENTS_ROUTES.remove(testId, id), noContentSchema),
+
+      /** Moves the day on the seat as it is held; nobody new takes the role. */
+      changeDueDate: (
+        testId: string,
+        id: string,
+        input: ChangeAssignmentDueInput,
+      ): Promise<Assignment> =>
+        write('PATCH', ADMIN_ASSIGNMENTS_ROUTES.changeDue(testId, id), assignmentSchema, input),
 
       mine: (query: MineAssignmentsQueryInput = {}): Promise<Paginated<AssignmentWithTest>> =>
         list(ADMIN_ASSIGNMENTS_ROUTES.mine, query, assignmentWithTestSchema),

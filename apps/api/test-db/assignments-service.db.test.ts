@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import {
   ADMIN_ROLES,
@@ -65,7 +66,8 @@ function build() {
     new FakeEventBus().asService(),
   );
   return {
-    assignments: new AssignmentsService(prisma, admins, redis),
+    assignments: new AssignmentsService(prisma, admins, redis, audit),
+    audit,
     admins,
     tests: new TestsService(
       prisma,
@@ -430,7 +432,12 @@ describe('AssignmentsService — one lock order, Test before its rows', () => {
       body({ baseConfigSectionId: section.id, assigneeId, role: ASSIGNMENT_ROLES.PROOFREADER });
     await assignments.assign(test.id, reading(first.id), first.id);
     const order: string[] = [];
-    const watched = new AssignmentsService(watchingLocks(order), admins, NO_CLAIMS);
+    const watched = new AssignmentsService(
+      watchingLocks(order),
+      admins,
+      NO_CLAIMS,
+      new AuditContext(),
+    );
 
     await watched.assign(test.id, reading(second.id), second.id);
 
@@ -468,7 +475,7 @@ describe('AssignmentsService — a hand-over reads the role as it is under the l
         };
       },
     });
-    const racing = new AssignmentsService(reopenedMidway, admins, NO_CLAIMS);
+    const racing = new AssignmentsService(reopenedMidway, admins, NO_CLAIMS, new AuditContext());
 
     const next = await racing.assign(test.id, reading(second.id), second.id);
 
@@ -1784,6 +1791,125 @@ describe('AssignmentsService — a due date', () => {
         Boolean(error.fieldErrors?.dueAt),
     );
     assert.equal((await due(dueIn(0))).dueAt, endOf(dueIn(0)));
+  });
+});
+
+describe('AssignmentsService — moving a due day', () => {
+  /** A typist on a framed test, holding the section until `dueIn(2)`. */
+  async function typing() {
+    const bench = build();
+    const catalog = await makeCatalog(prisma);
+    const test = await framed(catalog);
+    const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
+    const typist = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    const held = await bench.assignments.assign(
+      test.id,
+      body({ baseConfigSectionId: section.id, assigneeId: typist.id, dueAt: dueIn(2) }),
+      typist.id,
+    );
+    return { ...bench, catalog, test, section, typist, held };
+  }
+
+  const due = (dueAt: string) => ({ dueAt });
+
+  it('moves the day on the same seat and files the old and new day', async () => {
+    const { assignments, audit, test, held } = await typing();
+
+    const { moved, store } = await audit.run(async () => ({
+      moved: await assignments.changeDueDay(test.id, held.id, due(dueIn(6))),
+      store: { ...audit.current() },
+    }));
+
+    assert.equal(moved.id, held.id);
+    assert.equal(moved.dueAt, endOf(dueIn(6)));
+    assert.equal(moved.replacedAt, null);
+    assert.equal(await prisma.questionAssignment.count({ where: { testId: test.id } }), 1);
+    assert.equal(store.entityId, test.id);
+    assert.deepEqual(store.changed, {
+      section: { from: null, to: 'Reasoning' },
+      role: { from: null, to: 'typist' },
+      dueAt: { from: dueIn(2), to: dueIn(6) },
+    });
+  });
+
+  it('files nothing when the day is the one it already was', async () => {
+    const { assignments, audit, test, held } = await typing();
+
+    const store = await audit.run(async () => {
+      await assignments.changeDueDay(test.id, held.id, due(dueIn(2)));
+      return { ...audit.current() };
+    });
+
+    assert.equal(store.unchanged, true);
+  });
+
+  /** The failure this prevents: a seat sent back overdue by a client that skipped the picker's minimum. */
+  it('refuses a day already gone, and takes today', async () => {
+    const { assignments, test, held } = await typing();
+
+    await assert.rejects(
+      () => assignments.changeDueDay(test.id, held.id, due(dueIn(-1))),
+      (error: unknown) =>
+        AppException.is(error) &&
+        error.code === ErrorCodes.VALIDATION_ERROR &&
+        Boolean(error.fieldErrors?.dueAt),
+    );
+    assert.equal(
+      (await assignments.changeDueDay(test.id, held.id, due(dueIn(0)))).dueAt,
+      endOf(dueIn(0)),
+    );
+  });
+
+  /** The failure this prevents: a day moved under a test whose sections nobody is working to any more. */
+  it('refuses once the test has been offered, and leaves the day', async () => {
+    const { assignments, test, held } = await typing();
+    await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: new Date() } });
+
+    await assert.rejects(
+      () => assignments.changeDueDay(test.id, held.id, due(dueIn(6))),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    const after = await prisma.questionAssignment.findUniqueOrThrow({ where: { id: held.id } });
+    assert.equal(after.dueAt?.toISOString(), endOf(dueIn(2)));
+  });
+
+  /** The failure this prevents: a seat finished late made on time by moving the day afterwards. */
+  it('refuses a seat that is already finished, and leaves its day', async () => {
+    const { assignments, test, held } = await typing();
+    await finalizedNow(held.id);
+
+    await assert.rejects(
+      () => assignments.changeDueDay(test.id, held.id, due(dueIn(6))),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    const after = await prisma.questionAssignment.findUniqueOrThrow({ where: { id: held.id } });
+    assert.equal(after.dueAt?.toISOString(), endOf(dueIn(2)));
+  });
+
+  /** The failure this prevents: a day set on a seat whose holder has already passed it on. */
+  it('refuses a seat that has passed on, one on another test, and one that does not exist', async () => {
+    const { assignments, test, section, held } = await typing();
+    const next = await makeAdmin(prisma);
+    await grant(next.id, FEATURE_KEYS.QUESTION_AUTHORING);
+    await assignments.assign(
+      test.id,
+      body({ baseConfigSectionId: section.id, assigneeId: next.id }),
+      next.id,
+    );
+
+    await assert.rejects(
+      () => assignments.changeDueDay(test.id, held.id, due(dueIn(6))),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await assert.rejects(
+      () => assignments.changeDueDay(test.id, randomUUID(), due(dueIn(6))),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
+    await assert.rejects(
+      () => assignments.changeDueDay(randomUUID(), held.id, due(dueIn(6))),
+      refusedWith(ErrorCodes.NOT_FOUND),
+    );
   });
 });
 

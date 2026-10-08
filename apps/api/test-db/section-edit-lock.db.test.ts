@@ -60,7 +60,7 @@ async function build() {
   const questions = new QuestionsService(prisma, audit, new FakeStorage() as never);
   const redis = new FakeRedis();
   const admins = new AdminsService(prisma, audit, new FakeEventBus().asService());
-  const assignments = new AssignmentsService(prisma, admins, redis.asService());
+  const assignments = new AssignmentsService(prisma, admins, redis.asService(), audit);
   const storage = new FakeStorage() as never;
   const imports = new QuestionImportService(prisma, storage, new AuditService(prisma, storage));
   return {

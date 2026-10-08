@@ -893,6 +893,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
       prisma,
       new AdminsService(prisma, new AuditContext(), new FakeEventBus().asService()),
       new FakeRedis().asService(),
+      new AuditContext(),
     );
 
     await questions.update(questionId, draft({ stem: REWORDED }), ADMIN);
@@ -1064,6 +1065,34 @@ describe('QuestionsService — finding a question again', () => {
       [byStem.items.length, byCode.items.length, byTag.items.length],
       [1, 1, 1],
       'each arm finds its own question and nothing else',
+    );
+  });
+
+  /** The column once held the content's JSON whole, so its key names found every question in the bank. */
+  it('finds a question by the words in it, never by the names of the fields that hold them', async () => {
+    const { questions } = await build();
+    await questions.create(
+      draft({
+        stem: { en: '<p>Area of a trapezium</p>', hi: '<p>समलम्ब का क्षेत्रफल</p>' },
+        solution: { en: '<p>Half the sum of the parallel sides</p>' },
+      }),
+      ADMIN,
+    );
+    await questions.create(
+      draft({ stem: { en: '<p>The stem of a plant said "grow"</p>', hi: '<p>पौधे का तना</p>' } }),
+      ADMIN,
+    );
+    const found = async (q: string) => (await questions.list(listQuery({ q }))).items.length;
+
+    assert.deepEqual(
+      [await found('stem'), await found('solution'), await found('text'), await found('type')],
+      [1, 0, 0, 0],
+      'only the question that says "stem" answers to it',
+    );
+    assert.deepEqual(
+      [await found('trapezium'), await found('parallel sides'), await found('said "grow"')],
+      [1, 1, 1],
+      'a word in a stem, a word in a solution, and the words either side of a quotation mark',
     );
   });
 

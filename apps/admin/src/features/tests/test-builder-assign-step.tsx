@@ -6,6 +6,7 @@ import {
   ASSIGNMENT_ROLES,
   PAPER_SOURCES,
   PAPER_SOURCE_LABELS,
+  civilDate,
   scopedSections,
   instituteDayLabel,
   todayISO,
@@ -118,6 +119,7 @@ export function AssignStep({
   });
   const [assigning, setAssigning] = useState<AssignTarget | null>(null);
   const [removing, setRemoving] = useState<Assignment | null>(null);
+  const [moving, setMoving] = useState<Assignment | null>(null);
   const [handingOver, setHandingOver] = useState<BaseConfigSection | null>(null);
 
   // The server refuses anybody else, so a box they cannot post from is not shown at all.
@@ -148,6 +150,7 @@ export function AssignStep({
         // An offered paper takes nobody new and loses nobody: there is nothing left to type or read.
         onAssign: detail?.finalizedAt ? null : setAssigning,
         onRemove: detail?.finalizedAt ? null : setRemoving,
+        onChangeDue: detail?.finalizedAt ? null : setMoving,
         onHandOver: detail?.finalizedAt ? null : setHandingOver,
       }),
     [detail?.id, detail?.finalizedAt, held, handable, mayComment],
@@ -233,6 +236,15 @@ export function AssignStep({
 
       <RemoveDialog assignment={removing} onClose={() => setRemoving(null)} onRemoved={reread} />
 
+      {moving ? (
+        <DueDateDialog
+          key={moving.id}
+          assignment={moving}
+          onClose={() => setMoving(null)}
+          onChanged={reread}
+        />
+      ) : null}
+
       <HandOverDialog
         testId={detail.id}
         section={handingOver}
@@ -267,6 +279,7 @@ interface ColumnsInput {
   mayComment: (row: SectionRow) => boolean;
   onAssign: ((target: AssignTarget) => void) | null;
   onRemove: ((assignment: Assignment) => void) | null;
+  onChangeDue: ((assignment: Assignment) => void) | null;
   onHandOver: ((section: BaseConfigSection) => void) | null;
 }
 
@@ -277,6 +290,7 @@ function columnsOf({
   mayComment,
   onAssign,
   onRemove,
+  onChangeDue,
   onHandOver,
 }: ColumnsInput): DataTableColumn<SectionRow>[] {
   return [
@@ -348,6 +362,7 @@ function columnsOf({
           testId={testId}
           row={row}
           onRemove={onRemove}
+          onChangeDue={onChangeDue}
           onHandOver={
             handable.has(row.section.id) && onHandOver ? () => onHandOver(row.section) : null
           }
@@ -482,11 +497,13 @@ function SectionActions({
   testId,
   row,
   onRemove,
+  onChangeDue,
   onHandOver,
 }: Readonly<{
   testId: string;
   row: SectionRow;
   onRemove: ((assignment: Assignment) => void) | null;
+  onChangeDue: ((assignment: Assignment) => void) | null;
   onHandOver: (() => void) | null;
 }>) {
   return (
@@ -500,9 +517,26 @@ function SectionActions({
       {onHandOver ? (
         <DropdownMenuItem onSelect={onHandOver}>Hand over to proof-reader</DropdownMenuItem>
       ) : null}
+      {onChangeDue ? changeDueItemsFor(row, onChangeDue) : null}
       {onRemove ? removeItemsFor(row, onRemove) : null}
     </RowActions>
   );
+}
+
+function changeDueItemsFor(
+  row: SectionRow,
+  onChangeDue: (assignment: Assignment) => void,
+): ReactNode[] {
+  return ROLE_ORDER.flatMap((role) => {
+    const assignment = role === ASSIGNMENT_ROLES.TYPIST ? row.typist : row.proofreader;
+    // A finished seat keeps the day it is judged against.
+    if (!assignment || assignment.finalizedAt) return [];
+    return [
+      <DropdownMenuItem key={role} onSelect={() => onChangeDue(assignment)}>
+        Change {ASSIGNMENT_ROLE_LABELS[role].toLowerCase()} due date
+      </DropdownMenuItem>,
+    ];
+  });
 }
 
 function removeItemsFor(row: SectionRow, onRemove: (assignment: Assignment) => void): ReactNode[] {
@@ -683,6 +717,63 @@ function AssignDialog({
             {...control}
             value={dueAt}
             min={todayISO()}
+            onChange={(next) => {
+              form.clearErrors('dueAt');
+              form.setValue('dueAt', next, { shouldDirty: true });
+            }}
+          />
+        )}
+      </Field>
+    </FormDialog>
+  );
+}
+
+interface DueFormValues {
+  dueAt: string;
+}
+
+const DUE_FIELDS = ['dueAt'] as const;
+
+function DueDateDialog({
+  assignment,
+  onClose,
+  onChanged,
+}: Readonly<{ assignment: Assignment; onClose: () => void; onChanged: () => void }>) {
+  const form = useForm<DueFormValues>({
+    defaultValues: { dueAt: assignment.dueAt ? civilDate(new Date(assignment.dueAt)) : '' },
+  });
+  const dueAt = useWatch({ control: form.control, name: 'dueAt' }) ?? '';
+
+  const change = useMutation({
+    meta: { success: 'Due date changed.', fields: DUE_FIELDS },
+    mutationFn: (values: DueFormValues) =>
+      api.admin.assignments.changeDueDate(assignment.testId, assignment.id, {
+        dueAt: values.dueAt,
+      }),
+    onSuccess: () => {
+      onChanged();
+      onClose();
+    },
+    onError: (error) => applyFieldErrors(error, form.setError, DUE_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      form={form}
+      onSubmit={(values) => change.mutate(values)}
+      title={`Change ${ASSIGNMENT_ROLE_LABELS[assignment.role].toLowerCase()} due date for ${assignment.sectionName}`}
+      submitLabel="Change due date"
+      loading={change.isPending}
+    >
+      <Field htmlFor="dueAt" label="Due date" error={form.formState.errors.dueAt?.message}>
+        {(control) => (
+          <DatePicker
+            {...control}
+            value={dueAt}
+            min={todayISO()}
+            clearable={false}
             onChange={(next) => {
               form.clearErrors('dueAt');
               form.setValue('dueAt', next, { shouldDirty: true });

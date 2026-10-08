@@ -608,6 +608,7 @@ export type SetTestSeriesBody = z.infer<typeof setTestSeriesSchema>;
 export const replacePaperQuestionSchema = z.object({
   questionId: z.string().min(1, 'Choose a question'),
 });
+export type ReplacePaperQuestionInput = z.input<typeof replacePaperQuestionSchema>;
 export type ReplacePaperQuestionBody = z.infer<typeof replacePaperQuestionSchema>;
 
 /** Putting several on the paper in one request, in the next free places its section has. */
@@ -630,6 +631,8 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   print: (id: string) => `/admin/tests/${id}/paper/print`,
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   removeQuestions: (id: string) => `/admin/tests/${id}/paper/questions`,
+  /** One row swapped for another question, keeping its place. */
+  replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   /** Draws the rest of one section from its own spec, around the rows already on it. */
   fillSection: (id: string, sectionId: string) =>
     `/admin/tests/${id}/paper/sections/${sectionId}/fill`,

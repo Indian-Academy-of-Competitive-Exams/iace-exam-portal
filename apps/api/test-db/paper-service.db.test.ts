@@ -717,6 +717,43 @@ describe('PaperService — one row at a time', () => {
     assert.match(error.message, /already on this paper/);
   });
 
+  /** The failure this prevents: a swap tipping a section over the split an add would refuse. */
+  it('refuses a question whose difficulty the split is full of, and takes one of the same', async () => {
+    const service = await serviceWith({
+      questions: gradedBank(),
+      test: { questionPoolFilter: oneOfEach },
+    });
+    await service.addQuestions(TEST, {
+      baseConfigSectionId: idFor('sec_1'),
+      questionIds: [idFor('low1'), idFor('med1'), idFor('high1')],
+    });
+    const low = (await rows()).find((candidate) => candidate.questionId === idFor('low1'));
+    assert.ok(low);
+
+    const error = await refused(
+      service.replaceQuestion(TEST, low.id, { questionId: idFor('high2') }),
+    );
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /more of one difficulty than its split allows/);
+    assert.ok((await heldIds()).includes(idFor('low1')));
+
+    await service.replaceQuestion(TEST, low.id, { questionId: idFor('low2') });
+    assert.ok((await heldIds()).includes(idFor('low2')));
+  });
+
+  /** The failure this prevents: a live paper changing under students who can already reach it. */
+  it('refuses a swap once the test is offered, and leaves the row', async () => {
+    const { service, row } = await drawn();
+    await prisma.test.update({ where: { id: TEST }, data: { finalizedAt: new Date() } });
+
+    const error = await refused(service.replaceQuestion(TEST, row.id, { questionId: idFor('q3') }));
+
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(error.message, OFFERED_TEST_MESSAGE);
+    assert.equal((await rows()).find((r) => r.id === row.id)?.questionId, row.questionId);
+  });
+
   it('refuses a row that belongs to another test', async () => {
     const { service, row } = await drawn();
 

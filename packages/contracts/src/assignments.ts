@@ -79,6 +79,11 @@ export const createAssignmentSchema = z.object({
 export type CreateAssignmentInput = z.input<typeof createAssignmentSchema>;
 export type CreateAssignmentBody = z.infer<typeof createAssignmentSchema>;
 
+/** Only the day: the holder keeps the seat, and the role is not passed on. */
+export const changeAssignmentDueSchema = createAssignmentSchema.pick({ dueAt: true });
+export type ChangeAssignmentDueInput = z.input<typeof changeAssignmentDueSchema>;
+export type ChangeAssignmentDueBody = z.infer<typeof changeAssignmentDueSchema>;
+
 /** One row plus the test it is on — a work queue needs that; a section's own list already knows it. */
 export const assignmentWithTestSchema = assignmentSchema.extend({
   testTitle: z.string().nullable(),
@@ -330,6 +335,7 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   forTest: (testId: string) => `/admin/assignments/tests/${testId}`,
   assign: (testId: string) => `/admin/assignments/tests/${testId}`,
   remove: (testId: string, id: string) => `/admin/assignments/tests/${testId}/${id}`,
+  changeDue: (testId: string, id: string) => `/admin/assignments/tests/${testId}/${id}`,
   mine: '/admin/assignments/mine',
   /** Read access over every section, for a super admin. Assigned or not, finished or not. */
   progress: '/admin/assignments/progress',

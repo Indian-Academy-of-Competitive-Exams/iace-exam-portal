@@ -38,6 +38,8 @@ import {
   type UpdateTestBody,
   setPaperQuestionStatusSchema,
   removePaperQuestionsSchema,
+  replacePaperQuestionSchema,
+  type ReplacePaperQuestionBody,
   type SetPaperQuestionStatusBody,
   type RemovePaperQuestionsQuery,
   typistDoneSchema,
@@ -124,6 +126,19 @@ export class TestsController {
     @Body(new ZodBody(setPaperQuestionStatusSchema)) body: SetPaperQuestionStatusBody,
   ): Promise<TestPaper> {
     return this.paper.setQuestionStatus(id, rowId, body);
+  }
+
+  /** One row swapped for another question of the same section, keeping its place. Drafts only. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id/paper/:rowId')
+  replacePaperQuestion(
+    @Param('id') id: string,
+    @Param('rowId') rowId: string,
+    @Body(new ZodBody(replacePaperQuestionSchema)) body: ReplacePaperQuestionBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<TestPaper> {
+    return this.paper.replaceQuestion(id, rowId, body, user);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)

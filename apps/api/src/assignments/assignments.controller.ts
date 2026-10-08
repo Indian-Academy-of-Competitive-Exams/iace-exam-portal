@@ -12,12 +12,15 @@ import {
 } from '@nestjs/common';
 import {
   ActorTypes,
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   can,
   assignableQuerySchema,
   assignmentSectionsQuerySchema,
   assignmentTestsQuerySchema,
+  changeAssignmentDueSchema,
   createAssignmentSchema,
   createSectionCommentSchema,
   editSectionCommentSchema,
@@ -31,6 +34,7 @@ import {
   type AssignmentTest,
   type AssignmentTestsQuery,
   type AssignmentWithTest,
+  type ChangeAssignmentDueBody,
   type CreateAssignmentBody,
   type CreateSectionCommentBody,
   type EditSectionCommentBody,
@@ -49,6 +53,7 @@ import {
   type AuthenticatedUser,
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
+import { Audit } from '../audit';
 import { AssignmentsService } from './assignments.service';
 import { SectionThreadService } from './section-thread.service';
 
@@ -85,6 +90,18 @@ export class AssignmentsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<Assignment> {
     return this.assignments.assign(testId, body, user.id);
+  }
+
+  /** Whoever may assign may move the day; the holder keeps the seat. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch('tests/:testId/:id')
+  changeDueDay(
+    @Param('testId') testId: string,
+    @Param('id') id: string,
+    @Body(new ZodBody(changeAssignmentDueSchema)) body: ChangeAssignmentDueBody,
+  ): Promise<Assignment> {
+    return this.assignments.changeDueDay(testId, id, body);
   }
 
   @RequiresAnyFeature(ASSIGNEE_FEATURES, PERMISSION_LEVELS.READ)

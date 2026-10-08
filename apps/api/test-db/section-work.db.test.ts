@@ -131,6 +131,7 @@ async function build({ bank = prisma, section = prisma, roles = prisma }: Client
     roles,
     new AdminsService(prisma, audit, new FakeEventBus().asService()),
     redis,
+    audit,
   );
   const storage = new FakeStorage() as never;
   const imports = new QuestionImportService(bank, storage, new AuditService(prisma, storage));

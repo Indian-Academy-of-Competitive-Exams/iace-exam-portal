@@ -12,6 +12,8 @@ import {
   FEATURE_KEYS,
   PAPER_SOURCES,
   PERMISSION_LEVELS,
+  civilDate,
+  fieldDiff,
   satisfiesLevel,
   scopedSections,
   todayISO,
@@ -25,6 +27,7 @@ import {
   type AssignmentTest,
   type AssignmentTestsQuery,
   type AssignmentWithTest,
+  type ChangeAssignmentDueBody,
   type CreateAssignmentBody,
   type DifficultyMix,
   type DrawSpec,
@@ -38,6 +41,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { AuditContext } from '../audit';
 import { AdminsService } from '../admins';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { scopeRefOf } from '../common/prisma-json';
@@ -66,10 +70,21 @@ const REPLACED_MESSAGE = 'This assignment has passed to somebody else and stays 
 const SECTION_DROPPED_MESSAGE =
   'This section left the test, and the assignment stays on the record.';
 const DUE_DAY_GONE_MESSAGE = 'Choose today or a later day.';
+const OFFERED_DUE_MESSAGE =
+  'This test has been offered, so the day its sections are wanted by no longer moves.';
+const FINISHED_DUE_MESSAGE =
+  'This section is already finished, so the day it was wanted by stays as it was.';
 const TYPED_HERE_MESSAGE =
   'This admin typed questions for this section, so they cannot proof-read it.';
 
 const notWhole = (issue: string) => formRefusal(ErrorCodes.CONFLICT, issue);
+
+function assertDueDayNotGone(dueAt: string): void {
+  if (dueAt >= todayISO()) return;
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, DUE_DAY_GONE_MESSAGE, {
+    fieldErrors: { dueAt: [DUE_DAY_GONE_MESSAGE] },
+  });
+}
 
 const ASSIGNMENT_INCLUDE = {
   baseConfigSection: {
@@ -242,6 +257,7 @@ export class AssignmentsService {
     private readonly prisma: PrismaService,
     private readonly admins: AdminsService,
     private readonly redis: RedisService,
+    private readonly auditContext: AuditContext,
   ) {}
 
   /** Every assignment on the test, section and assignee named, one query. */
@@ -289,11 +305,7 @@ export class AssignmentsService {
     const test = await this.requireTest(testId);
     if (test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
     assertSourceChosen(test);
-    if (body.dueAt < todayISO()) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, DUE_DAY_GONE_MESSAGE, {
-        fieldErrors: { dueAt: [DUE_DAY_GONE_MESSAGE] },
-      });
-    }
+    assertDueDayNotGone(body.dueAt);
     const section = await this.requireSection(test, body.baseConfigSectionId);
     const assignee = await this.requireAssignee(body.assigneeId);
     await this.assertHoldsFeature(assignee, body.role);
@@ -350,6 +362,54 @@ export class AssignmentsService {
         `That section already has a ${roleLabel(body.role)}`,
       );
     }
+  }
+
+  /** The holder keeps the seat and only its day moves: no new row, and the role is not passed on. */
+  async changeDueDay(
+    testId: string,
+    id: string,
+    body: ChangeAssignmentDueBody,
+  ): Promise<Assignment> {
+    assertDueDayNotGone(body.dueAt);
+
+    const { row, held } = await this.prisma.$transaction(async (tx) => {
+      // Test before its rows, the app's one lock order: a hand-over of this seat takes it first too.
+      await beginDraftPaperEdit(tx, testId, OFFERED_DUE_MESSAGE);
+
+      const held = await tx.questionAssignment.findFirst({
+        where: { id, testId },
+        include: ASSIGNMENT_INCLUDE,
+      });
+      if (!held) throw new AppException(ErrorCodes.NOT_FOUND, 'No such assignment');
+      if (held.replacedAt) {
+        const ended = inScope(held) ? REPLACED_MESSAGE : SECTION_DROPPED_MESSAGE;
+        throw new AppException(ErrorCodes.CONFLICT, ended);
+      }
+      // A finished seat's standing is read off this day, so moving it would rewrite who was late.
+      if (held.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, FINISHED_DUE_MESSAGE);
+      const row = await tx.questionAssignment.update({
+        where: { id },
+        data: { dueAt: endOfInstituteDay(body.dueAt) },
+        include: ASSIGNMENT_INCLUDE,
+      });
+      return { row, held };
+    });
+
+    const moved = fieldDiff(
+      { dueAt: held.dueAt ? civilDate(held.dueAt) : null },
+      { dueAt: body.dueAt },
+      ['dueAt'],
+    );
+    this.auditContext.setEntityId(testId);
+    this.auditContext.setPatchDiff(
+      moved && {
+        section: { from: null, to: held.baseConfigSection.name },
+        role: { from: null, to: roleLabel(held.role) },
+        ...moved,
+      },
+    );
+    // Whoever moves it may hold the other seat on this section, so the answer carries nobody's time.
+    return { ...(await this.withFacts(row)), secondsSpent: null };
   }
 
   /** Work done is a record: only a row nothing has been done under can be taken back. */

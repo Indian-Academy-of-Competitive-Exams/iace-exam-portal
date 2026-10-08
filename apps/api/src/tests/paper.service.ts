@@ -360,8 +360,24 @@ export class PaperService {
     const question = await this.requireDrawable(testId, input.questionId, row.baseConfigSectionId);
     await this.assertNotAlreadyOnThePaper(testId, question.id, rowId);
 
+    const sections = this.scopedOf(test, await this.configs.detail(test.baseConfigId));
+    const sectionName = namesOf(sections, new Set([row.baseConfigSectionId]));
+
     await this.prisma.$transaction(async (tx) => {
       await beginDraftPaperEdit(tx, testId);
+      // The rest of the section as the Test lock holds it: the swap is one more pick against its split.
+      const kept = await tx.paperQuestion.findMany({
+        where: { testId, baseConfigSectionId: row.baseConfigSectionId, id: { not: rowId } },
+        select: { question: { select: { difficulty: true } } },
+      });
+      const spec = (test.questionPoolFilter as DrawSpec | null)?.sections?.[
+        row.baseConfigSectionId
+      ];
+      const quota = sectionQuota(
+        spec?.mix,
+        kept.map((other) => other.question.difficulty),
+      );
+      assertWithinSplit(sectionName, quotaWithPicks(quota, [question.difficulty]), 'questionId');
       await tx.paperQuestion.update({
         where: { id: rowId },
         data: { questionId: question.id, questionVersionId: question.currentVersionId },
@@ -370,10 +386,7 @@ export class PaperService {
       await reopenReadingIfUnchecked(tx, testId, row.baseConfigSectionId);
     }, TX_LIMITS.SHORT);
 
-    const sections = this.scopedOf(test, await this.configs.detail(test.baseConfigId));
-    this.recordMove(namesOf(sections, new Set([row.baseConfigSectionId])), {
-      questionId: { from: row.questionId, to: question.id },
-    });
+    this.recordMove(sectionName, { questionId: { from: row.questionId, to: question.id } });
     return this.paperOf(test, sections);
   }
 

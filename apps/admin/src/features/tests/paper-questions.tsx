@@ -2,9 +2,11 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   PICK_REFUSAL,
+  sectionQuota,
   strandedPicks,
   type BaseConfigSection,
   type PaperRow,
+  type PaperSource,
   type PickRefusal,
   type SectionDrawSpec,
   type TestPaper,
@@ -14,6 +16,15 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenuItem,
+  RowActions,
   SectionHeading,
   TruncatedText,
   plural,
@@ -23,6 +34,7 @@ import { api } from '../../lib/api';
 import { framingOf } from './test-paper-view';
 import { DispositionBadge, PaperDisposition } from './paper-disposition';
 import { QuestionLink } from '../../components/question-link';
+import { QuestionChooser, type QuestionPicks } from './question-picker';
 
 /** One section of the paper as it stands: what is on it, and what its own settings now refuse. */
 
@@ -50,7 +62,19 @@ function paperColumns(
   testId: string,
   disposition: PaperDispositionSpec | undefined,
   onChanged: (next: TestPaper) => Promise<void>,
+  onReplace: ((row: PaperRow) => void) | undefined,
 ): DataTableColumn<PaperRow>[] {
+  const rowActions = (row: PaperRow): ReactNode => {
+    if (disposition) {
+      return <PaperDisposition testId={testId} row={row} onChanged={onChanged} {...disposition} />;
+    }
+    return onReplace ? (
+      <RowActions label={`Question ${row.order} actions`}>
+        <DropdownMenuItem onSelect={() => onReplace(row)}>Replace</DropdownMenuItem>
+      </RowActions>
+    ) : null;
+  };
+
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order },
     {
@@ -79,16 +103,7 @@ function paperColumns(
         </span>
       ),
     },
-    ...(disposition
-      ? [
-          {
-            key: 'actions',
-            cell: (row: PaperRow) => (
-              <PaperDisposition testId={testId} row={row} onChanged={onChanged} {...disposition} />
-            ),
-          },
-        ]
-      : []),
+    ...(disposition || onReplace ? [{ key: 'actions', cell: rowActions }] : []),
   ];
 }
 
@@ -99,6 +114,7 @@ export function PaperQuestions({
   spec,
   editable,
   disposition,
+  onReplace,
   action,
   banner,
   onChanged,
@@ -111,6 +127,8 @@ export function PaperQuestions({
   editable: boolean;
   /** Absent on a draft and without TEST_MANAGEMENT write, which is when nothing may be disposed. */
   disposition?: PaperDispositionSpec;
+  /** Absent once the paper is frozen or its section is not the owner's to change. */
+  onReplace?: (row: PaperRow) => void;
   /** Beside the heading — filling the rest of this section. */
   action?: ReactNode;
   /** Above the rows — how the last fill was refused. */
@@ -136,8 +154,8 @@ export function PaperQuestions({
   );
 
   const columns = useMemo(
-    () => paperColumns(stranded, testId, disposition, onChanged),
-    [stranded, testId, disposition, onChanged],
+    () => paperColumns(stranded, testId, disposition, onChanged, onReplace),
+    [stranded, testId, disposition, onChanged, onReplace],
   );
 
   const remove = useMutation({
@@ -195,5 +213,91 @@ export function PaperQuestions({
         onConfirm={() => remove.mutate(going.map((row) => row.id))}
       />
     </section>
+  );
+}
+
+const NO_PICKS: QuestionPicks = new Map();
+
+/** The bank again, for the one slot the row leaves: its difficulty and the split are judged as if it were empty. */
+export function ReplaceQuestionDialog({
+  testId,
+  paperSource,
+  section,
+  spec,
+  rows,
+  row,
+  held,
+  onClose,
+  onChanged,
+}: Readonly<{
+  testId: string;
+  paperSource: PaperSource | null;
+  section: BaseConfigSection;
+  spec: SectionDrawSpec;
+  /** The section's own rows, the one being replaced among them. */
+  rows: readonly PaperRow[];
+  row: PaperRow;
+  /** Every question the whole paper holds, since one sits on it once wherever it was put. */
+  held: ReadonlySet<string>;
+  onClose: () => void;
+  onChanged: (next: TestPaper) => Promise<void>;
+}>) {
+  const [picked, setPicked] = useState<QuestionPicks>(NO_PICKS);
+  const [replacement] = picked.keys();
+  const quota = useMemo(
+    () =>
+      sectionQuota(
+        spec.mix,
+        rows.filter((other) => other.id !== row.id).map((other) => other.question.difficulty),
+      ),
+    [spec.mix, rows, row.id],
+  );
+
+  const replace = useMutation({
+    meta: { success: 'Question replaced.' },
+    mutationFn: (questionId: string) =>
+      api.admin.tests.replacePaperQuestion(testId, row.id, { questionId }),
+    onSuccess: async (next) => {
+      await onChanged(next);
+      onClose();
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && !replace.isPending && onClose()}>
+      <DialogContent size="window">
+        <DialogHeader>
+          <DialogTitle>{`Replace question ${row.order} in ${section.name}`}</DialogTitle>
+        </DialogHeader>
+        {/* The list is the one scroller here, so the body does not scroll as well. */}
+        <DialogBody className="flex flex-col overflow-hidden">
+          <QuestionChooser
+            testId={testId}
+            paperSource={paperSource}
+            // One slot, the row's own, whatever the section still lacks.
+            section={{ ...section, questionCount: rows.length }}
+            spec={spec}
+            quota={quota}
+            held={held}
+            picking={{ picked, onPicked: setPicked }}
+          />
+        </DialogBody>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="secondary" disabled={replace.isPending}>
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            type="button"
+            disabled={replacement === undefined}
+            loading={replace.isPending}
+            onClick={() => replacement !== undefined && replace.mutate(replacement)}
+          >
+            Replace
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -79,8 +79,13 @@ function build(client: PrismaService = prisma) {
       return Reflect.get(target, key) as unknown;
     },
   });
-  // The summary never asks who may hold a section or who is editing one, so neither service is here.
-  const assignments = new AssignmentsService(watched, undefined as never, undefined as never);
+  // The summary never asks who may hold a section, who is editing one or what to audit, so none of them is here.
+  const assignments = new AssignmentsService(
+    watched,
+    undefined as never,
+    undefined as never,
+    undefined as never,
+  );
   return { touched, service: new DashboardService(watched, fakeAudit() as never, assignments) };
 }
 

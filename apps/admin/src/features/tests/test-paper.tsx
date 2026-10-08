@@ -15,6 +15,7 @@ import {
   type Assignment,
   type BaseConfigSection,
   type DrawSpec,
+  type PaperRow,
   type PaperSource,
   type SectionDrawSpec,
   type TestDetail,
@@ -46,7 +47,7 @@ import { api } from '../../lib/api';
 import { durationLabel } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 import { DrawSpecEditor } from './draw-spec';
-import { PaperQuestions } from './paper-questions';
+import { PaperQuestions, ReplaceQuestionDialog } from './paper-questions';
 import { QuestionChooser, type QuestionPicks } from './question-picker';
 import {
   FULLNESS_VARIANT,
@@ -447,6 +448,16 @@ function refusalMessage(error: unknown, ...keys: readonly string[]): string | nu
   return keys.map((key) => fields[key]?.[0]).find(Boolean) ?? error.message;
 }
 
+/** What the server refused, said above what it refused; nothing when it refused nothing. */
+function Refusal({ message }: Readonly<{ message: string | null }>) {
+  if (!message) return null;
+  return (
+    <Alert variant="danger" className="shrink-0">
+      {message}
+    </Alert>
+  );
+}
+
 /** The bank and the paper side by side, and the two ways a section is filled from one. */
 function PaperSection({
   testId,
@@ -486,6 +497,7 @@ function PaperSection({
   reader: Assignment | null;
 }>) {
   const [picked, setPicked] = useState<QuestionPicks>(NO_PICKS);
+  const [replacing, setReplacing] = useState<PaperRow | null>(null);
   const rows = onPaper?.questions ?? [];
   const released = Boolean(reader?.finalizedAt);
   const withReader = Boolean(reader?.handedAt) && !released;
@@ -535,11 +547,7 @@ function PaperSection({
       <FillButton disabled={poolDirty} loading={fill.isPending} onFill={() => fill.mutate()} />
     ) : null;
 
-  const shortfallBanner = shortfall ? (
-    <Alert variant="danger" className="shrink-0">
-      {shortfall}
-    </Alert>
-  ) : null;
+  const shortfallBanner = shortfall ? <Refusal message={shortfall} /> : null;
 
   // A typed section reaches its owner when its reader releases it, and not a question before.
   if (framed && !released && !offered) {
@@ -553,11 +561,7 @@ function PaperSection({
 
   return (
     <>
-      {refused ? (
-        <Alert variant="danger" className="shrink-0">
-          {refused}
-        </Alert>
-      ) : null}
+      <Refusal message={refused} />
       {withReader ? (
         <Alert variant="info" className="shrink-0">
           With its proof-reader until they release it. Its paper cannot change before then.
@@ -588,6 +592,7 @@ function PaperSection({
           spec={spec}
           editable={picking}
           disposition={disposable ? { onRescoring } : undefined}
+          onReplace={picking ? setReplacing : undefined}
           action={
             <>
               {fillAction}
@@ -598,6 +603,21 @@ function PaperSection({
           onChanged={onChanged}
         />
       </div>
+
+      {replacing ? (
+        <ReplaceQuestionDialog
+          key={replacing.id}
+          testId={testId}
+          paperSource={paperSource}
+          section={section}
+          spec={spec}
+          rows={rows}
+          row={replacing}
+          held={held}
+          onClose={() => setReplacing(null)}
+          onChanged={onChanged}
+        />
+      ) : null}
     </>
   );
 }

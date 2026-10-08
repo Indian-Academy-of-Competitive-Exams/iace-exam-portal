@@ -788,6 +788,8 @@ export type QuestionImportResult = z.infer<typeof questionImportResultSchema>;
 export const ADMIN_TAXONOMY_ROUTES = {
   subjects: '/admin/subjects',
   topics: '/admin/topics',
+  subject: (id: string) => `/admin/subjects/${id}`,
+  topic: (id: string) => `/admin/topics/${id}`,
 } as const;
 
 /** What the bank holds for a slice of it, counted rather than paged: a page is not a total. */
