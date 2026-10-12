@@ -9,6 +9,7 @@ import { Alert, Button, Calculator, ConfirmDialog } from '@iace/ui';
 import { submittingSays, type ExamView } from '@iace/app-kit';
 import { Layout } from './templates/shared/layout';
 import { useLockedZoom } from './lock-zoom';
+import { useNetworkStatus } from './use-network-status';
 import { RailwayLayout } from './templates/railway/layout';
 import { RailwayFullscreenNag } from './templates/railway/fullscreen-nag';
 
@@ -19,6 +20,7 @@ export function ExamShell({
 }: Readonly<{ examTemplate: ExamTemplate; calculatorEnabled: boolean; view: ExamView }>) {
   const { submit, fullscreen } = view;
   const [calculating, setCalculating] = useState(false);
+  const online = useNetworkStatus();
   useLockedZoom();
   // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
@@ -33,6 +35,14 @@ export function ExamShell({
       // A sitting is not a document to copy from: neither skin lets the paper be selected.
       className="relative flex h-dvh select-none flex-col bg-exam-surface text-exam-ink"
     >
+      {!online || view.hasUnsaved ? (
+        <Alert variant="warning" className="mx-3 mt-2 shrink-0">
+          {!online
+            ? 'Your connection is offline. You can continue the test; answers will sync when it returns. Keep this page open.'
+            : 'Your answers have not reached the server yet. They will be retried automatically. Keep this page open.'}
+        </Alert>
+      ) : null}
+
       {/* Inert under the full-screen warning, or Tab and Space still answer the paper behind it. */}
       <div inert={fullscreen.nagging} className="flex min-h-0 flex-1 flex-col">
         <Skin

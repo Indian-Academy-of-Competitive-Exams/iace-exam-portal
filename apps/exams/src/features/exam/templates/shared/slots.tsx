@@ -12,7 +12,6 @@ import {
 } from '@iace/contracts';
 import {
   Alert,
-  Badge,
   Button,
   Spinner,
   TabsList,
@@ -61,7 +60,6 @@ export function Header({
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-exam-border px-exam py-3">
       <h1 className="min-w-0 truncate text-sm font-semibold text-exam-ink">{view.title}</h1>
       <div className="flex items-center gap-1 sm:gap-3">
-        {view.hasUnsaved ? <Badge variant="warning">Not saved yet</Badge> : null}
         {view.isSaving ? <Spinner size="sm" label="Saving" /> : null}
         {view.locked === PAPER_LOCK.WAITING ? (
           <Spinner size="sm" label="Opening your paper" />

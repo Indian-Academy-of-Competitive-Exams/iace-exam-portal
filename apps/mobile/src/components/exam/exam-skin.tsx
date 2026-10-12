@@ -7,6 +7,7 @@
 import { Fragment, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNetworkState } from 'expo-network';
 import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
 import { PAPER_LOCK, submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
@@ -46,8 +47,10 @@ export interface ExamSkinProps {
 
 export function ExamSkin({ view, paperQuestions }: Readonly<ExamSkinProps>) {
   const insets = useSafeAreaInsets();
+  const network = useNetworkState();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const offline = network.isConnected === false || network.isInternetReachable === false;
 
   return (
     <View
@@ -64,6 +67,13 @@ export function ExamSkin({ view, paperQuestions }: Readonly<ExamSkinProps>) {
       ) : (
         <OpeningBar />
       )}
+      {view && (view.hasUnsaved || offline) ? (
+        <Alert variant="warning" className="mx-4 mt-2">
+          {offline
+            ? 'Your connection is offline. You can continue the test; answers are kept on this phone and will sync when it returns. Keep the app open.'
+            : 'Your latest answers are not saved yet. They are kept on this phone and sent when the connection is back, but the clock does not wait.'}
+        </Alert>
+      ) : null}
       <QuestionBody view={view} paperQuestions={paperQuestions} />
       {view ? (
         <SittingFoot
@@ -142,13 +152,6 @@ function SittingHead({
           />
         ))}
       </ScrollView>
-
-      {view.hasUnsaved ? (
-        <Alert variant="warning" className="mx-4 mt-2">
-          Your latest answers are not saved yet. They are kept on this phone and sent when the
-          connection is back, but the clock does not wait.
-        </Alert>
-      ) : null}
 
       <View className="flex-row items-center gap-3 px-4 py-2">
         {view.question ? (

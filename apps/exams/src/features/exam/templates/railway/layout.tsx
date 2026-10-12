@@ -8,7 +8,7 @@ import { Calculator } from 'lucide-react';
 import { isStateShown, type ExamClock } from '@iace/contracts';
 import { TIMER_KIND, useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
-import { Alert, Badge, Button, cn } from '@iace/ui';
+import { Alert, Button, cn } from '@iace/ui';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
@@ -42,7 +42,6 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
       </div>
 
       <div className="rw-utilitybar flex items-center justify-end gap-6 px-4">
-        {view.hasUnsaved ? <Badge variant="warning">Not saved yet</Badge> : null}
         <button
           type="button"
           className="flex items-center gap-2"
