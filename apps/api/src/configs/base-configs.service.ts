@@ -119,7 +119,13 @@ export class BaseConfigsService {
   }
 
   async detail(id: string): Promise<BaseConfigDetail> {
-    return toDetail(await this.requireDetail(id), await this.editingBy(id));
+    const [configResult, editingResult] = await Promise.allSettled([
+      this.requireDetail(id),
+      this.editingBy(id),
+    ]);
+    if (configResult.status === 'rejected') throw configResult.reason;
+    if (editingResult.status === 'rejected') throw editingResult.reason;
+    return toDetail(configResult.value, editingResult.value);
   }
 
   async create(input: CreateBaseConfigBody, createdById: string): Promise<BaseConfigDetail> {
@@ -311,12 +317,18 @@ export class BaseConfigsService {
 
   /** Deleting is the one shape change nothing can undo, so it waits on whoever is mid-edit too. */
   async remove(id: string, editor: Editor = {}): Promise<void> {
-    const config = await this.requireDetail(id);
+    const [configResult, cloneCountResult] = await Promise.allSettled([
+      this.requireDetail(id),
+      this.prisma.baseConfig.count({ where: { clonedFromId: id } }),
+    ]);
+    if (configResult.status === 'rejected') throw configResult.reason;
+    if (cloneCountResult.status === 'rejected') throw cloneCountResult.reason;
+    const config = configResult.value;
 
     const blocker = configDeletionBlocker({
       locked: config.locked,
       testCount: config._count.tests,
-      cloneCount: await this.prisma.baseConfig.count({ where: { clonedFromId: id } }),
+      cloneCount: cloneCountResult.value,
     });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 

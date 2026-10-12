@@ -229,10 +229,16 @@ export class MetricsService implements OnModuleInit {
     await Promise.all(
       [...this.queues].map(async ([name, queue]) => {
         try {
-          const counts = await queue.getJobCounts('waiting', 'delayed', 'active');
+          const [countsResult, oldestResult] = await Promise.allSettled([
+            queue.getJobCounts('waiting', 'delayed', 'active'),
+            this.oldestWait(queue),
+          ]);
+          if (countsResult.status === 'rejected') throw countsResult.reason;
+          const counts = countsResult.value;
           const depth = (counts.waiting ?? 0) + (counts.delayed ?? 0) + (counts.active ?? 0);
           this.queueDepth.set({ queue: name }, depth);
-          this.queueOldestWait.set({ queue: name }, await this.oldestWait(queue));
+          if (oldestResult.status === 'rejected') throw oldestResult.reason;
+          this.queueOldestWait.set({ queue: name }, oldestResult.value);
         } catch (error) {
           this.logger.warn(`Queue metrics unavailable for ${name}: ${String(error)}`);
         }

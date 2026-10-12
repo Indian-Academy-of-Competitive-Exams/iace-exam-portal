@@ -177,19 +177,26 @@ export class StudentsService {
   }
 
   async detail(id: string): Promise<StudentDetail> {
-    const student = await this.prisma.student.findFirst({
-      where: { id },
-      include: {
-        profile: true,
-        eventCandidacies: { include: { event: { select: { id: true, name: true } } } },
-        mobileHistory: {
-          orderBy: { createdAt: 'desc' },
-          select: { mobile: true, createdAt: true },
+    const [studentResult, ownResult] = await Promise.allSettled([
+      this.prisma.student.findFirst({
+        where: { id },
+        include: {
+          profile: true,
+          eventCandidacies: { include: { event: { select: { id: true, name: true } } } },
+          mobileHistory: {
+            orderBy: { createdAt: 'desc' },
+            select: { mobile: true, createdAt: true },
+          },
         },
-      },
-    });
+      }),
+      this.prisma.student.count({ where: { id, ...HOLDS_OWN_ACCESS } }),
+    ]);
+    if (studentResult.status === 'rejected') throw studentResult.reason;
+    const student = studentResult.value;
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-    const own = await this.prisma.student.count({ where: { id, ...HOLDS_OWN_ACCESS } });
+    if (ownResult.status === 'rejected') throw ownResult.reason;
+    const own = ownResult.value;
+    const profile = student.profile ? await this.toProfileView(student.profile) : null;
 
     return {
       ...this.toSummary(student, own > 0),
@@ -199,7 +206,7 @@ export class StudentsService {
         .map((row) => ({ mobile: row.mobile, replacedAt: row.createdAt.toISOString() })),
       currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
-      profile: student.profile ? await this.toProfileView(student.profile) : null,
+      profile,
     };
   }
 
@@ -237,6 +244,10 @@ export class StudentsService {
     educationDetails: unknown;
     pastExamHistory: unknown;
   }): Promise<StudentDetail['profile']> {
+    const [photoUrl, tenthMarksheetUrl] = await Promise.all([
+      this.signed(profile.photoUrl),
+      this.signed(profile.tenthMarksheetUrl),
+    ]);
     return {
       motherName: profile.motherName,
       fatherName: profile.fatherName,
@@ -244,10 +255,10 @@ export class StudentsService {
       email: profile.email,
       address: profile.address,
       gender: profile.gender,
-      photoUrl: await this.signed(profile.photoUrl),
+      photoUrl,
       aadhaarVerified: profile.aadhaarVerified,
       panVerified: profile.panVerified,
-      tenthMarksheetUrl: await this.signed(profile.tenthMarksheetUrl),
+      tenthMarksheetUrl,
       // Parsed rather than cast: this is JSON written by an older build or by hand, and a malformed row should read as "nothing recorded" rather than reach a screen that assumes an array.
       educationDetails:
         educationEntrySchema.array().safeParse(profile.educationDetails).data ?? null,
@@ -269,12 +280,16 @@ export class StudentsService {
     const existing = await this.findLiveByMobile(input.mobile);
     if (existing) throw mobileTaken(existing.id);
 
-    if (input.enrolledExams?.length) {
-      await this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
-    }
-    if (input.programs?.length) {
-      await this.programs.assertUsable(input.programs, PROGRAMS_FIELD);
-    }
+    const [examResult, programResult] = await Promise.allSettled([
+      input.enrolledExams?.length
+        ? this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD)
+        : Promise.resolve(),
+      input.programs?.length
+        ? this.programs.assertUsable(input.programs, PROGRAMS_FIELD)
+        : Promise.resolve(),
+    ]);
+    if (examResult.status === 'rejected') throw examResult.reason;
+    if (programResult.status === 'rejected') throw programResult.reason;
     const currentBranchId = await this.placementOf(
       input.studentType,
       input.currentBranchId ?? null,
@@ -309,11 +324,17 @@ export class StudentsService {
       ? addedTo(student.enrolledExams, input.enrolledExams)
       : [];
     if (input.enrolledExams) this.assertMayEnrol(student, input.enrolledExams);
-    if (addedExams.length) await this.exams.assertUsable(addedExams, ENROLLED_EXAMS_FIELD);
     const addedPrograms = input.programs ? addedTo(student.programs, input.programs) : [];
-    if (addedPrograms.length) {
-      await this.programs.assertUsable(addedPrograms, PROGRAMS_FIELD);
-    }
+    const [examResult, programResult] = await Promise.allSettled([
+      addedExams.length
+        ? this.exams.assertUsable(addedExams, ENROLLED_EXAMS_FIELD)
+        : Promise.resolve(),
+      addedPrograms.length
+        ? this.programs.assertUsable(addedPrograms, PROGRAMS_FIELD)
+        : Promise.resolve(),
+    ]);
+    if (examResult.status === 'rejected') throw examResult.reason;
+    if (programResult.status === 'rejected') throw programResult.reason;
   }
 
   /** Where a save puts them: a branch named has to fit the type, and an online student naming none sits in the online branch. */

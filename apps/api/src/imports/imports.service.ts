@@ -116,13 +116,11 @@ export class ImportsService {
 
   /** Writes nothing. The event has to exist, so a stale page cannot fill a deleted roster. */
   async previewEventCandidates(eventId: string, file: Buffer): Promise<CandidateImportPlan> {
-    await this.events.detail(eventId);
-    return this.planCandidates(await readUploadedTable(file));
+    return this.planCandidates(await this.eventCandidateTable(eventId, file));
   }
 
   async eventCandidateErrorRows(eventId: string, file: Buffer): Promise<ExportSheet> {
-    await this.events.detail(eventId);
-    const table = await readUploadedTable(file);
+    const table = await this.eventCandidateTable(eventId, file);
     return rosterErrorRows(table, await this.planCandidates(table));
   }
 
@@ -132,8 +130,7 @@ export class ImportsService {
     file: Buffer,
     actorId: string,
   ): Promise<CandidateImportResult> {
-    await this.events.detail(eventId);
-    const plan = await this.planCandidates(await readUploadedTable(file));
+    const plan = await this.planCandidates(await this.eventCandidateTable(eventId, file));
     const studentIds: string[] = [];
 
     const run = await this.withRun(
@@ -171,13 +168,11 @@ export class ImportsService {
 
   /** Writes nothing. The program has to exist and be offered, or there is nothing to enrol into. */
   async previewProgramStudents(code: string, file: Buffer): Promise<ProgramImportPlan> {
-    await this.programs.assertUsable([code], 'programCode');
-    return this.planPrograms(code, await readUploadedTable(file));
+    return this.planPrograms(code, await this.programStudentTable(code, file));
   }
 
   async programStudentErrorRows(code: string, file: Buffer): Promise<ExportSheet> {
-    await this.programs.assertUsable([code], 'programCode');
-    const table = await readUploadedTable(file);
+    const table = await this.programStudentTable(code, file);
     return rosterErrorRows(table, await this.planPrograms(code, table));
   }
 
@@ -187,9 +182,7 @@ export class ImportsService {
     file: Buffer,
     actorId: string,
   ): Promise<ProgramImportResult> {
-    await this.programs.assertUsable([code], 'programCode');
-
-    const plan = await this.planPrograms(code, await readUploadedTable(file));
+    const plan = await this.planPrograms(code, await this.programStudentTable(code, file));
     const skipped = plan.summary.invalid + plan.summary.alreadyEnrolled;
 
     const enrolling = plan.rows.flatMap((row) =>
@@ -348,6 +341,26 @@ export class ImportsService {
         students.filter((student) => student.deletedAt !== null).map((student) => student.mobile),
       ),
     });
+  }
+
+  private async eventCandidateTable(eventId: string, file: Buffer): Promise<CsvTable> {
+    const [eventResult, tableResult] = await Promise.allSettled([
+      this.events.detail(eventId),
+      readUploadedTable(file),
+    ]);
+    if (eventResult.status === 'rejected') throw eventResult.reason;
+    if (tableResult.status === 'rejected') throw tableResult.reason;
+    return tableResult.value;
+  }
+
+  private async programStudentTable(code: string, file: Buffer): Promise<CsvTable> {
+    const [programResult, tableResult] = await Promise.allSettled([
+      this.programs.assertUsable([code], 'programCode'),
+      readUploadedTable(file),
+    ]);
+    if (programResult.status === 'rejected') throw programResult.reason;
+    if (tableResult.status === 'rejected') throw tableResult.reason;
+    return tableResult.value;
   }
 
   private async planPrograms(code: string, table: CsvTable): Promise<ProgramImportPlan> {

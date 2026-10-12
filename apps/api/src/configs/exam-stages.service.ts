@@ -82,8 +82,12 @@ export class ExamStagesService {
   }
 
   async create(input: CreateExamStageBody): Promise<ExamStage> {
-    await this.requireExam(input.examId);
-    await this.assertKeyFree(input.stageKey);
+    const [examResult, stageKeyResult] = await Promise.allSettled([
+      this.requireExam(input.examId),
+      this.assertKeyFree(input.stageKey),
+    ]);
+    if (examResult.status === 'rejected') throw examResult.reason;
+    if (stageKeyResult.status === 'rejected') throw stageKeyResult.reason;
 
     const stage = await this.prisma.examStage.create({
       data: {

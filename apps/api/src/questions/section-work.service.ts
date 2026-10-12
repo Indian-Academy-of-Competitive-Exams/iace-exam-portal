@@ -504,19 +504,20 @@ export class SectionWorkService {
         finalizedAt: true,
       },
     });
-    const section = test
-      ? await this.prisma.baseConfigSection.findFirst({
-          where: { id: pair.baseConfigSectionId, baseConfigId: test.baseConfigId },
-          select: { name: true, questionCount: true, subjectId: true },
-        })
-      : null;
-    if (!test || !section) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
 
-    const rows = await this.assignments.sectionAssignments(
-      pair.testId,
-      pair.baseConfigSectionId,
-      viewer,
-    );
+    const [sectionResult, rowsResult] = await Promise.allSettled([
+      this.prisma.baseConfigSection.findFirst({
+        where: { id: pair.baseConfigSectionId, baseConfigId: test.baseConfigId },
+        select: { name: true, questionCount: true, subjectId: true },
+      }),
+      this.assignments.sectionAssignments(pair.testId, pair.baseConfigSectionId, viewer),
+    ]);
+    if (sectionResult.status === 'rejected') throw sectionResult.reason;
+    const section = sectionResult.value;
+    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    if (rowsResult.status === 'rejected') throw rowsResult.reason;
+    const rows = rowsResult.value;
     const active = rows.filter((row) => row.replacedAt === null);
     const own = rows.filter((row) => row.assigneeId === viewer.id);
     const mine = own.find((row) => row.replacedAt === null) ?? own.at(-1) ?? null;

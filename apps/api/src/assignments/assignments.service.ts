@@ -306,10 +306,21 @@ export class AssignmentsService {
     if (test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
     assertSourceChosen(test);
     assertDueDayNotGone(body.dueAt);
-    const section = await this.requireSection(test, body.baseConfigSectionId);
-    const assignee = await this.requireAssignee(body.assigneeId);
-    await this.assertHoldsFeature(assignee, body.role);
-    await this.assertNotTheOtherRole(testId, section.id, body.assigneeId, body.role);
+    const [sectionResult, assigneeResult] = await Promise.allSettled([
+      this.requireSection(test, body.baseConfigSectionId),
+      this.requireAssignee(body.assigneeId),
+    ]);
+    if (sectionResult.status === 'rejected') throw sectionResult.reason;
+    if (assigneeResult.status === 'rejected') throw assigneeResult.reason;
+    const section = sectionResult.value;
+    const assignee = assigneeResult.value;
+
+    const [featureResult, roleResult] = await Promise.allSettled([
+      this.assertHoldsFeature(assignee, body.role),
+      this.assertNotTheOtherRole(testId, section.id, body.assigneeId, body.role),
+    ]);
+    if (featureResult.status === 'rejected') throw featureResult.reason;
+    if (roleResult.status === 'rejected') throw roleResult.reason;
 
     const pair = { testId, baseConfigSectionId: section.id };
 
