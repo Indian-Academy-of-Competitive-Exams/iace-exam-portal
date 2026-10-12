@@ -184,11 +184,17 @@ export class TestsService {
 
   async detail(id: string): Promise<TestDetail> {
     const row = await this.requireTest(id);
+    const [counts, baseConfig, editingBy] = await Promise.all([
+      this.countsOfOne(id),
+      this.configs.detail(row.baseConfigId),
+      testEditingBy(this.redis, this.prisma, id),
+    ]);
+
     return {
-      ...toTest(row, await this.countsOfOne(id)),
+      ...toTest(row, counts),
       ...toTestSchedule(row),
-      baseConfig: await this.configs.detail(row.baseConfigId),
-      editingBy: await testEditingBy(this.redis, this.prisma, id),
+      baseConfig,
+      editingBy,
     };
   }
 

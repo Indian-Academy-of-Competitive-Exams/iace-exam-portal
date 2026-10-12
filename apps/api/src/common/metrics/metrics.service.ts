@@ -249,14 +249,17 @@ export class MetricsService implements OnModuleInit {
 
   private async readRedis(): Promise<void> {
     try {
-      const info = await this.redis.client.info('memory');
-      const stats = await this.redis.client.info('stats');
+      const [info, stats, liveAttempts] = await Promise.all([
+        this.redis.client.info('memory'),
+        this.redis.client.info('stats'),
+        this.redis.client.scard(redisKeys.attemptsDirty),
+      ]);
       const used = fieldOf(info, 'used_memory');
       const max = fieldOf(info, 'maxmemory');
       this.redisMemory.set(used);
       this.redisMemoryRatio.set(max > 0 ? used / max : 0);
       this.redisEvictions.set(fieldOf(stats, 'evicted_keys'));
-      this.liveAttempts.set(await this.redis.client.scard(redisKeys.attemptsDirty));
+      this.liveAttempts.set(liveAttempts);
     } catch (error) {
       this.logger.warn(`Redis metrics unavailable: ${String(error)}`);
     }

@@ -957,10 +957,21 @@ export class AssignmentsService {
         fieldErrors: { assigneeId: [message] },
       });
 
-    const clash = await this.prisma.questionAssignment.findFirst({
-      where: { ...pair, role: otherRole(role), replacedAt: null },
-      select: { assigneeId: true },
-    });
+    const [clash, typed] = await Promise.all([
+      this.prisma.questionAssignment.findFirst({
+        where: { ...pair, role: otherRole(role), replacedAt: null },
+        select: { assigneeId: true },
+      }),
+      role === ASSIGNMENT_ROLES.PROOFREADER
+        ? this.prisma.question.findFirst({
+            where: {
+              createdById: assigneeId,
+              assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
     if (clash?.assigneeId === assigneeId) {
       throw refused(
         role === ASSIGNMENT_ROLES.PROOFREADER
@@ -968,13 +979,7 @@ export class AssignmentsService {
           : 'This admin is already the proof-reader on this section',
       );
     }
-    if (role !== ASSIGNMENT_ROLES.PROOFREADER) return;
-
     // A typist whose role passed on as well: what they wrote for the section is still their own typing.
-    const typed = await this.prisma.question.findFirst({
-      where: { createdById: assigneeId, assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST } },
-      select: { id: true },
-    });
     if (typed) throw refused(TYPED_HERE_MESSAGE);
   }
 }
