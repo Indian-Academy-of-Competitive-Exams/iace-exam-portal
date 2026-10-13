@@ -11,7 +11,7 @@ import {
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
-import { plural } from '@iace/ui';
+import { cn, plural } from '@iace/ui';
 import { LEGEND_ORDER, STATE_CLASS } from './states';
 import { useAuth } from '../../../../providers/auth';
 import { type InstructionsView } from '../../use-instructions';
@@ -40,7 +40,13 @@ export function RailwayInstructions({ view }: Readonly<{ view: InstructionsView 
             <ViewIn view={view} />
           </div>
 
-          <div className="ri-body min-h-0 flex-1 overflow-y-auto">
+          <div
+            className={cn(
+              'ri-body min-h-0 flex-1 overflow-y-auto',
+              // A column, so the language and the declaration can sit at the foot of a short page.
+              view.step === 'PAPER' && 'flex flex-col',
+            )}
+          >
             {view.step === 'GENERAL' ? (
               <GeneralScreen forwardOnly={view.forwardOnly} sectional={view.sectional} />
             ) : (
@@ -223,44 +229,46 @@ function PaperScreen({ view }: Readonly<{ view: InstructionsView }>) {
         ))}
       </ol>
 
-      {view.dual ? null : (
-        <div className="ri-choose">
-          <label className="ri-viewin">
-            <span>Choose your default language:</span>
-            <select
-              value={view.language}
-              onChange={(event) => view.chooseLanguage(event.target.value as LanguageCode)}
-            >
-              <option value="">--Select--</option>
-              {brief.languages.map((code) => (
-                <option key={code} value={code}>
-                  {LANGUAGE_LABELS[contentLanguageOf(code)]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p className="ri-note">
-            Please note all questions will appear in your default language. This language can be
-            changed for a particular question later on.
-          </p>
-        </div>
-      )}
+      <div className="mt-auto">
+        {view.dual ? null : (
+          <div className="ri-choose">
+            <label className="ri-viewin">
+              <span>Choose your default language:</span>
+              <select
+                value={view.language}
+                onChange={(event) => view.chooseLanguage(event.target.value as LanguageCode)}
+              >
+                <option value="">--Select--</option>
+                {brief.languages.map((code) => (
+                  <option key={code} value={code}>
+                    {LANGUAGE_LABELS[contentLanguageOf(code)]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="ri-note">
+              Please note all questions will appear in your default language. This language can be
+              changed for a particular question later on.
+            </p>
+          </div>
+        )}
 
-      <label className="ri-declare">
-        <input
-          type="checkbox"
-          checked={view.declared}
-          onChange={(event) => view.declare(event.target.checked)}
-        />
-        <span>
-          I have read and understood the instructions. All computer hardware allotted to me are in
-          proper working condition. I declare that I am not in possession of / not wearing / not
-          carrying any prohibited gadget like mobile phone, bluetooth devices etc. /any prohibited
-          material with me into the Examination Hall. I agree that in case of not adhering to the
-          instructions, I shall be liable to be debarred from this Test and/or to disciplinary
-          action, which may include ban from future Tests / Examinations.
-        </span>
-      </label>
+        <label className="ri-declare">
+          <input
+            type="checkbox"
+            checked={view.declared}
+            onChange={(event) => view.declare(event.target.checked)}
+          />
+          <span>
+            I have read and understood the instructions. All computer hardware allotted to me are in
+            proper working condition. I declare that I am not in possession of / not wearing / not
+            carrying any prohibited gadget like mobile phone, bluetooth devices etc. /any prohibited
+            material with me into the Examination Hall. I agree that in case of not adhering to the
+            instructions, I shall be liable to be debarred from this Test and/or to disciplinary
+            action, which may include ban from future Tests / Examinations.
+          </span>
+        </label>
+      </div>
     </>
   );
 }
