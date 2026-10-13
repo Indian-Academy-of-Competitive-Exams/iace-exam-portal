@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   Alert,
   ComparisonCards,
@@ -26,10 +27,12 @@ export function ComparePanel() {
 
   const testId = card.data?.testId ?? '';
   const placed = (card.data?.cohort?.cohortSize ?? 0) > 0;
+  const [page, setPage] = useState(1);
   const board = useQuery({
-    queryKey: leaderboardQueryKey(testId),
-    queryFn: () => api.me.leaderboard({ testId }),
+    queryKey: [...leaderboardQueryKey(testId), page],
+    queryFn: () => api.me.leaderboard({ testId, page }),
     enabled: placed && testId !== '',
+    placeholderData: keepPreviousData,
   });
 
   const again = () => void card.refetch();
@@ -76,7 +79,11 @@ export function ComparePanel() {
           {board.data ? (
             <>
               <Podium rows={board.data.podium} />
-              <Standings board={board.data} empty="Nobody has been ranked on this paper yet" />
+              <Standings
+                board={board.data}
+                empty="Nobody has been ranked on this paper yet"
+                onPage={setPage}
+              />
             </>
           ) : null}
         </Section>

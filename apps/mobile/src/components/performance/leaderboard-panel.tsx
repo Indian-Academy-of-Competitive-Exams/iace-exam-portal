@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { everySitting } from '@iace/app-kit';
 import { testsSat } from '@iace/contracts';
 import { Text } from '../ui/text';
@@ -24,10 +24,15 @@ export function LeaderboardPanel() {
   const sat = testsSat(everySitting(trend.data));
   const paper = testId || (sat[0]?.testId ?? '');
 
+  // Held with the paper it belongs to, so choosing another paper opens that one at its first page.
+  const [turned, setTurned] = useState({ paper, page: 1 });
+  const page = turned.paper === paper ? turned.page : 1;
+
   const board = useQuery({
-    queryKey: leaderboardQueryKey(paper),
-    queryFn: () => api.me.leaderboard({ testId: paper }),
+    queryKey: [...leaderboardQueryKey(paper), page],
+    queryFn: () => api.me.leaderboard({ testId: paper, page }),
     enabled: paper !== '',
+    placeholderData: keepPreviousData,
   });
 
   // With no paper the board is not asked for, so a pull re-reads the sittings that would name one.
@@ -59,7 +64,11 @@ export function LeaderboardPanel() {
         <>
           <Text variant="meta">{plural(board.data.cohortSize, 'student')}</Text>
           <Podium rows={board.data.podium} />
-          <Standings board={board.data} empty="Nobody has been ranked here yet" />
+          <Standings
+            board={board.data}
+            empty="Nobody has been ranked here yet"
+            onPage={(next) => setTurned({ paper, page: next })}
+          />
           {board.data.you === null ? (
             <Alert variant="info">You are not on this board yet.</Alert>
           ) : null}

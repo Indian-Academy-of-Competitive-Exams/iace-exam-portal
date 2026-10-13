@@ -2,6 +2,7 @@ import {
   Avatar,
   Card,
   DataTable,
+  Pagination,
   TruncatedText,
   cn,
   type DataTableColumn,
@@ -74,16 +75,54 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
   );
 }
 
-export function Standings({ board, empty }: Readonly<{ board: Leaderboard; empty: EmptyMessage }>) {
+/** One page of the ranking, the reader's own seat pinned under it when it is on another page, then the pager. */
+export function Standings({
+  board,
+  empty,
+  onPage,
+}: Readonly<{ board: Leaderboard; empty: EmptyMessage; onPage: (page: number) => void }>) {
+  const { you, yourPage } = board;
+  const elsewhere = you !== null && yourPage !== null && yourPage !== board.page;
+
   return (
-    <DataTable
-      columns={STANDING_COLUMNS}
-      rows={board.neighbourhood}
-      rowKey={(row) => String(row.rank)}
-      rowClassName={(row) => (row.isYou ? '[&>td]:bg-primary-subtle' : undefined)}
-      isLoading={false}
-      empty={empty}
-    />
+    <div className="flex flex-col">
+      <DataTable
+        columns={STANDING_COLUMNS}
+        rows={board.rows}
+        rowKey={(row) => String(row.rank)}
+        rowClassName={(row) => (row.isYou ? '[&>td]:bg-primary-subtle' : undefined)}
+        isLoading={false}
+        empty={empty}
+      />
+      {elsewhere || board.total > board.pageSize ? (
+        <div className="sticky bottom-0 flex flex-col border-t border-border bg-surface">
+          {elsewhere ? (
+            <button
+              type="button"
+              aria-label={`Go to your rank, ${you.rank}`}
+              className="flex items-center gap-3 bg-primary-subtle px-4 py-2.5 text-left focus-visible:shadow-focus focus-visible:outline-none"
+              onClick={() => onPage(yourPage)}
+            >
+              <span className="w-10 text-right text-sm font-medium tabular-nums text-primary-ink">
+                {you.rank}
+              </span>
+              <span className="min-w-0 flex-1">
+                <StudentCell row={you} />
+              </span>
+              <span className="text-sm font-semibold tabular-nums">{you.score}</span>
+            </button>
+          ) : null}
+          {board.total > board.pageSize ? (
+            <Pagination
+              page={board.page}
+              pageSize={board.pageSize}
+              total={board.total}
+              onPageChange={onPage}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

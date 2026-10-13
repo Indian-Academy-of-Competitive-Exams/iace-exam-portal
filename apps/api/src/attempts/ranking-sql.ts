@@ -4,7 +4,7 @@
  * The cohort filter stays literal SQL so the planner can match `Attempt_ranking_idx`, and a sitting
  * with no recorded time ranks as the slowest there is.
  */
-import { ATTEMPT_STATUS, LEADERBOARD_NEIGHBOURS, LEADERBOARD_PODIUM } from '@iace/contracts';
+import { ATTEMPT_STATUS, LEADERBOARD_PODIUM } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 
 /** Unqualified, so it binds to the nearest `Attempt` in scope — the inner one inside the LATERAL. */
@@ -135,15 +135,18 @@ export function rankedCohortSql(testId: string): Prisma.Sql {
   `;
 }
 
-/** The podium and one reader's neighbourhood alone — the live answer where no held ranking has them. */
-export function testBoardSql(testId: string, attemptId: string): Prisma.Sql {
+/** The podium, one page of ranks and the reader's own seat — the live answer where no held ranking has them. */
+export function testBoardSql(
+  testId: string,
+  attemptId: string,
+  ranks: { from: number; to: number },
+): Prisma.Sql {
   return Prisma.sql`
-    WITH ranked AS (${SEATED} WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT}),
-    mine AS (SELECT rank FROM ranked WHERE "id" = ${attemptId}::uuid)
+    WITH ranked AS (${SEATED} WHERE a."testId" = ${testId}::uuid AND ${IN_COHORT})
     ${NAMED}
     WHERE r.rank <= ${LEADERBOARD_PODIUM}
-       OR r.rank BETWEEN (SELECT rank FROM mine) - ${LEADERBOARD_NEIGHBOURS}
-                     AND (SELECT rank FROM mine) + ${LEADERBOARD_NEIGHBOURS}
+       OR r.rank BETWEEN ${ranks.from} AND ${ranks.to}
+       OR r."id" = ${attemptId}::uuid
     ORDER BY r.rank
   `;
 }

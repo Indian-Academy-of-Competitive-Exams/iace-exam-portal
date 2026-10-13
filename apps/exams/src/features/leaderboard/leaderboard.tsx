@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   EMPTY_STATE_KINDS,
   Alert,
@@ -48,10 +49,16 @@ export function LeaderboardPage() {
   const filters = useFilterSpec(FILTERS);
   const testId = filters.values.testId || (sat[0]?.testId ?? '');
 
+  // Held with the paper it belongs to, so choosing another paper opens that one at its first page.
+  const [turned, setTurned] = useState({ testId, page: 1 });
+  const page = turned.testId === testId ? turned.page : 1;
+
   const board = useQuery({
-    queryKey: leaderboardQueryKey(testId),
-    queryFn: () => api.me.leaderboard({ testId }),
+    queryKey: [...leaderboardQueryKey(testId), page],
+    queryFn: () => api.me.leaderboard({ testId, page }),
     enabled: testId !== '',
+    // The page being left stays drawn until the next one lands, so the table does not blink to a skeleton.
+    placeholderData: keepPreviousData,
   });
 
   // The podium and the ranks live inside the board's own query, so `trend` landing is too early to point at them.
@@ -69,7 +76,12 @@ export function LeaderboardPage() {
       filters={{ spec: FILTERS, state: filters }}
       filtersBesideTitle
     >
-      <Body trend={trend} board={board} tests={sat} />
+      <Body
+        trend={trend}
+        board={board}
+        tests={sat}
+        onPage={(next) => setTurned({ testId, page: next })}
+      />
     </PanelFrame>
   );
 }
@@ -85,10 +97,12 @@ function Body({
   trend,
   board,
   tests,
+  onPage,
 }: Readonly<{
   trend: QueryState;
   board: QueryState & { data?: Leaderboard };
   tests: readonly SatTest[];
+  onPage: (page: number) => void;
 }>) {
   if (trend.isLoading) return <RowsSkeleton rows={6} />;
   if (trend.isError) {
@@ -124,10 +138,13 @@ function Body({
   }
   if (!board.data) return <RowsSkeleton rows={6} />;
 
-  return <Board board={board.data} />;
+  return <Board board={board.data} onPage={onPage} />;
 }
 
-function Board({ board }: Readonly<{ board: Leaderboard }>) {
+function Board({
+  board,
+  onPage,
+}: Readonly<{ board: Leaderboard; onPage: (page: number) => void }>) {
   if (board.cohortSize === 0) {
     return <EmptyState title="No ranks yet" />;
   }
@@ -147,7 +164,7 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
         title="Ranks"
         meta={plural(board.cohortSize, 'student')}
       >
-        <Standings board={board} empty="Everyone on this board is on the podium" />
+        <Standings board={board} empty="Everyone on this board is on the podium" onPage={onPage} />
       </Section>
     </div>
   );

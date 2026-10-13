@@ -1,7 +1,7 @@
 /**
  * The board a signed-in student reads. ONE paper, ranked on marks — papers do not compare on marks,
  * so no board spans more than one. The reader's own standing is always counted live, by the same
- * call the score card makes; the seats around it are cut from a ranking held per rollup. No select
+ * call the score card makes; the page of seats is cut from a ranking held per rollup. No select
  * here reaches a mobile, an email or a question.
  */
 import { Injectable } from '@nestjs/common';
@@ -9,14 +9,14 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
-  LEADERBOARD_NEIGHBOURS,
   LEADERBOARD_PODIUM,
+  leaderboardPageOf,
   type Leaderboard,
   type LeaderboardQuery,
   type LeaderboardRow,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { boardName, splitBoard } from './leaderboard-board';
+import { boardName, pageRanks, splitBoard } from './leaderboard-board';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { hold } from './paper-sheet.service';
 import { rankedCohortSql, testBoardSql, type CohortSeatRow } from './ranking-sql';
@@ -37,7 +37,7 @@ export class LeaderboardViewService {
 
   /** No places-moved arrow: it would need a rank saved from some earlier read, and none is. */
   async board(studentId: string, query: LeaderboardQuery): Promise<Leaderboard> {
-    const { testId } = query;
+    const { testId, page, pageSize } = query;
     // Reading somebody else's cohort starts with having sat it yourself.
     const mine = await this.prisma.attempt.findFirst({
       where: { testId, studentId, isGraded: true, status: ATTEMPT_STATUS.EVALUATED },
@@ -49,15 +49,16 @@ export class LeaderboardViewService {
     });
     if (!mine) throw new AppException(ErrorCodes.NOT_FOUND, NO_BOARD);
 
-    const frame = emptyBoard(testId, mine.test.title);
+    const frame = emptyBoard(query, mine.test.title);
+    const ranks = pageRanks(page, pageSize);
     // Counted now, by the call the score card makes, so the two can never quote different ranks.
     const standing = await this.leaderboard.standing(testId, mine.id);
     // A sitting the cohort does not count has no standing, and reads a board with nobody on it.
     if (standing === null) return frame;
 
     const seats =
-      (await this.heldSeats(testId, mine.id, standing, mine.test.stat?.computedAt)) ??
-      (await this.prisma.$queryRaw<CohortSeatRow[]>(testBoardSql(testId, mine.id)));
+      (await this.heldSeats(testId, mine.id, standing, ranks, mine.test.stat?.computedAt)) ??
+      (await this.prisma.$queryRaw<CohortSeatRow[]>(testBoardSql(testId, mine.id, ranks)));
 
     const rows: LeaderboardRow[] = seats.map((seat) => ({
       rank: seat.rank,
@@ -68,7 +69,14 @@ export class LeaderboardViewService {
       isYou: seat.attempt_id === mine.id,
     }));
 
-    return { ...frame, ...splitBoard(rows), cohortSize: standing.cohortSize, you: yours(rows) };
+    return {
+      ...frame,
+      ...splitBoard(rows, ranks),
+      cohortSize: standing.cohortSize,
+      total: Math.max(standing.cohortSize - LEADERBOARD_PODIUM, 0),
+      you: yours(rows),
+      yourPage: leaderboardPageOf(standing.rank, pageSize),
+    };
   }
 
   /** Null where the held ranking disagrees with the live standing, so no board mixes the two. */
@@ -76,6 +84,7 @@ export class LeaderboardViewService {
     testId: string,
     attemptId: string,
     standing: Standing,
+    ranks: { from: number; to: number },
     countedAt: Date | undefined,
   ): Promise<CohortSeatRow[] | null> {
     if (countedAt === undefined) return null;
@@ -88,31 +97,37 @@ export class LeaderboardViewService {
     );
     const seat = ranked.find((row) => row.attempt_id === attemptId);
     const agrees = seat?.rank === standing.rank && seat?.cohort === standing.cohortSize;
-    return agrees ? seatsNear(ranked, standing.rank) : null;
+    return agrees && seat ? seatsOn(ranked, ranks, seat) : null;
   }
 }
 
 /** The same seats `testBoardSql` selects, cut from a ranking already in memory. */
-function seatsNear(ranked: readonly CohortSeatRow[], rank: number): CohortSeatRow[] {
-  const podium = ranked.slice(0, LEADERBOARD_PODIUM);
-  const from = Math.max(rank - LEADERBOARD_NEIGHBOURS, 1);
-  const near = ranked.slice(from - 1, rank + LEADERBOARD_NEIGHBOURS);
-  // A reader within the podium's reach sits in both slices, and no seat is drawn twice.
-  return [...podium, ...near.filter((seat) => seat.rank > LEADERBOARD_PODIUM)];
+function seatsOn(
+  ranked: readonly CohortSeatRow[],
+  ranks: { from: number; to: number },
+  mine: CohortSeatRow,
+): CohortSeatRow[] {
+  const shown = [...ranked.slice(0, LEADERBOARD_PODIUM), ...ranked.slice(ranks.from - 1, ranks.to)];
+  // The reader's own seat rides along wherever it is, so the board can pin it under any page.
+  return shown.includes(mine) ? shown : [...shown, mine];
 }
 
 const yours = (rows: readonly LeaderboardRow[]): LeaderboardRow | null =>
   rows.find((row) => row.isYou) ?? null;
 
 /** A board with nobody on it yet — an unscored sitting, or a paper nobody has finished. */
-function emptyBoard(testId: string, label: string | null): Leaderboard {
+function emptyBoard(query: LeaderboardQuery, label: string | null): Leaderboard {
   return {
-    testId,
+    testId: query.testId,
     label,
     cohortSize: 0,
     podium: [],
-    neighbourhood: [],
+    rows: [],
+    page: query.page,
+    pageSize: query.pageSize,
+    total: 0,
     you: null,
+    yourPage: null,
     generatedAt: new Date().toISOString(),
   };
 }

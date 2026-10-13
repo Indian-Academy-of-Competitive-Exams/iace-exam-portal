@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import {
+  LEADERBOARD_PAGE_SIZE,
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
@@ -44,9 +45,10 @@ async function entrant(
   return { studentId, attemptId: id };
 }
 
-const board = (studentId: string, testId: string) => view.board(studentId, { testId });
+const board = (studentId: string, testId: string, page = 1, pageSize = LEADERBOARD_PAGE_SIZE) =>
+  view.board(studentId, { testId, page, pageSize });
 
-const rowsOf = (read: Leaderboard): LeaderboardRow[] => [...read.podium, ...read.neighbourhood];
+const rowsOf = (read: Leaderboard): LeaderboardRow[] => [...read.podium, ...read.rows];
 
 /** The rollup's own watermark, which is what a held ranking is keyed on. */
 const countedAt = (testId: string, at: Date) =>
@@ -57,7 +59,7 @@ const countedAt = (testId: string, at: Date) =>
   });
 
 describe('the board for one paper', () => {
-  it('draws the podium and the reader among their neighbours, ranked by the database', async () => {
+  it('draws the podium and the whole ranking under it, ranked by the database', async () => {
     const testId = await paper();
     const seats: string[] = [];
     for (let seat = 1; seat <= 12; seat += 1) {
@@ -76,9 +78,10 @@ describe('the board for one paper', () => {
       [1, 2, 3],
     );
     assert.deepEqual(
-      read.neighbourhood.map((row) => row.rank),
-      [5, 6, 7, 8, 9, 10, 11],
+      read.rows.map((row) => row.rank),
+      [4, 5, 6, 7, 8, 9, 10, 11, 12],
     );
+    assert.deepEqual([read.page, read.total, read.yourPage], [1, 9, 1]);
     assert.deepEqual(
       rowsOf(read).map((row) => [row.name, row.score]),
       rowsOf(read).map((row) => [`Seat ${row.rank}`, 210 - row.rank * 10]),
@@ -197,6 +200,51 @@ describe('the board for one paper', () => {
   });
 
   /** A graded sitting with no marks yet is in no cohort, so its reader sees a board with nobody on it. */
+  /** The failure this prevents: a reader far down the ranking who cannot find their own seat. */
+  it('pages the ranking, and carries the reader’s seat and its page with every page', async () => {
+    const testId = await paper();
+    const seats: string[] = [];
+    for (let seat = 1; seat <= 12; seat += 1) {
+      seats.push((await entrant(testId, `Seat ${seat}`, 210 - seat * 10)).studentId);
+    }
+    const me = seats[7];
+    assert.ok(me);
+
+    const first = await board(me, testId, 1, 4);
+    assert.deepEqual(
+      first.rows.map((row) => row.rank),
+      [4, 5, 6, 7],
+    );
+    assert.deepEqual([first.you?.rank, first.yourPage, first.total], [8, 2, 9]);
+
+    // A held ranking must cut the same page the live query does.
+    await countedAt(testId, new Date());
+    const second = await board(me, testId, 2, 4);
+    assert.deepEqual(
+      second.rows.map((row) => [row.rank, row.isYou]),
+      [
+        [8, true],
+        [9, false],
+        [10, false],
+        [11, false],
+      ],
+    );
+    assert.deepEqual(
+      (await board(me, testId, 1, 4)).rows.map((row) => row.rank),
+      [4, 5, 6, 7],
+    );
+  });
+
+  it('gives a reader on the podium no page, because the podium is on none', async () => {
+    const testId = await paper();
+    const top = await entrant(testId, 'Seat 1', 200);
+    await entrant(testId, 'Seat 2', 190);
+
+    const read = await board(top.studentId, testId);
+
+    assert.deepEqual([read.you?.rank, read.yourPage, read.rows, read.total], [1, null, [], 0]);
+  });
+
   it('draws an empty board for a sitting the cohort does not count', async () => {
     const testId = await paper();
     await entrant(testId, 'Priya Sharma', 120);
@@ -206,7 +254,7 @@ describe('the board for one paper', () => {
     const read = await board(me.studentId, testId);
 
     assert.deepEqual(
-      [read.label, read.cohortSize, read.podium, read.neighbourhood, read.you],
+      [read.label, read.cohortSize, read.podium, read.rows, read.you],
       ['Board mock', 0, [], [], null],
     );
   });

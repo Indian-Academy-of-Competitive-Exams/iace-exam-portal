@@ -795,6 +795,19 @@ nothing to have.
 numbers and marks do not belong in a lower-security environment, and while the two share a Valkey
 and a Postgres instance that rule is doing more work than usual.
 
+**Staging is off unless somebody is testing, and a page is how it comes on.** The API box, the
+Valkey box and the RDS instance are stopped between sessions — about $31 of the month's $52 — and
+`deploy/staging-power/` is one Lambda behind a function URL that starts and stops exactly those
+three, behind a shared passcode. It keeps no state of its own: who is checked in is a set of tags on
+the API box, and the optional auto-off is the EventBridge schedule that fires it, so the switch
+costs nothing to have. Nothing shuts staging down unless a tester chose a time, because a shut-down
+nobody chose cuts a session. One schedule runs regardless, daily at 03:00 IST: AWS restarts a
+stopped RDS instance after seven days, and this stops it again when the API box is stopped. **A
+deploy never starts anything.** A push while the box is off ends green with "ECR updated", and
+`deploy/boot-update.sh` — a systemd unit on the staging box only — pulls the `staging` tag on every
+start and retries until the database is up. **The day production exists, set `MANAGE_SHARED=false`**:
+the Valkey box and the database are then production's too, and the switch leaves them alone.
+
 **This box is also the load-testing rig**, and the split from Box B is what makes it worth trusting
 — the API box's CPU is the API's alone, and the database is across a network hop, which is the
 topology production will have. EC2 bills hourly, so resize to the production candidate for an

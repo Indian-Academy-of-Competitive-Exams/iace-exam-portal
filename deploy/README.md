@@ -219,6 +219,78 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 Afterwards the migration's `IF NOT EXISTS` is a no-op. Without it, `migrate` fails on a permission
 error and the API containers never start, because they wait on it exiting zero.
 
+## The staging power switch
+
+Staging is off unless somebody is testing. `deploy/staging-power/` is one Lambda behind a function
+URL: it serves a page, and starts and stops the staging API box, the Valkey box and the `examprep`
+database. `policy.json` is the whole of what it may touch.
+
+**Standing it up, once.** From the repo root, with the passcode in `$PASSCODE`:
+
+```bash
+ACCOUNT=598927569098; REGION=ap-south-1; FN=examprep-staging-power
+export AWS_DEFAULT_REGION=$REGION
+
+aws ssm put-parameter --name /examprep/staging/power-passcode --type SecureString --value "$PASSCODE"
+
+aws iam create-role --role-name $FN --assume-role-policy-document \
+  '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+aws iam put-role-policy --role-name $FN --policy-name power \
+  --policy-document file://deploy/staging-power/policy.json
+
+aws iam create-role --role-name $FN-scheduler --assume-role-policy-document \
+  '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"scheduler.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+aws iam put-role-policy --role-name $FN-scheduler --policy-name invoke --policy-document \
+  "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"arn:aws:lambda:$REGION:$ACCOUNT:function:$FN\"}]}"
+
+(cd deploy/staging-power && zip -q /tmp/$FN.zip index.mjs logic.mjs page.html)
+aws lambda create-function --function-name $FN --runtime nodejs22.x --architectures arm64 \
+  --handler index.handler --timeout 20 --memory-size 256 \
+  --role arn:aws:iam::$ACCOUNT:role/$FN --zip-file fileb:///tmp/$FN.zip \
+  --environment "Variables={API_INSTANCE_ID=i-0d1a3dd4cce06c993,VALKEY_INSTANCE_ID=i-02d91009dacaa7177,DB_INSTANCE_ID=examprep,API_HEALTH_URL=https://api.staging.examprep.iace.co.in/health/ready,EXAMS_URL=https://staging.examprep.iace.co.in,ADMIN_URL=https://admin.staging.examprep.iace.co.in,PASSCODE_PARAM=/examprep/staging/power-passcode,AUTO_OFF_SCHEDULE=examprep-staging-auto-off,MANAGE_SHARED=true}"
+
+aws lambda create-function-url-config --function-name $FN --auth-type NONE
+aws lambda add-permission --function-name $FN --statement-id url \
+  --action lambda:InvokeFunctionUrl --principal '*' --function-url-auth-type NONE
+aws lambda add-permission --function-name $FN --statement-id url-invoke \
+  --action lambda:InvokeFunction --principal '*' --invoked-via-function-url
+
+TARGET="arn:aws:lambda:$REGION:$ACCOUNT:function:$FN"; ROLE="arn:aws:iam::$ACCOUNT:role/$FN-scheduler"
+aws scheduler create-schedule --name examprep-staging-auto-off --state DISABLED \
+  --schedule-expression 'rate(7 days)' --schedule-expression-timezone UTC \
+  --flexible-time-window Mode=OFF \
+  --target "{\"Arn\":\"$TARGET\",\"RoleArn\":\"$ROLE\",\"Input\":\"{\\\"action\\\":\\\"off\\\",\\\"autoOff\\\":{\\\"mode\\\":\\\"none\\\"}}\"}"
+aws scheduler create-schedule --name examprep-staging-keep-off \
+  --schedule-expression 'cron(0 3 * * ? *)' --schedule-expression-timezone Asia/Kolkata \
+  --flexible-time-window Mode=OFF \
+  --target "{\"Arn\":\"$TARGET\",\"RoleArn\":\"$ROLE\",\"Input\":\"{\\\"action\\\":\\\"keep-off\\\"}\"}"
+```
+
+`aws lambda get-function-url-config --function-name examprep-staging-power` prints the address to
+hand to testers. The passcode is read once per warm function, so after changing the parameter,
+re-run the `update-function-code` below to make it take effect.
+
+**Shipping a change to it** — it is not part of the pipeline:
+
+```bash
+(cd deploy/staging-power && zip -q /tmp/examprep-staging-power.zip index.mjs logic.mjs page.html)
+aws lambda update-function-code --function-name examprep-staging-power \
+  --zip-file fileb:///tmp/examprep-staging-power.zip
+```
+
+**The staging box updates itself on every start**, which is what lets a push while it is off end
+green. Install the unit once, on the staging box only, after a release that contains it:
+
+```bash
+sudo cp /opt/examprep/deploy/examprep-boot-update.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable examprep-boot-update.service
+```
+
+`journalctl -u examprep-boot-update -b` is what it did on this boot.
+
+**The day production exists:** set `MANAGE_SHARED=false` on the function. On and Off then touch only
+the staging API box, because production shares the Valkey box and the database.
+
 ## When it does not come up
 
 - `docker compose ... logs api` — the API refuses to boot on an unsized pool, an empty CORS list, a

@@ -70,7 +70,7 @@ import {
   LEADERBOARD_ROUTES,
   leaderboardSchema,
   type Leaderboard,
-  type LeaderboardQuery,
+  type LeaderboardQueryInput,
 } from '../leaderboard';
 import {
   notificationSchema,
@@ -218,7 +218,7 @@ export function meClient(core: ApiCore) {
       requestBlob(ME_REPORT_ROUTES.export(key), { ...query }),
 
     /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
-    leaderboard: (query: LeaderboardQuery): Promise<Leaderboard> =>
+    leaderboard: (query: LeaderboardQueryInput): Promise<Leaderboard> =>
       get(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, leaderboardSchema),
 
     /** Everything they starred, newest first. */
