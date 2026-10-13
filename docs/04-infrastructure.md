@@ -796,7 +796,7 @@ numbers and marks do not belong in a lower-security environment, and while the t
 and a Postgres instance that rule is doing more work than usual.
 
 **Staging is off unless somebody is testing, and a page is how it comes on.** The API box, the
-Valkey box and the RDS instance are stopped between sessions — about $31 of the month's $52 — and
+Valkey box and the RDS instance are stopped between sessions — the instance hours are most of §1's bill — and
 `deploy/staging-power/` is one Lambda behind a function URL that starts and stops exactly those
 three, behind a shared passcode. It keeps no state of its own: who is checked in is a set of tags on
 the API box, and the optional auto-off is the EventBridge schedule that fires it, so the switch
