@@ -357,7 +357,7 @@ describe('base_config_guard — what the database refuses on a locked config', (
     const id = await seedConfig({ examStageId: await makeStage(prisma), locked: true });
 
     await assert.rejects(
-      prisma.$executeRaw`UPDATE "BaseConfig" SET "examTemplate" = 'SSC_RAILWAYS' WHERE "id" = ${id}::uuid`,
+      prisma.$executeRaw`UPDATE "BaseConfig" SET "examTemplate" = 'RAILWAYS' WHERE "id" = ${id}::uuid`,
       /locked; clone it to change its shape/,
     );
     assert.equal((await configRow(id)).examTemplate, 'DEFAULT');

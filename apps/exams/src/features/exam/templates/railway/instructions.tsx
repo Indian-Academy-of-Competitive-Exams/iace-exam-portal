@@ -1,5 +1,5 @@
 /**
- * The SSC/Railway pre-test screens: General Instructions, then the paper's own, with the
+ * The Railway pre-test screens: General Instructions, then the paper's own, with the
  * language and the declaration on the second. Copy is the portal's, verbatim. The sprite
  * legend is the one the sitting draws, so the symbols a candidate is taught here are the
  * symbols they then see.
@@ -28,7 +28,7 @@ export function RailwayInstructions({ view }: Readonly<{ view: InstructionsView 
   const candidate = identity?.fullName ?? 'Candidate';
 
   return (
-    <div data-exam-template="ssc_railways" className="ri-page flex h-dvh flex-col">
+    <div data-exam-template="railways" className="ri-page flex h-dvh flex-col">
       <div className="ri-logobar flex items-center justify-center">
         <span className="rw-logo">IACE</span>
       </div>

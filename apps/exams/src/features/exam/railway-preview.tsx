@@ -23,7 +23,7 @@ export function RailwayPreviewPage() {
 
   return (
     <ExamShell
-      examTemplate={EXAM_TEMPLATE.SSC_RAILWAYS}
+      examTemplate={EXAM_TEMPLATE.RAILWAYS}
       calculatorEnabled
       view={{
         ...view,

@@ -6,7 +6,7 @@
    alone, never from index.css.
    Source of record: docs/superpowers/specs/railway-capture/ */
 
-[data-exam-template='ssc_railways'] {
+[data-exam-template='railways'] {
   --rw-header-from: #3272b9;
   --rw-header-to: #458dd5;
   --rw-blue: #4787c2;
@@ -27,14 +27,14 @@
 
 /* ---------- top chrome ---------- */
 
-[data-exam-template='ssc_railways'] .rw-header {
+[data-exam-template='railways'] .rw-header {
   background: linear-gradient(to bottom, var(--rw-header-from) 0%, var(--rw-header-to) 100%);
   border-bottom: 1px solid #333;
   height: 54px;
   flex-shrink: 0;
 }
 
-[data-exam-template='ssc_railways'] .rw-logo {
+[data-exam-template='railways'] .rw-logo {
   background: #e02b20;
   color: #fff;
   font-weight: bold;
@@ -44,14 +44,14 @@
   border-radius: 2px;
 }
 
-[data-exam-template='ssc_railways'] .rw-utilitybar {
+[data-exam-template='railways'] .rw-utilitybar {
   background: #000;
   color: #fff;
   height: 30px;
   flex-shrink: 0;
 }
 
-[data-exam-template='ssc_railways'] .rw-utilitybar button {
+[data-exam-template='railways'] .rw-utilitybar button {
   color: #fff;
   font-size: 14px;
   font-weight: 700;
@@ -61,7 +61,7 @@
 }
 
 /* Both icons are one sprite, at the offsets the original addresses them by. */
-[data-exam-template='ssc_railways'] .rw-icon {
+[data-exam-template='railways'] .rw-icon {
   background-image: url('./assets/Icon-sprite.png');
   background-repeat: no-repeat;
   width: 18px;
@@ -70,21 +70,21 @@
   flex-shrink: 0;
 }
 
-[data-exam-template='ssc_railways'] .questionpaper_icon {
+[data-exam-template='railways'] .questionpaper_icon {
   background-position: -196px -8px;
 }
 
-[data-exam-template='ssc_railways'] .instruction_icon {
+[data-exam-template='railways'] .instruction_icon {
   background-position: -140px -7px;
 }
 
-[data-exam-template='ssc_railways'] .fixedquehdr {
+[data-exam-template='railways'] .fixedquehdr {
   background: #f5f5f5;
   padding: 6px 12px;
 }
 
 /* Positioned because the (i) inside it drops its tally against whatever control holds it. */
-[data-exam-template='ssc_railways'] .rw-testname {
+[data-exam-template='railways'] .rw-testname {
   position: relative;
   background: #5bc0de;
   color: #fff;
@@ -96,7 +96,7 @@
   gap: 8px;
 }
 
-[data-exam-template='ssc_railways'] .time-left-sect {
+[data-exam-template='railways'] .time-left-sect {
   font-size: 16px;
   font-weight: 700;
   line-height: 16px;
@@ -106,22 +106,22 @@
   border-bottom: 1px solid var(--rw-rule);
 }
 
-[data-exam-template='ssc_railways'] .right-time {
+[data-exam-template='railways'] .right-time {
   font-size: 14px;
   font-weight: 700;
   color: var(--rw-ink);
 }
 
-[data-exam-template='ssc_railways'] .right-time b {
+[data-exam-template='railways'] .right-time b {
   color: #0a0;
 }
 
-[data-exam-template='ssc_railways'] .rw-sectionbar {
+[data-exam-template='railways'] .rw-sectionbar {
   border-bottom: 1px solid var(--rw-rule);
 }
 
 /* Positioned because the (i) inside it drops its tally against the tab that holds it. */
-[data-exam-template='ssc_railways'] .subjcttab {
+[data-exam-template='railways'] .subjcttab {
   position: relative;
   background: var(--rw-blue);
   color: #fff;
@@ -137,11 +137,11 @@
   gap: 8px;
 }
 
-[data-exam-template='ssc_railways'] .subjcttab:not(.active) {
+[data-exam-template='railways'] .subjcttab:not(.active) {
   background: #7fa9cf;
 }
 
-[data-exam-template='ssc_railways'] .new-tab-second {
+[data-exam-template='railways'] .new-tab-second {
   font-size: 16px;
   font-weight: 700;
   line-height: 18px;
@@ -151,24 +151,24 @@
   border-bottom: 1px solid var(--rw-rule);
 }
 
-[data-exam-template='ssc_railways'] .rw-qtype {
+[data-exam-template='railways'] .rw-qtype {
   color: #e8663d;
 }
 
-[data-exam-template='ssc_railways'] .rw-marks {
+[data-exam-template='railways'] .rw-marks {
   font-size: 12px;
 }
 
-[data-exam-template='ssc_railways'] .rw-marks em {
+[data-exam-template='railways'] .rw-marks em {
   font-style: normal;
   color: #0a0;
 }
 
-[data-exam-template='ssc_railways'] .rw-marks em.rw-penalty {
+[data-exam-template='railways'] .rw-marks em.rw-penalty {
   color: #e8663d;
 }
 
-[data-exam-template='ssc_railways'] .questn {
+[data-exam-template='railways'] .questn {
   font-size: 14px;
   font-weight: 700;
   color: var(--rw-ink);
@@ -183,26 +183,26 @@
 /* The only value not taken from a declared rule. bankingTest.css says 14px, but
    .questiondiv_font14 exists to FORCE 14px, so 14 is the shrunk setting and not the
    default; the original renders this sentence 1576px wide against 1272px at 14px. */
-[data-exam-template='ssc_railways'] .questiondiv {
+[data-exam-template='railways'] .questiondiv {
   font-size: 17px;
   line-height: 30px;
   color: #000;
   margin: 10px 12px 15px 12px;
 }
 
-[data-exam-template='ssc_railways'] .questiondiv img,
-[data-exam-template='ssc_railways'] .optn img {
+[data-exam-template='railways'] .questiondiv img,
+[data-exam-template='railways'] .optn img {
   max-width: min(500px, 100%) !important;
   vertical-align: middle;
 }
 
-[data-exam-template='ssc_railways'] .option {
+[data-exam-template='railways'] .option {
   margin: 0 12px;
   line-height: normal;
   color: #000;
 }
 
-[data-exam-template='ssc_railways'] .optn {
+[data-exam-template='railways'] .optn {
   margin: 8px 0;
   width: 100%;
   display: flex;
@@ -212,7 +212,7 @@
 }
 
 /* Tailwind preflight zeroes every border; a native radio needs its own back or it fills solid. */
-[data-exam-template='ssc_railways'] .optn .rdobtn {
+[data-exam-template='railways'] .optn .rdobtn {
   appearance: auto;
   border: initial;
   width: 13px;
@@ -221,14 +221,14 @@
   flex-shrink: 0;
 }
 
-[data-exam-template='ssc_railways'] .optn > span {
+[data-exam-template='railways'] .optn > span {
   font-size: 17px;
   font-weight: normal;
 }
 
 /* ---------- footer tray ---------- */
 
-[data-exam-template='ssc_railways'] .rw-buttons {
+[data-exam-template='railways'] .rw-buttons {
   background: var(--rw-tray);
   border: 1px solid #f0f0f0;
   border-top: 1px solid var(--rw-rule);
@@ -237,7 +237,7 @@
   flex-shrink: 0;
 }
 
-[data-exam-template='ssc_railways'] .btn {
+[data-exam-template='railways'] .btn {
   background: #fff;
   border: 1px solid #c8c8c8;
   cursor: pointer;
@@ -247,12 +247,12 @@
   color: #000;
 }
 
-[data-exam-template='ssc_railways'] .btn:hover {
+[data-exam-template='railways'] .btn:hover {
   background: var(--rw-save);
   color: #fff;
 }
 
-[data-exam-template='ssc_railways'] .savenext {
+[data-exam-template='railways'] .savenext {
   background-color: var(--rw-save);
   border: 2px solid var(--rw-save-edge);
   color: #fff;
@@ -261,7 +261,7 @@
   font-size: 13.3333px;
 }
 
-[data-exam-template='ssc_railways'] .fulscrnbtn {
+[data-exam-template='railways'] .fulscrnbtn {
   background: #c9ddf5;
   border-left: 1px solid #fff;
   border-right: 1px solid #cdcdcd;
@@ -273,7 +273,7 @@
   cursor: pointer;
 }
 
-[data-exam-template='ssc_railways'] .rw-submit {
+[data-exam-template='railways'] .rw-submit {
   background: var(--rw-submit);
   color: #fff;
   height: 36px;
@@ -286,48 +286,48 @@
 }
 
 /* A paper that takes no answer right now: its controls are still read, and are not targets. */
-[data-exam-template='ssc_railways'] .btn:disabled,
-[data-exam-template='ssc_railways'] .savenext:disabled,
-[data-exam-template='ssc_railways'] .rw-submit:disabled {
+[data-exam-template='railways'] .btn:disabled,
+[data-exam-template='railways'] .savenext:disabled,
+[data-exam-template='railways'] .rw-submit:disabled {
   opacity: 0.55;
   pointer-events: none;
 }
 
 /* ---------- right panel ---------- */
 
-[data-exam-template='ssc_railways'] .rw-palette {
+[data-exam-template='railways'] .rw-palette {
   width: 304px;
 }
 
 /* The welcome strip carries the palette's tint; only the legend below it is white. */
-[data-exam-template='ssc_railways'] .rightmenuClass {
+[data-exam-template='railways'] .rightmenuClass {
   background: var(--rw-tint);
   padding: 12px;
 }
 
-[data-exam-template='ssc_railways'] .stdntinfo {
+[data-exam-template='railways'] .stdntinfo {
   font-size: 15px;
   color: #000;
 }
 
-[data-exam-template='ssc_railways'] .paleet-data {
+[data-exam-template='railways'] .paleet-data {
   background: #fff;
   padding: 20px 0;
   font-size: 12px;
 }
 
-[data-exam-template='ssc_railways'] .legend td {
+[data-exam-template='railways'] .legend td {
   font-size: 12px;
   font-weight: normal;
   line-height: 16px;
   color: #000;
 }
 
-[data-exam-template='ssc_railways'] .hdngpalt {
+[data-exam-template='railways'] .hdngpalt {
   background: var(--rw-blue);
 }
 
-[data-exam-template='ssc_railways'] .bottom-legend {
+[data-exam-template='railways'] .bottom-legend {
   color: #fff;
   font-size: 16px;
   font-weight: bold;
@@ -336,7 +336,7 @@
   margin: 0;
 }
 
-[data-exam-template='ssc_railways'] .question-choose {
+[data-exam-template='railways'] .question-choose {
   background: var(--rw-tint);
   font-size: 12px;
   font-weight: 700;
@@ -346,13 +346,13 @@
 
 /* The scrollbar is drawn, not borrowed: the platform's own reserves no width here
    and hides until the wheel moves, which these panes refuse. */
-[data-exam-template='ssc_railways'] .rw-scrollwrap {
+[data-exam-template='railways'] .rw-scrollwrap {
   position: relative;
   display: flex;
   min-height: 0;
 }
 
-[data-exam-template='ssc_railways'] .rw-scrollpane {
+[data-exam-template='railways'] .rw-scrollpane {
   flex: 1;
   min-height: 0;
   overflow-y: scroll;
@@ -361,7 +361,7 @@
   padding-right: 14px;
 }
 
-[data-exam-template='ssc_railways'] .rw-scrolltrack {
+[data-exam-template='railways'] .rw-scrolltrack {
   position: absolute;
   top: 0;
   right: 0;
@@ -371,7 +371,7 @@
   border-left: 1px solid #d8d8d8;
 }
 
-[data-exam-template='ssc_railways'] .rw-scrollthumb {
+[data-exam-template='railways'] .rw-scrollthumb {
   width: 8px;
   margin: 0 3px;
   border-radius: 4px;
@@ -379,25 +379,25 @@
   cursor: grab;
 }
 
-[data-exam-template='ssc_railways'] .rw-scrollthumb:active {
+[data-exam-template='railways'] .rw-scrollthumb:active {
   background: #6f6f6f;
   cursor: grabbing;
 }
 
-[data-exam-template='ssc_railways'] .quenmbrpalt {
+[data-exam-template='railways'] .quenmbrpalt {
   background: var(--rw-tint);
   padding: 7px 0;
   box-sizing: border-box;
 }
 
-[data-exam-template='ssc_railways'] .quenmbrgrid {
+[data-exam-template='railways'] .quenmbrgrid {
   display: grid;
   grid-template-columns: repeat(5, 34px);
   gap: 5px 16px;
   padding: 0 19px;
 }
 
-[data-exam-template='ssc_railways'] .palettebottom {
+[data-exam-template='railways'] .palettebottom {
   background: var(--rw-tint);
   padding: 14px 0;
   flex-shrink: 0;
@@ -407,7 +407,7 @@
    The sprite, addressed by the offsets the original addresses it by. Drawing these
    in CSS lost the edges and the shapes the image carries, so the image is back. */
 
-[data-exam-template='ssc_railways'] .rw-cell {
+[data-exam-template='railways'] .rw-cell {
   position: relative;
   display: inline-block;
   background-image: url('./assets/sprite_1.png');
@@ -426,25 +426,25 @@
   flex-shrink: 0;
 }
 
-[data-exam-template='ssc_railways'] .rw-cell.answered {
+[data-exam-template='railways'] .rw-cell.answered {
   background-position: -73px -4px;
 }
 
-[data-exam-template='ssc_railways'] .rw-cell.notanswered {
+[data-exam-template='railways'] .rw-cell.notanswered {
   background-position: -33px -4px;
 }
 
-[data-exam-template='ssc_railways'] .rw-cell.markforreview,
-[data-exam-template='ssc_railways'] .rw-cell.answeredmarked {
+[data-exam-template='railways'] .rw-cell.markforreview,
+[data-exam-template='railways'] .rw-cell.answeredmarked {
   background-position: -33px -39px;
 }
 
-[data-exam-template='ssc_railways'] .rw-cell.notvisited {
+[data-exam-template='railways'] .rw-cell.notvisited {
   background-position: -33px -73px;
   color: #333;
 }
 
-[data-exam-template='ssc_railways'] .rw-cell.answeredmarked::after {
+[data-exam-template='railways'] .rw-cell.answeredmarked::after {
   content: '';
   position: absolute;
   top: -2px;
@@ -459,12 +459,12 @@
 
 /* The legend draws the same cells the grid does, so a shape and its number read
    identically in both; it is only not a target. */
-[data-exam-template='ssc_railways'] .rw-cell.rw-swatch {
+[data-exam-template='railways'] .rw-cell.rw-swatch {
   cursor: default;
 }
 
 /* A seat a forward-only paper has closed: still read, no longer a target. */
-[data-exam-template='ssc_railways'] .rw-cell:disabled {
+[data-exam-template='railways'] .rw-cell:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -472,12 +472,12 @@
 /* ---------- info popup ---------- */
 
 /* .subjectcntnt verbatim: the tally a section's (i) drops open. */
-[data-exam-template='ssc_railways'] .rw-testname,
-[data-exam-template='ssc_railways'] .rw-sectionbar {
+[data-exam-template='railways'] .rw-testname,
+[data-exam-template='railways'] .rw-sectionbar {
   border-bottom: 1px solid var(--rw-rule);
 }
 
-[data-exam-template='ssc_railways'] .subjectcntnt {
+[data-exam-template='railways'] .subjectcntnt {
   background: #fff;
   /* The original is 167px of content inside 17px gutters; preflight makes width the total. */
   width: 201px;
@@ -494,7 +494,7 @@
   color: #000;
 }
 
-[data-exam-template='ssc_railways'] .subjectcntnt td {
+[data-exam-template='railways'] .subjectcntnt td {
   padding: 7px 0;
   font-weight: 700;
   line-height: 16px;
@@ -502,7 +502,7 @@
 }
 
 /* The icon is a button here, so the sprite needs the box a span got for free. */
-[data-exam-template='ssc_railways'] button.rw-icon {
+[data-exam-template='railways'] button.rw-icon {
   background-color: transparent;
   border: none;
   padding: 0;
@@ -512,30 +512,30 @@
 /* ---------- overlays ---------- */
 
 /* Above the palette's toggle, which otherwise pokes through an open panel. */
-[data-exam-template='ssc_railways'] .rw-panel {
+[data-exam-template='railways'] .rw-panel {
   z-index: 100;
   background: #fff;
   border: 1px solid var(--rw-header-from);
 }
 
 /* Over the panels too: the question paper lists every stem, which is what a photograph would take. */
-[data-exam-template='ssc_railways'] .rw-watermark {
+[data-exam-template='railways'] .rw-watermark {
   z-index: 110;
 }
 
-[data-exam-template='ssc_railways'] .rw-paper-row {
+[data-exam-template='railways'] .rw-paper-row {
   border-bottom: 1px solid #e0e0e0;
 }
 
-[data-exam-template='ssc_railways'] .rw-paper-no {
+[data-exam-template='railways'] .rw-paper-no {
   color: #666;
 }
 
-[data-exam-template='ssc_railways'] .rw-rules-title {
+[data-exam-template='railways'] .rw-rules-title {
   color: var(--rw-header-from);
 }
 
-[data-exam-template='ssc_railways'] .rw-modal-head {
+[data-exam-template='railways'] .rw-modal-head {
   background: var(--rw-header-from);
   color: #fff;
   font-size: 13px;
@@ -543,7 +543,7 @@
   padding: 8px 12px;
 }
 
-[data-exam-template='ssc_railways'] .rw-modal-close {
+[data-exam-template='railways'] .rw-modal-close {
   font-size: 12px;
   cursor: pointer;
   background: none;
@@ -551,7 +551,7 @@
   color: #fff;
 }
 
-[data-exam-template='ssc_railways'] .rw-palette-toggle {
+[data-exam-template='railways'] .rw-palette-toggle {
   position: absolute;
   top: 50%;
   right: 0;
@@ -569,36 +569,36 @@
 
 /* ---------- the submit tally ---------- */
 
-[data-exam-template='ssc_railways'] .rw-summary {
+[data-exam-template='railways'] .rw-summary {
   padding: 40px 12px;
   color: #000;
   font-size: 13px;
 }
 
-[data-exam-template='ssc_railways'] .rw-summary table {
+[data-exam-template='railways'] .rw-summary table {
   margin: 0 auto;
   border-collapse: collapse;
   border: 1px solid #333;
 }
 
-[data-exam-template='ssc_railways'] .rw-summary th,
-[data-exam-template='ssc_railways'] .rw-summary td {
+[data-exam-template='railways'] .rw-summary th,
+[data-exam-template='railways'] .rw-summary td {
   border: 1px solid #333;
   padding: 5px 14px;
   text-align: center;
   font-weight: normal;
 }
 
-[data-exam-template='ssc_railways'] .rw-summary th {
+[data-exam-template='railways'] .rw-summary th {
   font-weight: bold;
 }
 
-[data-exam-template='ssc_railways'] .rw-ask {
+[data-exam-template='railways'] .rw-ask {
   margin: 28px 0 14px;
   text-align: center;
 }
 
-[data-exam-template='ssc_railways'] .rw-ask-btn {
+[data-exam-template='railways'] .rw-ask-btn {
   background: #c9c9c9;
   border: 1px solid #bbb;
   border-radius: 2px;
@@ -607,18 +607,18 @@
   cursor: pointer;
 }
 
-[data-exam-template='ssc_railways'] .rw-ask-btn:disabled {
+[data-exam-template='railways'] .rw-ask-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
 /* ---------- the confirm box, over a paper it will not let go of ---------- */
 
-[data-exam-template='ssc_railways'] .rw-nag-overlay {
+[data-exam-template='railways'] .rw-nag-overlay {
   background: rgba(0, 0, 0, 0.6);
 }
 
-[data-exam-template='ssc_railways'] .rw-nag {
+[data-exam-template='railways'] .rw-nag {
   background: #fff;
   border-radius: 3px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
@@ -630,7 +630,7 @@
   padding: 32px 25px;
 }
 
-[data-exam-template='ssc_railways'] .rw-nag-btn {
+[data-exam-template='railways'] .rw-nag-btn {
   background: #fff;
   border: 1px solid;
   border-radius: 3px;
@@ -645,7 +645,7 @@
 }
 
 /* The calculator has no glyph in the original's sprite sheet, so its icon is sized like one. */
-[data-exam-template='ssc_railways'] .rw-utilitybar svg {
+[data-exam-template='railways'] .rw-utilitybar svg {
   width: 18px;
   height: 18px;
 }
@@ -656,7 +656,7 @@
    The width is PHONE_QUERY in layout.tsx. */
 
 @media (max-width: 767px) {
-  [data-exam-template='ssc_railways'] .rw-palette {
+  [data-exam-template='railways'] .rw-palette {
     position: absolute;
     top: 0;
     right: 0;
@@ -668,50 +668,50 @@
   }
 
   /* Wide enough for a thumb, where the original's is sized for a pointer. */
-  [data-exam-template='ssc_railways'] .rw-palette-toggle {
+  [data-exam-template='railways'] .rw-palette-toggle {
     width: 24px;
     height: 56px;
     line-height: 56px;
     font-size: 16px;
   }
 
-  [data-exam-template='ssc_railways'] [data-palette-open] .rw-palette-toggle {
+  [data-exam-template='railways'] [data-palette-open] .rw-palette-toggle {
     right: min(304px, 100vw - 24px);
   }
 
-  [data-exam-template='ssc_railways'] .rw-utilitybar {
+  [data-exam-template='railways'] .rw-utilitybar {
     gap: 14px;
     padding: 0 8px;
   }
 
-  [data-exam-template='ssc_railways'] .rw-utilitybar button {
+  [data-exam-template='railways'] .rw-utilitybar button {
     font-size: 12px;
     white-space: nowrap;
   }
 
   /* Two tabs to a row leave the second no room for its tally, so here it drops under the bar. */
-  [data-exam-template='ssc_railways'] .rw-sectionbar {
+  [data-exam-template='railways'] .rw-sectionbar {
     position: relative;
   }
 
-  [data-exam-template='ssc_railways'] .subjcttab {
+  [data-exam-template='railways'] .subjcttab {
     position: static;
     flex-shrink: 0;
   }
 
-  [data-exam-template='ssc_railways'] .rw-buttons {
+  [data-exam-template='railways'] .rw-buttons {
     height: auto;
     min-height: 59px;
     padding: 6px 8px;
   }
 
-  [data-exam-template='ssc_railways'] .rw-summary {
+  [data-exam-template='railways'] .rw-summary {
     overflow-x: auto;
     padding: 20px 8px;
   }
 
-  [data-exam-template='ssc_railways'] .rw-summary th,
-  [data-exam-template='ssc_railways'] .rw-summary td {
+  [data-exam-template='railways'] .rw-summary th,
+  [data-exam-template='railways'] .rw-summary td {
     padding: 4px 6px;
   }
 }

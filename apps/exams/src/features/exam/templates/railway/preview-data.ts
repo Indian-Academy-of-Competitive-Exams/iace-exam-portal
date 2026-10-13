@@ -187,7 +187,7 @@ export function previewBrief(): ExamBrief {
   return {
     testId: 'preview',
     title: 'RRB JE CBT I 26TH MAY 2019 SHIFT - 3',
-    examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+    examTemplate: EXAM_TEMPLATE.RAILWAYS,
     navigation: NAVIGATION_POLICY.FREE,
     durationSec: PAPER_SEC,
     totalQuestions: QUESTION_COUNT,

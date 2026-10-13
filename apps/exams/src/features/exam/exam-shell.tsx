@@ -24,7 +24,7 @@ export function ExamShell({
   useLockedZoom();
   // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
-  const railway = template === EXAM_TEMPLATE.SSC_RAILWAYS;
+  const railway = template === EXAM_TEMPLATE.RAILWAYS;
   const Skin = railway ? RailwayLayout : Layout;
   const Nag = railway ? RailwayFullscreenNag : FullscreenNag;
 

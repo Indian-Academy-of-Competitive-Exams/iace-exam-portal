@@ -145,7 +145,7 @@ describe('TestsService — creating a draft from a config', () => {
 
   /** The screen is asked for at creation now; the blueprint only says where the answer starts. */
   it('wears the screen the admin chose, and falls back to the config when they chose none', async () => {
-    const { service } = await serviceWith({ config: { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS } });
+    const { service } = await serviceWith({ config: { examTemplate: EXAM_TEMPLATE.RAILWAYS } });
 
     const chosen = await service.create(
       { ...DRAFT, title: 'Mock 1', examTemplate: EXAM_TEMPLATE.DEFAULT },
@@ -154,7 +154,7 @@ describe('TestsService — creating a draft from a config', () => {
     const defaulted = await service.create({ ...DRAFT, title: 'Mock 2' }, ADMIN);
 
     assert.equal(chosen.examTemplate, EXAM_TEMPLATE.DEFAULT);
-    assert.equal(defaulted.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
+    assert.equal(defaulted.examTemplate, EXAM_TEMPLATE.RAILWAYS);
   });
 
   /** The copy is the point: re-skinning the blueprint must not re-skin a test already built. */
@@ -164,7 +164,7 @@ describe('TestsService — creating a draft from a config', () => {
 
     await prisma.baseConfig.update({
       where: { id: BUILDER.CONFIG },
-      data: { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS },
+      data: { examTemplate: EXAM_TEMPLATE.RAILWAYS },
     });
 
     assert.equal((await service.detail(created.id)).examTemplate, EXAM_TEMPLATE.DEFAULT);
@@ -604,11 +604,11 @@ describe('TestsService — an edit and the first sitting take turns', () => {
     const race: StartRace = {};
     const { service } = await serviceWith({ test: {}, client: startingMidEdit(race) });
 
-    const updated = await service.update(TEST, { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
+    const updated = await service.update(TEST, { examTemplate: EXAM_TEMPLATE.RAILWAYS });
     await race.start;
 
     assert.equal(race.landed, false);
-    assert.equal(updated.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
+    assert.equal(updated.examTemplate, EXAM_TEMPLATE.RAILWAYS);
     assert.equal(await prisma.attempt.count({ where: { testId: TEST } }), 1);
   });
 
@@ -734,7 +734,7 @@ describe('TestsService — a save from a stale screen', () => {
     const error = await refused(
       service.update(TEST, {
         title: opened.title ?? undefined,
-        examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+        examTemplate: EXAM_TEMPLATE.RAILWAYS,
         expectedUpdatedAt: opened.updatedAt,
       }),
     );
@@ -811,9 +811,9 @@ describe('TestsService — editing and removing', () => {
   it('re-skins an offered test, which moves nothing its paper holds', async () => {
     const { service } = await serviceWith({ test: { ...FROZEN, status: TEST_STATUS.ACTIVE } });
 
-    const updated = await service.update(TEST, { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
+    const updated = await service.update(TEST, { examTemplate: EXAM_TEMPLATE.RAILWAYS });
 
-    assert.equal(updated.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
+    assert.equal(updated.examTemplate, EXAM_TEMPLATE.RAILWAYS);
     const row = await testRow();
     assert.deepEqual([row?.finalizedAt, row?.status], [FROZEN.finalizedAt, TEST_STATUS.ACTIVE]);
   });
@@ -823,7 +823,7 @@ describe('TestsService — editing and removing', () => {
     const { service } = await serviceWith({ test: {} });
     await sat();
 
-    const error = await refused(service.update(TEST, { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS }));
+    const error = await refused(service.update(TEST, { examTemplate: EXAM_TEMPLATE.RAILWAYS }));
 
     assert.equal(error.code, ErrorCodes.CONFLICT);
   });
@@ -838,12 +838,12 @@ describe('TestsService — editing and removing', () => {
     const updated = await service.update(TEST, {
       ...scoped,
       title: 'Mock 1 (revised)',
-      examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+      examTemplate: EXAM_TEMPLATE.RAILWAYS,
     });
 
     assert.deepEqual(
       [updated.title, updated.examTemplate, updated.scopeRef],
-      ['Mock 1 (revised)', EXAM_TEMPLATE.SSC_RAILWAYS, scoped.scopeRef],
+      ['Mock 1 (revised)', EXAM_TEMPLATE.RAILWAYS, scoped.scopeRef],
     );
   });
 
@@ -881,7 +881,7 @@ describe('TestsService — editing and removing', () => {
       service.update(TEST, {
         ...setup,
         title: 'Mock 1 (again)',
-        examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+        examTemplate: EXAM_TEMPLATE.RAILWAYS,
       }),
     );
 
@@ -945,7 +945,7 @@ describe('TestsService — editing and removing', () => {
       test: { ...FROZEN, status: TEST_STATUS.ACTIVE },
     });
 
-    await service.update(TEST, { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
+    await service.update(TEST, { examTemplate: EXAM_TEMPLATE.RAILWAYS });
 
     assert.deepEqual(
       events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),

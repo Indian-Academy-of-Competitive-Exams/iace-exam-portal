@@ -1,5 +1,5 @@
 /**
- * The SSC/Railway skin. It fills the same slots as the default one and takes every
+ * The Railway skin. It fills the same slots as the default one and takes every
  * value and callback off the view — only the markup and the class names differ, so
  * the two skins cannot drift into behaving differently.
  */

@@ -145,7 +145,7 @@ test('SINGLE shows the first language and DUAL shows both, stem and options', ()
     languages: [LANGUAGE_CODE.HI, LANGUAGE_CODE.EN],
     languageMode: LANGUAGE_MODE.DUAL,
     testUi: TEST_UI.CBT,
-    examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+    examTemplate: EXAM_TEMPLATE.RAILWAYS,
     selectedOptionId: null,
     marked: false,
   });
@@ -157,5 +157,5 @@ test('SINGLE shows the first language and DUAL shows both, stem and options', ()
     { lang: 'hi', html: 'दो' },
     { lang: 'en', html: '2' },
   ]);
-  assert.equal(dual.template, 'ssc_railways');
+  assert.equal(dual.template, 'railways');
 });

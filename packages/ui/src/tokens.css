@@ -615,7 +615,7 @@
 
 /* Strict — the austere real-CBT baseline: flat fills, square edges, dense. */
 /* No dark variant: `railway.css` pins this skin's chrome light, so flipping tokens would darken half the paper. */
-[data-exam-template='ssc_railways'] {
+[data-exam-template='railways'] {
   --exam-surface: #ffffff;
   --exam-surface-2: #eef1f5;
   --exam-ink: #10141a;

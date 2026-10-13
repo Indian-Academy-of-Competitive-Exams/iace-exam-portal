@@ -19,7 +19,7 @@ export function InstructionsShell({
 }>) {
   const view = useInstructions(brief, onBegin);
 
-  if (brief.examTemplate === EXAM_TEMPLATE.SSC_RAILWAYS) {
+  if (brief.examTemplate === EXAM_TEMPLATE.RAILWAYS) {
     return <RailwayInstructions view={view} />;
   }
 

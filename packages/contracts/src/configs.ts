@@ -46,7 +46,7 @@ export const LANGUAGE_MODES = languageModeSchema.options;
 /** Which skin the exam screen wears. Presentation only: one engine, one clock, one paper. */
 export const EXAM_TEMPLATE = {
   DEFAULT: 'DEFAULT',
-  SSC_RAILWAYS: 'SSC_RAILWAYS',
+  RAILWAYS: 'RAILWAYS',
 } as const;
 export const examTemplateSchema = z.enum(EXAM_TEMPLATE);
 export type ExamTemplate = z.infer<typeof examTemplateSchema>;
@@ -72,7 +72,7 @@ export const EXAM_TEMPLATE_CONFIG: Readonly<Record<ExamTemplate, ExamTemplateCon
     sectionSwitch: 'TABS',
     watermark: 'PAPER',
   },
-  [EXAM_TEMPLATE.SSC_RAILWAYS]: {
+  [EXAM_TEMPLATE.RAILWAYS]: {
     timerPosition: 'SECTION_BAR',
     timerFormat: 'LABELLED',
     palettePosition: 'RIGHT',

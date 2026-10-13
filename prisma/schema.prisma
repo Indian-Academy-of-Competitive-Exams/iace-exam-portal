@@ -77,7 +77,7 @@ enum LanguageMode {
 // the same clock and the same state machine, so neither changes what is scored.
 enum ExamTemplate {
   DEFAULT
-  SSC_RAILWAYS
+  RAILWAYS
 }
 
 // Section-return behaviour derives from this: COMPOSITE_FREE may return,
