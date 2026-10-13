@@ -7,6 +7,7 @@ import {
   TYPING_PRESET_KEYS,
   instituteDateTimeLabel,
   typingPresetKeySchema,
+  type TypingMetric,
   type TypingPractice,
   type TypingPreset,
   type TypingPresetKey,
@@ -27,7 +28,6 @@ import { Hero, PageBody, Section } from '../../components/ui';
 import { api } from '../../lib/api';
 import { NAV_ITEMS, PICKER_WIDTH, ROUTES, typingPracticesQueryKey } from '../../lib/constants';
 import {
-  METRIC_UNITS,
   durationLabel,
   headlineOf,
   mistakeRuleLabel,
@@ -81,7 +81,7 @@ export function TypingPage() {
         </Section>
 
         <Section title="History">
-          <Card className="overflow-hidden">
+          <Card className="flex flex-col gap-4 p-4">
             <History key={presetKey} presetKey={presetKey} preset={preset} />
           </Card>
         </Section>
@@ -112,15 +112,28 @@ function History({
   );
 }
 
+/** Short enough to sit two to a line on a phone. A plain count has no rate: its column is the count. */
+const HEADLINE_HEADERS: Readonly<Partial<Record<TypingMetric, string>>> = {
+  WPM: 'Speed (WPM)',
+  KEY_DEPRESSIONS_PER_HOUR: 'Rate (per hour)',
+};
+
 function historyColumns(preset: TypingPreset): DataTableColumn<TypingPractice>[] {
+  const header = HEADLINE_HEADERS[preset.metric];
+  const headline: DataTableColumn<TypingPractice>[] = header
+    ? [
+        {
+          key: 'headline',
+          header,
+          numeric: true,
+          cell: (row) => headlineOf(preset, row).toLocaleString('en-IN'),
+        },
+      ]
+    : [];
+
   return [
     { key: 'when', header: 'Typed on', cell: (row) => instituteDateTimeLabel(row.createdAt) },
-    {
-      key: 'headline',
-      header: `Speed (${METRIC_UNITS[preset.metric]})`,
-      numeric: true,
-      cell: (row) => headlineOf(preset, row).toLocaleString('en-IN'),
-    },
+    ...headline,
     {
       key: 'keyDepressions',
       header: 'Key depressions',
