@@ -9,19 +9,21 @@ export function StartSitting({
   testId,
   resume,
   size,
+  variant,
   className,
   children,
 }: Readonly<{
   testId: string;
   resume?: string | null;
   size?: NonNullable<React.ComponentProps<typeof Button>['size']>;
+  variant?: React.ComponentProps<typeof Button>['variant'];
   className?: string;
   children: React.ReactNode;
 }>) {
   const fullscreen = useFullscreen();
 
   return (
-    <Button asChild size={size} className={className}>
+    <Button asChild size={size} variant={variant} className={className}>
       <Link
         to={{ pathname: ROUTES.TEST_INSTRUCTIONS(testId), search: resumeSearch(resume) }}
         onClick={() => void fullscreen.enter()}

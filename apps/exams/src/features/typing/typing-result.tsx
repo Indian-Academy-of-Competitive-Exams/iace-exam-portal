@@ -20,7 +20,7 @@ import {
 } from '@iace/ui';
 import { Hero, HeroFigure, PageBody, Section } from '../../components/ui';
 import { ROUTES } from '../../lib/constants';
-import { METRIC_UNITS, headlineOf, mistakesOf, targetLabel } from './typing-figures';
+import { METRIC_UNITS, headlineOf, mistakesOf, targetLabel } from '@iace/app-kit';
 
 const WORD_MARKS: Readonly<Record<TypedWordKind, { label: string; className: string }>> = {
   RIGHT: { label: 'Right', className: '' },

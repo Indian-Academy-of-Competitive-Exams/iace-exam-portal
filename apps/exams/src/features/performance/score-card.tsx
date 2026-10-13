@@ -13,10 +13,8 @@ import {
   type SectionalStanding,
   type TypingSitting,
 } from '@iace/contracts';
-import { api } from '../../lib/api';
-import { typingInAttemptQueryKey } from '../../lib/constants';
-import { scoreCardQuery } from '../../lib/queries';
-import { METRIC_UNITS, headlineOf, targetLabel } from '../typing/typing-figures';
+import { scoreCardQuery, typingInAttemptQuery } from '../../lib/queries';
+import { METRIC_UNITS, headlineOf, targetLabel } from '@iace/app-kit';
 import { QualifiedBadge, TypingHeadline, TypingOutcome } from '../typing/typing-result';
 import { SittingSetAside } from './report';
 import {
@@ -35,11 +33,7 @@ export function ScoreCardPanel() {
   const { attemptId = '' } = useParams();
   const card = useQuery(scoreCardQuery(attemptId));
   // Asked only once the paper is marked: before that it would be refused for the same reason the card is.
-  const typing = useQuery({
-    queryKey: typingInAttemptQueryKey(attemptId),
-    queryFn: () => api.me.typingInAttempt(attemptId),
-    enabled: card.isSuccess,
-  });
+  const typing = useQuery({ ...typingInAttemptQuery(attemptId), enabled: card.isSuccess });
 
   const again = () => void card.refetch();
 

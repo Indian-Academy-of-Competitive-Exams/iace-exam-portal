@@ -77,6 +77,8 @@ export interface AttemptStateHandle {
   hasUnsaved: boolean;
   /** True once this tab stopped holding the sitting: it was opened somewhere else, or another test was. */
   takenOver: boolean;
+  /** Whether the answers saved before this screen opened are on it yet; true at once for a fresh sitting. */
+  answersLoaded: boolean;
   /** It stopped because another of the student's tests was opened, not because this one went elsewhere. */
   setAside: boolean;
   /** True once the server said the sitting is over: nothing more is taken, sent or kept to send. */
@@ -166,6 +168,8 @@ export function useAttemptState(
   const fresh = useRef(startedByThisCall);
   const inFlight = useRef<Promise<boolean> | null>(null);
   const seeded = useRef(false);
+  // The same fact as `seeded`, drawn: a typing box stays shut until what was typed before has arrived.
+  const [answersLoaded, setAnswersLoaded] = useState(startedByThisCall);
   const giveUp = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastSaveFailed = useRef(false);
   // When the server last answered this screen: the start that mounted it, then every save since.
@@ -227,6 +231,7 @@ export function useAttemptState(
           setSections((mine) => ({ ...held.sections, ...mine }));
           setSectionsSettled(true);
           seeded.current = true;
+          setAnswersLoaded(true);
           // Never backwards: a flush racing this GET may already have moved the counter on.
           revision.current = seedRevision(revision.current, held.revision);
         },
@@ -487,6 +492,7 @@ export function useAttemptState(
     isSaving,
     hasUnsaved,
     takenOver,
+    answersLoaded,
     setAside,
     ended,
     standDown,

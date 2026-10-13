@@ -107,6 +107,7 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
         testId={row.test.id}
         resume={row.test.liveAttemptId}
         size="sm"
+        variant={row.action === 'RESUME' ? 'warning' : 'default'}
         className="w-full"
       >
         {row.action === 'RESUME' ? 'Resume' : 'Start test'}

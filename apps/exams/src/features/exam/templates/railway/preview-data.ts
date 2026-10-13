@@ -140,6 +140,7 @@ export function previewView(): ExamView {
     questionIndex: 1,
     selectedOptionId: null,
     typedAnswer: '',
+    answersLoaded: true,
     marked: false,
     answers: PREVIEW_ANSWERS,
     counts,

@@ -447,7 +447,8 @@ export function useExamView(
 
   const lock = lockOf(inert, submit.isPending || submit.isSuccess, shut || lapsed);
 
-  const { answers, isSaving, hasUnsaved, hasUnsent, leave, takenOver, setAside } = state;
+  const { answers, isSaving, hasUnsaved, hasUnsent, leave, takenOver, setAside, answersLoaded } =
+    state;
   // Behind the student's own hand-in a late save says ended too: that paper is theirs, and Handed in says so.
   const ended = state.ended && !submit.isPending && !submit.isSuccess;
   return useMemo<ExamView>(
@@ -468,6 +469,7 @@ export function useExamView(
       questionIndex: current ? inSection.indexOf(current) : -1,
       selectedOptionId: current ? (answers[current.questionId]?.selectedOptionId ?? null) : null,
       typedAnswer: current ? (answers[current.questionId]?.typedAnswer ?? '') : '',
+      answersLoaded,
       marked: isReviewState(current ? answers[current.questionId]?.state : undefined),
       answers,
       counts,
@@ -513,6 +515,7 @@ export function useExamView(
       inSection,
       current,
       answers,
+      answersLoaded,
       counts,
       timer,
       isSaving,

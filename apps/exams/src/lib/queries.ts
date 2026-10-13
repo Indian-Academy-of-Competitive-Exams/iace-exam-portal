@@ -11,6 +11,7 @@ export const {
   questionReportQuery,
   scoreCardAheadQuery,
   scoreCardQuery,
+  typingInAttemptQuery,
   testPaperQuery,
   solutionsQuery,
   savedSolutionQuery,

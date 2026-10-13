@@ -116,6 +116,13 @@ export function createStudentQueries(api: AppApiClient) {
         queryFn: () => api.me.scoreCard(attemptId),
         ...AWAITS_MARKING,
       }),
+    /** Each typing section's passage and what was typed; refused, like the card, until the paper is marked. */
+    typingInAttemptQuery: (attemptId: string) =>
+      queryOptions({
+        queryKey: [...attemptQueryKey(attemptId), 'typing'] as const,
+        queryFn: () => api.me.typingInAttempt(attemptId),
+        ...AWAITS_MARKING,
+      }),
     fieldEffortQuery: (attemptId: string) =>
       queryOptions({
         queryKey: fieldEffortQueryKey(attemptId),

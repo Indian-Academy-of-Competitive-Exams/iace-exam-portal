@@ -11,6 +11,7 @@ export function TypingPane({
   passage,
   value,
   onChange,
+  onBlur,
   backspace,
   disabled = false,
   className,
@@ -18,6 +19,8 @@ export function TypingPane({
   passage: string;
   value: string;
   onChange: (next: string) => void;
+  /** The box was left: a sitting hands what it holds over then, ahead of whatever was clicked. */
+  onBlur?: () => void;
   /** False where the board gives no way to correct: what is typed stays typed. */
   backspace: boolean;
   disabled?: boolean;
@@ -54,6 +57,7 @@ export function TypingPane({
         autoCapitalize="off"
         autoComplete="off"
         maxLength={TYPED_TEXT_MAX}
+        onBlur={onBlur}
         onPaste={refuse}
         onDrop={refuse}
         onContextMenu={refuse}

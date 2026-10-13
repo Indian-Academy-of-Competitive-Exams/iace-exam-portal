@@ -4,6 +4,7 @@
  * say something the screen does not.
  */
 import {
+  ATTEMPT_STATUS,
   DEFAULT_LANGUAGE,
   MERIT_TYPE,
   PAPER_QUESTION_STATUS,
@@ -285,7 +286,7 @@ interface TypingPart {
 }
 
 interface TypingRow {
-  sitting: RankedRow;
+  sitting: ResultRow;
   part: TypingPart;
   result: TypingResult;
 }
@@ -293,6 +294,7 @@ interface TypingRow {
 const TYPING_COLUMNS: ExportColumn<TypingRow>[] = [
   { header: 'Student', width: 28, value: (row) => row.sitting.student.fullName },
   { header: 'Branch', width: 20, value: (row) => branchOf(row.sitting.student) },
+  { header: 'Attempt', width: 9, value: (row) => row.sitting.attemptNo },
   { header: 'Section', width: 18, value: (row) => row.part.name },
   { header: 'Standard', width: 30, value: (row) => row.part.preset.label },
   { header: 'Key depressions', width: 16, value: (row) => row.result.keyDepressions },
@@ -357,10 +359,13 @@ const typing: TestBuilder = async (sources, { testId }) => {
     return { about, figures: [{ label: 'Typing sections', value: 0 }], sheets: [] };
   }
 
-  const ranked = await rankedOf(sheets);
+  // Every marked sitting, ranked or not: a typing test alone carries no marks and so ranks nobody.
+  const marked = (await sheets.results()).rows.filter(
+    (row) => row.status === ATTEMPT_STATUS.EVALUATED,
+  );
   const rows: TypingRow[] = [];
-  for (let from = 0; from < ranked.length; from += TYPING_BATCH) {
-    const batch = ranked.slice(from, from + TYPING_BATCH);
+  for (let from = 0; from < marked.length; from += TYPING_BATCH) {
+    const batch = marked.slice(from, from + TYPING_BATCH);
     const typed = await sources.prisma.attemptSheet.findMany({
       where: { attemptId: { in: batch.map((sitting) => sitting.id) } },
       select: { attemptId: true, answers: true },
@@ -374,7 +379,7 @@ const typing: TestBuilder = async (sources, { testId }) => {
     }
   }
 
-  const qualified = ranked.filter((sitting) =>
+  const qualified = marked.filter((sitting) =>
     rows.every((row) => row.sitting !== sitting || row.result.qualified),
   ).length;
   return {
@@ -382,7 +387,7 @@ const typing: TestBuilder = async (sources, { testId }) => {
     figures: [
       { label: 'Typing sections', value: parts.length },
       { label: 'Qualified', value: qualified },
-      { label: 'Not qualified', value: ranked.length - qualified },
+      { label: 'Not qualified', value: marked.length - qualified },
     ],
     sheets: [{ name: 'Typing results', columns: TYPING_COLUMNS, rows }],
   };

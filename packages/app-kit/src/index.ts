@@ -163,6 +163,13 @@ export {
   type Verdict,
 } from './review';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
+export {
+  METRIC_UNITS,
+  headlineOf,
+  mistakesOf,
+  targetLabel,
+  type TypingFigures,
+} from './typing-figures';
 export { reportHtml } from './report-html';
 export { PRINT_WATERMARK, logoSvg, logoUrl, printPageCss } from './print-page';
 export {

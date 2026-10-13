@@ -27,13 +27,8 @@ import {
 import { Hero, PageBody, Section } from '../../components/ui';
 import { api } from '../../lib/api';
 import { NAV_ITEMS, PICKER_WIDTH, ROUTES, typingPracticesQueryKey } from '../../lib/constants';
-import {
-  durationLabel,
-  headlineOf,
-  mistakeRuleLabel,
-  mistakesOf,
-  targetLabel,
-} from './typing-figures';
+import { durationLabel, mistakeRuleLabel } from './typing-figures';
+import { headlineOf, mistakesOf, targetLabel } from '@iace/app-kit';
 
 const PRESET_ITEMS = TYPING_PRESET_KEYS.map((key) => ({
   value: key,

@@ -203,6 +203,19 @@ describe('AttemptsService — starting a sitting', () => {
     assert.deepEqual([second.attemptNo, second.isGraded], [2, false]);
   });
 
+  /** The failure this prevents: a typing test alone ranking its candidates, all on zero, by who handed in first. */
+  it('ranks nobody on a paper that carries no marks', async () => {
+    const { service, student, paper } = await hall();
+    await prisma.baseConfig.update({
+      where: { id: paper.catalog.baseConfigId },
+      data: { totalMarks: 0 },
+    });
+
+    const first = await service.start(student, paper.testId, {});
+
+    assert.deepEqual([first.attemptNo, first.isGraded], [1, false]);
+  });
+
   it('sits a SINGLE paper in the language the student picked', async () => {
     const { service, student, paper } = await hall({
       languageMode: LANGUAGE_MODE.SINGLE,

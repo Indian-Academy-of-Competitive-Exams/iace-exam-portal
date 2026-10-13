@@ -108,9 +108,6 @@ export {
 
 /** Web only: a phone keyboard measures nothing, so the mobile client never asks for these. */
 export const typingPracticesQueryKey = () => ['me', 'typing', 'practices'] as const;
-/** Under the sitting, so whatever drops a sitting's reads drops this with them. */
-export const typingInAttemptQueryKey = (attemptId: string) =>
-  ['me', 'attempts', attemptId, 'typing'] as const;
 export const typingPassageQueryKey = (presetKey: string) =>
   ['me', 'typing', 'passage', presetKey] as const;
 

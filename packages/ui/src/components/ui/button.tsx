@@ -14,6 +14,7 @@ const VARIANTS = {
   default: `bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover ${OFF}`,
   secondary: `bg-secondary text-secondary-foreground hover:bg-secondary-hover ${OFF}`,
   destructive: `bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive-hover ${OFF}`,
+  warning: `bg-warning text-warning-foreground shadow-sm hover:bg-warning/90 ${OFF}`,
   outline: `border border-border bg-surface text-foreground shadow-sm hover:bg-muted hover:text-foreground ${OFF} disabled:border-disabled-border`,
   // No fill to mute, so it takes the ink alone.
   ghost: 'text-foreground hover:bg-muted disabled:text-disabled-foreground',

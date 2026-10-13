@@ -146,6 +146,8 @@ export interface ExamView {
   selectedOptionId: string | null;
   /** What the open question's typing box holds; empty for a question answered by an option. */
   typedAnswer: string;
+  /** False while a reloaded sitting's saved answers are still on their way: nothing typed is taken until then. */
+  answersLoaded: boolean;
   marked: boolean;
   answers: Readonly<Record<string, LiveAnswer>>;
   /** The whole paper, which is what submit counts against. */

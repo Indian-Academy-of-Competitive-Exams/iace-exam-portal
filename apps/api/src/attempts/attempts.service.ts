@@ -30,6 +30,7 @@ const SITTABLE_INCLUDE = {
       languageMode: true,
       languages: true,
       totalQuestions: true,
+      totalMarks: true,
       locked: true,
       navigation: true,
       shuffleQuestions: true,
@@ -53,6 +54,9 @@ function sittingSeconds(test: SittableTest): number {
 }
 
 type SittableTest = Prisma.TestGetPayload<{ include: typeof SITTABLE_INCLUDE }>;
+
+/** A paper worth no marks (a typing test alone) has nothing to rank by but who handed in first. */
+const carriesMarks = (test: SittableTest): boolean => Number(test.baseConfig.totalMarks) > 0;
 
 const LIVE = ATTEMPT_STATUS.IN_PROGRESS;
 
@@ -153,7 +157,7 @@ export class AttemptsService {
           studentId,
           attemptNo: slots.attemptNo,
           // Counts toward a cohort: the one sitting holding the ranked slot.
-          isGraded: slots.ranksAgain,
+          isGraded: slots.ranksAgain && carriesMarks(test),
           startedAt,
           endsAt: deadlineFrom(startedAt, sittingSeconds(test)),
           shuffleSeed: randomInt(SEED_CEILING),

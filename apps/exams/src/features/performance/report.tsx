@@ -135,7 +135,8 @@ function Notices({ notices }: Readonly<{ notices: readonly string[] }>) {
 /** Each one is a CONSEQUENCE the figures cannot show: what can still move it, and what it misses. */
 function noticesFor(sitting: PerformancePoint): string[] {
   const notices: string[] = [];
-  if (!sitting.isGraded) {
+  // A paper with no marks is never ranked, so being unranked there says nothing about a retake.
+  if (!sitting.isGraded && sitting.maxMarks > 0) {
     notices.push('This was a retake, so it is marked but it does not carry a rank.');
   }
   return notices;
