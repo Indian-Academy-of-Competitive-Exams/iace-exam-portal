@@ -98,3 +98,13 @@ test('a verdict reads off the marking, never off what they picked', () => {
   assert.equal(verdictOf({ ...sat, isCorrect: true }), VERDICT.RIGHT);
   assert.equal(verdictOf({ ...sat, isCorrect: null, selectedOptionId: null }), VERDICT.LEFT);
 });
+
+test('a reviewed question carries its passage, and none when it has none', () => {
+  const read = {
+    ...sat,
+    content: { en: { ...sat.content?.en, stem: node('s'), passage: node('<p>Read</p>') } },
+  };
+
+  assert.deepEqual(screenOf(read).passage, [{ lang: 'en', html: '<p>Read</p>' }]);
+  assert.deepEqual(screenOf(sat).passage, []);
+});

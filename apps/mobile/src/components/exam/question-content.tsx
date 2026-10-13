@@ -26,6 +26,7 @@ const NOTHING_ON_SCREEN: Omit<QuestionScreen, 'theme'> = {
   bubbling: false,
   locked: false,
   selectedOptionId: null,
+  passage: [],
   stem: [],
   options: [],
 };

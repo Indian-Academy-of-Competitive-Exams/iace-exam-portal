@@ -8,10 +8,15 @@ import {
   QUESTION_TYPE,
   TEST_UI,
   type ExamQuestion,
+  type LanguageMode,
   type TestUi,
 } from '@iace/contracts';
 import { PAGE_MESSAGE } from '../src/components/exam/question-bridge';
-import { questionScreen, readPageMessage } from '../src/components/exam/question-protocol';
+import {
+  preloadHtmlOf,
+  questionScreen,
+  readPageMessage,
+} from '../src/components/exam/question-protocol';
 
 const node = (text: string) => [{ type: 'TEXT' as const, text }];
 
@@ -158,4 +163,45 @@ test('SINGLE shows the first language and DUAL shows both, stem and options', ()
     { lang: 'en', html: '2' },
   ]);
   assert.equal(dual.template, 'railways');
+});
+
+const PASSAGE_EN = '<p>Read the passage</p>';
+const PASSAGE_HI = '<p>गद्यांश पढ़ें</p>';
+const withPassage: ExamQuestion = {
+  ...question,
+  content: {
+    en: { ...question.content.en, stem: node('<p>Solve for x</p>'), passage: node(PASSAGE_EN) },
+    hi: { stem: node('<p>x का मान ज्ञात करें</p>'), passage: node(PASSAGE_HI) },
+  },
+};
+const passageIn = (asked: ExamQuestion, languageMode: LanguageMode) =>
+  questionScreen({
+    question: asked,
+    languages: [LANGUAGE_CODE.HI, LANGUAGE_CODE.EN],
+    languageMode,
+    testUi: TEST_UI.CBT,
+    examTemplate: EXAM_TEMPLATE.DEFAULT,
+    selectedOptionId: null,
+    marked: false,
+  }).passage;
+
+test('a passage reaches the screen in the shown languages, both of them under DUAL', () => {
+  assert.deepEqual(passageIn(withPassage, LANGUAGE_MODE.SINGLE), [
+    { lang: 'hi', html: PASSAGE_HI },
+  ]);
+  assert.deepEqual(passageIn(withPassage, LANGUAGE_MODE.DUAL), [
+    { lang: 'hi', html: PASSAGE_HI },
+    { lang: 'en', html: PASSAGE_EN },
+  ]);
+});
+
+test('a question with no passage sends none, so the page draws no pane for it', () => {
+  assert.deepEqual(passageIn(question, LANGUAGE_MODE.DUAL), []);
+  assert.deepEqual(cbt.passage, []);
+});
+
+test('a passage is preloaded with the stem, so its figures are fetched before it is opened', () => {
+  const languages = [LANGUAGE_CODE.EN, LANGUAGE_CODE.HI];
+  assert.ok(preloadHtmlOf([withPassage], languages, LANGUAGE_MODE.SINGLE).includes(PASSAGE_EN));
+  assert.ok(!preloadHtmlOf([question], languages, LANGUAGE_MODE.DUAL).includes(PASSAGE_EN));
 });

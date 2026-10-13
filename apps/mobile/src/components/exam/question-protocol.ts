@@ -13,11 +13,12 @@ import {
   type ExamTemplate,
   type LanguageCode,
   type LanguageMode,
+  type LocalizedContent,
   type QuestionLanguage,
   type RichContent,
   type TestUi,
 } from '@iace/contracts';
-import { htmlOf, shownLanguages } from '@iace/app-kit';
+import { htmlOf, passagesOf, shownLanguages } from '@iace/app-kit';
 import {
   PAGE_MESSAGE,
   PRELOAD_IMAGES,
@@ -36,6 +37,16 @@ export interface ScreenInput {
   selectedOptionId: string | null;
   marked: boolean;
 }
+
+export const screenPassage = (
+  content: LocalizedContent,
+  languages: readonly LanguageCode[],
+  languageMode: LanguageMode,
+): ScreenContent[] =>
+  passagesOf(content, languages, languageMode).map(({ language, html }) => ({
+    lang: contentLanguageOf(language),
+    html,
+  }));
 
 export function questionScreen({
   question,
@@ -59,6 +70,7 @@ export function questionScreen({
     // Committed: an option is held and the question is not flagged, so the ink is dry.
     locked: bubbling && selectedOptionId !== null && !marked,
     selectedOptionId,
+    passage: screenPassage(question.content, languages, languageMode),
     stem: inShown((language) => question.content[language]?.stem),
     options: question.options.map((option) => ({
       id: option.id,
@@ -72,7 +84,7 @@ export function questionScreen({
 export const showScript = (screen: QuestionScreen): string =>
   `window.${SHOW_QUESTION}(${JSON.stringify(screen)});true;`;
 
-/** Every shown-language stem and option, raw and deduped; the page sanitises before it looks for images. */
+/** Every shown-language passage, stem and option, raw and deduped; the page sanitises before it looks for images. */
 export function preloadHtmlOf(
   questions: readonly ExamQuestion[],
   languages: readonly LanguageCode[],
@@ -80,6 +92,7 @@ export function preloadHtmlOf(
 ): readonly string[] {
   const shown = shownLanguages(languages, languageMode).map(contentLanguageOf);
   const html = questions.flatMap((question) => [
+    ...passagesOf(question.content, languages, languageMode).map((passage) => passage.html),
     ...shown.map((language) => htmlOf(question.content[language]?.stem)),
     ...question.options.flatMap((option) => shown.map((language) => htmlOf(option.text[language]))),
   ]);

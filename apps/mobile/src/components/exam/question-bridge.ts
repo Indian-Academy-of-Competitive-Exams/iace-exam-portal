@@ -52,6 +52,8 @@ export interface QuestionScreen {
   bubbling: boolean;
   locked: boolean;
   selectedOptionId: string | null;
+  /** What the question is asked about; empty when it stands alone. */
+  passage: ScreenContent[];
   stem: ScreenContent[];
   options: ScreenOption[];
   /** Absent during a sitting: the key only ever reaches the page after the paper is marked. */

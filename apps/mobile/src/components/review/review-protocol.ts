@@ -13,6 +13,7 @@ import {
 } from '@iace/contracts';
 import { answerKeyText, htmlOf, shownLanguages, type ReviewedQuestion } from '@iace/app-kit';
 import { type QuestionScreen, type ScreenContent } from '../exam/question-bridge';
+import { screenPassage } from '../exam/question-protocol';
 
 export interface ReviewInput {
   question: ReviewedQuestion;
@@ -35,6 +36,7 @@ export function reviewScreen({
     bubbling: false,
     locked: true,
     selectedOptionId: question.selectedOptionId,
+    passage: screenPassage(question.content ?? {}, languages, languageMode),
     stem: inShown((language) => question.content?.[language]?.stem),
     options: (question.options ?? []).map((option) => ({
       id: option.id,

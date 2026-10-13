@@ -29,6 +29,7 @@ const FULL = 1;
 
 const OPTION = 'option';
 const BUBBLE = 'bubble';
+const HAS_PASSAGE = 'data-passage';
 const DASH = '\u2014';
 
 interface Hold {
@@ -137,8 +138,18 @@ function build(screen: QuestionScreen): void {
     options.append(item);
   });
 
-  const review = screen.review ? reviewBlocks(screen.review) : [];
-  root.replaceChildren(stem, options, ...review);
+  const asked = [stem, options, ...(screen.review ? reviewBlocks(screen.review) : [])];
+  const split = screen.passage.length > 0;
+  root.toggleAttribute(HAS_PASSAGE, split);
+  if (split) {
+    const passage = element('section', 'passage');
+    passage.append(...richBlocks(screen.passage));
+    const pane = element('div', 'asked');
+    pane.append(...asked);
+    root.replaceChildren(passage, pane);
+  } else {
+    root.replaceChildren(...asked);
+  }
   window.scrollTo(0, 0);
 }
 
@@ -172,6 +183,7 @@ function show(screen: QuestionScreen): void {
   document.documentElement.dataset.theme = screen.theme;
   const content = JSON.stringify([
     screen.bubbling,
+    screen.passage,
     screen.stem,
     screen.options.map((o) => [o.id, o.content]),
     screen.review,
