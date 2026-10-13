@@ -1,18 +1,20 @@
-/** DEV only: the railway skin on a standing paper, for looking at the screens without a sitting. */
+/** DEV only: a copied skin on a standing paper, for looking at the screens without a sitting. */
 import { useState } from 'react';
-import { EXAM_TEMPLATE } from '@iace/contracts';
+import { EXAM_TEMPLATE, type ExamTemplate } from '@iace/contracts';
 import { ExamShell } from './exam-shell';
 import { InstructionsShell } from './instructions-shell';
 import { previewBrief, previewView } from './templates/railway/preview-data';
 
-export function RailwayPreviewPage() {
+export function RailwayPreviewPage({
+  template = EXAM_TEMPLATE.RAILWAYS,
+}: Readonly<{ template?: ExamTemplate }>) {
   const [begun, setBegun] = useState(false);
   const [asking, setAsking] = useState(false);
 
   if (!begun) {
     return (
       <InstructionsShell
-        brief={previewBrief()}
+        brief={{ ...previewBrief(), examTemplate: template }}
         fullscreenSupported
         onBegin={() => setBegun(true)}
       />
@@ -23,7 +25,7 @@ export function RailwayPreviewPage() {
 
   return (
     <ExamShell
-      examTemplate={EXAM_TEMPLATE.RAILWAYS}
+      examTemplate={template}
       calculatorEnabled
       view={{
         ...view,

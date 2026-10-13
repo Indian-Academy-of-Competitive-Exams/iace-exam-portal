@@ -1,0 +1,922 @@
+/* The Banking skin (IBPS-style CBT). Every size and colour was measured off a live
+   bank mock at 1920px wide; the stylesheet and the glyphs are written here, not copied.
+   Raw values are deliberate: this skin reproduces a third-party screen exactly, so a
+   token would be a deviation. Scoped to the skin attribute and imported by this template
+   alone. Source of record: docs/superpowers/specs/banking-capture/notes.md */
+
+[data-exam-template='banking'] {
+  --bk-blue: #245893;
+  --bk-blue-active: #cde8ff;
+  --bk-info: #0fadec;
+  --bk-rule: #ccc;
+  --bk-rule-soft: rgb(0 0 0 / 20%);
+  --bk-tint: #effaff;
+  --bk-side: 20%;
+  --bk-side-min: 280px;
+
+  font-family: Poppins, 'Segoe UI', system-ui, sans-serif;
+  background: #fff;
+  color: #000;
+  /* The app may sit in a dark scheme; this screen is a light one, and native radios follow it. */
+  color-scheme: light;
+}
+
+[data-exam-template='banking'] button:not(:disabled) {
+  cursor: pointer;
+}
+
+/* ---------- title bar ---------- */
+
+[data-exam-template='banking'] .bk-titlebar {
+  position: relative;
+  height: 45px;
+  padding: 0 20px;
+  background: var(--bk-blue);
+  color: #fff;
+}
+
+[data-exam-template='banking'] .bk-logo {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+[data-exam-template='banking'] .bk-testname {
+  position: absolute;
+  left: 50%;
+  max-width: 50%;
+  transform: translateX(-50%);
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-exam-template='banking'] .bk-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 34px;
+  border-radius: 50%;
+  color: #fff;
+}
+
+[data-exam-template='banking'] .bk-tool:disabled {
+  opacity: 0.45;
+}
+
+[data-exam-template='banking'] .bk-tool svg {
+  width: 16px;
+  height: 16px;
+}
+
+[data-exam-template='banking'] .bk-tool-boxed {
+  width: 32px;
+  height: 32px;
+  margin-right: 6px;
+  border: 1px solid rgb(255 255 255 / 60%);
+  border-radius: 5px;
+}
+
+[data-exam-template='banking'] .bk-tool-boxed svg {
+  width: 18px;
+  height: 18px;
+}
+
+[data-exam-template='banking'] .bk-tool-glyph {
+  width: 30px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 24px;
+  line-height: 1;
+  text-align: center;
+}
+
+/* ---------- section tabs, clock, profile ---------- */
+
+[data-exam-template='banking'] .bk-category {
+  border: 1px solid var(--bk-rule-soft);
+}
+
+[data-exam-template='banking'] .bk-tabrow {
+  height: 44px;
+}
+
+[data-exam-template='banking'] .bk-tab {
+  position: relative;
+  min-width: 0;
+  height: 44px;
+  padding: 10px;
+  border-right: 1px solid var(--bk-blue);
+  background: #fff;
+  color: var(--bk-blue);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+[data-exam-template='banking'] .bk-tab.active {
+  background: var(--bk-blue-active);
+}
+
+[data-exam-template='banking'] .bk-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-exam-template='banking'] .bk-tab-name:disabled {
+  color: #8a8b8f;
+}
+
+[data-exam-template='banking'] .bk-info-dot {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin: 5px 0 5px 10px;
+  border-radius: 50%;
+  background: var(--bk-info);
+  color: #fff;
+}
+
+[data-exam-template='banking'] .bk-info-dot svg {
+  width: 16px;
+  height: 16px;
+}
+
+[data-exam-template='banking'] .bk-tally {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  display: none;
+  width: 220px;
+  padding-bottom: 7px;
+  border: 1px solid var(--bk-rule);
+  background: #e5f6fc;
+  color: #000;
+  font-weight: 400;
+}
+
+[data-exam-template='banking'] .bk-info-dot:hover + .bk-tally,
+[data-exam-template='banking'] .bk-info-dot:focus + .bk-tally {
+  display: block;
+}
+
+[data-exam-template='banking'] .bk-tally-title {
+  padding: 7px;
+  border-bottom: 1px solid var(--bk-rule);
+  font-size: 14px;
+}
+
+[data-exam-template='banking'] .bk-tally-row {
+  height: 45px;
+  padding-left: 8px;
+  font-size: 13px;
+}
+
+[data-exam-template='banking'] .bk-tally-row .bk-cell {
+  --bk-cell-w: 42px;
+}
+
+[data-exam-template='banking'] .bk-tally-row span:last-child {
+  padding-left: 10px;
+}
+
+[data-exam-template='banking'] .bk-timer {
+  padding: 0 16px;
+  border-left: 1px solid var(--bk-rule);
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+[data-exam-template='banking'] .bk-timer b {
+  min-width: 80px;
+  font-size: 18px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+[data-exam-template='banking'] .bk-subject {
+  height: 45px;
+  padding: 0 10px;
+  border-top: 1px solid var(--bk-rule-soft);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+[data-exam-template='banking'] .bk-profile {
+  width: var(--bk-side);
+  min-width: var(--bk-side-min);
+  border-right: 1px solid var(--bk-rule-soft);
+  border-bottom: 1px solid var(--bk-rule-soft);
+  background: #fff;
+}
+
+[data-exam-template='banking'] .bk-profile-strip {
+  height: 24px;
+  background: #363636;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+[data-exam-template='banking'] .bk-profile-strip button span:last-child {
+  margin-left: 8px;
+  text-decoration: underline;
+}
+
+[data-exam-template='banking'] .bk-profile-strip .bk-info-dot {
+  margin: 0;
+}
+
+[data-exam-template='banking'] .bk-profile-strip > button > svg {
+  width: 14px;
+  height: 14px;
+}
+
+[data-exam-template='banking'] .bk-photos {
+  gap: 8px;
+  padding: 0 10px;
+}
+
+[data-exam-template='banking'] .bk-photos img {
+  width: 74px;
+  height: 66px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+/* ---------- the paper ---------- */
+
+[data-exam-template='banking'] .bk-question-scroll {
+  height: 100%;
+  overflow-y: auto;
+}
+
+[data-exam-template='banking'] .bk-question-col {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 10px;
+}
+
+[data-exam-template='banking'] .bk-question-no {
+  padding: 6px 10px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+[data-exam-template='banking'] .bk-question {
+  padding: 10px;
+  font-family: Arial, Verdana, Helvetica, sans-serif;
+  font-size: calc(19.2px + var(--bk-font-step, 0) * 1.6px);
+  line-height: 1.6;
+  text-align: justify;
+}
+
+[data-exam-template='banking'] .optn {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: center;
+  padding: 10px;
+  font-family: Arial, Verdana, Helvetica, sans-serif;
+  font-size: calc(18.432px + var(--bk-font-step, 0) * 1.536px);
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+[data-exam-template='banking'] .optn .rdobtn {
+  width: 13px;
+  height: 13px;
+  justify-self: center;
+}
+
+[data-exam-template='banking'] .optn > span {
+  padding-left: 10px;
+}
+
+[data-exam-template='banking'] .bk-drawer-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 62px;
+  transform: translateY(-50%);
+  border: 1px solid var(--bk-rule);
+  border-radius: 5px;
+  background: var(--bk-blue);
+  color: #fff;
+}
+
+[data-exam-template='banking'] .bk-drawer-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- the palette ---------- */
+
+[data-exam-template='banking'] .bk-drawer {
+  width: var(--bk-side);
+  min-width: var(--bk-side-min);
+  border-right: 1px solid var(--bk-rule);
+  border-left: 1px solid var(--bk-rule);
+  background: #fff;
+}
+
+[data-exam-template='banking'] .bk-roll {
+  overflow: hidden;
+  height: 30px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--bk-rule);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 30px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-exam-template='banking'] .bk-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px 5px;
+  font-size: 12px;
+}
+
+[data-exam-template='banking'] .bk-legend > div {
+  min-height: 35px;
+  gap: 8px;
+}
+
+[data-exam-template='banking'] .bk-legend > div[data-wide] {
+  grid-column: 1 / -1;
+}
+
+[data-exam-template='banking'] .bk-legend .bk-cell {
+  --bk-cell-w: 38px;
+}
+
+[data-exam-template='banking'] .bk-panel {
+  border: 1px solid #c4c4c4;
+}
+
+[data-exam-template='banking'] .bk-panel-title {
+  overflow: hidden;
+  height: 30px;
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--bk-rule);
+  background: var(--bk-blue);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-exam-template='banking'] .bk-grid-scroll {
+  overflow-y: auto;
+  padding: 10px;
+  background: var(--bk-tint);
+}
+
+[data-exam-template='banking'] .bk-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 10px 0 10px 10px;
+  row-gap: 10px;
+}
+
+/* ---------- answer states ---------- */
+
+/* The shape is drawn on ::before so a clip-path cannot cut the number or the corner badge. */
+[data-exam-template='banking'] .bk-cell {
+  --bk-cell-w: 50px;
+
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--bk-cell-w);
+  height: calc(var(--bk-cell-w) * 0.88);
+  isolation: isolate;
+  color: #fff;
+  font-size: calc(var(--bk-cell-w) * 0.27);
+  line-height: 1;
+}
+
+[data-exam-template='banking'] .bk-cell::before {
+  content: '';
+  position: absolute;
+  inset: 8% 6%;
+  z-index: -1;
+}
+
+[data-exam-template='banking'] .bk-cell.notvisited {
+  color: #000;
+}
+
+[data-exam-template='banking'] .bk-cell.notvisited::before {
+  inset: 8% 14%;
+  border: 1px solid #a9a9a9;
+  border-radius: 3px;
+  background: linear-gradient(#fafafa, #cfcfcf);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 25%);
+}
+
+[data-exam-template='banking'] .bk-cell.notanswered::before {
+  background: linear-gradient(#f5601f, #c62605);
+  clip-path: polygon(0 0, 100% 0, 100% 62%, 78% 100%, 22% 100%, 0 62%);
+}
+
+[data-exam-template='banking'] .bk-cell.answered::before {
+  background: linear-gradient(#86d62a, #4a9a0c);
+  clip-path: polygon(22% 0, 78% 0, 100% 38%, 100% 100%, 0 100%, 0 38%);
+}
+
+[data-exam-template='banking'] .bk-cell.marked,
+[data-exam-template='banking'] .bk-cell.answeredmarked {
+  height: var(--bk-cell-w);
+}
+
+[data-exam-template='banking'] .bk-cell.marked::before,
+[data-exam-template='banking'] .bk-cell.answeredmarked::before {
+  inset: 10%;
+  border-radius: 50%;
+  background: linear-gradient(#8062ad, #4f357b);
+}
+
+/* The green corner badge: a rounded square carrying three white rules, like a ticked sheet. */
+[data-exam-template='banking'] .bk-cell.answeredmarked::after {
+  content: '';
+  position: absolute;
+  right: 6%;
+  bottom: 8%;
+  width: 30%;
+  height: 30%;
+  border: 1px solid #fff;
+  border-radius: 3px;
+  background:
+    linear-gradient(#fff, #fff) center 30% / 55% 1px no-repeat,
+    linear-gradient(#fff, #fff) center 52% / 55% 1px no-repeat,
+    linear-gradient(#fff, #fff) center 74% / 55% 1px no-repeat,
+    #6bbf1f;
+}
+
+[data-exam-template='banking'] .bk-cell[aria-current='true'] {
+  font-weight: 700;
+}
+
+/* A seat a forward-only paper has closed: still read, no longer a target. */
+[data-exam-template='banking'] .bk-cell:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- footer ---------- */
+
+[data-exam-template='banking'] .bk-footer {
+  min-height: 70px;
+  border: 1px solid var(--bk-rule);
+}
+
+[data-exam-template='banking'] .bk-footer-main {
+  padding: 8px 20px;
+}
+
+[data-exam-template='banking'] .bk-footer-side {
+  width: var(--bk-side);
+  min-width: var(--bk-side-min);
+  border-left: 1px solid var(--bk-rule);
+}
+
+[data-exam-template='banking'] .bk-btn {
+  height: 36px;
+  padding: 0 20px;
+  border: 1px solid var(--bk-rule);
+  border-radius: 5px;
+  background: var(--bk-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+[data-exam-template='banking'] .bk-btn-outline {
+  border-color: var(--bk-blue);
+  background: transparent;
+  color: var(--bk-blue);
+}
+
+[data-exam-template='banking'] .bk-btn:disabled {
+  opacity: 0.55;
+}
+
+/* ---------- dialogs ---------- */
+
+[data-exam-template='banking'] .bk-overlay {
+  background: rgb(0 0 0 / 30%);
+  backdrop-filter: blur(8px);
+}
+
+[data-exam-template='banking'] .bk-summary {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  max-height: 100%;
+  padding: 20px;
+  gap: 4px;
+  border-radius: 16px;
+  background: #fff8f6;
+  color: #000;
+  text-align: center;
+}
+
+[data-exam-template='banking'] .bk-summary h1 {
+  font-size: 25.6px;
+  font-weight: 500;
+}
+
+[data-exam-template='banking'] .bk-summary-close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 6%);
+  color: #603e39;
+}
+
+[data-exam-template='banking'] .bk-summary-scroll {
+  min-height: 0;
+  margin: 16px 0 20px;
+  overflow-y: auto;
+}
+
+[data-exam-template='banking'] .bk-summary table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+[data-exam-template='banking'] .bk-summary thead {
+  background: rgb(228 228 228 / 40%);
+}
+
+[data-exam-template='banking'] .bk-summary th,
+[data-exam-template='banking'] .bk-summary td {
+  padding: 10px 20px;
+  border: 1px solid var(--bk-rule);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+[data-exam-template='banking'] .bk-summary th {
+  font-weight: 500;
+}
+
+[data-exam-template='banking'] .bk-summary-submit {
+  padding: 7px 22px;
+  border: 1px solid #0053ac;
+  border-radius: 5px;
+  background: #3476bb;
+  color: #fff;
+  font-size: 16px;
+}
+
+[data-exam-template='banking'] .bk-summary-submit:disabled {
+  opacity: 0.55;
+}
+
+[data-exam-template='banking'] .bk-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: min(400px, 100%);
+  max-height: 100%;
+  border-radius: 16px;
+  background: #fff8f6;
+  color: #000;
+}
+
+[data-exam-template='banking'] .bk-info[data-wide='true'] {
+  width: min(1000px, 100%);
+}
+
+[data-exam-template='banking'] .bk-info-head {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  background: #2c71b5;
+  color: #fff;
+  font-size: 16px;
+}
+
+[data-exam-template='banking'] .bk-info-head button {
+  color: #fff;
+  font-size: 13px;
+}
+
+[data-exam-template='banking'] .bk-info-body {
+  min-height: 0;
+  padding: 10px 16px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+[data-exam-template='banking'] .bk-info-foot {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  background: #f8f3f0;
+}
+
+[data-exam-template='banking'] .bk-info-yes,
+[data-exam-template='banking'] .bk-info-no {
+  padding: 4px 12px;
+  border: 1px solid #4e8a6a;
+  border-radius: 5px;
+  background: #4eaf7c;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-exam-template='banking'] .bk-info-no {
+  border-color: var(--bk-blue);
+  background: transparent;
+  color: var(--bk-blue);
+}
+
+[data-exam-template='banking'] .bk-watermark {
+  pointer-events: none;
+}
+
+/* ---------- instructions (also read inside the sitting) ---------- */
+
+[data-exam-template='banking'].bi-page {
+  font-family: Arial, Verdana, Helvetica, sans-serif;
+  font-size: 16px;
+}
+
+[data-exam-template='banking'] .bi-header {
+  height: 50px;
+  border: 1px solid var(--bk-rule);
+}
+
+[data-exam-template='banking'] .bi-header h1 {
+  overflow: hidden;
+  padding: 0 15px;
+  color: #030065;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 50px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-exam-template='banking'] .bi-main {
+  border: 1px solid var(--bk-rule);
+}
+
+[data-exam-template='banking'] .bi-band {
+  height: 45px;
+  padding: 0 15px;
+  background: #bce8f5;
+  color: #5c666d;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 45px;
+}
+
+[data-exam-template='banking'] .bi-scroll {
+  padding: 10px 0;
+  overflow-y: auto;
+}
+
+[data-exam-template='banking'] .bi-content,
+[data-exam-template='banking'] .bk-info-body {
+  font-family: Arial, Verdana, Helvetica, sans-serif;
+}
+
+[data-exam-template='banking'] .bi-content {
+  padding: 0 15px;
+}
+
+[data-exam-template='banking'] :is(.bi-content, .bk-info-body) h3 {
+  margin: 30px 5px 15px;
+  font-size: 18.72px;
+  font-weight: 500;
+}
+
+[data-exam-template='banking'] :is(.bi-content, .bk-info-body) h3:first-child {
+  margin-top: 10px;
+}
+
+[data-exam-template='banking'] :is(.bi-content, .bk-info-body) ol {
+  padding-left: 30px;
+  list-style: decimal;
+}
+
+[data-exam-template='banking'] :is(.bi-content, .bk-info-body) ol ol {
+  margin-top: 10px;
+  padding-left: 20px;
+}
+
+[data-exam-template='banking'] :is(.bi-content, .bk-info-body) li {
+  margin-bottom: 10px;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+[data-exam-template='banking'] :is(.bi-content, .bk-info-body) strong {
+  font-weight: 500;
+}
+
+[data-exam-template='banking'] .bi-red {
+  color: #f00;
+}
+
+[data-exam-template='banking'] .bi-legend td {
+  height: 40px;
+  padding-right: 6px;
+  vertical-align: middle;
+}
+
+[data-exam-template='banking'] .bi-legend .bk-cell {
+  --bk-cell-w: 40px;
+
+  font-size: 16px;
+  font-weight: 700;
+}
+
+[data-exam-template='banking'] .bi-sections {
+  border-collapse: collapse;
+  font-size: 14.4px;
+}
+
+[data-exam-template='banking'] .bi-sections th,
+[data-exam-template='banking'] .bi-sections td {
+  padding: 6px 16px;
+  border: 1px solid var(--bk-rule);
+  text-align: center;
+}
+
+[data-exam-template='banking'] .bi-sections th {
+  font-weight: 700;
+}
+
+[data-exam-template='banking'] .bi-sections td:first-child {
+  text-align: left;
+}
+
+[data-exam-template='banking'] .bi-footer {
+  height: 60px;
+  padding: 0 15px;
+  border-top: 1px solid var(--bk-rule);
+}
+
+[data-exam-template='banking'] .bi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 15px;
+  border: 1px solid var(--bk-rule);
+  border-radius: 5px;
+  background: transparent;
+  color: #000;
+  font-family: Poppins, 'Segoe UI', system-ui, sans-serif;
+  font-size: 13.33px;
+}
+
+[data-exam-template='banking'] .bi-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+[data-exam-template='banking'] .bi-btn-filled {
+  border-color: #0c7cd5;
+  background: #0c7cd5;
+  color: #fff;
+}
+
+[data-exam-template='banking'] .bi-btn-filled:disabled {
+  opacity: 0.55;
+}
+
+[data-exam-template='banking'] .bi-confirm {
+  max-height: 60%;
+  padding: 10px;
+  overflow-y: auto;
+  border-top: 1px solid var(--bk-rule);
+  background: #fff;
+}
+
+[data-exam-template='banking'] .bi-choose {
+  font-size: 13px;
+}
+
+[data-exam-template='banking'] .bi-choose select {
+  margin-left: 5px;
+  padding: 2px 3px;
+  border: 1px solid #767676;
+  background: #fff;
+  font-size: 13.33px;
+}
+
+[data-exam-template='banking'] .bi-alert {
+  margin-top: 5px;
+  color: #f00;
+  font-size: 13px;
+}
+
+[data-exam-template='banking'] .bi-declare {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+[data-exam-template='banking'] .bi-declare input {
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+}
+
+[data-exam-template='banking'] .bi-declare span {
+  padding: 0 10px;
+}
+
+[data-exam-template='banking'] .bi-actions {
+  margin-top: 20px;
+}
+
+[data-exam-template='banking'] .bi-side {
+  width: var(--bk-side);
+  padding: 20px;
+  border: 1px solid var(--bk-rule);
+}
+
+[data-exam-template='banking'] .bi-side img {
+  height: 100px;
+  margin: 0 auto;
+}
+
+/* ---------- narrow screens: the original has none, so the palette folds over the paper ---------- */
+
+@media (max-width: 767px) {
+  [data-exam-template='banking'] .bk-photos,
+  [data-exam-template='banking'] .bi-side {
+    display: none;
+  }
+
+  [data-exam-template='banking'] .bk-lower {
+    flex-direction: column;
+  }
+
+  [data-exam-template='banking'] .bk-profile {
+    width: auto;
+    min-width: 0;
+  }
+
+  [data-exam-template='banking'] .bk-drawer {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 10;
+    width: min(320px, 85%);
+  }
+
+  [data-exam-template='banking'] [data-palette-open] .bk-drawer-toggle {
+    z-index: 11;
+    right: min(320px, 85%);
+  }
+
+  [data-exam-template='banking'] .bk-footer-side {
+    width: auto;
+    min-width: 0;
+    padding: 0 12px;
+  }
+
+  [data-exam-template='banking'] .bk-testname {
+    position: static;
+    max-width: none;
+    flex: 1;
+    padding: 0 8px;
+    transform: none;
+  }
+
+  [data-exam-template='banking'] .bk-tabrow {
+    overflow-x: auto;
+  }
+}

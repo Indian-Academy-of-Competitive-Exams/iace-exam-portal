@@ -4,8 +4,8 @@ import config from '@iace/config/eslint-react';
 export default [
   ...config,
   {
-    // This skin reproduces a third-party CBT exactly; a token here would be a deviation from it.
-    files: ['src/features/exam/templates/railway/**'],
+    // These skins reproduce a third-party CBT exactly; a token here would be a deviation from it.
+    files: ['src/features/exam/templates/{railway,banking}/**'],
     rules: { 'no-restricted-syntax': 'off' },
   },
   {

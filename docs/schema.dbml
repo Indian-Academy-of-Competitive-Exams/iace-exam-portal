@@ -54,7 +54,8 @@ Enum LanguageMode {
 
 Enum ExamTemplate {
   DEFAULT
-  SSC_RAILWAYS
+  RAILWAYS
+  BANKING
 }
 
 Enum TimerTemplate {

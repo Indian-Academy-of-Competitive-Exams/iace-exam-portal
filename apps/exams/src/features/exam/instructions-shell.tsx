@@ -5,6 +5,7 @@
  */
 import { EXAM_TEMPLATE, type ExamBrief, type LanguageCode } from '@iace/contracts';
 import { DefaultInstructions } from './default-instructions';
+import { BankingInstructions } from './templates/banking/instructions';
 import { RailwayInstructions } from './templates/railway/instructions';
 import { useInstructions } from './use-instructions';
 
@@ -21,6 +22,9 @@ export function InstructionsShell({
 
   if (brief.examTemplate === EXAM_TEMPLATE.RAILWAYS) {
     return <RailwayInstructions view={view} />;
+  }
+  if (brief.examTemplate === EXAM_TEMPLATE.BANKING) {
+    return <BankingInstructions view={view} />;
   }
 
   return <DefaultInstructions view={view} fullscreenSupported={fullscreenSupported} />;

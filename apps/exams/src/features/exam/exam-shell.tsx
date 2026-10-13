@@ -3,15 +3,18 @@
  * confirmation are here rather than in a template, so a new skin cannot ship
  * without them — and the data attribute is what scopes that skin's tokens.
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, Calculator, ConfirmDialog } from '@iace/ui';
 import { submittingSays, type ExamView } from '@iace/app-kit';
 import { Layout } from './templates/shared/layout';
+import { type ExamSlotProps } from './templates/shared/slots';
 import { useLockedZoom } from './lock-zoom';
 import { useNetworkStatus } from './use-network-status';
 import { RailwayLayout } from './templates/railway/layout';
 import { RailwayFullscreenNag } from './templates/railway/fullscreen-nag';
+import { BankingLayout } from './templates/banking/layout';
+import { BankingFullscreenNag } from './templates/banking/info-dialog';
 
 export function ExamShell({
   examTemplate,
@@ -24,9 +27,7 @@ export function ExamShell({
   useLockedZoom();
   // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
-  const railway = template === EXAM_TEMPLATE.RAILWAYS;
-  const Skin = railway ? RailwayLayout : Layout;
-  const Nag = railway ? RailwayFullscreenNag : FullscreenNag;
+  const { Skin, Nag, asksItself } = SKINS[template];
 
   return (
     <div
@@ -57,9 +58,9 @@ export function ExamShell({
 
       {fullscreen.nagging ? <Nag fullscreen={fullscreen} says={nagSays(fullscreen.exits)} /> : null}
 
-      {/* The railway skin asks over the paper, as its original does; every other skin gets this. */}
+      {/* A skin copied from a real CBT asks the way its original does; the default one gets this. */}
       <ConfirmDialog
-        open={submit.asking && !railway}
+        open={submit.asking && !asksItself}
         onOpenChange={(open) => !open && submit.cancel()}
         // ui-copy-ok: consequence — a confirm names what it is about to do
         title="Submit this test?"
@@ -71,6 +72,22 @@ export function ExamShell({
     </div>
   );
 }
+
+/** One row per template, so a new skin cannot be added without its warning and its way of asking. */
+const SKINS: Readonly<
+  Record<
+    ExamTemplate,
+    {
+      Skin: (props: ExamSlotProps) => ReactNode;
+      Nag: (props: { fullscreen: ExamView['fullscreen']; says: string }) => ReactNode;
+      asksItself: boolean;
+    }
+  >
+> = {
+  [EXAM_TEMPLATE.DEFAULT]: { Skin: Layout, Nag: FullscreenNag, asksItself: false },
+  [EXAM_TEMPLATE.RAILWAYS]: { Skin: RailwayLayout, Nag: RailwayFullscreenNag, asksItself: true },
+  [EXAM_TEMPLATE.BANKING]: { Skin: BankingLayout, Nag: BankingFullscreenNag, asksItself: true },
+};
 
 /** The default skin's warning: the design system's own alert, over the paper it interrupts. */
 function FullscreenNag({

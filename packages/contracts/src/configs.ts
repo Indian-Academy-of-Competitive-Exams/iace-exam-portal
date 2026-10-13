@@ -47,6 +47,7 @@ export const LANGUAGE_MODES = languageModeSchema.options;
 export const EXAM_TEMPLATE = {
   DEFAULT: 'DEFAULT',
   RAILWAYS: 'RAILWAYS',
+  BANKING: 'BANKING',
 } as const;
 export const examTemplateSchema = z.enum(EXAM_TEMPLATE);
 export type ExamTemplate = z.infer<typeof examTemplateSchema>;
@@ -77,6 +78,13 @@ export const EXAM_TEMPLATE_CONFIG: Readonly<Record<ExamTemplate, ExamTemplateCon
     timerFormat: 'LABELLED',
     palettePosition: 'RIGHT',
     sectionSwitch: 'BUTTONS',
+    watermark: 'SCREEN',
+  },
+  [EXAM_TEMPLATE.BANKING]: {
+    timerPosition: 'SECTION_BAR',
+    timerFormat: 'LABELLED',
+    palettePosition: 'RIGHT',
+    sectionSwitch: 'TABS',
     watermark: 'SCREEN',
   },
 };

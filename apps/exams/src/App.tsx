@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Route, Routes } from 'react-router-dom';
+import { EXAM_TEMPLATE } from '@iace/contracts';
 import { ProtectedRoute } from '@iace/app-kit/browser';
 import { LoadingState, PageErrorBoundary } from '@iace/ui';
 import { useAuth } from './providers/auth';
@@ -113,13 +114,22 @@ export function App() {
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       {import.meta.env.DEV ? (
-        <Route
-          path="/railway-preview"
-          element={whileLoading(
-            <RailwayPreviewPage />,
-            <LoadingState>Opening your paper</LoadingState>,
-          )}
-        />
+        <>
+          <Route
+            path="/railway-preview"
+            element={whileLoading(
+              <RailwayPreviewPage />,
+              <LoadingState>Opening your paper</LoadingState>,
+            )}
+          />
+          <Route
+            path="/banking-preview"
+            element={whileLoading(
+              <RailwayPreviewPage template={EXAM_TEMPLATE.BANKING} />,
+              <LoadingState>Opening your paper</LoadingState>,
+            )}
+          />
+        </>
       ) : null}
       <Route
         element={

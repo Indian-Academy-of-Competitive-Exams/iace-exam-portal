@@ -73,11 +73,12 @@ enum LanguageMode {
   DUAL
 }
 
-// Which skin the exam screen wears. Presentation only — both run the same engine,
-// the same clock and the same state machine, so neither changes what is scored.
+// Which skin the exam screen wears. Presentation only — every one runs the same engine,
+// the same clock and the same state machine, so none changes what is scored.
 enum ExamTemplate {
   DEFAULT
   RAILWAYS
+  BANKING
 }
 
 // Section-return behaviour derives from this: COMPOSITE_FREE may return,
