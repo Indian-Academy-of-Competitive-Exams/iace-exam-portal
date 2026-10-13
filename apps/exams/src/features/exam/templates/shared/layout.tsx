@@ -84,16 +84,7 @@ export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<Exa
                   </div>
                 </ScrollPane>
               ) : null}
-              {isTypingQuestion(view.question) ? (
-                <ExamTyping view={view} />
-              ) : (
-                <ScrollPane keys wheel className="min-h-0 min-w-0 flex-1">
-                  <article className="flex min-w-0 flex-col gap-exam-gap p-exam">
-                    <QuestionPanel view={view} config={config} />
-                    <Options view={view} config={config} />
-                  </article>
-                </ScrollPane>
-              )}
+              <Answered view={view} config={config} />
             </div>
             {onPaper ? <PaperWatermark view={view} config={config} /> : null}
           </div>
@@ -166,5 +157,18 @@ export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<Exa
         onOpenChange={(open) => setPanel(open ? 'RULES' : null)}
       />
     </>
+  );
+}
+
+/** Where the question is answered: a typing passage takes the whole pane, anything else scrolls under its stem. */
+function Answered({ view, config }: Readonly<ExamSlotProps>) {
+  if (isTypingQuestion(view.question)) return <ExamTyping view={view} />;
+  return (
+    <ScrollPane keys wheel className="min-h-0 min-w-0 flex-1">
+      <article className="flex min-w-0 flex-col gap-exam-gap p-exam">
+        <QuestionPanel view={view} config={config} />
+        <Options view={view} config={config} />
+      </article>
+    </ScrollPane>
   );
 }

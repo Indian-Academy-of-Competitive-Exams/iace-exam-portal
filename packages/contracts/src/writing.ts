@@ -64,10 +64,11 @@ function lengthShare(words: number, rubric: WritingRubric | undefined): number {
   return min === null ? Math.min(1, words / WRITING_ATTEMPT_WORDS) : 1;
 }
 
+/** Each read off one trimmed line, so no pattern has leading space to wander through. */
 const LETTER_PARTS = [
-  /^\s*(dear|respected|sir|madam|to)\b/im,
-  /^\s*(subject|sub)\s*[:\-\u2013]/im,
-  /(yours\s+(faithfully|sincerely|truly|obediently)|regards|thanking\s+you)/i,
+  /^(dear|respected|sir|madam|to)\b/i,
+  /^(subject|sub) ?[:\-\u2013]/i,
+  /\b(yours (faithfully|sincerely|truly|obediently)|regards|thanking you)\b/i,
 ];
 const ESSAY_PARAGRAPHS = 3;
 const PRECIS_TITLE_WORDS = 12;
@@ -81,7 +82,11 @@ const paragraphsOf = (answer: string): string[] =>
 const FORMAT_SHARE: Record<WritingFormat, (answer: string, rubric: WritingRubric) => number> = {
   OTHER: () => 1,
   ESSAY: (answer) => Math.min(1, paragraphsOf(answer).length / ESSAY_PARAGRAPHS),
-  LETTER: (answer) => LETTER_PARTS.filter((part) => part.test(answer)).length / LETTER_PARTS.length,
+  LETTER: (answer) => {
+    const lines = paragraphsOf(answer).map((line) => line.replace(/\s+/g, ' '));
+    const found = LETTER_PARTS.filter((part) => lines.some((line) => part.test(line)));
+    return found.length / LETTER_PARTS.length;
+  },
   PRECIS: (answer, rubric) => {
     const [title = '', ...body] = paragraphsOf(answer);
     const titled = body.length > 0 && wordsOf(title).length <= PRECIS_TITLE_WORDS;

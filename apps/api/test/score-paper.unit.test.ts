@@ -350,7 +350,8 @@ describe('scorePaper — a written answer', () => {
     ]).questions;
 
     assert.equal(whole?.marksAwarded, 10);
-    assert.ok((half?.marksAwarded ?? 0) > 0 && (half?.marksAwarded ?? 0) < 10);
+    assert.ok((half?.marksAwarded ?? 0) > 0);
+    assert.ok((half?.marksAwarded ?? 0) < 10);
     assert.equal(half?.isCorrect, true);
   });
 

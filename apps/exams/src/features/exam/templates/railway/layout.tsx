@@ -137,10 +137,7 @@ export function RailwayLayout({
           </div>
 
           <div className="new-tab-second flex shrink-0 items-center justify-between">
-            <span className="rw-qtype">
-              Question Type :{' '}
-              {isTypingQuestion(view.question) ? 'Typing Test' : 'Multiple Choice Question'}
-            </span>
+            <span className="rw-qtype">Question Type : {questionTypeLabel(view)}</span>
             {view.question ? (
               <span className="rw-marks">
                 Marks For Correct Answer: <em>{view.question.marks}</em> | Negative Mark:{' '}
@@ -167,13 +164,7 @@ export function RailwayLayout({
                 </div>
               </ScrollPane>
             ) : null}
-            {!asking && isTypingQuestion(view.question) ? (
-              <ExamTyping view={view} />
-            ) : (
-              <ScrollPane keys className="min-h-0 min-w-0 flex-1">
-                {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
-              </ScrollPane>
-            )}
+            <RailwayAnswered view={view} asking={asking} />
           </div>
 
           {view.submit.failed ? (
@@ -194,7 +185,7 @@ export function RailwayLayout({
             <button
               type="button"
               className="btn"
-              disabled={off || answersByKeyboard(view.question)}
+              disabled={!clearable(view, off)}
               onClick={view.clearResponse}
             >
               Clear Response
@@ -256,6 +247,22 @@ export function RailwayLayout({
 
       <PaperWatermark view={view} config={config} className="rw-watermark" />
     </div>
+  );
+}
+
+const questionTypeLabel = (view: ExamView) =>
+  isTypingQuestion(view.question) ? 'Typing Test' : 'Multiple Choice Question';
+
+/** One click must not clear minutes of typing or writing, so the button is off on such a question. */
+const clearable = (view: ExamView, off: boolean) => !off && !answersByKeyboard(view.question);
+
+/** The pane the answer is given in: the submit summary, a typing passage whole, or the question scrolling. */
+function RailwayAnswered({ view, asking }: Readonly<{ view: ExamView; asking: boolean }>) {
+  if (!asking && isTypingQuestion(view.question)) return <ExamTyping view={view} />;
+  return (
+    <ScrollPane keys className="min-h-0 min-w-0 flex-1">
+      {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
+    </ScrollPane>
   );
 }
 

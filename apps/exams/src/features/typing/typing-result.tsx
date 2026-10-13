@@ -141,13 +141,23 @@ export function TypingOutcome({ result }: Readonly<{ result: TypingResult }>) {
         }
       >
         <Card className="p-5 text-base leading-loose">
-          {result.words.map((word, index) => (
-            <MarkedWord key={index} word={word} />
+          {placed(result.words).map(({ word, at }) => (
+            <MarkedWord key={at} word={word} />
           ))}
         </Card>
       </Section>
     </>
   );
+}
+
+/** Each word with how far into the comparison it starts: fixed once scored, and so its identity. */
+function placed(words: readonly TypedWord[]): { word: TypedWord; at: number }[] {
+  let at = 0;
+  return words.map((word) => {
+    const here = { word, at };
+    at += (word.typed ?? word.expected ?? '').length + 1;
+    return here;
+  });
 }
 
 function MarkedWord({ word }: Readonly<{ word: TypedWord }>) {

@@ -3,7 +3,15 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Card, EmptyState, EMPTY_STATE_KINDS, Metric, StatRow, cn } from '@iace/ui';
 import { CohortFigure, MarksFigure, TimeFigure, type Benchmark } from '@iace/app-kit/browser';
-import { isMarkingPending, isSittingVoided, minutes, ordinalSuffix } from '@iace/app-kit';
+import {
+  METRIC_UNITS,
+  headlineOf,
+  isMarkingPending,
+  isSittingVoided,
+  minutes,
+  ordinalSuffix,
+  targetLabel,
+} from '@iace/app-kit';
 import {
   TYPING_PRESETS,
   paperCounts,
@@ -14,7 +22,6 @@ import {
   type TypingSitting,
 } from '@iace/contracts';
 import { scoreCardQuery, typingInAttemptQuery } from '../../lib/queries';
-import { METRIC_UNITS, headlineOf, targetLabel } from '@iace/app-kit';
 import { QualifiedBadge, TypingHeadline, TypingOutcome } from '../typing/typing-result';
 import { WRITTEN_NOTICE } from '../typing/written-notice';
 import { SittingSetAside } from './report';

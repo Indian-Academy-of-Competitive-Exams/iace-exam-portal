@@ -569,7 +569,8 @@ describe('a written answer in a sitting', () => {
     const card = await analytics().scoreCard(studentId, attemptId);
     const essay = card.sections.find((section) => section.name === 'Essay');
 
-    assert.ok((essay?.score ?? 0) > 0 && (essay?.score ?? 0) < 2, 'part of its two marks');
+    assert.ok((essay?.score ?? 0) > 0, 'something for the point it made');
+    assert.ok((essay?.score ?? 0) < 2, 'and less than its two marks');
     assert.equal(card.score, 2 + (essay?.score ?? 0));
     assert.equal(card.correctCount, 2);
   });
