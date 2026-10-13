@@ -43,6 +43,14 @@ const ExamPage = React.lazy(() =>
 const SolutionPanel = React.lazy(() =>
   import('./features/review/review').then((module) => ({ default: module.SolutionPanel })),
 );
+const TypingPage = React.lazy(() =>
+  import('./features/typing/typing').then((module) => ({ default: module.TypingPage })),
+);
+const TypingSessionPage = React.lazy(() =>
+  import('./features/typing/typing-session').then((module) => ({
+    default: module.TypingSessionPage,
+  })),
+);
 const DownloadsPage = React.lazy(() =>
   import('./features/downloads/downloads').then((module) => ({ default: module.DownloadsPage })),
 );
@@ -160,7 +168,15 @@ export function App() {
           path={ROUTES.EXAM_PATTERN}
           element={whileLoading(<ExamPage />, <LoadingState>Opening your paper</LoadingState>)}
         />
+        <Route
+          path={ROUTES.TYPING_SESSION_PATTERN}
+          element={whileLoading(
+            <TypingSessionPage />,
+            <LoadingState>Fetching a passage</LoadingState>,
+          )}
+        />
         <Route element={<AppShell />}>
+          <Route path={ROUTES.TYPING} element={whileLoading(<TypingPage />, <PageSkeleton />)} />
           <Route path={ROUTES.HOME} element={whileLoading(<DashboardPage />, <PageSkeleton />)} />
           <Route path={ROUTES.TESTS} element={whileLoading(<TestsPage />, <PageSkeleton />)} />
           <Route

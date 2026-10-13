@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Download,
   KeyRound,
+  Keyboard,
   Trophy,
   User,
 } from 'lucide-react';
@@ -46,6 +47,11 @@ export const ROUTES = {
   NOTIFICATIONS: '/notifications',
   /** Under the bell, so the trail reads Notifications > Settings and the rail stays on the bell. */
   NOTIFICATION_SETTINGS: '/notifications/settings',
+  /** Typing practice: the standards and their history. */
+  TYPING: '/typing',
+  /** Full screen, outside the shell, like the sitting it rehearses. */
+  TYPING_SESSION: (presetKey: string) => `/typing/${presetKey}`,
+  TYPING_SESSION_PATTERN: '/typing/:presetKey',
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
@@ -59,6 +65,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
   { to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },
   { to: ROUTES.LEADERBOARD, label: 'Leaderboard', icon: Trophy },
+  { to: ROUTES.TYPING, label: 'Typing', icon: Keyboard },
   { to: ROUTES.SAVED, label: 'Saved questions', icon: Bookmark },
   { to: ROUTES.DOWNLOADS, label: 'Downloads', icon: Download },
   { to: ROUTES.NOTIFICATIONS, label: 'Notifications', icon: Bell },
@@ -98,6 +105,11 @@ export {
   scoreCardQueryKey,
   solutionsQueryKey,
 } from '@iace/app-kit';
+
+/** Web only: a phone keyboard measures nothing, so the mobile client never asks for these. */
+export const typingPracticesQueryKey = () => ['me', 'typing', 'practices'] as const;
+export const typingPassageQueryKey = (presetKey: string) =>
+  ['me', 'typing', 'passage', presetKey] as const;
 
 /** The subject filter choosing no scope means every scope, the way a `choice` filter's blank does. */
 export const ANY_SCOPE = '';
