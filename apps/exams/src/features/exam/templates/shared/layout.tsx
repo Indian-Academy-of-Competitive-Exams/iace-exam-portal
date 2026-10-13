@@ -27,6 +27,8 @@ import {
 } from './slots';
 import { Passage } from '../../passage';
 import { ScrollPane } from '../../scroll-pane';
+import { isTypingQuestion } from '../../../typing/typing-figures';
+import { ExamTyping } from './exam-typing';
 import { PaperPanel, RulesPanel } from './panels';
 
 export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<ExamSlotProps>) {
@@ -82,12 +84,16 @@ export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<Exa
                   </div>
                 </ScrollPane>
               ) : null}
-              <ScrollPane keys wheel className="min-h-0 min-w-0 flex-1">
-                <article className="flex min-w-0 flex-col gap-exam-gap p-exam">
-                  <QuestionPanel view={view} config={config} />
-                  <Options view={view} config={config} />
-                </article>
-              </ScrollPane>
+              {isTypingQuestion(view.question) ? (
+                <ExamTyping view={view} />
+              ) : (
+                <ScrollPane keys wheel className="min-h-0 min-w-0 flex-1">
+                  <article className="flex min-w-0 flex-col gap-exam-gap p-exam">
+                    <QuestionPanel view={view} config={config} />
+                    <Options view={view} config={config} />
+                  </article>
+                </ScrollPane>
+              )}
             </div>
             {onPaper ? <PaperWatermark view={view} config={config} /> : null}
           </div>

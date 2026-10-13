@@ -19,6 +19,7 @@ import {
   type PrintablePaperQuery,
   type QuestionOption,
   languagesFor,
+  type TypingPresetKey,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
@@ -58,6 +59,7 @@ const PAPER_SELECT = {
               order: true,
               questionCount: true,
               durationSec: true,
+              typingPreset: true,
             },
             orderBy: { order: 'asc' },
           },
@@ -138,6 +140,7 @@ export class AttemptPaperService {
         durationSec: section.durationSec,
         marksPerQuestion: Number(section.marksPerQuestion),
         negativeMarks: Number(section.negativeMarks),
+        typingPreset: section.typingPreset as TypingPresetKey | null,
       })),
     };
   }
@@ -298,6 +301,7 @@ export class AttemptPaperService {
         order: section.order,
         questionCount: section.questionCount,
         durationSec: section.durationSec,
+        typingPreset: section.typingPreset as TypingPresetKey | null,
       })),
       questions: this.withImages(
         rows.map((row, index) => toExamQuestion({ ...row, order: index + 1 }, languages)),

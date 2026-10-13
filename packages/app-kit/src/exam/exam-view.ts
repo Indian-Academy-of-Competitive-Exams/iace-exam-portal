@@ -142,6 +142,8 @@ export interface ExamView {
   question: ExamQuestion | undefined;
   questionIndex: number;
   selectedOptionId: string | null;
+  /** What the open question's typing box holds; empty for a question answered by an option. */
+  typedAnswer: string;
   marked: boolean;
   answers: Readonly<Record<string, LiveAnswer>>;
   /** The whole paper, which is what submit counts against. */
@@ -172,6 +174,8 @@ export interface ExamView {
   canOpen: (questionId: string) => boolean;
   nextQuestion: () => void;
   chooseOption: (optionId: string) => void;
+  /** A typing passage's one write: the whole of what the box now holds. */
+  typeAnswer: (text: string) => void;
   /** OMR's one write: the option and the flag together, because two records are two saves. */
   bubbleAnswer: (optionId: string, fill: number) => void;
   markAndNext: () => void;

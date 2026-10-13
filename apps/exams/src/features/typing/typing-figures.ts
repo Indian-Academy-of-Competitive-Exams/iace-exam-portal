@@ -1,7 +1,9 @@
 /** What a typing standard asks for and what a session came to, in the words the boards use. */
 import {
+  QUESTION_TYPE,
   TYPING_METRIC,
   TYPING_RULE,
+  type ExamQuestion,
   type TypingMetric,
   type TypingPreset,
   type TypingRule,
@@ -45,3 +47,7 @@ export function mistakeRuleLabel(rule: TypingRule): string {
 /** A whole mistake and a half one, as the single figure the rule counts. */
 export const mistakesOf = (row: { fullMistakes: number; halfMistakes: number }) =>
   row.fullMistakes + row.halfMistakes / 2;
+
+/** Whether this question is typed rather than answered, which every skin asks before drawing options. */
+export const isTypingQuestion = (question: ExamQuestion | undefined): boolean =>
+  question?.type === QUESTION_TYPE.TYPING;

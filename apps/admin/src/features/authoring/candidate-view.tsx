@@ -4,6 +4,7 @@ import {
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
   QUESTION_TYPE,
+  type QuestionType,
   hasText,
   type QuestionLanguage,
 } from '@iace/contracts';
@@ -42,13 +43,7 @@ export function CandidateViewPage() {
   }
 
   const content = view.state.content[language];
-  const asked = (
-    <Asked
-      content={content}
-      language={language}
-      typed={view.state.type === QUESTION_TYPE.TEXT_FIELD}
-    />
-  );
+  const asked = <Asked content={content} language={language} answeredBy={view.state.type} />;
 
   return (
     <div className={FRAME}>
@@ -92,12 +87,16 @@ export function CandidateViewPage() {
 function Asked({
   content,
   language,
-  typed,
-}: Readonly<{ content: LanguageContent; language: QuestionLanguage; typed: boolean }>) {
+  answeredBy,
+}: Readonly<{ content: LanguageContent; language: QuestionLanguage; answeredBy: QuestionType }>) {
+  // A typing passage is its own question: the candidate is given a box, which is not this view's to draw.
+  if (answeredBy === QUESTION_TYPE.TYPING)
+    return <RichContent html={content.stem} lang={language} />;
+
   return (
     <div className="flex flex-col gap-4">
       <RichContent html={content.stem} lang={language} />
-      {typed ? (
+      {answeredBy === QUESTION_TYPE.TEXT_FIELD ? (
         <Input aria-label="Answer" className="max-w-xs" />
       ) : (
         // Keyed by language, so a choice made in one does not stay ticked under another's text.

@@ -21,6 +21,7 @@ import {
   round2 as round,
   scopedSections,
   servedQuestions,
+  type TypingPresetKey,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -68,6 +69,7 @@ const SOLUTION_SELECT = {
               order: true,
               questionCount: true,
               durationSec: true,
+              typingPreset: true,
             },
             orderBy: { order: 'asc' },
           },
@@ -157,6 +159,7 @@ export class AttemptReportService {
         order: section.order,
         questionCount: section.questionCount,
         durationSec: section.durationSec,
+        typingPreset: section.typingPreset as TypingPresetKey | null,
       }),
     );
     const asked = wantedOf(served, query, sections[0]?.id ?? null);

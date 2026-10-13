@@ -72,6 +72,7 @@ const SHARED_SELECT = {
               perQuestionSec: true,
               marksPerQuestion: true,
               negativeMarks: true,
+              typingPreset: true,
             },
             orderBy: { order: 'asc' },
           },

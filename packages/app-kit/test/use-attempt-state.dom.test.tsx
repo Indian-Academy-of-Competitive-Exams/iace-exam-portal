@@ -1294,3 +1294,39 @@ test('time on one question stops at what a save accepts, however far the device 
     'and so is the screen',
   );
 });
+
+type SentTyped = {
+  answers: Array<{ questionId: string; typedAnswer: string | null; state: string }>;
+};
+
+/** The failure this prevents: a typing box saved once a key, or its text lost to a flag or a visit. */
+test('typing keeps the whole text through a flag and a visit, and saves it once', async (t) => {
+  const sent: SentTyped[] = [];
+  const { result, unmount } = renderHook(() =>
+    useAttemptState('attempt-1', depsFor(apiThatSaves(sent as unknown as SentAnswers[]))),
+  );
+  t.after(unmount);
+  await act(async () => void (await Promise.resolve()));
+
+  act(() => result.current.open('q1'));
+  for (const text of ['t', 'th', 'the', 'the ', 'the q']) {
+    act(() => result.current.type('q1', text));
+  }
+  assert.equal(sent.length, 0, 'a key is not a save');
+  assert.equal(result.current.answers.q1?.typedAnswer, 'the q');
+  assert.equal(result.current.answers.q1?.state, ANSWER_STATE.ANSWERED);
+
+  act(() => result.current.answer('q1', { marked: true }));
+  act(() => result.current.open('q2'));
+  await act(async () => void (await result.current.flush()));
+  const saved = sent.at(-1)?.answers.find((row) => row.questionId === 'q1');
+  assert.equal(saved?.typedAnswer, 'the q');
+  assert.equal(saved?.state, ANSWER_STATE.ANSWERED_MARKED);
+
+  act(() => result.current.answer('q1', { selectedOptionId: null, marked: false }));
+  assert.equal(
+    result.current.answers.q1?.typedAnswer,
+    null,
+    'clearing the response empties the box',
+  );
+});

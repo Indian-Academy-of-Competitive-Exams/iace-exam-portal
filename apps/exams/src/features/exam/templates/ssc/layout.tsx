@@ -26,6 +26,8 @@ import profileImage from '../railway/assets/profile.png';
 import { SscGuide, SscHeader, SscPhotoColumn } from './instructions';
 import { ANALYTICS_ORDER, STATE_CLASS, STATE_LABEL, answeredOf, summaryOf } from './states';
 import './ssc.css';
+import { isTypingQuestion } from '../../../typing/typing-figures';
+import { ExamTyping } from '../shared/exam-typing';
 
 /** ssc.css lays the palette over the paper at the same width. */
 const PHONE_QUERY = '(max-width: 767px)';
@@ -338,6 +340,7 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
 function SscPaper({ view }: Readonly<{ view: ExamView }>) {
   const { question } = view;
   if (!question) return <p className="sc-qno">This section is closed.</p>;
+  if (isTypingQuestion(question)) return <ExamTyping view={view} />;
 
   const passages = passagesOf(question.content, view.languages, view.languageMode);
   const shown = shownLanguages(view.languages, view.languageMode);

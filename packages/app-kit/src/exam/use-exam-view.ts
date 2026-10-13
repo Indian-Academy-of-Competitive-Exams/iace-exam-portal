@@ -301,6 +301,10 @@ export function useExamView(
       state.answer(current.questionId, forwardOnly ? { ...next, marked: false } : next);
   };
 
+  const type = (text: string): void => {
+    if (current && !locked()) state.type(current.questionId, text);
+  };
+
   // Null is "no clock of its own" and falls to the paper's; a section spent to 0 still counts, and closes.
   const sectionSec = sectional
     ? sectionLeftSec(section?.durationSec, state.sections[sectionId]?.openedAt, clock.serverNow)
@@ -323,6 +327,7 @@ export function useExamView(
     move,
     nextQuestion,
     record,
+    type,
     openSection,
     endSection,
     end,
@@ -348,6 +353,7 @@ export function useExamView(
       canOpen: (id: string) => live.current.canOpen(id),
       nextQuestion: () => live.current.nextQuestion(),
       chooseOption: (optionId: string) => live.current.record({ selectedOptionId: optionId }),
+      typeAnswer: (text: string) => live.current.type(text),
       bubbleAnswer: (optionId: string, fill: number) => {
         const filled = omrStateFor(fill);
         // A smudge is not an answer, so it must not pick the option either — only stop flagging it.
@@ -448,6 +454,7 @@ export function useExamView(
       question: current,
       questionIndex: current ? inSection.indexOf(current) : -1,
       selectedOptionId: current ? (answers[current.questionId]?.selectedOptionId ?? null) : null,
+      typedAnswer: current ? (answers[current.questionId]?.typedAnswer ?? '') : '',
       marked: isReviewState(current ? answers[current.questionId]?.state : undefined),
       answers,
       counts,
@@ -468,6 +475,7 @@ export function useExamView(
       canOpen: on.canOpen,
       nextQuestion: on.nextQuestion,
       chooseOption: on.chooseOption,
+      typeAnswer: on.typeAnswer,
       bubbleAnswer: on.bubbleAnswer,
       markAndNext: on.markAndNext,
       toggleMark: on.toggleMark,

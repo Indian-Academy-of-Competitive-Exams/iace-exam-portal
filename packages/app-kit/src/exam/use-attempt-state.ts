@@ -85,6 +85,8 @@ export interface AttemptStateHandle {
   standDown: () => void;
   /** What happened, in the screen's words. Time on the question is this hook's bookkeeping. */
   answer: (questionId: string, next: AnswerIntent) => void;
+  /** What a typing box now holds. Unlike an answer it restarts no clock: it changes at every key. */
+  type: (questionId: string, text: string) => void;
   /** Which question is on screen now, so the time on the last one can be banked. The same one again is a no-op. */
   open: (questionId: string | null) => void;
   /** Banks the open question's seconds without moving off it — before a flush that must be whole. */
@@ -434,6 +436,13 @@ export function useAttemptState(
     [flush, queue, record],
   );
 
+  const type = useCallback(
+    (questionId: string, text: string) => {
+      record(typedChange(questionId, answersNow.current[questionId], text, seenAtOf(openedAt)));
+    },
+    [record],
+  );
+
   const markSection = useCallback(
     (sectionId: string, progress: SectionProgress) => {
       if (stoodDown.current) return;
@@ -480,6 +489,7 @@ export function useAttemptState(
     ended,
     standDown,
     answer,
+    type,
     open,
     bankOpen,
     enterSection,
@@ -503,13 +513,32 @@ function changeFor(
   const option =
     next.selectedOptionId === undefined ? held?.selectedOptionId : next.selectedOptionId;
   const marked = next.marked ?? isReviewState(held?.state);
+  // A flag leaves what was typed alone; only clearing the response empties it.
+  const typed = next.selectedOptionId === null ? null : (held?.typedAnswer ?? null);
 
   return {
     questionId,
-    state: stateFor(option ?? null, marked),
+    state: stateFor(option ?? null, marked, typed),
     selectedOptionId: option ?? null,
-    typedAnswer: null,
+    typedAnswer: typed,
     timeSpentSec: timeOn(held, spentSec),
+    firstActionAt: held?.firstActionAt ?? seenAt,
+  };
+}
+
+/** A typing box's text, with the seconds left as they were: leaving the question banks those. */
+function typedChange(
+  questionId: string,
+  held: LiveAnswer | undefined,
+  text: string,
+  seenAt: string,
+): AnswerChange {
+  return {
+    questionId,
+    state: stateFor(null, isReviewState(held?.state), text),
+    selectedOptionId: null,
+    typedAnswer: text,
+    timeSpentSec: held?.timeSpentSec ?? 0,
     firstActionAt: held?.firstActionAt ?? seenAt,
   };
 }
@@ -540,8 +569,13 @@ const timeOn = (held: LiveAnswer | undefined, spentSec: number): number =>
   Math.min(QUESTION_TIME_MAX_SEC, (held?.timeSpentSec ?? 0) + spentSec);
 
 /** The screen's guess. The server derives the truth from the same two facts and wins. */
-function stateFor(option: string | null, marked: boolean): AnswerState {
-  if (option !== null) return marked ? ANSWER_STATE.ANSWERED_MARKED : ANSWER_STATE.ANSWERED;
+function stateFor(
+  option: string | null,
+  marked: boolean,
+  typed: string | null = null,
+): AnswerState {
+  const answered = option !== null || (typed ?? '').trim() !== '';
+  if (answered) return marked ? ANSWER_STATE.ANSWERED_MARKED : ANSWER_STATE.ANSWERED;
   return marked ? ANSWER_STATE.MARKED_REVIEW : ANSWER_STATE.NOT_ANSWERED;
 }
 

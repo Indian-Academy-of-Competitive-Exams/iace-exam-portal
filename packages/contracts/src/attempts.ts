@@ -15,6 +15,8 @@ import {
   questionTypeSchema,
 } from './questions';
 import { paperQuestionStatusSchema } from './tests';
+import { typingPresetKeySchema } from './typing';
+import { TYPED_TEXT_MAX } from './typing-practice';
 
 // ============================================================================
 // Attempts. One row holds the live state and the scored result — there is no
@@ -152,7 +154,8 @@ export const answerChangeSchema = z.object({
   /** What the screen believes. The server derives the truth from the answer and the mark. */
   state: answerStateSchema,
   selectedOptionId: z.string().min(1).nullish(),
-  typedAnswer: z.string().nullish(),
+  /** Bounded by the longest a typing box takes; a save past it would be refused whole. */
+  typedAnswer: z.string().max(TYPED_TEXT_MAX).nullish(),
   /** Total seconds on this question so far, as the screen has counted them. */
   timeSpentSec: z.number().int().min(0).max(QUESTION_TIME_MAX_SEC),
   /** When this student first touched it, in UTC. Sent every time; the server keeps only the earliest. */
@@ -251,6 +254,8 @@ export const examBriefSchema = z.object({
       durationSec: z.number().int().nullable(),
       marksPerQuestion: z.number(),
       negativeMarks: z.number(),
+      /** Set on a typing section, which needs a keyboard: a phone says so before the clock starts. */
+      typingPreset: typingPresetKeySchema.nullish(),
     }),
   ),
 });
@@ -528,6 +533,8 @@ export const examSectionSchema = z.object({
   order: z.number().int(),
   questionCount: z.number().int(),
   durationSec: z.number().int().nullable(),
+  /** Set on a typing section: its one question is typed, and held to this standard. */
+  typingPreset: typingPresetKeySchema.nullish(),
 });
 export type ExamSection = z.infer<typeof examSectionSchema>;
 

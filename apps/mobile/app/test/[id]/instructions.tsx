@@ -38,7 +38,7 @@ import { EXAM_RESUME_PARAM } from '../../../src/lib/constants';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { plural } from '../../../src/lib/plural';
-import { sectionLine } from '../../../src/lib/brief-lines';
+import { NEEDS_KEYBOARD_SAYS, needsKeyboard, sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
@@ -184,9 +184,13 @@ function InstructionsContent({
 
       <Declaration declared={declared} onChange={onDeclaredChange} />
 
-      <Button disabled={!ready || beginning} onPress={() => onBegin(languages)}>
-        I am ready to begin
-      </Button>
+      {needsKeyboard(paper) ? (
+        <Alert>{NEEDS_KEYBOARD_SAYS}</Alert>
+      ) : (
+        <Button disabled={!ready || beginning} onPress={() => onBegin(languages)}>
+          I am ready to begin
+        </Button>
+      )}
     </Fragment>
   );
 }

@@ -26,6 +26,8 @@ import { ScrollPane } from '../../scroll-pane';
 import { RailwaySubmitSummary } from './submit-summary';
 import { RailwayPauseBox } from './fullscreen-nag';
 import './railway.css';
+import { isTypingQuestion } from '../../../typing/typing-figures';
+import { ExamTyping } from '../shared/exam-typing';
 
 /** The original has no screen this narrow; railway.css folds the palette over the paper at the same width. */
 const PHONE_QUERY = '(max-width: 767px)';
@@ -132,7 +134,10 @@ export function RailwayLayout({
           </div>
 
           <div className="new-tab-second flex shrink-0 items-center justify-between">
-            <span className="rw-qtype">Question Type : Multiple Choice Question</span>
+            <span className="rw-qtype">
+              Question Type :{' '}
+              {isTypingQuestion(view.question) ? 'Typing Test' : 'Multiple Choice Question'}
+            </span>
             {view.question ? (
               <span className="rw-marks">
                 Marks For Correct Answer: <em>{view.question.marks}</em> | Negative Mark:{' '}
@@ -159,9 +164,13 @@ export function RailwayLayout({
                 </div>
               </ScrollPane>
             ) : null}
-            <ScrollPane keys className="min-h-0 min-w-0 flex-1">
-              {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
-            </ScrollPane>
+            {!asking && isTypingQuestion(view.question) ? (
+              <ExamTyping view={view} />
+            ) : (
+              <ScrollPane keys className="min-h-0 min-w-0 flex-1">
+                {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
+              </ScrollPane>
+            )}
           </div>
 
           {view.submit.failed ? (

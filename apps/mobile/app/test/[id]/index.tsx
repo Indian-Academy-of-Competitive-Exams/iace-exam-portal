@@ -39,7 +39,7 @@ import { cn } from '../../../src/lib/cn';
 import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import { plural } from '../../../src/lib/plural';
-import { sectionLine } from '../../../src/lib/brief-lines';
+import { NEEDS_KEYBOARD_SAYS, needsKeyboard, sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
@@ -164,7 +164,13 @@ function AboutContent({
       <SectionsCard brief={brief} />
       <PaperCard brief={brief} />
 
-      <Exits testId={testId} listed={listed} catalog={catalog} now={now} />
+      <Exits
+        testId={testId}
+        listed={listed}
+        catalog={catalog}
+        now={now}
+        needsKeyboard={needsKeyboard(brief)}
+      />
 
       <PastAttempts testId={testId} />
     </Fragment>
@@ -236,9 +242,12 @@ function Exits({
   listed,
   catalog,
   now,
+  needsKeyboard,
 }: Readonly<{
   testId: string;
   listed: StudentCatalogTest | undefined;
+  /** A typing section is typed on a real keyboard, so the paper is not started from a phone. */
+  needsKeyboard: boolean;
   catalog: CatalogState;
   now: Date;
 }>) {
@@ -255,6 +264,7 @@ function Exits({
 
   const action = listed ? testAction(listed) : null;
 
+  if (action && needsKeyboard) return <Alert variant="info">{NEEDS_KEYBOARD_SAYS}</Alert>;
   if (!action) {
     return <Button disabled>{listed ? shutReason(listed, now) : 'Not open to you'}</Button>;
   }

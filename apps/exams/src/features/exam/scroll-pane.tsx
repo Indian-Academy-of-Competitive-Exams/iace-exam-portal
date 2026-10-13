@@ -109,6 +109,8 @@ export function ScrollPane({
     const step = (event: KeyboardEvent) => {
       const by = STEP_BY_KEY[event.key];
       if (by === undefined || keyTarget() !== node) return;
+      // A typing box moves its own caret with these keys, and must keep them.
+      if (event.target instanceof HTMLTextAreaElement) return;
       // Taken from the option that has focus, or the key would change the answer as well as the view.
       event.preventDefault();
       node.scrollTop += by;

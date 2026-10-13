@@ -34,6 +34,8 @@ import { BankingGeneral } from './instructions';
 import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateBadge } from './states';
 import { BankingSummaryDialog } from './submit-dialog';
 import './banking.css';
+import { isTypingQuestion } from '../../../typing/typing-figures';
+import { ExamTyping } from '../shared/exam-typing';
 
 /** banking.css lays the palette over the paper at the same width. */
 const PHONE_QUERY = '(max-width: 767px)';
@@ -336,6 +338,7 @@ function SectionTab({
 /** The question column: its number, the stem and the options, or a word where a closed section was. */
 function BankingPaper({ view }: Readonly<{ view: ExamView }>) {
   if (!view.question) return <p className="bk-question-no">This section is closed.</p>;
+  if (isTypingQuestion(view.question)) return <ExamTyping view={view} />;
 
   const passages = passagesOf(view.question.content, view.languages, view.languageMode);
 

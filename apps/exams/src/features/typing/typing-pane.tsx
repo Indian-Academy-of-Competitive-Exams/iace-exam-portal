@@ -1,6 +1,6 @@
 /** The typing screen itself: the passage above, the box below. It knows no clock and saves nothing. */
 import type * as React from 'react';
-import { typablePassage } from '@iace/contracts';
+import { TYPED_TEXT_MAX, typablePassage } from '@iace/contracts';
 import { Textarea, cn } from '@iace/ui';
 
 const ERASING_KEYS: ReadonlySet<string> = new Set(['Backspace', 'Delete']);
@@ -26,7 +26,7 @@ export function TypingPane({
   const keyDepressions = typablePassage(value).length;
 
   return (
-    <div className={cn('flex min-h-0 flex-1 flex-col gap-exam-gap p-exam', className)}>
+    <div className={cn('flex h-full min-h-0 flex-1 flex-col gap-exam-gap p-exam', className)}>
       <section
         aria-label="Passage"
         onCopy={refuse}
@@ -45,6 +45,7 @@ export function TypingPane({
         autoCorrect="off"
         autoCapitalize="off"
         autoComplete="off"
+        maxLength={TYPED_TEXT_MAX}
         onPaste={refuse}
         onDrop={refuse}
         onContextMenu={refuse}
