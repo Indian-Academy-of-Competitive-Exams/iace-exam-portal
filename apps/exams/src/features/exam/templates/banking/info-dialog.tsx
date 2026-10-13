@@ -1,6 +1,6 @@
 /** The banking screen's small "Info" box: a blue bar, a line of text, and its buttons on a tinted foot. */
 import { type ReactNode } from 'react';
-import { PAUSE_SAYS, type ExamView } from '@iace/app-kit';
+import { PAUSE_SAYS, type ExamView, type usePause } from '@iace/app-kit';
 
 function InfoDialog({
   title = 'Info',
@@ -67,24 +67,26 @@ export function BankingInstructionsDialog({
   );
 }
 
-export function BankingPauseDialog({
-  onPause,
-  onCancel,
-}: Readonly<{ onPause: () => void; onCancel: () => void }>) {
+export function BankingPauseDialog({ pause }: Readonly<{ pause: ReturnType<typeof usePause> }>) {
   return (
     <InfoDialog
       foot={
         <>
-          <button type="button" autoFocus className="bk-info-yes" onClick={onPause}>
+          <button
+            type="button"
+            className="bk-info-yes"
+            disabled={pause.pending}
+            onClick={pause.confirm}
+          >
             {PAUSE_SAYS.confirm}
           </button>
-          <button type="button" className="bk-info-no" onClick={onCancel}>
+          <button type="button" autoFocus className="bk-info-no" onClick={pause.cancel}>
             Carry on
           </button>
         </>
       }
     >
-      {PAUSE_SAYS.hint}
+      {pause.says}
     </InfoDialog>
   );
 }

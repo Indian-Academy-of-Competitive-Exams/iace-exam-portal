@@ -85,7 +85,9 @@ export function stoodDownSays({ setAside, hasUnsent }: Pick<ExamView, 'setAside'
 /** What a candidate is told before pausing, with the limits the server keeps, the same on every skin and both apps. */
 export const PAUSE_SAYS = {
   title: 'Pause this test?',
-  hint: 'Your answers are saved, and you can resume this test from your tests. A break longer than a minute does not cost you time. A test left for 48 hours ends by itself.',
+  hint: 'Your answers are saved first, and you can resume this test from your tests. Time away is given back, except the first minute of each pause. After 48 hours away in all, the test ends by itself.',
+  failed:
+    'Your answers could not be saved, so the test is not paused. Check your connection and try again.',
   confirm: 'Pause',
 } as const;
 
@@ -181,6 +183,8 @@ export interface ExamView {
   markAndNext: () => void;
   /** Flags this question for a second look, or takes the flag off, and stays on it. */
   toggleMark: () => void;
+  /** Sends what is unsent now and answers whether it reached the server, which a pause waits on. */
+  saveNow: () => Promise<boolean>;
   clearResponse: () => void;
   openSection: (sectionId: string) => void;
   /** Hands this section in and opens the next. Null unless a sectional paper has a section left after this one. */

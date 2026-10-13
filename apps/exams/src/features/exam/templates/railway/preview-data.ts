@@ -172,6 +172,7 @@ export function previewView(): ExamView {
     bubbleAnswer: noop,
     markAndNext: noop,
     toggleMark: noop,
+    saveNow: () => Promise.resolve(true),
     clearResponse: noop,
     openSection: noop,
     submitSection: null,

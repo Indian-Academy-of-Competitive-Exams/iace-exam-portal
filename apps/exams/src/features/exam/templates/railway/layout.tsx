@@ -11,6 +11,7 @@ import {
   TIMER_KIND,
   useAnchoredCountdown,
   useClockCountdown,
+  usePause,
   type ExamView,
 } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
@@ -41,7 +42,7 @@ export function RailwayLayout({
   const [openPanel, setOpenPanel] = useState<'PAPER' | 'INSTRUCTIONS' | null>(null);
   const phone = useMediaQuery(PHONE_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(!phone);
-  const [pausing, setPausing] = useState(false);
+  const pause = usePause(onPause);
   // Over the paper the palette hides the question it just opened, so opening one puts it away.
   const openQuestion = (questionId: string) => {
     view.openQuestion(questionId);
@@ -89,7 +90,7 @@ export function RailwayLayout({
             type="button"
             className="flex items-center gap-2"
             disabled={view.locked !== null}
-            onClick={() => setPausing(true)}
+            onClick={pause.ask}
           >
             <Pause aria-hidden />
             <span>Pause Test</span>
@@ -249,9 +250,7 @@ export function RailwayLayout({
         <InstructionsModal view={view} onClose={() => setOpenPanel(null)} />
       ) : null}
 
-      {onPause && pausing ? (
-        <RailwayPauseBox onPause={onPause} onCancel={() => setPausing(false)} />
-      ) : null}
+      {pause.asking ? <RailwayPauseBox pause={pause} /> : null}
 
       <PaperWatermark view={view} config={config} className="rw-watermark" />
     </div>

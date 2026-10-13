@@ -26,7 +26,7 @@ export function ExamShell({
   examTemplate: ExamTemplate;
   calculatorEnabled: boolean;
   view: ExamView;
-  onPause?: () => void;
+  onPause?: () => Promise<boolean>;
 }>) {
   const { submit, fullscreen } = view;
   const [calculating, setCalculating] = useState(false);

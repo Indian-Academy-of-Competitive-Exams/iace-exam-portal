@@ -260,16 +260,18 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   the pause its reload would be given back. Known limits: a sign-in that was replaced still holds
   for the window, and a key rebuilt from Postgres is held by nobody until its next open.
 - **A pause is credited, not stopped.** Falling silent longer than the reload grace
-  (`PRESENT_GRACE_SEC`) moves the deadline, and every open section's clock, out by the gap — a
-  laptop sleeping, a dropped network or a genuine multi-hour pause costs the student nothing. That
+  (`PRESENT_GRACE_SEC`) moves the deadline, and every open section's clock, out by the gap less
+  that grace — a laptop sleeping, a dropped network or a genuine multi-hour pause costs the student
+  one minute, and a pause with less than that left comes back spent. That
   credit is capped per sitting at `PAUSE_CREDIT_CAP_SEC`, the same ceiling `PAUSE_LIMIT_SEC` already
   puts on one pause, so no number of reloads can bank more than the one long pause that limit already
   allows. Past `PAUSE_LIMIT_SEC` of silence the sitting is abandoned, and so is one whose credit is
   spent — the sweeper ends both at their deadline rather than letting a reopened tab hold a sitting
   that can no longer earn a second.
-  Every skin, and the app, offers this as a **Pause** button: it sends what is unsent, leaves
-  the paper for the student's tests, and names these limits before it does. It is the same silence
-  as a closed tab, so it adds no state and no endpoint.
+  Every skin, and the app, offers this as a **Pause** button: it saves what is unsent and
+  waits for the server to take it, refusing to pause when it does not, then leaves the paper for
+  the student's tests. It names these limits first. It is the same silence as a closed tab, so it
+  adds no state and no endpoint.
 - **Leaving takes the unsent answers with it.** On the web the unsent copy lives in the tab's
   `sessionStorage`, which dies with the tab. So closing or reloading with anything unsent raises the
   browser's own "changes may not be saved" prompt, and leaving anyway sends it all on a `keepalive`

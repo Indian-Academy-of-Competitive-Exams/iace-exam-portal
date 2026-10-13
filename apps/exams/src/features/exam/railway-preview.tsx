@@ -26,7 +26,7 @@ export function RailwayPreviewPage({
   return (
     <ExamShell
       examTemplate={template}
-      onPause={() => undefined}
+      onPause={() => Promise.resolve(false)}
       calculatorEnabled
       view={{
         ...view,

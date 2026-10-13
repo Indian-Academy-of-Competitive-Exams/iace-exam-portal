@@ -20,6 +20,7 @@ import {
   TIMER_KIND,
   useAnchoredCountdown,
   useClockCountdown,
+  usePause,
   type ExamView,
 } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
@@ -51,7 +52,7 @@ export function BankingLayout({
   const [paletteOpen, setPaletteOpen] = useState(!phone);
   const [reading, setReading] = useState(false);
   const [fontStep, setFontStep] = useState(0);
-  const [pausing, setPausing] = useState(false);
+  const pause = usePause(onPause);
   // Held by id, so a clock that closes the section first takes the question about it away too.
   const [handingIn, setHandingIn] = useState<string | null>(null);
   const { submitSection } = view;
@@ -103,12 +104,7 @@ export function BankingLayout({
             <Plus aria-hidden />
           </button>
           {onPause ? (
-            <button
-              type="button"
-              className="bk-pause"
-              disabled={off}
-              onClick={() => setPausing(true)}
-            >
+            <button type="button" className="bk-pause" disabled={off} onClick={pause.ask}>
               Pause Test
             </button>
           ) : null}
@@ -291,9 +287,7 @@ export function BankingLayout({
         />
       ) : null}
 
-      {onPause && pausing ? (
-        <BankingPauseDialog onPause={onPause} onCancel={() => setPausing(false)} />
-      ) : null}
+      {pause.asking ? <BankingPauseDialog pause={pause} /> : null}
 
       <PaperWatermark view={view} config={config} className="bk-watermark" />
     </div>

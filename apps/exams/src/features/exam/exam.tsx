@@ -186,12 +186,13 @@ function ExamHall(
       examTemplate={sitting.paper.examTemplate}
       calculatorEnabled={sitting.paper.calculatorEnabled}
       view={view}
-      // Silence is what pauses a sitting: the server gives the time away back when it is reopened.
-      onPause={() => {
-        view.leave();
+      // Silence is what pauses a sitting, so it is left only once its answers are on the server.
+      onPause={async () => {
+        if (!(await view.saveNow())) return false;
         releaseLeave();
         void focus.exit();
         navigate(ROUTES.TESTS, { replace: true });
+        return true;
       }}
     />
   );

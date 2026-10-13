@@ -47,7 +47,7 @@ export interface ExamSlotProps {
   /** Absent where the config offers no calculator, which is how a skin knows not to draw it. */
   onOpenCalculator?: () => void;
   /** Absent where a sitting cannot be left and come back to, which is how a skin knows not to offer it. */
-  onPause?: () => void;
+  onPause?: () => Promise<boolean>;
 }
 
 const SWITCH: Readonly<Record<'TABS' | 'BUTTONS', string>> = {
@@ -69,7 +69,13 @@ export function Header({
   onPause,
   onOpenPaper,
   onOpenRules,
-}: Readonly<ExamSlotProps & { onOpenPaper?: () => void; onOpenRules?: () => void }>) {
+}: Readonly<
+  Omit<ExamSlotProps, 'onPause'> & {
+    onPause?: () => void;
+    onOpenPaper?: () => void;
+    onOpenRules?: () => void;
+  }
+>) {
   return (
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-exam-border px-exam py-3">
       <h1 className="min-w-0 truncate text-sm font-semibold text-exam-ink">{view.title}</h1>

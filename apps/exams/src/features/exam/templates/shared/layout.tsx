@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { EXAM_TEMPLATE } from '@iace/contracts';
-import { passagesOf, PAUSE_SAYS } from '@iace/app-kit';
+import { passagesOf, PAUSE_SAYS, usePause } from '@iace/app-kit';
 import { DESKTOP_QUERY, useMediaQuery } from '@iace/app-kit/browser';
 import {
   Button,
@@ -37,7 +37,7 @@ export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<Exa
   // Below the rail's breakpoint the palette would take the paper's own room, so it waits in a drawer.
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [pausing, setPausing] = useState(false);
+  const pause = usePause(onPause);
   const passages = view.question
     ? passagesOf(view.question.content, view.languages, view.languageMode)
     : [];
@@ -49,7 +49,7 @@ export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<Exa
         view={view}
         config={config}
         onOpenCalculator={onOpenCalculator}
-        onPause={onPause ? () => setPausing(true) : undefined}
+        onPause={onPause ? pause.ask : undefined}
         onOpenPaper={() => setPanel('PAPER')}
         onOpenRules={() => setPanel('RULES')}
       />
@@ -144,12 +144,13 @@ export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<Exa
 
       {onPause ? (
         <ConfirmDialog
-          open={pausing}
-          onOpenChange={setPausing}
+          open={pause.asking}
+          onOpenChange={(open) => !open && pause.cancel()}
           title={PAUSE_SAYS.title}
-          description={PAUSE_SAYS.hint}
+          description={pause.says}
           confirmLabel={PAUSE_SAYS.confirm}
-          onConfirm={onPause}
+          loading={pause.pending}
+          onConfirm={pause.confirm}
         />
       ) : null}
 

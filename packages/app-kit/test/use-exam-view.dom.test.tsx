@@ -867,6 +867,59 @@ test('opening another section swaps the section and the questions under it', asy
   assert.equal(result.current.question?.questionId, 'sec2-q1');
 });
 
+test('opening the section already open keeps the question on screen', async (t) => {
+  const { result, unmount } = await seated(apiWith({}), twoInSectionOne());
+  t.after(unmount);
+
+  act(() => result.current.nextQuestion());
+  assert.equal(result.current.question?.questionId, 'sec1-q2');
+
+  await act(async () => {
+    result.current.openSection('sec1');
+    await settle();
+  });
+
+  assert.equal(result.current.question?.questionId, 'sec1-q2', 'not thrown back to the first');
+});
+
+test('saving now sends what is unsent and says it landed, so a pause may leave', async (t) => {
+  const saves: SaveCall[] = [];
+  const { result, unmount } = await seated(
+    apiWith({}, (body) => saves.push(body)),
+    twoInSectionOne(),
+  );
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-a'));
+  const sentBefore = saves.length;
+  let landed = false;
+  await act(async () => {
+    landed = await result.current.saveNow();
+  });
+
+  assert.equal(landed, true);
+  assert.equal(saves.length, sentBefore + 1, 'one save carried the answer up');
+  assert.equal(result.current.hasUnsent(), false, 'and nothing is left to resend on the way back');
+});
+
+test('saving now says so when the server did not take it, so a pause stays on the paper', async (t) => {
+  const gated = apiGatedSave();
+  const { result, unmount } = await seated(gated.api, twoInSectionOne());
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-a'));
+  let landed = true;
+  await act(async () => {
+    const saving = result.current.saveNow();
+    await settle();
+    gated.refused(new Error('offline'));
+    landed = await saving;
+  });
+
+  assert.equal(landed, false);
+  assert.equal(result.current.hasUnsent(), true, 'the answer is still held to send again');
+});
+
 /** The failure this prevents: the bell ringing on a section while the screen still draws the one behind it. */
 test("a section's clock running out moves the sitting on, and the whole view with it", async (t) => {
   // A save that never answers, so no new clock lands and the section is the only thing that moved.

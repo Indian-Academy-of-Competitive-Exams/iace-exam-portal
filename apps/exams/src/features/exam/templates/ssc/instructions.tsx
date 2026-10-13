@@ -3,7 +3,7 @@
  * with the language and the start button under it. The same guide is read again from
  * inside the sitting, so the two cannot describe different papers.
  */
-import { type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { contentLanguageOf, LANGUAGE_LABELS, type LanguageCode } from '@iace/contracts';
 import { Brandmark } from '@iace/ui';
 import { type InstructionsView } from '../../use-instructions';
@@ -112,6 +112,11 @@ export function SscGuide({
   /** Opens with the symbol table at the top, for a candidate who asked what a colour means. */
   startAtSymbols?: boolean;
 }>) {
+  const symbols = useRef<HTMLTableElement>(null);
+  // Once, as the guide opens: a ref callback would scroll back here on every render behind it.
+  useEffect(() => {
+    if (startAtSymbols) symbols.current?.scrollIntoView();
+  }, [startAtSymbols]);
   const scored = sections.every((section) => section.maxScore !== undefined);
   const timed = sections.some((section) => section.durationSec);
 
@@ -158,12 +163,7 @@ export function SscGuide({
         what each means before you start the test.
       </p>
 
-      <table
-        className="sc-symbols"
-        ref={(table) => {
-          if (startAtSymbols) table?.scrollIntoView();
-        }}
-      >
+      <table className="sc-symbols" ref={symbols}>
         <thead>
           <tr>
             <th>Symbol</th>
@@ -229,7 +229,7 @@ export function SscGuide({
             <td>
               <span className="sc-btn">Save &amp; Next</span>
             </td>
-            <td>Saves your answer and takes you to the next question</td>
+            <td>Takes you to the next question, keeping the answer you chose</td>
           </tr>
           {forwardOnly ? null : (
             <>
@@ -290,12 +290,12 @@ export function SscGuide({
           </li>
         ) : (
           <li>
-            Click a question number on the palette to go straight to that question. Going this way
-            does NOT save your answer to the question you are leaving.
+            Click a question number on the palette to go straight to that question. An option you
+            have chosen on the question you are leaving stays chosen, and is evaluated.
           </li>
         )}
         <li>
-          Click <b>Save &amp; Next</b> to save your answer and go to the next question in order.
+          Click <b>Save &amp; Next</b> to go to the next question in order.
         </li>
         {forwardOnly ? null : (
           <li>
@@ -311,7 +311,8 @@ export function SscGuide({
         <li>To change it, click the button of another option.</li>
         <li>To take it off, click the option you chose once more.</li>
         <li>
-          To save it, you MUST click <b>Save &amp; Next</b>.
+          Your answer is recorded as soon as you choose it. An option left chosen is evaluated, so
+          take off any answer you do not mean to give.
         </li>
         {forwardOnly ? null : (
           <li className="sc-red">

@@ -10,6 +10,7 @@ import {
   htmlOf,
   passagesOf,
   PAUSE_SAYS,
+  usePause,
   shownLanguages,
   TIMER_KIND,
   useAnchoredCountdown,
@@ -42,7 +43,7 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
   const [paletteOpen, setPaletteOpen] = useState(!phone);
   const [reading, setReading] = useState<Reading | null>(null);
   const [fontStep, setFontStep] = useState(0);
-  const [pausing, setPausing] = useState(false);
+  const pause = usePause(onPause);
   // Held by id, so a clock that closes the section first takes the question about it away too.
   const [handingIn, setHandingIn] = useState<string | null>(null);
   const { submitSection, fullscreen } = view;
@@ -102,7 +103,7 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
                 type="button"
                 className="sc-pause flex items-center"
                 disabled={off}
-                onClick={() => setPausing(true)}
+                onClick={pause.ask}
               >
                 <CirclePause aria-hidden />
                 Pause Test
@@ -320,12 +321,12 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
         </>
       )}
 
-      {onPause && pausing ? (
-        <SscBox label="Pause Test" says={PAUSE_SAYS.hint}>
-          <button type="button" autoFocus onClick={onPause}>
+      {pause.asking ? (
+        <SscBox label="Pause Test" says={pause.says}>
+          <button type="button" disabled={pause.pending} onClick={pause.confirm}>
             {PAUSE_SAYS.confirm}
           </button>
-          <button type="button" onClick={() => setPausing(false)}>
+          <button type="button" autoFocus onClick={pause.cancel}>
             Carry on
           </button>
         </SscBox>

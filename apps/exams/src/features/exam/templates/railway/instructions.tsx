@@ -180,18 +180,18 @@ export function GeneralScreen({
               to that numbered question directly.
             </li>
             <li>
-              Click on <b>Save &amp; Next</b> to save your answer for the current question and then
-              go to the next question.
+              Click on <b>Save &amp; Next</b> to go to the next question, keeping the answer you
+              chose.
             </li>
             <li>
-              Click on <b>Mark for Review &amp; Next</b> to save your answer for the current
-              question, mark it for review, and then go to the next question.
+              Click on <b>Mark for Review &amp; Next</b> to mark the current question for review,
+              keeping the answer you chose, and then go to the next question.
             </li>
           </ul>
           <p>
-            Note: note that your answer for the current question will not be saved, if you navigate
-            to another question directly by clicking on a question number without saving the answer
-            to the previous question.
+            Note: an option you have chosen is recorded at once and is evaluated, even if you
+            navigate to another question directly by clicking on a question number. Clear any answer
+            you do not mean to give.
           </p>
         </>
       )}

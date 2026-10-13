@@ -151,18 +151,18 @@ export function BankingGeneral({
             ) : (
               <li>
                 Click on the question number in the Question Palette at the right of your screen to
-                go to that numbered question directly. Note that using this option does NOT save
-                your answer to the current question.
+                go to that numbered question directly. An option you have chosen on the current
+                question stays chosen, and is evaluated.
               </li>
             )}
             <li>
-              Click on <strong>Save &amp; Next</strong> to save your answer for the current question
-              and then go to the next question.
+              Click on <strong>Save &amp; Next</strong> to go to the next question, keeping the
+              answer you chose.
             </li>
             {forwardOnly ? null : (
               <li>
-                Click on <strong>Mark for Review &amp; Next</strong> to save your answer for the
-                current question, mark it for review, and then go to the next question.
+                Click on <strong>Mark for Review &amp; Next</strong> to mark the current question
+                for review, keeping the answer you chose, and then go to the next question.
               </li>
             )}
           </ol>
@@ -180,13 +180,14 @@ export function BankingGeneral({
             </li>
             <li>To change your chosen answer, click on the button of another option</li>
             <li>
-              To save your answer, you MUST click on the <strong>Save &amp; Next</strong> button
+              Your answer is recorded as soon as you choose it; clicking{' '}
+              <strong>Save &amp; Next</strong> is not needed for it to count
             </li>
           </ol>
         </li>
         <li>
-          Note that ONLY Questions for which answers are saved or marked for review after answering
-          will be considered for evaluation.
+          Note that EVERY question with an option left chosen is considered for evaluation, whether
+          or not it is marked for review. Clear any answer you do not mean to give.
         </li>
       </ol>
 

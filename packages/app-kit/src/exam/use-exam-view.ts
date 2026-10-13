@@ -275,7 +275,8 @@ export function useExamView(
 
   // Moving between sections is a save point: a batch left behind is a section's worth of answers.
   const openSection = (next: string) => {
-    if (locked()) return;
+    // The section already open is not a move: re-entering it would drop the candidate back on its first question.
+    if (locked() || next === sectionId) return;
     state.bankOpen();
     const allowed = paper.sections.find((row) => row.id === next)?.durationSec;
     // Told, not asked: the server stamps when this clock started, so a reload cannot restart it.
@@ -344,6 +345,10 @@ export function useExamView(
     counts,
     focus,
     marked: isReviewState(current ? state.answers[current.questionId]?.state : undefined),
+    saveNow: () => {
+      state.bankOpen();
+      return state.flush();
+    },
   };
   const live = useRef(now);
   // Before any child's layout effect, so a handler called in the same commit is already this render's.
@@ -377,6 +382,7 @@ export function useExamView(
         live.current.nextQuestion();
       },
       toggleMark: () => live.current.record({ marked: !live.current.marked }),
+      saveNow: () => live.current.saveNow(),
       clearResponse: () => live.current.clear(),
       openSection: (id: string) => live.current.openSection(id),
       sectionCounts: (id: string) => live.current.sectionCounts[id] ?? live.current.counts,
@@ -486,6 +492,7 @@ export function useExamView(
       bubbleAnswer: on.bubbleAnswer,
       markAndNext: on.markAndNext,
       toggleMark: on.toggleMark,
+      saveNow: on.saveNow,
       clearResponse: on.clearResponse,
       openSection: on.openSection,
       submitSection: hasSectionAfter ? on.submitSection : null,

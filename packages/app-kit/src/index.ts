@@ -74,6 +74,7 @@ export {
   type PaperLock,
 } from './exam/exam-view';
 export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
+export { usePause } from './exam/use-pause';
 export { htmlOf, passagesOf, shownLanguages } from './exam/content';
 export {
   MARKING_TRIES,

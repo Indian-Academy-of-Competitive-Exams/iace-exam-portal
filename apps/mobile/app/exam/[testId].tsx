@@ -178,10 +178,12 @@ function Sitting() {
       <ExamSkin
         view={view}
         paperQuestions={paper.data?.paper.questions ?? NO_QUESTIONS}
-        // Silence is what pauses a sitting: unmounting the engine stops its heartbeat.
-        onPause={() => {
-          view?.leave();
-          router.dismissTo(ROUTES.TESTS);
+        // Silence is what pauses a sitting, so it is left only once its answers are on the server.
+        onPause={async () => {
+          if (!view || !(await view.saveNow())) return false;
+          // `replace`, not a pop: the engine must unmount whatever screen this one was opened from.
+          router.replace(ROUTES.TESTS);
+          return true;
         }}
       />
       {paper.data && attempt.data ? (

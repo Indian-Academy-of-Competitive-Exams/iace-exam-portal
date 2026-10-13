@@ -9,7 +9,14 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNetworkState } from 'expo-network';
 import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
-import { PAPER_LOCK, PAUSE_SAYS, submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
+import {
+  PAPER_LOCK,
+  PAUSE_SAYS,
+  submittingSays,
+  TIMER_KIND,
+  usePause,
+  type ExamView,
+} from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { Alert } from '../ui/alert';
 import { Button } from '../ui/button';
@@ -44,7 +51,7 @@ export interface ExamSkinProps {
   /** The paper's full question list, all sections, so a dead zone still shows a figure not yet reached. */
   paperQuestions: readonly ExamQuestion[];
   /** Leaves the paper to be come back to; the server gives the time away back when it is reopened. */
-  onPause: () => void;
+  onPause: () => Promise<boolean>;
 }
 
 export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinProps>) {
@@ -52,7 +59,7 @@ export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinPro
   const network = useNetworkState();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
-  const [pausing, setPausing] = useState(false);
+  const pause = usePause(onPause);
   const offline = network.isConnected === false || network.isInternetReachable === false;
 
   return (
@@ -66,7 +73,7 @@ export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinPro
           view={view}
           onPalette={() => setPaletteOpen(true)}
           onRules={() => setRulesOpen(true)}
-          onPause={() => setPausing(true)}
+          onPause={pause.ask}
         />
       ) : (
         <OpeningBar />
@@ -90,12 +97,13 @@ export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinPro
       ) : null}
       <ConfirmDialog
         // iOS presents one Modal at a time, so the focus warning stands this one down.
-        open={pausing && view !== null && !view.fullscreen.nagging}
+        open={pause.asking && view !== null && !view.fullscreen.nagging}
         title={PAUSE_SAYS.title}
-        description={PAUSE_SAYS.hint}
+        description={pause.says}
         confirmLabel={PAUSE_SAYS.confirm}
-        onConfirm={onPause}
-        onCancel={() => setPausing(false)}
+        loading={pause.pending}
+        onConfirm={pause.confirm}
+        onCancel={pause.cancel}
       />
     </View>
   );
