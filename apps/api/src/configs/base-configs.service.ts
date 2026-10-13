@@ -557,6 +557,9 @@ function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSecti
     durationSec: section.durationSec,
     perQuestionSec: section.perQuestionSec,
     patternNote: section.patternNote,
+    qualifyingCutoff: section.qualifyingCutoff === null ? null : Number(section.qualifyingCutoff),
+    // Carried, or a save that changes only the timer would be judged as if no section were a typing test.
+    typingPreset: section.typingPreset as TypingPresetKey | null,
   };
 }
 

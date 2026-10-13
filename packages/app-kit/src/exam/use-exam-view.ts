@@ -7,6 +7,7 @@
 import { useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import {
+  QUESTION_TYPE,
   ANSWER_STATE,
   ATTEMPT_STATUS,
   furthestSeat,
@@ -305,6 +306,11 @@ export function useExamView(
     if (current && !locked()) state.type(current.questionId, text);
   };
 
+  // One click must not empty ten minutes of typing: a passage is cleared with the keyboard, like any text.
+  const clear = (): void => {
+    if (current?.type !== QUESTION_TYPE.TYPING) record({ selectedOptionId: null });
+  };
+
   // Null is "no clock of its own" and falls to the paper's; a section spent to 0 still counts, and closes.
   const sectionSec = sectional
     ? sectionLeftSec(section?.durationSec, state.sections[sectionId]?.openedAt, clock.serverNow)
@@ -328,6 +334,7 @@ export function useExamView(
     nextQuestion,
     record,
     type,
+    clear,
     openSection,
     endSection,
     end,
@@ -370,7 +377,7 @@ export function useExamView(
         live.current.nextQuestion();
       },
       toggleMark: () => live.current.record({ marked: !live.current.marked }),
-      clearResponse: () => live.current.record({ selectedOptionId: null }),
+      clearResponse: () => live.current.clear(),
       openSection: (id: string) => live.current.openSection(id),
       sectionCounts: (id: string) => live.current.sectionCounts[id] ?? live.current.counts,
       expire: () => live.current.expire(),

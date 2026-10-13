@@ -5,6 +5,7 @@ import {
   TYPING_PRESETS,
   scoreTyping,
   typablePassage,
+  typingKeyDepressions,
   typingPassageNeed,
   typingPassageText,
 } from '../src/index';
@@ -168,6 +169,19 @@ describe('scoreTyping at its edges', () => {
 
     assert.equal(result.halfMistakes, 0);
     assert.ok(result.fullMistakes > 0);
+  });
+});
+
+describe('scoreTyping against a held key', () => {
+  /** The failure this prevents: twenty words and one key held down reading as a qualifying speed. */
+  it('counts a word for no more than the longest the passage holds', () => {
+    const words = passageOf(400);
+    const junk = [...words.slice(0, 20), 'x'.repeat(1700)].join(' ');
+    const result = scoreTyping(words.join(' '), junk, SSC);
+
+    assert.equal(result.keyDepressions, 20 * 4 + 4 + 20);
+    assert.equal(result.qualified, false);
+    assert.equal(typingKeyDepressions(words.join(' '), junk), result.keyDepressions);
   });
 });
 

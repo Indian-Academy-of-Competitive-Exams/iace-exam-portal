@@ -1,6 +1,6 @@
 /** The typing screen itself: the passage above, the box below. It knows no clock and saves nothing. */
 import type * as React from 'react';
-import { TYPED_TEXT_MAX, typablePassage } from '@iace/contracts';
+import { TYPED_TEXT_MAX, typingKeyDepressions } from '@iace/contracts';
 import { Textarea, cn } from '@iace/ui';
 
 const ERASING_KEYS: ReadonlySet<string> = new Set(['Backspace', 'Delete']);
@@ -23,7 +23,7 @@ export function TypingPane({
   disabled?: boolean;
   className?: string;
 }>) {
-  const keyDepressions = typablePassage(value).length;
+  const keyDepressions = typingKeyDepressions(passage, value);
 
   return (
     <div className={cn('flex h-full min-h-0 flex-1 flex-col gap-exam-gap p-exam', className)}>
@@ -37,6 +37,8 @@ export function TypingPane({
       </section>
 
       <Textarea
+        // Remounted as it opens: a box that mounted disabled would never take the focus it asks for.
+        key={disabled ? 'closed' : 'open'}
         aria-label="Type the passage here"
         autoFocus
         value={value}

@@ -4,7 +4,7 @@
  * the pass that recounts them, so an accumulated table and a recounted one cannot disagree.
  */
 import { type Prisma } from '@prisma/client';
-import { ATTEMPT_STATUS, type TestScope } from '@iace/contracts';
+import { ATTEMPT_STATUS, QUESTION_TYPE, type QuestionType, type TestScope } from '@iace/contracts';
 
 /** The sittings a test's cohort rollups describe: `Attempt_graded_per_test_key` makes these one per student. */
 export const cohortSittingsOf = (testId: string) =>
@@ -19,6 +19,9 @@ export interface FoldableQuestion {
   timeSpentSec: number;
   selectedOptionId: string | null;
 }
+
+/** A typing passage is neither answered nor skipped, so no question, subject or pace figure is made of it. */
+export const isFolded = (type: QuestionType): boolean => type !== QUESTION_TYPE.TYPING;
 
 /** An evaluated sitting with everything the fold reads, and nothing it does not. */
 export interface FoldableAttempt {

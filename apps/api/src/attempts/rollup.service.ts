@@ -16,6 +16,7 @@ import {
   addToStudentTotals,
   cohortSittingsOf,
   emptyStudentTotals,
+  isFolded,
   type FoldableAttempt,
   type QuestionTotals,
   type StudentTotals,
@@ -42,7 +43,7 @@ type FoldRow = Prisma.AttemptGetPayload<{ select: typeof FOLD_SELECT }>;
 const FOLD_ROW_SELECT = {
   ...SHEET_ROW_SELECT,
   testId: true,
-  question: { select: { subjectId: true } },
+  question: { select: { subjectId: true, type: true } },
 } as const satisfies Prisma.PaperQuestionSelect;
 
 type FoldPaperRow = Prisma.PaperQuestionGetPayload<{ select: typeof FOLD_ROW_SELECT }>;
@@ -470,14 +471,16 @@ function toFoldable(row: FoldRow, paper: readonly FoldPaperRow[]): FoldableAttem
     unattemptedCount: row.unattemptedCount ?? 0,
     submittedAt: row.submittedAt,
     scope: row.test.scope,
-    questions: servedSheet(paper, row, false).map((question) => ({
-      paperQuestionId: question.id,
-      questionId: question.questionId,
-      subjectId: question.question.subjectId,
-      isCorrect: question.isCorrect,
-      timeSpentSec: question.timeSpentSec,
-      selectedOptionId: question.selectedOptionId,
-    })),
+    questions: servedSheet(paper, row, false)
+      .filter((question) => isFolded(question.question.type))
+      .map((question) => ({
+        paperQuestionId: question.id,
+        questionId: question.questionId,
+        subjectId: question.question.subjectId,
+        isCorrect: question.isCorrect,
+        timeSpentSec: question.timeSpentSec,
+        selectedOptionId: question.selectedOptionId,
+      })),
   };
 }
 

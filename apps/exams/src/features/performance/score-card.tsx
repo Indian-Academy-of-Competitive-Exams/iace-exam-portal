@@ -67,6 +67,18 @@ export function ScoreCardPanel() {
     );
   }
 
+  // A zero-mark paper is a typing test, so its card waits for the typing rather than showing "0 marks" first.
+  if (card.data.maxMarks === 0 && typing.isPending) return <ReportSkeleton />;
+  if (typing.isError) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Your typing result did not load"
+        onRetry={() => void typing.refetch()}
+      />
+    );
+  }
+
   return <Result card={card.data} typing={typing.data ?? NO_TYPING} />;
 }
 

@@ -438,6 +438,8 @@ export function useAttemptState(
 
   const type = useCallback(
     (questionId: string, text: string) => {
+      // Unseeded, this key would outrank the server's copy and replace everything typed before a reload.
+      if (!seeded.current) return;
       record(typedChange(questionId, answersNow.current[questionId], text, seenAtOf(openedAt)));
     },
     [record],

@@ -350,9 +350,15 @@ export class QuestionImportService {
     const [, baseConfigSectionId = ''] = target.split('/');
     const section = await this.prisma.baseConfigSection.findUnique({
       where: { id: baseConfigSectionId },
-      select: { name: true, subject: { select: { id: true, name: true } } },
+      select: { name: true, typingPreset: true, subject: { select: { id: true, name: true } } },
     });
-    return section && { sectionName: section.name, subject: section.subject };
+    return (
+      section && {
+        sectionName: section.name,
+        subject: section.subject,
+        typing: section.typingPreset !== null,
+      }
+    );
   }
 
   /** Only the rows this sheet could clash with: the whole bank was read to answer a few hundred asks. */

@@ -194,17 +194,17 @@ export class AttemptReportService {
     );
     const { test } = attempt;
     // Narrowed AFTER the sequencer: its option generator is spent across the whole paper in display order.
-    const sections = scopedSections(config.sections, test.scope, scopeRefOf(test)).map(
-      (section) => ({
+    const sections = scopedSections(config.sections, test.scope, scopeRefOf(test))
+      .filter((section) => section.typingPreset === null)
+      .map((section) => ({
         id: section.id,
         name: section.name,
         order: section.order,
         questionCount: section.questionCount,
         durationSec: section.durationSec,
-        typingPreset: section.typingPreset as TypingPresetKey | null,
-      }),
-    );
-    const asked = wantedOf(served, query, sections[0]?.id ?? null);
+      }));
+    const reviewed = served.filter(hasKeyToReview);
+    const asked = wantedOf(reviewed, query, sections[0]?.id ?? null);
     const urls = imageUrlsIn(this.storage, asked.questions.flatMap(htmlOfQuestion));
 
     return {
@@ -218,6 +218,10 @@ export class AttemptReportService {
     };
   }
 }
+
+/** A typing passage has no key to review: its result is the score card's, read off what was typed. */
+const hasKeyToReview = (question: SolutionQuestion): boolean =>
+  question.type !== QUESTION_TYPE.TYPING;
 
 /** One question where a saved row asked for it, one section otherwise — never a whole paper. */
 function wantedOf(

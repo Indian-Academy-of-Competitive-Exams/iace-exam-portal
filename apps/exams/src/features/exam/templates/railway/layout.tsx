@@ -188,7 +188,12 @@ export function RailwayLayout({
                 Mark for Review &amp; Next
               </button>
             )}
-            <button type="button" className="btn" disabled={off} onClick={view.clearResponse}>
+            <button
+              type="button"
+              className="btn"
+              disabled={off || isTypingQuestion(view.question)}
+              onClick={view.clearResponse}
+            >
               Clear Response
             </button>
             <button

@@ -8,7 +8,7 @@ import {
   ErrorCodes,
   TYPING_PRESETS,
   scoreTyping,
-  typablePassage,
+  typingKeyDepressions,
   typingPresetKeySchema,
   type ExamClock,
   type TypingPreset,
@@ -146,7 +146,7 @@ function Sitting({
         open={confirming}
         onOpenChange={setConfirming}
         title="Submit typing"
-        description={`The test ends now, with ${typablePassage(typed).length.toLocaleString('en-IN')} key depressions typed.`}
+        description={`The test ends now, with ${typingKeyDepressions(passage, typed).toLocaleString('en-IN')} key depressions typed.`}
         confirmLabel="Submit"
         onConfirm={finish}
       />

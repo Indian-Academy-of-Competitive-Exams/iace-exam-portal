@@ -228,7 +228,7 @@ export function BankingLayout({
             <button
               type="button"
               className="bk-btn bk-btn-outline"
-              disabled={off}
+              disabled={off || isTypingQuestion(view.question)}
               onClick={view.clearResponse}
             >
               Clear Response

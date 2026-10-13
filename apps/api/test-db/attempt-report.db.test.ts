@@ -514,6 +514,26 @@ describe('what was typed in a sitting', () => {
     assert.equal(card.unattemptedCount, 0, 'a typed passage is not an unattempted question');
   });
 
+  /** The failure this prevents: a typed passage reported as a skipped question, and a subject scored on it. */
+  it('keeps the passage out of the solution review and out of the subject figures', async () => {
+    const { paper } = await typingPaper();
+    const { studentId, attemptId } = await sat(paper, [RIGHT_OPTION, null], {
+      typed: [null, 'the quick brown fox'],
+    });
+
+    const review = await reports().solutions(studentId, attemptId, {});
+    const typingSubject = await prisma.studentSubjectStat.count({
+      where: { studentId, subjectId: paper.items[1]?.subjectId ?? '' },
+    });
+
+    assert.deepEqual(
+      review.sections.map((section) => section.name),
+      ['Reasoning'],
+    );
+    assert.equal(review.questions.length, 1);
+    assert.equal(typingSubject, 0);
+  });
+
   it('answers nothing for a paper with no typing section, and refuses another student', async () => {
     const paper = await makePaper(prisma, { questions: ['Reasoning'] });
     const { studentId, attemptId } = await sat(paper, [RIGHT_OPTION]);

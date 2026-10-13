@@ -127,7 +127,8 @@ export class QuestionReportService {
       attempt.shuffleSeed,
       config.shuffleQuestions,
       config.shuffleOptions,
-    );
+      // A typing passage is neither answered nor skipped, so it is not a row of this report.
+    ).filter((row) => row.question.type !== QUESTION_TYPE.TYPING);
 
     return this.assemble(attempt, served, {
       cohort,

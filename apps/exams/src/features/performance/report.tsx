@@ -84,7 +84,7 @@ export function ReportShell() {
         onValueChange: (next) => navigate(ROUTES.REPORT_TAB(attemptId, next)),
         action: <Standing sitting={current} />,
         // Only the open tab's content renders, and the ROUTER is what decides what that is.
-        items: REPORT_TABS.map((held) => ({
+        items: tabsFor(current).map((held) => ({
           value: held.path,
           label: held.label,
           content: <Outlet />,
@@ -153,6 +153,10 @@ function useSittings() {
   const points = everySitting(trend.data);
   return { points, newestFirst: newestFirst(points) };
 }
+
+/** A paper that is a typing test alone has no subjects, questions or marks to break down: its score card is all of it. */
+const tabsFor = (sitting: PerformancePoint | null) =>
+  sitting?.maxMarks === 0 ? REPORT_TABS.filter((tab) => tab.path === '') : REPORT_TABS;
 
 /** A paper that is a typing test alone carries no marks, and "0 of 0" would read as a failure. */
 const marksOf = (point: PerformancePoint) =>

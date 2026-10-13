@@ -239,6 +239,21 @@ const PERCENT = 100;
 // ponytail: the comparison is O(typed × passage) words, so a pasted novel is cut at twice the passage.
 const TYPED_WORDS_PER_PASSAGE_WORD = 2;
 
+/** A word counts for no more than the passage's longest: holding one key down types nothing the passage asks for. */
+function countedKeyDepressions(expected: readonly string[], given: readonly string[]): number {
+  const longest = Math.max(0, ...expected.map((word) => word.length));
+  const letters = given.reduce((total, word) => total + Math.min(word.length, longest), 0);
+  return letters + Math.max(0, given.length - 1);
+}
+
+/** What a typing box shows as it fills: the count the evaluator will arrive at for the same text. */
+export function typingKeyDepressions(passage: string, typed: string): number {
+  return countedKeyDepressions(
+    typablePassage(passage).split(' ').filter(Boolean),
+    typablePassage(typed).split(' ').filter(Boolean),
+  );
+}
+
 /** The same figures wherever it runs: the passage, what was typed, and the standard it is held to. */
 export function scoreTyping(passage: string, typed: string, preset: TypingPreset): TypingResult {
   const expected = typablePassage(passage).split(' ').filter(Boolean);
@@ -248,7 +263,7 @@ export function scoreTyping(passage: string, typed: string, preset: TypingPreset
     .slice(0, expected.length * TYPED_WORDS_PER_PASSAGE_WORD);
   const words = compare(expected, given);
 
-  const keyDepressions = given.join(' ').length;
+  const keyDepressions = countedKeyDepressions(expected, given);
   const minutes = preset.durationSec / SECONDS_PER_MINUTE;
   const fullMistakes = words.filter(
     (word) => word.kind !== TYPED_WORD.RIGHT && word.kind !== TYPED_WORD.HALF,

@@ -58,7 +58,7 @@ export function configShapeIssues(
     ...perQuestionIssues(timerTemplate, sections),
     ...sessionIssues(timerTemplate, modules, durationSec),
     ...totalMarksIssues(sections),
-    ...typingIssues(timerTemplate, sections, modules, durationSec),
+    ...typingIssues(timerTemplate, sections, durationSec),
   ];
 
   if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length > 0) {
@@ -109,7 +109,6 @@ function perQuestionIssues(
 function typingIssues(
   timerTemplate: TimerTemplate,
   sections: readonly BaseConfigSectionDraft[],
-  modules: readonly BaseConfigModuleDraft[],
   durationSec?: number,
 ): string[] {
   return sections.flatMap((section) => {
@@ -117,12 +116,16 @@ function typingIssues(
     const preset = TYPING_PRESETS[section.typingPreset];
     const onePassage =
       section.questionCount === 1 && section.marksPerQuestion === 0 && section.negativeMarks === 0;
-    const clock = typingClock(timerTemplate, section, sections, modules, durationSec);
+    const clock = typingClock(timerTemplate, section, sections.length, durationSec);
 
     return [
       ...(onePassage
         ? []
         : [`${section.name} is a typing test: one passage, carrying no marks and no negative.`]),
+      // It always scores nothing, so a cutoff would fail every candidate who qualified by typing.
+      ...(section.qualifyingCutoff
+        ? [`${section.name} is a typing test, which has no marks for a qualifying cutoff.`]
+        : []),
       ...(typeof clock === 'string' ? [`${section.name} is a typing test. ${clock}`] : []),
       ...(typeof clock === 'number' && clock !== preset.durationSec
         ? [
@@ -137,24 +140,19 @@ function typingIssues(
 function typingClock(
   timerTemplate: TimerTemplate,
   section: BaseConfigSectionDraft,
-  sections: readonly BaseConfigSectionDraft[],
-  modules: readonly BaseConfigModuleDraft[],
+  sectionCount: number,
   durationSec?: number,
 ): number | string {
-  if (timerTemplate === TIMER_TEMPLATE.SECTIONAL_LOCKED) return section.durationSec ?? 0;
   if (timerTemplate === TIMER_TEMPLATE.PER_ITEM_TIMED) {
     return 'A per-question paper cannot hold one.';
   }
   if (timerTemplate === TIMER_TEMPLATE.COMPOSITE_FREE) {
-    return sections.length === 1
+    return sectionCount === 1
       ? (durationSec ?? 0)
       : 'On a composite paper it has to be the only section, or the paper sectional or in sessions.';
   }
-
-  const session = modules.find((module) => module.order === section.moduleOrder) ?? modules[0];
-  const sharing = sections.filter((other) => (other.moduleOrder ?? null) === session?.order);
-  if (sharing.length > 1) return 'It has to sit alone in its session.';
-  return session?.durationSec ?? 0;
+  // A sitting counts a section down by the section's own clock, on a session paper as on a sectional one.
+  return section.durationSec ?? 0;
 }
 
 /** The total is a cache in a column of its own, narrower than the sections can add up to. */

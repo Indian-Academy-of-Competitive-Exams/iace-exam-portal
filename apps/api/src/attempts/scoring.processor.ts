@@ -21,7 +21,7 @@ import { MetricsService } from '../common/metrics/metrics.service';
 import { decodeAnswer, sheetIn, verdictsOf } from './answer-sheet';
 import { PaperSheetService, type PaperTerm } from './paper-sheet.service';
 import { RollupService } from './rollup.service';
-import { type FoldableAttempt } from './rollup-fold';
+import { type FoldableAttempt, isFolded } from './rollup-fold';
 
 const SCORING_SELECT = {
   id: true,
@@ -254,13 +254,19 @@ function foldableOf(
     submittedAt: attempt.submittedAt,
     scope: attempt.test.scope,
     // `scorePaper` pushes one verdict per row it was handed, so all three lists are the paper's order.
-    questions: terms.map((term, slot) => ({
-      paperQuestionId: term.id,
-      questionId: term.questionId,
-      subjectId: term.subjectId,
-      isCorrect: scored.questions[slot]?.isCorrect ?? null,
-      timeSpentSec: served[slot]?.timeSpentSec ?? 0,
-      selectedOptionId: served[slot]?.selectedOptionId ?? null,
-    })),
+    questions: terms.flatMap((term, slot) =>
+      isFolded(term.type)
+        ? [
+            {
+              paperQuestionId: term.id,
+              questionId: term.questionId,
+              subjectId: term.subjectId,
+              isCorrect: scored.questions[slot]?.isCorrect ?? null,
+              timeSpentSec: served[slot]?.timeSpentSec ?? 0,
+              selectedOptionId: served[slot]?.selectedOptionId ?? null,
+            },
+          ]
+        : [],
+    ),
   };
 }

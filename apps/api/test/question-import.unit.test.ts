@@ -104,10 +104,11 @@ describe('a sheet imported into one section of a test', () => {
       ...MCQ_ROW,
       stem_en: `What is ${at + 1}% of 9731?`,
     }));
-  const within = (subject: ImportScope['subject'], count = 3) =>
+  const within = (subject: ImportScope['subject'], count = 3, typing = false) =>
     planQuestionImport(table(...sheetOf(count)), catalog(), noDedup(), undefined, undefined, {
       sectionName: 'Quant',
       subject,
+      typing,
     });
   const codes = (planning: QuestionImportPlanning) =>
     planning.rows.map((row) => row.issues[0]?.code ?? row.action);
@@ -122,6 +123,14 @@ describe('a sheet imported into one section of a test', () => {
     assert.match(
       planning.rows[0]?.issues[0]?.message ?? '',
       /Only ENGLISH questions go into Quant/,
+    );
+  });
+
+  /** The failure this prevents: a typist's sheet landing rows their section's paper can never draw. */
+  it('skips a row of a kind the section does not take', () => {
+    assert.deepEqual(
+      codes(within(null, 3, true)),
+      [1, 2, 3].map(() => CODE.TYPE_OUTSIDE_SECTION),
     );
   });
 

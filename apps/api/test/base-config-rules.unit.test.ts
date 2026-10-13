@@ -172,21 +172,33 @@ describe('configShapeIssues — a typing section', () => {
     assert.deepEqual(configShapeIssues(TIMER_TEMPLATE.SECTIONAL_LOCKED, paper, [], 3600), []);
   });
 
-  it('takes one alone in its session, and refuses one that shares it', () => {
+  /** The failure this prevents: a session's clock passing the rule while the sitting counts the section's own. */
+  it('holds a session paper to the section clock the sitting runs, not the session one', () => {
     const sessions = [
       { name: 'Session I', order: 0, durationSec: 3000 },
       { name: 'Session II', order: 1, durationSec: TEN_MINUTES },
     ];
-    const alone = [section({ moduleOrder: 0 }), typing({ order: 1, moduleOrder: 1 })];
-    const shared = [section({ moduleOrder: 1 }), typing({ order: 1, moduleOrder: 1 })];
+    const paper = (typingSec: number | null) => [
+      section({ moduleOrder: 0 }),
+      typing({ order: 1, moduleOrder: 1, durationSec: typingSec }),
+    ];
+    const issues = (typingSec: number | null) =>
+      configShapeIssues(TIMER_TEMPLATE.SESSION_MODULE_LOCKED, paper(typingSec), sessions, 3600);
 
-    assert.deepEqual(
-      configShapeIssues(TIMER_TEMPLATE.SESSION_MODULE_LOCKED, alone, sessions, 3600),
+    assert.deepEqual(issues(TEN_MINUTES), []);
+    assert.equal(issues(null).length, 1);
+    assert.equal(issues(60).length, 1);
+  });
+
+  it('refuses a qualifying cutoff, which a section that scores nothing could never meet', () => {
+    const issues = configShapeIssues(
+      TIMER_TEMPLATE.COMPOSITE_FREE,
+      [typing({ qualifyingCutoff: 5 })],
       [],
+      TEN_MINUTES,
     );
-    assert.match(
-      configShapeIssues(TIMER_TEMPLATE.SESSION_MODULE_LOCKED, shared, sessions, 3600)[0] ?? '',
-      /alone in its session/,
-    );
+
+    assert.equal(issues.length, 1);
+    assert.match(issues[0] ?? '', /cutoff/);
   });
 });

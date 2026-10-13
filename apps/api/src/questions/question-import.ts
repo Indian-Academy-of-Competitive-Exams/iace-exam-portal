@@ -64,6 +64,8 @@ export interface PlannedRow extends QuestionImportRow {
 export interface ImportScope {
   sectionName: string;
   subject: { id: string; name: string } | null;
+  /** A typing section, which takes typing passages and nothing else. */
+  typing: boolean;
 }
 
 /** No row corrected yet: the sheet speaks for every line. */
@@ -271,6 +273,8 @@ function planRow(
 
   const outside = scope ? outsideSection(draft, scope) : null;
   if (outside) issues.push(outside);
+  const wrongKind = scope ? wrongKindFor(draft, scope) : null;
+  if (wrongKind) issues.push(wrongKind);
 
   const reported = dedupeIssues(issues);
 
@@ -382,6 +386,19 @@ function outsideSection(draft: QuestionDraft, scope: ImportScope): ValidationIss
     message: `Only ${subject.name} questions go into ${sectionName}`,
     field: 'subjectId',
     column: 'subject',
+  };
+}
+
+/** A row of a kind its section's paper could never draw: a choice in a typing section, or a passage outside one. */
+function wrongKindFor(draft: QuestionDraft, scope: ImportScope): ValidationIssue | null {
+  if ((draft.type === QUESTION_TYPE.TYPING) === scope.typing) return null;
+  return {
+    code: CODE.TYPE_OUTSIDE_SECTION,
+    message: scope.typing
+      ? `${scope.sectionName} is a typing test, so only typing passages go into it`
+      : `A typing passage does not go into ${scope.sectionName}`,
+    field: 'type',
+    column: 'type',
   };
 }
 

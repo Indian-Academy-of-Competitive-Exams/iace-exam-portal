@@ -7,7 +7,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { BackHandler, View } from 'react-native';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppException, ErrorCodes, type ExamQuestion } from '@iace/contracts';
 import {
   HELD_ELSEWHERE_SAYS,
@@ -30,7 +30,8 @@ import {
 import { examLanguagesFrom } from '../../src/lib/exam-routes';
 import { deviceTab, sittingStorage } from '../../src/lib/sitting-store';
 import { DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
-import { endedSittingQuery } from '../../src/lib/queries';
+import { NEEDS_KEYBOARD_SAYS, needsKeyboard } from '../../src/lib/brief-lines';
+import { briefQuery, endedSittingQuery } from '../../src/lib/queries';
 import { useAuth } from '../../src/providers/auth';
 import { appFocus, onBackground } from '../../src/components/exam/app-focus';
 import { ExamSkin } from '../../src/components/exam/exam-skin';
@@ -40,7 +41,28 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-sta
 /** Stable identity: a `[]` literal at the call site would re-run the preload memo on every render. */
 const NO_QUESTIONS: readonly ExamQuestion[] = [];
 
+/** Asked before any sitting is started: a typing section cannot be sat here, and the clock must not find that out. */
 export default function ExamScreen() {
+  const { testId = '' } = useLocalSearchParams<{ testId: string }>();
+  const brief = useQuery(briefQuery(testId));
+
+  if (brief.data && needsKeyboard(brief.data)) {
+    return (
+      <View className="flex-1 justify-center bg-background p-6">
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.REFUSED}
+          title="This test is not sat on a phone"
+          /* ui-copy-ok: rule — where it can be sat is the one thing that resolves it */
+          hint={NEEDS_KEYBOARD_SAYS}
+        />
+      </View>
+    );
+  }
+  // A brief that did not load is no reason to keep a candidate from an ordinary paper.
+  return brief.isPending ? null : <Sitting />;
+}
+
+function Sitting() {
   const {
     testId = '',
     [EXAM_LANGUAGES_PARAM]: languagesParam,

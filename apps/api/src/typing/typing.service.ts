@@ -1,4 +1,3 @@
-import { randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type TypingPractice as PracticeRow } from '@prisma/client';
 import {
@@ -25,8 +24,10 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const NO_PASSAGE_MESSAGE = 'No passage is long enough for this test yet';
 const PASSAGE_SELECT = { id: true, currentVersion: { select: { content: true } } } as const;
-// ponytail: every free passage is read to pick one; store its length on Question past a few hundred.
-const PASSAGE_POOL_MAX = 300;
+/** Where a stem's html sits in a version's content: the first node of the English stem. */
+const STEM_TEXT_PATH = [DEFAULT_LANGUAGE, 'stem', '0', 'text'];
+/** Drawn at random by the database and checked here, so a stem that is mostly markup has others behind it. */
+const PASSAGE_CANDIDATES = 5;
 
 type PassageRow = Prisma.QuestionGetPayload<{ select: typeof PASSAGE_SELECT }>;
 
@@ -37,20 +38,23 @@ export class TypingService {
 
   /** A bank passage no test holds: one written for a paper must not be met in practice first. */
   async passageFor(presetKey: TypingPresetKey): Promise<TypingPracticePassage> {
-    const rows = await this.prisma.question.findMany({
-      where: {
-        type: QUESTION_TYPE.TYPING,
-        status: QUESTION_STATUS.ACTIVE,
-        paperQuestions: { none: {} },
-      },
-      select: PASSAGE_SELECT,
-      orderBy: { id: 'desc' },
-      take: PASSAGE_POOL_MAX,
-    });
-
     const need = typingPassageNeed(TYPING_PRESETS[presetKey]);
-    const longEnough = rows.map(toPassage).filter((passage) => passage.text.length >= need);
-    const picked = longEnough[randomInt(Math.max(1, longEnough.length))];
+    // Markup only lengthens a stem, so this never drops a passage that fits; the exact check follows.
+    const drawn = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT q."id" FROM "Question" q
+      JOIN "QuestionVersion" v ON v."id" = q."currentVersionId"
+      WHERE q."type" = ${QUESTION_TYPE.TYPING}::"QuestionType"
+        AND q."status" = ${QUESTION_STATUS.ACTIVE}::"QuestionStatus"
+        AND NOT EXISTS (SELECT 1 FROM "PaperQuestion" p WHERE p."questionId" = q."id")
+        AND char_length(v."content" #>> ${STEM_TEXT_PATH}::text[]) >= ${need}
+      ORDER BY random()
+      LIMIT ${PASSAGE_CANDIDATES}`;
+
+    const rows = await this.prisma.question.findMany({
+      where: { id: { in: drawn.map((row) => row.id) } },
+      select: PASSAGE_SELECT,
+    });
+    const picked = rows.map(toPassage).find((passage) => passage.text.length >= need);
     if (!picked) throw new AppException(ErrorCodes.NOT_FOUND, NO_PASSAGE_MESSAGE);
     return picked;
   }

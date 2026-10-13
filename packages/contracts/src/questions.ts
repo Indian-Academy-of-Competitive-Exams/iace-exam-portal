@@ -442,6 +442,8 @@ export const QUESTION_VALIDATION_CODE = {
   DUPLICATE_IN_BANK: 'DUPLICATE_IN_BANK',
   /** A sheet imported into one section of a test, with a row filed under a subject the section does not take. */
   SUBJECT_OUTSIDE_SECTION: 'SUBJECT_OUTSIDE_SECTION',
+  /** The same, by kind: a typing section takes typing passages, and no other section takes one. */
+  TYPE_OUTSIDE_SECTION: 'TYPE_OUTSIDE_SECTION',
 } as const;
 const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
 
@@ -456,6 +458,7 @@ export const SHEET_ONLY_VALIDATION_CODES: ReadonlySet<string> = new Set([
   QUESTION_VALIDATION_CODE.SUBJECT_UNKNOWN,
   QUESTION_VALIDATION_CODE.TOPIC_UNKNOWN,
   QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
+  QUESTION_VALIDATION_CODE.TYPE_OUTSIDE_SECTION,
 ]);
 
 /** One problem with one question: `field` is the draft path the form focuses (`stem.en`, `options.2.text.hi`); `column` is what the sheet calls the same thing. */

@@ -1330,3 +1330,47 @@ test('typing keeps the whole text through a flag and a visit, and saves it once'
     'clearing the response empties the box',
   );
 });
+
+/** The failure this prevents: one key typed before the saved text arrives replacing all of it on the next save. */
+test('a key typed before the saved state arrives is not recorded over it', async (t) => {
+  let land = (_: unknown) => {};
+  const api = {
+    me: {
+      attemptState: () => new Promise((resolve) => (land = resolve)),
+      saveAttemptState: async (_id: string, body: { revision: number }) => ({
+        revision: body.revision,
+        applied: true,
+      }),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', depsFor(api)));
+  t.after(unmount);
+
+  act(() => result.current.type('q1', 'x'));
+  assert.equal('q1' in result.current.answers, false);
+
+  await act(async () => {
+    land({
+      revision: 3,
+      sections: {},
+      answers: {
+        q1: {
+          state: ANSWER_STATE.ANSWERED,
+          selectedOptionId: null,
+          typedAnswer: 'everything typed before the reload',
+          timeSpentSec: 300,
+          answeredAt: null,
+          firstActionAt: null,
+        },
+      },
+    });
+    await Promise.resolve();
+  });
+  assert.equal(result.current.answers.q1?.typedAnswer, 'everything typed before the reload');
+
+  act(() => result.current.type('q1', 'everything typed before the reload and more'));
+  assert.equal(
+    result.current.answers.q1?.typedAnswer,
+    'everything typed before the reload and more',
+  );
+});
