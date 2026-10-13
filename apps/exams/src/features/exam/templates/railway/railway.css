@@ -17,6 +17,10 @@
   --rw-save-edge: #a9d0f5;
   --rw-submit: #38aae9;
   --rw-tray: #e8e9e9;
+  --xp-scroll-track: #eef1f4;
+  --xp-scroll-rule: #d8d8d8;
+  --xp-scroll-thumb: #9a9a9a;
+  --xp-scroll-jump: #2f8fd8;
 
   font-family: 'segoe ui', sans-serif;
   background: #fff;
@@ -352,44 +356,6 @@
 
 /* The scrollbar is drawn, not borrowed: the platform's own reserves no width here
    and hides until the wheel moves, which these panes refuse. */
-[data-exam-template='railways'] .rw-scrollwrap {
-  position: relative;
-  display: flex;
-  min-height: 0;
-}
-
-[data-exam-template='railways'] .rw-scrollpane {
-  flex: 1;
-  min-height: 0;
-  overflow-y: scroll;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-  padding-right: 14px;
-}
-
-[data-exam-template='railways'] .rw-scrolltrack {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 14px;
-  background: #eef1f4;
-  border-left: 1px solid #d8d8d8;
-}
-
-[data-exam-template='railways'] .rw-scrollthumb {
-  width: 8px;
-  margin: 0 3px;
-  border-radius: 4px;
-  background: #9a9a9a;
-  cursor: grab;
-}
-
-[data-exam-template='railways'] .rw-scrollthumb:active {
-  background: #6f6f6f;
-  cursor: grabbing;
-}
-
 [data-exam-template='railways'] .quenmbrpalt {
   background: var(--rw-tint);
   padding: 7px 0;

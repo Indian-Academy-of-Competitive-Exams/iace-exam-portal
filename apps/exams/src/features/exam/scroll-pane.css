@@ -1,0 +1,72 @@
+/* The scrollbar and the two arrows a copied CBT skin moves its paper by. Sizes are fixed;
+   each skin sets the four colours below on its own root, and the tokens are the fallback. */
+
+.xp-scrollwrap {
+  position: relative;
+  display: flex;
+  min-height: 0;
+}
+
+.xp-scrollpane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding-right: 14px;
+}
+
+/* Room for the two arrows, so they never sit on the last words of a line. */
+.xp-scrollwrap[data-arrows] .xp-scrollpane {
+  padding-right: 52px;
+}
+
+.xp-scrolltrack {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  border-left: 1px solid var(--xp-scroll-rule, var(--exam-border));
+  background: var(--xp-scroll-track, var(--exam-surface-2));
+}
+
+.xp-scrollthumb {
+  width: 8px;
+  margin: 0 3px;
+  border-radius: 4px;
+  background: var(--xp-scroll-thumb, var(--exam-ink-muted));
+  cursor: grab;
+}
+
+.xp-scrollthumb:active {
+  cursor: grabbing;
+  filter: brightness(0.75);
+}
+
+.xp-scrolljump {
+  position: absolute;
+  right: 22px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--xp-scroll-jump, var(--exam-current));
+  color: #fff;
+  cursor: pointer;
+}
+
+.xp-scrolljump svg {
+  width: 16px;
+  height: 16px;
+}
+
+.xp-scrolljump-up {
+  top: 8px;
+}
+
+.xp-scrolljump-down {
+  bottom: 8px;
+}

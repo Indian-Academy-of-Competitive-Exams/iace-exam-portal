@@ -24,6 +24,7 @@ import {
 } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Brandmark, Button, cn } from '@iace/ui';
+import { ScrollPane } from '../../scroll-pane';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
 import { Passage } from '../../passage';
 import { RailwayOptions, RailwayQuestion } from '../railway/question';
@@ -322,11 +323,13 @@ function BankingPaper({ view }: Readonly<{ view: ExamView }>) {
     // Keyed, so the next question opens both panes at their top and not at the last one's offset.
     <div key={view.question.questionId} className="bk-split">
       {passages.length > 0 ? (
-        <div className="bk-passage">
-          <Passage passages={passages} />
-        </div>
+        <ScrollPane arrows className="bk-passage">
+          <div className="bk-passage-text">
+            <Passage passages={passages} />
+          </div>
+        </ScrollPane>
       ) : null}
-      <div className="bk-question-scroll">
+      <ScrollPane arrows className="bk-question-scroll">
         <div className="bk-question-col">
           <div className="bk-question-no">{`Question No. ${view.questionIndex + 1} :`}</div>
           <div className="bk-question">
@@ -345,7 +348,7 @@ function BankingPaper({ view }: Readonly<{ view: ExamView }>) {
             onSelect={view.chooseOption}
           />
         </div>
-      </div>
+      </ScrollPane>
     </div>
   );
 }

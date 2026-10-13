@@ -2,7 +2,7 @@ import { ANSWER_STATE, type AnswerState, type LiveAnswer } from '@iace/contracts
 import { cn } from '@iace/ui';
 import profileImage from './assets/profile.png';
 import { STATE_CLASS, STATE_LABEL, StateSwatch } from './states';
-import { ScrollPane } from './scroll-pane';
+import { ScrollPane } from '../../scroll-pane';
 
 export function RailwayPalette({
   questionIds,

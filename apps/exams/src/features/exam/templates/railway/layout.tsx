@@ -22,7 +22,7 @@ import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
 import { RailwayPalette } from './palette';
 import { InfoTally } from './info-popup';
 import { PaperModal, InstructionsModal } from './modals';
-import { ScrollPane } from './scroll-pane';
+import { ScrollPane } from '../../scroll-pane';
 import { RailwaySubmitSummary } from './submit-summary';
 import './railway.css';
 
@@ -135,13 +135,13 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
           {/* Keyed, so the next question opens both panes at their top and not at the last one's offset. */}
           <div key={view.question?.questionId} className="rw-split flex min-h-0 flex-1">
             {passages.length > 0 ? (
-              <ScrollPane className="rw-passage">
+              <ScrollPane arrows className="rw-passage">
                 <div className="questiondiv">
                   <Passage passages={passages} />
                 </div>
               </ScrollPane>
             ) : null}
-            <ScrollPane className="min-h-0 min-w-0 flex-1">
+            <ScrollPane arrows className="min-h-0 min-w-0 flex-1">
               {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
             </ScrollPane>
           </div>

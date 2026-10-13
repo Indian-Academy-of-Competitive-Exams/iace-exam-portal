@@ -3,7 +3,7 @@
  * language and the declaration pinned under them. The legend draws the sitting's own
  * symbols, so what a candidate is taught here is what they then see.
  */
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   ANSWER_STATE,
   contentLanguageOf,
@@ -131,6 +131,11 @@ export function BankingGeneral({
           to collapse the question palette thereby maximizing the question window. To view the
           question palette again, you can click on &quot;&lt;&quot; which appears on the right side
           of question window.
+        </li>
+        <li>
+          You can click on <ArrowDown className="bi-jump" aria-label="the down arrow" /> to navigate
+          to the bottom and <ArrowUp className="bi-jump" aria-label="the up arrow" /> to navigate to
+          the top of the question area, without scrolling.
         </li>
       </ol>
 

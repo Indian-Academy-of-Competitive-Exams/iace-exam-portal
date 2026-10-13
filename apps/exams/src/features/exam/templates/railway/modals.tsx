@@ -3,7 +3,7 @@ import { contentLanguageOf } from '@iace/contracts';
 import { htmlOf, shownLanguages, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { RichContent } from '@iace/ui';
 import { GeneralScreen } from './instructions';
-import { ScrollPane } from './scroll-pane';
+import { ScrollPane } from '../../scroll-pane';
 
 function Panel({
   title,

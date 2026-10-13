@@ -13,6 +13,10 @@
   --bk-tint: #effaff;
   --bk-side: 20%;
   --bk-side-min: 280px;
+  --xp-scroll-track: #eef1f4;
+  --xp-scroll-rule: var(--bk-rule);
+  --xp-scroll-thumb: #9a9a9a;
+  --xp-scroll-jump: var(--bk-info);
 
   font-family: Poppins, 'Segoe UI', system-ui, sans-serif;
   background: #fff;
@@ -255,20 +259,21 @@
 [data-exam-template='banking'] .bk-passage {
   flex: 0 0 62.5%;
   min-width: 0;
-  padding: 10px 15px;
   border-right: 1px solid var(--bk-rule);
-  overflow-y: auto;
   font-family: Arial, Verdana, Helvetica, sans-serif;
   font-size: calc(19.2px + var(--bk-font-step, 0) * 1.6px);
   line-height: 1.6;
   text-align: justify;
 }
 
+[data-exam-template='banking'] .bk-passage-text {
+  padding: 10px 15px;
+}
+
 [data-exam-template='banking'] .bk-question-scroll {
   flex: 1;
   min-width: 0;
   height: 100%;
-  overflow-y: auto;
 }
 
 [data-exam-template='banking'] .bk-question-col {
@@ -759,6 +764,17 @@
 
 [data-exam-template='banking'] :is(.bi-content, .bk-info-body) strong {
   font-weight: 500;
+}
+
+[data-exam-template='banking'] .bi-jump {
+  display: inline;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--bk-info);
+  color: #fff;
+  vertical-align: text-bottom;
 }
 
 [data-exam-template='banking'] .bi-red {
