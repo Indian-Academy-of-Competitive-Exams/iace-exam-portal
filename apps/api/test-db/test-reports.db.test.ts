@@ -19,6 +19,8 @@ import {
   MERIT_TYPE,
   REPORT_KEYS,
   TEST_SERIES_KIND,
+  QUESTION_TYPE,
+  TYPING_PRESET_KEY,
 } from '@iace/contracts';
 import { AuditContext, AuditContextMiddleware, AuditInterceptor } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
@@ -40,6 +42,7 @@ import {
   testPrisma,
   uid,
   type Catalog,
+  sitPaper,
 } from './support/database';
 import { SUPER_ADMIN, VIEWER, figureOf, reportsOver, tableOf } from './support/reports';
 
@@ -385,3 +388,51 @@ async function waitForAuditRows() {
   }
   return [];
 }
+
+describe('the typing results', () => {
+  const words = (count: number) =>
+    Array.from({ length: count }, (_, index) => `w${String(index).padStart(3, '0')}`).join(' ');
+
+  /** The failure this prevents: a typing test with nothing for an admin to read, since it scores no marks. */
+  it("scores what each sitting typed against the section's standard", async () => {
+    const paper = await makePaper(prisma, {
+      sections: ['Typing'],
+      questions: [{ subject: 'Typing', type: QUESTION_TYPE.TYPING, stem: words(400) }],
+    });
+    await makeFree(paper.catalog);
+    await prisma.baseConfigSection.update({
+      where: { id: paper.sectionIds[0] ?? '' },
+      data: { typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN },
+    });
+    const sat = async (name: string, typed: string) =>
+      sitPaper(prisma, {
+        paper,
+        studentId: await student(name),
+        chosen: [null],
+        typed: [typed],
+        status: ATTEMPT_STATUS.EVALUATED,
+        score: 0,
+      });
+    await sat('Ana', words(351));
+    await sat('Bala', words(40));
+
+    const document = await read(REPORT_KEYS.TEST_TYPING, { testId: paper.testId });
+    const rows = tableOf(document, 'Typing results');
+
+    assert.equal(figureOf(document, 'Qualified'), 1);
+    assert.equal(figureOf(document, 'Not qualified'), 1);
+    assert.deepEqual(Object.fromEntries(rows.map((row) => [row.Student, row.Result])), {
+      Ana: 'Qualified',
+      Bala: 'Not qualified',
+    });
+    assert.equal(rows.find((row) => row.Student === 'Ana')?.['Key depressions'], 1754);
+  });
+
+  it('says a test has no typing section rather than listing nobody', async () => {
+    const { testId } = await freeTest();
+
+    const document = await read(REPORT_KEYS.TEST_TYPING, { testId });
+
+    assert.equal(figureOf(document, 'Typing sections'), 0);
+  });
+});

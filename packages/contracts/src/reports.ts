@@ -52,6 +52,7 @@ export const REPORT_KEYS = {
   TEST_MERIT: 'test-merit',
   TEST_BRANCHES: 'test-branches',
   TEST_CUTOFFS: 'test-cutoffs',
+  TEST_TYPING: 'test-typing',
   TEST_VOIDED: 'test-voided',
   TEST_ANSWER_KEY: 'test-answer-key',
   TEST_ACTIVITY_WEEKLY: 'test-activity-weekly',
@@ -151,6 +152,7 @@ export const REPORTS = {
   [REPORT_KEYS.TEST_MERIT]: { ...ONE_TEST, title: 'Merit list', takes: [REPORT_PARAMS.TOP] },
   [REPORT_KEYS.TEST_BRANCHES]: { ...ONE_TEST, title: 'Branch comparison' },
   [REPORT_KEYS.TEST_CUTOFFS]: { ...ONE_TEST, title: 'Sectional cutoffs' },
+  [REPORT_KEYS.TEST_TYPING]: { ...ONE_TEST, title: 'Typing results' },
   [REPORT_KEYS.TEST_VOIDED]: { ...ONE_TEST, title: 'Void sittings' },
   [REPORT_KEYS.TEST_ANSWER_KEY]: { ...ONE_TEST, title: 'Answer key', superAdminOnly: true },
   [REPORT_KEYS.TEST_ACTIVITY_WEEKLY]: {

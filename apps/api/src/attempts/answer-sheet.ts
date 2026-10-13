@@ -205,6 +205,13 @@ export function servedSheet<P extends ServedRow>(
   );
 }
 
+/** What a sitting typed at one place on its paper; empty where nothing was. */
+export function typedIn(stored: unknown, slot: number): string {
+  const held = sheetIn(stored)[slot];
+  // A typed answer rides in a sixth place, present only when one was given.
+  return held?.length === 6 ? held[5] : '';
+}
+
 export const timeSpentIn = (stored: unknown): number =>
   sheetIn(stored).reduce((total, slot) => total + (slot?.[2] ?? 0), 0);
 

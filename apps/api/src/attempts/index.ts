@@ -16,6 +16,8 @@ export { TestReportSheets, type ResultRow, type SummaryRow } from './test-report
 export { PerformanceAnalyticsService } from './performance.service';
 export { AttemptReportService } from './attempt-report.service';
 export { sectionScoresIn } from './score-paper';
+/** What one sitting typed at one place on its paper, for a report that scores it on read. */
+export { typedIn } from './answer-sheet';
 export { PaperSheetService, type PaperTerm } from './paper-sheet.service';
 export { questionTalliesOf, type QuestionTally } from './question-tallies';
 /** A voided sitting's audit row, told apart from the suspension it is filed beside. */

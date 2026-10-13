@@ -564,6 +564,8 @@ export const REPORT_SUMMARIES: Readonly<Record<ReportKey, string>> = {
     'Each branch’s participation, mean score, highest and mean percentile',
   [REPORT_KEYS.TEST_CUTOFFS]:
     'Each student against every qualifying section’s cutoff, and the result',
+  [REPORT_KEYS.TEST_TYPING]:
+    'Each student’s speed, mistakes and result in every typing section of the test',
   [REPORT_KEYS.TEST_VOIDED]: 'Sittings struck off the ranking, with when, why and by whom',
   [REPORT_KEYS.TEST_ANSWER_KEY]: 'Every question with its answer, marks and negative marks',
   [REPORT_KEYS.TEST_ACTIVITY_WEEKLY]:

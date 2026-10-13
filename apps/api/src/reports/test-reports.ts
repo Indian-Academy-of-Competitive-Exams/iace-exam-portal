@@ -4,18 +4,26 @@
  * say something the screen does not.
  */
 import {
+  DEFAULT_LANGUAGE,
   MERIT_TYPE,
   PAPER_QUESTION_STATUS,
   QUESTION_TYPE,
   REPORT_KEYS,
   REPORT_TOP_DEFAULT,
+  TYPING_PRESETS,
   instituteDateTimeLabel,
+  plainTextOf,
+  scoreTyping,
+  typingPassageText,
+  typingPresetKeySchema,
   type LocalizedContent,
   type PaperQuestionStatus,
   type ReportFact,
   type ReportQueryOf,
+  type TypingPreset,
+  type TypingResult,
 } from '@iace/contracts';
-import { TestReportSheets, type PaperTerm, type ResultRow } from '../attempts';
+import { TestReportSheets, typedIn, type PaperTerm, type ResultRow } from '../attempts';
 import {
   EXPORT_DATE_FORMATS,
   exportInstant,
@@ -267,6 +275,119 @@ const cutoffs: TestBuilder = async (sources, { testId }) => {
   };
 };
 
+interface TypingPart {
+  id: string;
+  name: string;
+  preset: TypingPreset;
+  passage: string;
+  /** Where its passage sits on the paper, which is where a sitting's sheet holds what was typed. */
+  slot: number;
+}
+
+interface TypingRow {
+  sitting: RankedRow;
+  part: TypingPart;
+  result: TypingResult;
+}
+
+const TYPING_COLUMNS: ExportColumn<TypingRow>[] = [
+  { header: 'Student', width: 28, value: (row) => row.sitting.student.fullName },
+  { header: 'Branch', width: 20, value: (row) => branchOf(row.sitting.student) },
+  { header: 'Section', width: 18, value: (row) => row.part.name },
+  { header: 'Standard', width: 30, value: (row) => row.part.preset.label },
+  { header: 'Key depressions', width: 16, value: (row) => row.result.keyDepressions },
+  { header: 'Net speed (WPM)', width: 16, value: (row) => row.result.netWpm },
+  { header: 'Mistakes', width: 10, value: (row) => mistakesIn(row.result) },
+  { header: 'Errors (%)', width: 11, value: (row) => row.result.errorPct },
+  {
+    header: 'Result',
+    width: 14,
+    value: (row) => (row.result.qualified ? 'Qualified' : 'Not qualified'),
+  },
+];
+
+const mistakesIn = (result: TypingResult): number => result.fullMistakes + result.halfMistakes / 2;
+
+/** Sittings scored between one read and the next, so a hall's worth does not hold the server for seconds. */
+const TYPING_BATCH = 50;
+
+/** A test's typing sections, each with its passage and its place on the paper. */
+async function typingPartsOf(sources: ReportSources, testId: string): Promise<TypingPart[]> {
+  const paper = await sources.prisma.paperQuestion.findMany({
+    where: { testId },
+    orderBy: { order: 'asc' },
+    select: {
+      id: true,
+      question: { select: { type: true } },
+      baseConfigSection: { select: { id: true, name: true, typingPreset: true } },
+    },
+  });
+  const held = paper.flatMap((row, slot) =>
+    row.question.type === QUESTION_TYPE.TYPING && row.baseConfigSection.typingPreset
+      ? [{ rowId: row.id, slot, section: row.baseConfigSection }]
+      : [],
+  );
+  const passages = await sources.prisma.paperQuestion.findMany({
+    where: { id: { in: held.map((part) => part.rowId) } },
+    select: { id: true, questionVersion: { select: { content: true } } },
+  });
+  const contentOf = new Map(passages.map((row) => [row.id, row.questionVersion.content]));
+
+  return held.flatMap(({ rowId, slot, section }) => {
+    const preset = typingPresetKeySchema.safeParse(section.typingPreset).data;
+    const content = contentOf.get(rowId) as LocalizedContent | undefined;
+    if (!preset) return [];
+    return [
+      {
+        id: section.id,
+        name: section.name,
+        preset: TYPING_PRESETS[preset],
+        passage: typingPassageText(plainTextOf(content?.[DEFAULT_LANGUAGE]?.stem)),
+        slot,
+      },
+    ];
+  });
+}
+
+/** Nothing about a typing result is stored, so this reads what each sitting typed and scores it now. */
+const typing: TestBuilder = async (sources, { testId }) => {
+  const { sheets, about } = await openTest(sources, testId);
+  const parts = await typingPartsOf(sources, testId);
+  if (parts.length === 0) {
+    return { about, figures: [{ label: 'Typing sections', value: 0 }], sheets: [] };
+  }
+
+  const ranked = await rankedOf(sheets);
+  const rows: TypingRow[] = [];
+  for (let from = 0; from < ranked.length; from += TYPING_BATCH) {
+    const batch = ranked.slice(from, from + TYPING_BATCH);
+    const typed = await sources.prisma.attemptSheet.findMany({
+      where: { attemptId: { in: batch.map((sitting) => sitting.id) } },
+      select: { attemptId: true, answers: true },
+    });
+    const answersOf = new Map(typed.map((sheet) => [sheet.attemptId, sheet.answers]));
+    for (const sitting of batch) {
+      for (const part of parts) {
+        const text = typedIn(answersOf.get(sitting.id), part.slot);
+        rows.push({ sitting, part, result: scoreTyping(part.passage, text, part.preset) });
+      }
+    }
+  }
+
+  const qualified = ranked.filter((sitting) =>
+    rows.every((row) => row.sitting !== sitting || row.result.qualified),
+  ).length;
+  return {
+    about,
+    figures: [
+      { label: 'Typing sections', value: parts.length },
+      { label: 'Qualified', value: qualified },
+      { label: 'Not qualified', value: ranked.length - qualified },
+    ],
+    sheets: [{ name: 'Typing results', columns: TYPING_COLUMNS, rows }],
+  };
+};
+
 interface VoidRow {
   attemptNo: number;
   score: number | null;
@@ -408,6 +529,7 @@ export const TEST_REPORTS = {
   [REPORT_KEYS.TEST_MERIT]: merit,
   [REPORT_KEYS.TEST_BRANCHES]: branches,
   [REPORT_KEYS.TEST_CUTOFFS]: cutoffs,
+  [REPORT_KEYS.TEST_TYPING]: typing,
   [REPORT_KEYS.TEST_VOIDED]: voided,
   [REPORT_KEYS.TEST_ANSWER_KEY]: answerKey,
 };
