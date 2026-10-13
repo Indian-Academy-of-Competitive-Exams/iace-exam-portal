@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { previewTextOf } from './questions';
 
 // ============================================================================
 // Typing and data-entry skill tests: the standards, and the one evaluator the
@@ -116,6 +117,21 @@ export function typablePassage(text: string): string {
   return plain.split(/\s+/).filter(Boolean).join(' ');
 }
 
+/** The passage a TYPING question's stem holds, as the candidate is shown it and held to it. */
+export function typingPassageText(stemHtml: string | undefined): string {
+  return typablePassage(previewTextOf((stemHtml ?? '').replace(LINE_BREAK, ' ')));
+}
+
+/** `previewTextOf` drops a `<br>` outright, which would join the words either side of it. */
+const LINE_BREAK = /<br\s*\/?>/gi;
+
+const PASSAGE_NEEDS = TYPING_PRESET_KEYS.map((key) => typingPassageNeed(TYPING_PRESETS[key]));
+
+/** The shortest any standard can use; a passage below it could be handed to nobody. */
+export const TYPING_PASSAGE_MIN_KEY_DEPRESSIONS = Math.min(...PASSAGE_NEEDS);
+/** Twice the longest standard: the comparison's cost grows with the passage, so it has a ceiling. */
+export const TYPING_PASSAGE_MAX_KEY_DEPRESSIONS = Math.max(...PASSAGE_NEEDS) * 2;
+
 export const TYPED_WORD = {
   RIGHT: 'RIGHT',
   HALF: 'HALF',
@@ -149,7 +165,8 @@ export interface TypingResult {
 
 const HALF_COST = 1;
 const FULL_COST = 2;
-const NOT_A_LETTER = /[^\p{L}\p{N}]/gu;
+// Marks stay: a Devanagari vowel sign is the difference between two words, not punctuation.
+const NOT_A_LETTER = /[^\p{L}\p{M}\p{N}]/gu;
 
 const letters = (word: string) => word.toLowerCase().replace(NOT_A_LETTER, '');
 
@@ -167,9 +184,13 @@ const PAIRED_KIND: Record<number, TypedWordKind> = {
 /** Word-level edit distance, free past where they stopped: an unfinished passage is not an error. */
 function compare(passage: readonly string[], typed: readonly string[]): TypedWord[] {
   const columns = passage.length + 1;
-  const cost = new Uint32Array((typed.length + 1) * columns);
+  const cost = new Uint16Array((typed.length + 1) * columns);
   const at = (i: number, j: number) => cost[i * columns + j] ?? 0;
-  const paired = (i: number, j: number) => pairCost(typed[i - 1] ?? '', passage[j - 1] ?? '');
+  // The clock stops mid-word: the start of the right word, typed last, is not a wrong word.
+  const paired = (i: number, j: number) =>
+    i === typed.length && (passage[j - 1] ?? '').startsWith(typed[i - 1] ?? '')
+      ? 0
+      : pairCost(typed[i - 1] ?? '', passage[j - 1] ?? '');
 
   for (let j = 1; j < columns; j += 1) cost[j] = j * FULL_COST;
   for (let i = 1; i <= typed.length; i += 1) {
@@ -247,8 +268,10 @@ export function scoreTyping(passage: string, typed: string, preset: TypingPreset
     KEY_DEPRESSIONS_PER_HOUR: keyDepressionsPerHour,
   };
   const targetMet = reached[preset.metric] >= preset.target;
+  // Multiplied out, never divided: 28 mistakes in 400 words is 7.000000000000001 as a percentage.
   const withinCeiling =
-    preset.rule.shape !== TYPING_RULE.ERROR_CEILING || errorPct <= preset.rule.ceilingPct;
+    preset.rule.shape !== TYPING_RULE.ERROR_CEILING ||
+    mistakes * PERCENT <= preset.rule.ceilingPct * given.length;
 
   return {
     keyDepressions,

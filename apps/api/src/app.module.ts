@@ -28,6 +28,7 @@ import { AssignmentsModule } from './assignments';
 import { TestsModule } from './tests';
 import { AttemptsModule } from './attempts';
 import { SavedModule } from './saved';
+import { TypingModule } from './typing';
 import { DashboardModule } from './dashboard';
 import { ReportsModule } from './reports';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -67,6 +68,7 @@ import { RequestIdMiddleware } from './common/request-id';
     TestsModule,
     AttemptsModule,
     SavedModule,
+    TypingModule,
     DashboardModule,
     ReportsModule,
     HealthModule,

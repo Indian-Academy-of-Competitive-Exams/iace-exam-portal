@@ -46,7 +46,7 @@ export function CandidateViewPage() {
     <Asked
       content={content}
       language={language}
-      typed={view.state.type !== QUESTION_TYPE.SINGLE_MCQ}
+      typed={view.state.type === QUESTION_TYPE.TEXT_FIELD}
     />
   );
 

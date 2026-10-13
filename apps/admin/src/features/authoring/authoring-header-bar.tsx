@@ -146,7 +146,7 @@ export function AuthoringHeaderBar({
           />
         </Slot>
 
-        {typed ? null : (
+        {state.type === QUESTION_TYPE.SINGLE_MCQ ? (
           <Slot caption="Options">
             <SegmentedControl
               value={String(state.optionCount)}
@@ -155,7 +155,7 @@ export function AuthoringHeaderBar({
               onChange={(value) => onStateChange(withOptionCount(state, Number(value)))}
             />
           </Slot>
-        )}
+        ) : null}
 
         {typed ? (
           <Slot caption="Answer match">

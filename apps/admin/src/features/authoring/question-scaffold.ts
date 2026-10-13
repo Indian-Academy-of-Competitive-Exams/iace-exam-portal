@@ -112,6 +112,14 @@ export function emptyState(type: QuestionType = QUESTION_TYPE.SINGLE_MCQ): Autho
 /** The slots one language shows. The shape is the same in every language; only the text moves. */
 export function regionsFor(state: AuthoringState, language: QuestionLanguage): ScaffoldRegion[] {
   const content = state.content[language];
+  const stem = {
+    key: REGION_KEYS.STEM,
+    label: REGION_LABELS.STEM,
+    kind: REGION_KIND.PLAIN,
+    html: content.stem,
+  };
+  if (state.type === QUESTION_TYPE.TYPING) return [stem];
+
   const options =
     state.type === QUESTION_TYPE.SINGLE_MCQ
       ? Array.from({ length: state.optionCount }, (_, index) => ({
@@ -130,12 +138,7 @@ export function regionsFor(state: AuthoringState, language: QuestionLanguage): S
       hint: PASSAGE_HINT,
       html: content.passage,
     },
-    {
-      key: REGION_KEYS.STEM,
-      label: REGION_LABELS.STEM,
-      kind: REGION_KIND.PLAIN,
-      html: content.stem,
-    },
+    stem,
     ...options,
     {
       key: REGION_KEYS.ANSWER,
@@ -273,6 +276,22 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
   const correct = isMcq ? answerIndexOf(state.answer, state.optionCount) : null;
   const tolerance = state.tolerance.trim();
   const passage = localized((language) => state.content[language].passage);
+
+  if (state.type === QUESTION_TYPE.TYPING) {
+    return {
+      type: state.type,
+      subjectId: header.subjectId,
+      topicId: header.topicId || null,
+      difficulty: header.difficulty,
+      ...(header.questionCode === undefined
+        ? {}
+        : { questionCode: header.questionCode.trim() || null }),
+      tags: tagsIn(header.tags),
+      stem: localized((language) => state.content[language].stem),
+      options: [],
+      answerKey: null,
+    };
+  }
 
   return {
     type: state.type,

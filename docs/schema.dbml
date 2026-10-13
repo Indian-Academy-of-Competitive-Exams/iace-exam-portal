@@ -23,6 +23,7 @@ Enum SupportedLanguage {
 Enum QuestionType {
   SINGLE_MCQ
   TEXT_FIELD
+  TYPING
 }
 
 Enum AnswerMode {
@@ -964,6 +965,26 @@ Table SavedQuestion {
   }
 }
 
+Table TypingPractice {
+  id uuid [pk, default: `uuid(7)`]
+  studentId uuid [not null]
+  questionId uuid [not null]
+  presetKey text [not null]
+  keyDepressions integer [not null]
+  wordsTyped integer [not null]
+  fullMistakes integer [not null]
+  halfMistakes integer [not null]
+  errorPct decimal(6, 2) [not null]
+  grossWpm decimal(7, 2) [not null]
+  netWpm decimal(7, 2) [not null]
+  qualified boolean [not null]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (studentId, createdAt)
+    (questionId)
+  }
+}
+
 Ref: ExamStage.examId > Exam.id
 Ref: BaseConfig.examStageId > ExamStage.id
 Ref: BaseConfig.clonedFromId > BaseConfig.id [delete: restrict]
@@ -1034,6 +1055,8 @@ Ref: SavedQuestion.studentId > Student.id [delete: cascade]
 Ref: SavedQuestion.questionId > Question.id
 Ref: SavedQuestion.attemptId > Attempt.id [delete: set null]
 Ref: SavedQuestion.paperQuestionId > PaperQuestion.id [delete: set null]
+Ref: TypingPractice.studentId > Student.id [delete: cascade]
+Ref: TypingPractice.questionId > Question.id [delete: cascade]
 
 // ============================================================================
 // Table groups. Colors are kept as trailing comments: @dbml/core rejects
@@ -1057,6 +1080,7 @@ TableGroup "Question Bank" { // color: #B8860B
   Question
   QuestionVersion
   SavedQuestion
+  TypingPractice
 }
 
 TableGroup "Tests & Papers" { // color: #2E7D5B

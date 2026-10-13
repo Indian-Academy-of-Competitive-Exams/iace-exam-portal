@@ -59,6 +59,8 @@ export const QUESTION_TYPE = {
   SINGLE_MCQ: 'SINGLE_MCQ',
   /** Typed answer, scored by comparison rather than by option — no options at all. */
   TEXT_FIELD: 'TEXT_FIELD',
+  /** A passage to be typed: the stem is the passage, with no options and no answer key. */
+  TYPING: 'TYPING',
 } as const;
 export const questionTypeSchema = z.enum(QUESTION_TYPE);
 export type QuestionType = z.infer<typeof questionTypeSchema>;
@@ -417,6 +419,11 @@ export const QUESTION_VALIDATION_CODE = {
   /** A formula that will not render — a candidate would meet it as red error text mid-test. */
   MATH_INVALID: 'MATH_INVALID',
   TOLERANCE_NOT_ALLOWED: 'TOLERANCE_NOT_ALLOWED',
+  /** A typing passage carrying a picture or a formula, which no keyboard types. */
+  TYPING_PASSAGE_NOT_PLAIN: 'TYPING_PASSAGE_NOT_PLAIN',
+  /** A typing passage shorter than any standard could use. */
+  TYPING_PASSAGE_TOO_SHORT: 'TYPING_PASSAGE_TOO_SHORT',
+  TYPING_PASSAGE_TOO_LONG: 'TYPING_PASSAGE_TOO_LONG',
   SUBJECT_REQUIRED: 'SUBJECT_REQUIRED',
   SUBJECT_UNKNOWN: 'SUBJECT_UNKNOWN',
   TOPIC_UNKNOWN: 'TOPIC_UNKNOWN',

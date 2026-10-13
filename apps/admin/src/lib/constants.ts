@@ -191,6 +191,7 @@ export const GENDER_LABELS: Readonly<Record<Gender, string>> = {
 export const QUESTION_TYPE_LABELS: Readonly<Record<QuestionType, string>> = {
   SINGLE_MCQ: 'Multiple choice',
   TEXT_FIELD: 'Typed answer',
+  TYPING: 'Typing passage',
 };
 
 /** Every exam course as a choice, written the way the institute says it. */

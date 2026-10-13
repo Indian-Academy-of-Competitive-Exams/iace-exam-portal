@@ -1,4 +1,14 @@
 import { noContentSchema, type NoContent, type Paginated } from '../envelope';
+import {
+  TYPING_ROUTES,
+  typingPracticePassageSchema,
+  typingPracticeSchema,
+  type FinishTypingPracticeInput,
+  type TypingPractice,
+  type TypingPracticeListQueryInput,
+  type TypingPracticePassage,
+} from '../typing-practice';
+import { type TypingPresetKey } from '../typing';
 import { type LanguageCode } from '../exams';
 import { deviceSessionSchema, type DeviceSession } from '../auth';
 import {
@@ -238,5 +248,16 @@ export function meClient(core: ApiCore) {
     /** Which questions of one sitting are already starred — what the review draws its stars from. */
     bookmarksInAttempt: (attemptId: string): Promise<BookmarkedInAttempt> =>
       get(SAVED_ROUTES.inAttempt(attemptId), bookmarkedInAttemptSchema),
+
+    /** A passage long enough for the standard, a different one each time where there are several. */
+    typingPassage: (presetKey: TypingPresetKey): Promise<TypingPracticePassage> =>
+      get(`${TYPING_ROUTES.passage}${queryString({ presetKey })}`, typingPracticePassageSchema),
+
+    /** The session as the server scored it, which is the figure the history keeps. */
+    finishTypingPractice: (input: FinishTypingPracticeInput): Promise<TypingPractice> =>
+      write('POST', TYPING_ROUTES.practices, typingPracticeSchema, input),
+
+    typingPractices: (query: TypingPracticeListQueryInput): Promise<Paginated<TypingPractice>> =>
+      list(TYPING_ROUTES.practices, query, typingPracticeSchema),
   };
 }

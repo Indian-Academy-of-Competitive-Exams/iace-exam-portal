@@ -20,7 +20,7 @@ ThinkExam is the reference, not the target. Four of its failures shape the rules
   is no button.
 - **Creation is a rigid wizard** with clunky question mapping. Creation here is config-driven.
 
-Discarded outright, and the model blocks none of them: certificates, typing and essay evaluation,
+Discarded outright, and the model blocks none of them: certificates, essay evaluation,
 open-book whitelisting, bio-break scheduling, live proctoring, groups and batches, access codes,
 shareable test links, and a nested category tree.
 
@@ -551,6 +551,18 @@ and needs no mapping at all.
 - **A topic must sit under the question's own subject.** The question carries both ids and no
   foreign key can relate them, so the check is a shared rule in
   `packages/contracts/src/question-rules.ts` — the same one for the editor and the importer.
+- **A typing passage is a question of type `TYPING`.** Its English stem is the passage; it has no
+  options, no answer key, no picture and no formula, and its length is bounded both ways — long
+  enough for the shortest typing standard, and short enough that comparing it stays cheap. It is
+  written in the same editor and held to the same checks as any question. No ordinary section may
+  draw one: it has nothing to answer with.
+- **The typing standards are code-owned** (`TYPING_PRESETS` in `packages/contracts/src/typing.ts`),
+  like the feature keys: duration, target, and how mistakes count for each board's test. One
+  evaluator, `scoreTyping`, runs on the server and in the browser, so both give the same figures.
+- **Typing practice sits apart from tests and is never ranked.** A student picks a standard and is
+  handed an active typing passage that no test paper holds, so a passage written for a paper is
+  not met in practice first. The clock is the device's own. The server re-scores what was typed
+  and keeps only the figures (`TypingPractice`); a figure the browser sent is never stored.
 
 ## 12. Question import
 

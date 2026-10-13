@@ -23,6 +23,7 @@ export * from './imports';
 export * from './exports';
 export * from './reports';
 export * from './questions';
+export * from './typing-practice';
 export * from './question-rules';
 export * from './authoring';
 export * from './assignments';

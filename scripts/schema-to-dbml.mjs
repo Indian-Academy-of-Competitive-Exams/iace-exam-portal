@@ -7,7 +7,7 @@ const GROUPS = [
   [
     'Question Bank',
     '#B8860B',
-    ['Subject', 'Topic', 'Question', 'QuestionVersion', 'SavedQuestion'],
+    ['Subject', 'Topic', 'Question', 'QuestionVersion', 'SavedQuestion', 'TypingPractice'],
   ],
   [
     'Tests & Papers',

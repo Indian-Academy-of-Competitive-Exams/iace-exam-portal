@@ -1,4 +1,4 @@
-import { QUESTION_TYPE, type ValidationIssue } from '@iace/contracts';
+import { QUESTION_TYPE, typingPassageText, type ValidationIssue } from '@iace/contracts';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
 import { KEY_NAMES } from '@iace/ui';
 import { type Check } from './authoring-preview';
@@ -12,6 +12,8 @@ export function checksFor(
 ): Check[] {
   const failing = (...codes: string[]) => issues.find((issue) => codes.includes(issue.code));
   const isMcq = state.type === QUESTION_TYPE.SINGLE_MCQ;
+  const isTyping = state.type === QUESTION_TYPE.TYPING;
+  const keyDepressions = typingPassageText(state.content.en.stem).length;
 
   const structure = failing(
     'ENGLISH_STEM_REQUIRED',
@@ -20,6 +22,9 @@ export function checksFor(
     'OPTION_TEXT_REQUIRED',
     'OPTION_TEXT_DUPLICATE',
     'OPTIONS_NOT_ALLOWED',
+    'TYPING_PASSAGE_NOT_PLAIN',
+    'TYPING_PASSAGE_TOO_SHORT',
+    'TYPING_PASSAGE_TOO_LONG',
   );
   const answered = failing(
     'CORRECT_OPTION_REQUIRED',
@@ -39,13 +44,14 @@ export function checksFor(
   );
   const correct = answerIndexOf(state.answer, state.optionCount);
 
-  const checks: Check[] = [
-    {
-      key: 'structure',
-      label: structure?.message ?? (isMcq ? 'English text and every option' : 'English text'),
-      state: structure ? 'fail' : 'pass',
-      meta: isMcq ? `${state.optionCount} options` : undefined,
-    },
+  const structured: Check = {
+    key: 'structure',
+    label: structure?.message ?? (isMcq ? 'English text and every option' : 'English text'),
+    state: structure ? 'fail' : 'pass',
+    meta: structureMeta(state, keyDepressions),
+  };
+  // A typing passage is its own answer and carries no formula, so neither line has anything to say.
+  const answerChecks: Check[] = [
     {
       key: 'answered',
       label: answered?.message ?? (isMcq ? 'Exactly one correct answer' : 'An answer to compare'),
@@ -57,6 +63,10 @@ export function checksFor(
       label: math?.message ?? 'Every formula renders',
       state: math ? 'fail' : 'pass',
     },
+  ];
+  const checks: Check[] = [
+    structured,
+    ...(isTyping ? [] : answerChecks),
     {
       key: 'filed',
       label: filed?.message ?? 'Filed under a subject',
@@ -78,4 +88,9 @@ export function checksFor(
   }
 
   return checks;
+}
+
+function structureMeta(state: AuthoringState, keyDepressions: number): string | undefined {
+  if (state.type === QUESTION_TYPE.SINGLE_MCQ) return `${state.optionCount} options`;
+  return state.type === QUESTION_TYPE.TYPING ? `${keyDepressions} key depressions` : undefined;
 }

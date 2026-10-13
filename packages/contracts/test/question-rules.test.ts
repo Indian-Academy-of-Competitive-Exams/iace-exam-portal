@@ -386,3 +386,50 @@ describe('canonicalStemKey — what makes two questions the same question', () =
     assert.equal(canonicalStemKey(typed).split('||')[1], '');
   });
 });
+
+describe('validateQuestion — a typing passage', () => {
+  const words = (count: number) => Array.from({ length: count }, () => 'word').join(' ');
+  const passage = (over: Partial<QuestionDraft> = {}) =>
+    sound({
+      type: QUESTION_TYPE.TYPING,
+      stem: { en: `<p>${words(320)}</p>` },
+      options: [],
+      ...over,
+    });
+
+  it('is the passage alone: no options, no answer', () => {
+    assert.deepEqual(codes(passage()), []);
+  });
+
+  it('refuses options and an answer key', () => {
+    const found = codes(
+      passage({
+        options: [option(1, 'five', true)],
+        answerKey: { mode: ANSWER_MODE.EXACT, answers: { en: 'five' } },
+      }),
+    );
+
+    assert.ok(found.includes(CODE.OPTIONS_NOT_ALLOWED));
+    assert.ok(found.includes(CODE.ANSWER_NOT_ALLOWED));
+  });
+
+  it('refuses a passage too short for any standard to use', () => {
+    assert.deepEqual(codes(passage({ stem: { en: `<p>${words(100)}</p>` } })), [
+      CODE.TYPING_PASSAGE_TOO_SHORT,
+    ]);
+  });
+
+  it('refuses a passage longer than the comparison is allowed to cost', () => {
+    assert.deepEqual(codes(passage({ stem: { en: `<p>${words(1600)}</p>` } })), [
+      CODE.TYPING_PASSAGE_TOO_LONG,
+    ]);
+  });
+
+  it('refuses a picture or a formula, which no keyboard types', () => {
+    const pictured = `<p>${words(320)} <img data-key="questions/a.png" src="x" /></p>`;
+    const formula = `<p>${words(320)} <span data-type="inline-math" data-latex="x^2"></span></p>`;
+
+    assert.deepEqual(codes(passage({ stem: { en: pictured } })), [CODE.TYPING_PASSAGE_NOT_PLAIN]);
+    assert.deepEqual(codes(passage({ stem: { en: formula } })), [CODE.TYPING_PASSAGE_NOT_PLAIN]);
+  });
+});

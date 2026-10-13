@@ -6,6 +6,7 @@ import {
   scoreTyping,
   typablePassage,
   typingPassageNeed,
+  typingPassageText,
 } from '../src/index';
 
 const SSC = TYPING_PRESETS.SSC_CHSL_TYPING_EN;
@@ -143,5 +144,38 @@ describe('typing passages', () => {
     assert.equal(typingPassageNeed(SSC), 1750);
     assert.equal(typingPassageNeed(DEST), 2000);
     assert.equal(typingPassageNeed(TYPING_PRESETS.SSC_CHSL_DEO_15000), 3750);
+  });
+});
+
+describe('scoreTyping at its edges', () => {
+  it('qualifies a candidate exactly at the error ceiling', () => {
+    const words = passageOf(400);
+    const typed = words.map((word, index) => (index < 28 ? 'oops' : word));
+    const result = scoreTyping(words.join(' '), typed.join(' '), SSC);
+
+    assert.equal(result.errorPct, 7);
+    assert.equal(result.qualified, true);
+  });
+
+  it('does not charge the word the clock stopped them in', () => {
+    const result = scoreTyping('the cat sat down', 'the cat sa', SSC);
+
+    assert.equal(result.fullMistakes + result.halfMistakes, 0);
+  });
+
+  it('tells two Hindi words apart by their vowel signs', () => {
+    const result = scoreTyping('की कि क', 'कि क की', SSC);
+
+    assert.equal(result.halfMistakes, 0);
+    assert.ok(result.fullMistakes > 0);
+  });
+});
+
+describe('typingPassageText', () => {
+  it('keeps the words either side of a line break apart', () => {
+    assert.equal(
+      typingPassageText('<p>one<br>two<br />three</p><p>four</p>'),
+      'one two three four',
+    );
   });
 });

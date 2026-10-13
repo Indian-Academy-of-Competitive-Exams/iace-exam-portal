@@ -53,12 +53,13 @@ export function AuthoringPreview({
             </li>
           ))}
         </ol>
-      ) : (
+      ) : null}
+      {state.type === QUESTION_TYPE.TEXT_FIELD ? (
         <p className="border-l-2 border-border pl-3 text-sm">
           <span className="font-semibold">Answer. </span>
           {previewTextOf(state.answer) || '—'}
         </p>
-      )}
+      ) : null}
 
       {content.solution ? (
         <div className="flex gap-2 border-l-2 border-border pl-3 text-sm">

@@ -16,8 +16,14 @@ import {
   type QuestionDraft,
   type QuestionIdentity,
   type QuestionLanguage,
+  type QuestionType,
   type ValidationIssue,
 } from './questions';
+import {
+  TYPING_PASSAGE_MAX_KEY_DEPRESSIONS,
+  TYPING_PASSAGE_MIN_KEY_DEPRESSIONS,
+  typingPassageText,
+} from './typing';
 
 /** The one definition of valid, browser-safe so the editor and the server judge alike. */
 
@@ -67,6 +73,16 @@ const optionField = (position: number, language: QuestionLanguage) => ({
   column: `option${position}_${language}`,
 });
 
+/** What each type answers with, and so what the draft must and must not carry. */
+const ANSWER_CHECKS: Record<
+  QuestionType,
+  (draft: QuestionDraft, issues: ValidationIssue[]) => void
+> = {
+  SINGLE_MCQ: checkOptions,
+  TEXT_FIELD: checkTypedAnswer,
+  TYPING: checkTypingPassage,
+};
+
 /** Reported rather than thrown, so a bad row never stops the good ones beside it. */
 export function validateQuestion(
   draft: QuestionDraft,
@@ -77,8 +93,7 @@ export function validateQuestion(
 
   checkLanguages(draft, issues);
   checkStems(draft, issues);
-  if (draft.type === QUESTION_TYPE.SINGLE_MCQ) checkOptions(draft, issues);
-  else checkTypedAnswer(draft, issues);
+  ANSWER_CHECKS[draft.type](draft, issues);
   checkTaxonomy(draft, taxonomy, issues);
   if (mathError) checkMath(draft, issues, mathError);
 
@@ -301,6 +316,51 @@ function checkTypedAnswer(draft: QuestionDraft, issues: ValidationIssue[]): void
       message: 'A tolerance only means something for a numeric answer',
       field: 'answerKey.tolerance',
       column: 'answer_tolerance',
+    });
+  }
+}
+
+/** Held to what a keyboard can produce: the candidate is marked on every word of it. */
+function checkTypingPassage(draft: QuestionDraft, issues: ValidationIssue[]): void {
+  if (draft.options.length > 0) {
+    issues.push({
+      code: CODE.OPTIONS_NOT_ALLOWED,
+      message: 'A typing passage has no options',
+      field: 'options',
+      column: 'option1_en',
+    });
+  }
+  if (draft.answerKey) {
+    issues.push({
+      code: CODE.ANSWER_NOT_ALLOWED,
+      message: 'A typing passage has no answer',
+      field: 'answerKey.answers.en',
+      column: 'answer_en',
+    });
+  }
+
+  const stem = draft.stem[DEFAULT_LANGUAGE] ?? '';
+  if (imageKeysIn(stem).length > 0 || latexIn(stem).length > 0) {
+    issues.push({
+      code: CODE.TYPING_PASSAGE_NOT_PLAIN,
+      message: 'A typing passage is text only: no picture and no formula',
+      ...stemField(DEFAULT_LANGUAGE),
+    });
+  }
+
+  const keyDepressions = typingPassageText(stem).length;
+  if (keyDepressions > TYPING_PASSAGE_MAX_KEY_DEPRESSIONS) {
+    issues.push({
+      code: CODE.TYPING_PASSAGE_TOO_LONG,
+      message: `A typing passage holds at most ${TYPING_PASSAGE_MAX_KEY_DEPRESSIONS} key depressions; this has ${keyDepressions}`,
+      ...stemField(DEFAULT_LANGUAGE),
+    });
+  }
+  if (keyDepressions > 0 && keyDepressions < TYPING_PASSAGE_MIN_KEY_DEPRESSIONS) {
+    issues.push({
+      code: CODE.TYPING_PASSAGE_TOO_SHORT,
+      message: `A typing passage needs at least ${TYPING_PASSAGE_MIN_KEY_DEPRESSIONS} key depressions; this has ${keyDepressions}`,
+      ...stemField(DEFAULT_LANGUAGE),
     });
   }
 }

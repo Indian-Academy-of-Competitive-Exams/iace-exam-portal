@@ -41,6 +41,8 @@ enum SupportedLanguage {
 enum QuestionType {
   SINGLE_MCQ
   TEXT_FIELD
+  // A passage to be typed: the stem is the passage, and it has no options and no answer key.
+  TYPING
 }
 
 // No column uses it — a TEXT_FIELD's mode lives in QuestionVersion.answerKey JSON, as ANSWER_MODE in @iace/contracts.
@@ -474,17 +476,18 @@ model Question {
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
 
-  subject        Subject             @relation(fields: [subjectId], references: [id])
-  createdBy      Admin?              @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  topic          Topic?              @relation(fields: [topicId], references: [id], onDelete: Restrict)
-  currentVersion QuestionVersion?    @relation("QuestionCurrentVersion", fields: [id, currentVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
-  versions       QuestionVersion[]   @relation("QuestionVersions")
-  paperQuestions PaperQuestion[]
-  questionStats  TestQuestionStat[]
-  savedBy        SavedQuestion[]
-  reviews        QuestionReview[]
-  workTimes      QuestionWorkTime[]
-  assignment     QuestionAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  subject         Subject             @relation(fields: [subjectId], references: [id])
+  createdBy       Admin?              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  topic           Topic?              @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  currentVersion  QuestionVersion?    @relation("QuestionCurrentVersion", fields: [id, currentVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
+  versions        QuestionVersion[]   @relation("QuestionVersions")
+  paperQuestions  PaperQuestion[]
+  questionStats   TestQuestionStat[]
+  savedBy         SavedQuestion[]
+  typingPractices TypingPractice[]
+  reviews         QuestionReview[]
+  workTimes       QuestionWorkTime[]
+  assignment      QuestionAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
   // Unique, not just indexed: the duplicate pre-check reads outside the write, so two commits can race past it.
   @@unique([stemHash])
@@ -812,6 +815,7 @@ model Student {
   pushDevices       PushDevice[]
   savedQuestions    SavedQuestion[]
   mobileHistory     StudentMobileHistory[]
+  typingPractices   TypingPractice[]
 
   @@index([mobile])
   @@index([externalRef])
@@ -1312,5 +1316,30 @@ model SavedQuestion {
   @@index([studentId, createdAt])
   @@index([attemptId])
   @@index([paperQuestionId])
+  @@index([questionId])
+}
+
+// One finished typing-practice session. The figures are the server's own; what was typed is not kept.
+model TypingPractice {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  studentId      String   @db.Uuid
+  // The TYPING question whose stem was the passage.
+  questionId     String   @db.Uuid
+  // A TYPING_PRESETS key in @iace/contracts — code-owned, so a text column and no enum to migrate.
+  presetKey      String
+  keyDepressions Int
+  wordsTyped     Int
+  fullMistakes   Int
+  halfMistakes   Int
+  errorPct       Decimal  @db.Decimal(6, 2)
+  grossWpm       Decimal  @db.Decimal(7, 2)
+  netWpm         Decimal  @db.Decimal(7, 2)
+  qualified      Boolean
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
   @@index([questionId])
 }

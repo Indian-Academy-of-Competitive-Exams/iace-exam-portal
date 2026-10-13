@@ -164,6 +164,7 @@ erodes.
 | audit         | `RowActionLog`, `ImportLog`                                                                                       |
 | notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`                          |
 | saved         | `SavedQuestion`                                                                                                   |
+| typing        | `TypingPractice`                                                                                                  |
 
 `auth`, `imports`, `me`, `dashboard`, `reports` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
