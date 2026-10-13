@@ -3,6 +3,7 @@ import {
   EXAM_TEMPLATE,
   TEST_UI,
   TIMER_TEMPLATE,
+  TYPING_PRESETS,
   configTotalsOf,
   type BaseConfigModuleDraft,
   type BaseConfigSectionDraft,
@@ -57,6 +58,7 @@ export function configShapeIssues(
     ...perQuestionIssues(timerTemplate, sections),
     ...sessionIssues(timerTemplate, modules, durationSec),
     ...totalMarksIssues(sections),
+    ...typingIssues(timerTemplate, sections, modules, durationSec),
   ];
 
   if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length > 0) {
@@ -101,6 +103,58 @@ function perQuestionIssues(
   return [
     `A per-question paper gives every question its own countdown, and ${untimed.map((section) => section.name).join(', ')} has no seconds per question.`,
   ];
+}
+
+/** A typing test is one unmarked passage on a clock of exactly its standard's length, shared with nothing. */
+function typingIssues(
+  timerTemplate: TimerTemplate,
+  sections: readonly BaseConfigSectionDraft[],
+  modules: readonly BaseConfigModuleDraft[],
+  durationSec?: number,
+): string[] {
+  return sections.flatMap((section) => {
+    if (!section.typingPreset) return [];
+    const preset = TYPING_PRESETS[section.typingPreset];
+    const onePassage =
+      section.questionCount === 1 && section.marksPerQuestion === 0 && section.negativeMarks === 0;
+    const clock = typingClock(timerTemplate, section, sections, modules, durationSec);
+
+    return [
+      ...(onePassage
+        ? []
+        : [`${section.name} is a typing test: one passage, carrying no marks and no negative.`]),
+      ...(typeof clock === 'string' ? [`${section.name} is a typing test. ${clock}`] : []),
+      ...(typeof clock === 'number' && clock !== preset.durationSec
+        ? [
+            `${section.name} is held to ${preset.label}, which runs ${clockLabel(preset.durationSec)}; its clock is set to ${clockLabel(clock)}.`,
+          ]
+        : []),
+    ];
+  });
+}
+
+/** The seconds a typing section really runs for, or why this paper gives it no clock of its own. */
+function typingClock(
+  timerTemplate: TimerTemplate,
+  section: BaseConfigSectionDraft,
+  sections: readonly BaseConfigSectionDraft[],
+  modules: readonly BaseConfigModuleDraft[],
+  durationSec?: number,
+): number | string {
+  if (timerTemplate === TIMER_TEMPLATE.SECTIONAL_LOCKED) return section.durationSec ?? 0;
+  if (timerTemplate === TIMER_TEMPLATE.PER_ITEM_TIMED) {
+    return 'A per-question paper cannot hold one.';
+  }
+  if (timerTemplate === TIMER_TEMPLATE.COMPOSITE_FREE) {
+    return sections.length === 1
+      ? (durationSec ?? 0)
+      : 'On a composite paper it has to be the only section, or the paper sectional or in sessions.';
+  }
+
+  const session = modules.find((module) => module.order === section.moduleOrder) ?? modules[0];
+  const sharing = sections.filter((other) => (other.moduleOrder ?? null) === session?.order);
+  if (sharing.length > 1) return 'It has to sit alone in its session.';
+  return session?.durationSec ?? 0;
 }
 
 /** The total is a cache in a column of its own, narrower than the sections can add up to. */

@@ -681,21 +681,21 @@ export class PaperService {
     baseConfigSectionId: string,
   ): Promise<DrawableContext> {
     const ids = [...questionIds];
-    const [section, questions, drawable] = await Promise.all([
+    const [section, questions] = await Promise.all([
       this.prisma.baseConfigSection.findUnique({
         where: { id: baseConfigSectionId },
-        select: { subjectId: true },
+        select: { subjectId: true, typingPreset: true },
       }),
       this.prisma.question.findMany({
         where: { id: { in: ids } },
         select: { id: true, subjectId: true, currentVersionId: true, difficulty: true },
       }),
-      // Asked of the database, not of the row: drawability turns on other rows as well as this one.
-      this.prisma.question.findMany({
-        where: { id: { in: ids }, ...drawableFor(testId) },
-        select: { id: true },
-      }),
     ]);
+    // Asked of the database, not of the row: drawability turns on other rows as well as this one.
+    const drawable = await this.prisma.question.findMany({
+      where: { id: { in: ids }, ...drawableFor(testId, Boolean(section?.typingPreset)) },
+      select: { id: true },
+    });
 
     return {
       sectionSubjectId: section?.subjectId ?? null,
@@ -740,7 +740,7 @@ export class PaperService {
   ): Promise<DrawCandidate[]> {
     const rows = await db.question.findMany({
       where: {
-        ...drawableFor(testId),
+        ...drawableFor(testId, Boolean(section.typingPreset)),
         ...(source === PAPER_SOURCES.FRAMED
           ? // A framed section is made of what its own typist wrote, never of what the bank happens to hold.
             { assignment: { testId, baseConfigSectionId: section.id } }

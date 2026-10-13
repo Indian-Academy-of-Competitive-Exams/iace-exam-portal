@@ -11,6 +11,8 @@ import {
   PAPER_SOURCES,
   QUESTION_STATUS,
   TEST_SCOPE,
+  QUESTION_TYPE,
+  TYPING_PRESET_KEY,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
@@ -299,6 +301,32 @@ describe('PaperService — picking a draft paper by hand', () => {
     );
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+
+  /** The failure this prevents: a candidate shown a passage with nothing to answer, or options in a typing test. */
+  it('lets a typing section hold a typing passage and nothing else, and no other section hold one', async () => {
+    const service = await serviceWith();
+    await prisma.baseConfigSection.update({
+      where: { id: idFor('sec_2') },
+      data: { typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN },
+    });
+    await prisma.question.updateMany({
+      where: { id: { in: [idFor('q1'), idFor('r1')] } },
+      data: { type: QUESTION_TYPE.TYPING },
+    });
+    const add = (section: string, question: string) =>
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor(section),
+        questionIds: [idFor(question)],
+      });
+
+    const passageElsewhere = await refused(add('sec_1', 'r1'));
+    const choiceInTyping = await refused(add('sec_2', 'q2'));
+    await add('sec_2', 'q1');
+
+    assert.equal(passageElsewhere.code, ErrorCodes.VALIDATION_ERROR);
+    assert.equal(choiceInTyping.code, ErrorCodes.VALIDATION_ERROR);
+    assert.deepEqual(await heldIds(), [idFor('q1')]);
   });
 
   /** A paper pins a version, so a question with none has nothing to pin. */

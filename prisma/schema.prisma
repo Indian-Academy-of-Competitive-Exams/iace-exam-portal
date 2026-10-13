@@ -414,6 +414,8 @@ model BaseConfigSection {
   qualifyingCutoff  Decimal?  @db.Decimal(6, 2)
   // The exam-pattern workbook's own words ("Moderate-Difficult"). Reference only; no draw reads it.
   patternNote       String?
+  // A TYPING_PRESETS key: set, the section is one TYPING question held to that standard.
+  typingPreset      String?
 
   baseConfig     BaseConfig           @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
   module         BaseConfigModule?    @relation(fields: [baseConfigId, moduleId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)

@@ -33,6 +33,9 @@ import {
   type NavigationPolicy,
   type TestUi,
   type TimerTemplate,
+  TYPING_PRESETS,
+  TYPING_PRESET_KEYS,
+  typingPresetKeySchema,
 } from '@iace/contracts';
 import {
   applyFieldErrors,
@@ -51,6 +54,7 @@ import {
   EMPTY_STATE_KINDS,
   EmptyState,
   FieldRow,
+  Combobox,
   FormCombobox,
   FormField,
   FormPanel,
@@ -106,6 +110,8 @@ interface SectionValues {
   meritOrQualifying: MeritType;
   qualifyingCutoff: string;
   patternNote: string;
+  /** A typing standard's key, or empty for an ordinary section. */
+  typingPreset: string;
 }
 
 interface ModuleValues {
@@ -147,6 +153,7 @@ function emptySection(): SectionValues {
     mandatory: true,
     meritOrQualifying: MERIT_TYPE.MERIT,
     qualifyingCutoff: '',
+    typingPreset: '',
   };
 }
 
@@ -215,6 +222,7 @@ function valuesOf(detail: BaseConfigDetail | null): ConfigFormValues {
       mandatory: section.mandatory,
       meritOrQualifying: section.meritOrQualifying,
       qualifyingCutoff: section.qualifyingCutoff === null ? '' : String(section.qualifyingCutoff),
+      typingPreset: section.typingPreset ?? '',
     })),
   };
 }
@@ -238,6 +246,7 @@ function toSectionDraft(section: SectionValues, index: number): BaseConfigSectio
       section.meritOrQualifying === MERIT_TYPE.QUALIFYING
         ? optionalNumber(section.qualifyingCutoff)
         : null,
+    typingPreset: typingPresetKeySchema.safeParse(section.typingPreset).data ?? null,
   };
 }
 
@@ -957,6 +966,12 @@ function LanguageChoice({ form }: Readonly<{ form: UseFormReturn<ConfigFormValue
   );
 }
 
+/** The first row is the ordinary case, so a section is a typing test only when one is chosen. */
+const TYPING_TEST_ITEMS = [
+  { value: '', label: 'Not a typing test' },
+  ...TYPING_PRESET_KEYS.map((key) => ({ value: key, label: TYPING_PRESETS[key].label })),
+];
+
 function SectionCard({
   form,
   index,
@@ -979,6 +994,23 @@ function SectionCard({
   const mandatory = useWatch({ control: form.control, name: `sections.${index}.mandatory` });
   const modules = useWatch({ control: form.control, name: 'modules' }) ?? [];
   const moduleNames = sessionPaper ? modules.map((module) => module.name) : [];
+  const typingPreset = useWatch({ control: form.control, name: `sections.${index}.typingPreset` });
+  const isTyping = typingPreset !== '';
+
+  // A typing test is one unmarked passage on its standard's clock, so choosing one fills all four.
+  const chooseTyping = (key: string) => {
+    form.setValue(`sections.${index}.typingPreset`, key, { shouldDirty: true });
+    const preset = typingPresetKeySchema.safeParse(key).data;
+    if (!preset) return;
+    form.setValue(`sections.${index}.questionCount`, '1');
+    form.setValue(`sections.${index}.marksPerQuestion`, '0');
+    form.setValue(`sections.${index}.negativeMarks`, '0');
+    form.setValue(`sections.${index}.perQuestionSec`, '');
+    form.setValue(
+      `sections.${index}.durationMin`,
+      minutesFieldOf(TYPING_PRESETS[preset].durationSec),
+    );
+  };
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
@@ -1020,47 +1052,63 @@ function SectionCard({
           )}
         </FormField>
 
-        <FormField form={form} name={`sections.${index}.questionCount`} label="Questions">
+        <FormField form={form} name={`sections.${index}.typingPreset`} label="Typing test">
           {(control) => (
-            <Input
-              {...control}
-              {...form.register(`sections.${index}.questionCount`, NUMBER_FIELD)}
-              inputMode="numeric"
-              placeholder="25"
+            <Combobox
+              id={control.id}
+              value={typingPreset}
+              clearable={false}
+              items={TYPING_TEST_ITEMS}
+              onChange={chooseTyping}
             />
           )}
         </FormField>
 
-        <FormField
-          form={form}
-          name={`sections.${index}.marksPerQuestion`}
-          label="Marks per question"
-        >
-          {(control) => (
-            <Input
-              {...control}
-              {...form.register(`sections.${index}.marksPerQuestion`, NUMBER_FIELD)}
-              inputMode="decimal"
-              placeholder="2"
-            />
-          )}
-        </FormField>
+        {isTyping ? null : (
+          <>
+            <FormField form={form} name={`sections.${index}.questionCount`} label="Questions">
+              {(control) => (
+                <Input
+                  {...control}
+                  {...form.register(`sections.${index}.questionCount`, NUMBER_FIELD)}
+                  inputMode="numeric"
+                  placeholder="25"
+                />
+              )}
+            </FormField>
 
-        <FormField
-          form={form}
-          name={`sections.${index}.negativeMarks`}
-          label="Negative marks"
-          /* ui-copy-ok: unit */ hint="Per wrong answer"
-        >
-          {(control) => (
-            <Input
-              {...control}
-              {...form.register(`sections.${index}.negativeMarks`, NUMBER_FIELD)}
-              inputMode="decimal"
-              placeholder="0.5"
-            />
-          )}
-        </FormField>
+            <FormField
+              form={form}
+              name={`sections.${index}.marksPerQuestion`}
+              label="Marks per question"
+            >
+              {(control) => (
+                <Input
+                  {...control}
+                  {...form.register(`sections.${index}.marksPerQuestion`, NUMBER_FIELD)}
+                  inputMode="decimal"
+                  placeholder="2"
+                />
+              )}
+            </FormField>
+
+            <FormField
+              form={form}
+              name={`sections.${index}.negativeMarks`}
+              label="Negative marks"
+              /* ui-copy-ok: unit */ hint="Per wrong answer"
+            >
+              {(control) => (
+                <Input
+                  {...control}
+                  {...form.register(`sections.${index}.negativeMarks`, NUMBER_FIELD)}
+                  inputMode="decimal"
+                  placeholder="0.5"
+                />
+              )}
+            </FormField>
+          </>
+        )}
 
         <FormField
           form={form}
@@ -1079,22 +1127,24 @@ function SectionCard({
           )}
         </FormField>
 
-        <FormField
-          form={form}
-          name={`sections.${index}.perQuestionSec`}
-          label="Seconds per question"
-          /* ui-copy-ok: rule */ hint={
-            perQuestionClocks ? 'Required: this paper has a countdown per question' : 'Optional'
-          }
-        >
-          {(control) => (
-            <Input
-              {...control}
-              {...form.register(`sections.${index}.perQuestionSec`, NUMBER_FIELD)}
-              inputMode="numeric"
-            />
-          )}
-        </FormField>
+        {isTyping ? null : (
+          <FormField
+            form={form}
+            name={`sections.${index}.perQuestionSec`}
+            label="Seconds per question"
+            /* ui-copy-ok: rule */ hint={
+              perQuestionClocks ? 'Required: this paper has a countdown per question' : 'Optional'
+            }
+          >
+            {(control) => (
+              <Input
+                {...control}
+                {...form.register(`sections.${index}.perQuestionSec`, NUMBER_FIELD)}
+                inputMode="numeric"
+              />
+            )}
+          </FormField>
+        )}
 
         <FormField
           form={form}

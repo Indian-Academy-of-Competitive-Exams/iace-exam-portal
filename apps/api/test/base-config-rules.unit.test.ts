@@ -4,6 +4,7 @@ import {
   EXAM_TEMPLATE,
   TEST_UI,
   TIMER_TEMPLATE,
+  TYPING_PRESET_KEY,
   type BaseConfigSectionDraft,
 } from '@iace/contracts';
 import { configShapeIssues, renderModeIssue } from '../src/configs/base-config-rules';
@@ -105,5 +106,87 @@ describe('renderModeIssue', () => {
     for (const template of [EXAM_TEMPLATE.DEFAULT, EXAM_TEMPLATE.RAILWAYS]) {
       assert.equal(renderModeIssue(template, TEST_UI.CBT), null);
     }
+  });
+});
+
+describe('configShapeIssues — a typing section', () => {
+  const TEN_MINUTES = 600;
+  const typing = (over: Partial<BaseConfigSectionDraft> = {}) =>
+    section({
+      name: 'Typing',
+      questionCount: 1,
+      marksPerQuestion: 0,
+      negativeMarks: 0,
+      typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN,
+      ...over,
+    });
+
+  it('takes a paper that is the typing test alone, on a clock of the standard’s length', () => {
+    assert.deepEqual(
+      configShapeIssues(TIMER_TEMPLATE.COMPOSITE_FREE, [typing()], [], TEN_MINUTES),
+      [],
+    );
+  });
+
+  it('refuses a clock that is not the standard’s, which would score a speed nobody typed at', () => {
+    const [issue, ...rest] = configShapeIssues(TIMER_TEMPLATE.COMPOSITE_FREE, [typing()], [], 900);
+
+    assert.match(issue ?? '', /10 minutes/);
+    assert.match(issue ?? '', /15 minutes/);
+    assert.deepEqual(rest, []);
+  });
+
+  it('refuses a typing section that carries marks or more than its one passage', () => {
+    const marked = configShapeIssues(
+      TIMER_TEMPLATE.COMPOSITE_FREE,
+      [typing({ marksPerQuestion: 2 })],
+      [],
+      TEN_MINUTES,
+    );
+    const several = configShapeIssues(
+      TIMER_TEMPLATE.COMPOSITE_FREE,
+      [typing({ questionCount: 2 })],
+      [],
+      TEN_MINUTES,
+    );
+
+    assert.equal(marked.length, 1);
+    assert.equal(several.length, 1);
+  });
+
+  it('refuses one sharing a composite paper, where it would have no clock of its own', () => {
+    const issues = configShapeIssues(
+      TIMER_TEMPLATE.COMPOSITE_FREE,
+      [section(), typing({ order: 1 })],
+      [],
+      3600,
+    );
+
+    assert.equal(issues.length, 1);
+    assert.match(issues[0] ?? '', /only section/);
+  });
+
+  it('takes one as a section of a sectional paper, timed by its own clock', () => {
+    const paper = [section({ durationSec: 3000 }), typing({ order: 1, durationSec: TEN_MINUTES })];
+
+    assert.deepEqual(configShapeIssues(TIMER_TEMPLATE.SECTIONAL_LOCKED, paper, [], 3600), []);
+  });
+
+  it('takes one alone in its session, and refuses one that shares it', () => {
+    const sessions = [
+      { name: 'Session I', order: 0, durationSec: 3000 },
+      { name: 'Session II', order: 1, durationSec: TEN_MINUTES },
+    ];
+    const alone = [section({ moduleOrder: 0 }), typing({ order: 1, moduleOrder: 1 })];
+    const shared = [section({ moduleOrder: 1 }), typing({ order: 1, moduleOrder: 1 })];
+
+    assert.deepEqual(
+      configShapeIssues(TIMER_TEMPLATE.SESSION_MODULE_LOCKED, alone, sessions, 3600),
+      [],
+    );
+    assert.match(
+      configShapeIssues(TIMER_TEMPLATE.SESSION_MODULE_LOCKED, shared, sessions, 3600)[0] ?? '',
+      /alone in its session/,
+    );
   });
 });

@@ -241,6 +241,7 @@ export function QuestionChooser({
       q: values.q || undefined,
       difficulty: values.difficulty as DifficultyLevel[],
       drawable: 'true',
+      forTyping: section.typingPreset ? 'true' : undefined,
       subjectId: section.subjectId ? [section.subjectId] : undefined,
       topicId: spec.topicIds,
       writtenFor: (values.writtenFor as WrittenFor) || undefined,

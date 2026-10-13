@@ -28,6 +28,8 @@ import {
   type SectionWork,
   type SendBackBody,
   type WorkTimeTotal,
+  QUESTION_TYPE,
+  type TypingPresetKey,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
@@ -63,7 +65,12 @@ interface Context {
     paperSource: PaperSource;
     finalizedAt: Date | null;
   };
-  section: { name: string; questionCount: number; subjectId: string | null };
+  section: {
+    name: string;
+    questionCount: number;
+    subjectId: string | null;
+    typingPreset: string | null;
+  };
   rows: Assignment[];
   typist: Assignment | null;
   reader: Assignment | null;
@@ -95,6 +102,8 @@ const WITH_TYPIST_MESSAGE = 'This question is with the typist until they mark it
 const NO_TYPIST_MESSAGE = 'This section has no typist to send a question back to.';
 const NOT_SENT_BACK_MESSAGE = 'This question was not sent back to you.';
 const TYPISTS_ONLY_MESSAGE = "Only this section's typist marks a question fixed.";
+const TYPING_SECTION_MESSAGE = 'This section is a typing test, so it takes a typing passage.';
+const NOT_A_TYPING_SECTION_MESSAGE = 'A typing passage belongs in a typing section.';
 const TYPING_ONLY_MESSAGE = "Only this section's typist does that.";
 const NO_LONGER_TYPING_MESSAGE =
   'This section is no longer yours, so nothing new is typed into it.';
@@ -134,6 +143,16 @@ function reviewOf(row: ReviewRow | undefined): QuestionReview {
   };
 }
 
+/** A typing section is written as a passage and nothing else is: its paper could draw no other kind. */
+function assertTypeFits(section: Context['section'], draft: QuestionDraft): void {
+  const typing = section.typingPreset !== null;
+  if ((draft.type === QUESTION_TYPE.TYPING) === typing) return;
+  const message = typing ? TYPING_SECTION_MESSAGE : NOT_A_TYPING_SECTION_MESSAGE;
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+    fieldErrors: { type: [message] },
+  });
+}
+
 /** One section of one test as whoever holds it works on it — the same facts for all, the rules per seat. */
 @Injectable()
 export class SectionWorkService {
@@ -167,6 +186,7 @@ export class SectionWorkService {
       paperSource: context.test.paperSource,
       questionCount: context.section.questionCount,
       sectionSubjectId: context.section.subjectId,
+      typingPreset: context.section.typingPreset as TypingPresetKey | null,
       offered: context.test.finalizedAt !== null,
       typist: context.typist,
       reader: context.reader,
@@ -249,7 +269,9 @@ export class SectionWorkService {
 
   /** A question typed for the section, under the open typing job the viewer acts through. */
   async create(pair: Pair, draft: QuestionDraft, viewer: SectionViewer): Promise<QuestionDetail> {
-    const typing = typingRow(await this.load(pair, viewer));
+    const context = await this.load(pair, viewer);
+    const typing = typingRow(context);
+    assertTypeFits(context.section, draft);
     await takeSectionEditLock(this.redis, this.prisma, pair, viewer);
     return this.questions.create(draft, viewer.id, { assignmentId: typing.id });
   }
@@ -315,6 +337,7 @@ export class SectionWorkService {
     if (!this.editable(context, question)) {
       throw new AppException(ErrorCodes.FORBIDDEN, NOT_EDITABLE_MESSAGE);
     }
+    assertTypeFits(context.section, draft);
     await takeSectionEditLock(this.redis, this.prisma, pair, {
       id: viewer.id,
       isSuperAdmin: viewer.isSuperAdmin,
@@ -509,7 +532,7 @@ export class SectionWorkService {
     const [sectionResult, rowsResult] = await Promise.allSettled([
       this.prisma.baseConfigSection.findFirst({
         where: { id: pair.baseConfigSectionId, baseConfigId: test.baseConfigId },
-        select: { name: true, questionCount: true, subjectId: true },
+        select: { name: true, questionCount: true, subjectId: true, typingPreset: true },
       }),
       this.assignments.sectionAssignments(pair.testId, pair.baseConfigSectionId, viewer),
     ]);

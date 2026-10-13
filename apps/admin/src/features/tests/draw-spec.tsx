@@ -46,6 +46,7 @@ export function DrawSpecEditor({
         subjectId: section.subjectId ? [section.subjectId] : undefined,
         topicId: topicIds.length > 0 ? topicIds : undefined,
         forTestId: testId,
+        forTyping: section.typingPreset ? 'true' : undefined,
       }),
   });
 

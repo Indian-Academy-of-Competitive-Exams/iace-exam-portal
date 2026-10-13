@@ -23,6 +23,7 @@ import {
   type Paginated,
   type TimerTemplate,
   type UpdateBaseConfigBody,
+  type TypingPresetKey,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -305,6 +306,7 @@ export class BaseConfigsService {
             meritOrQualifying: section.meritOrQualifying,
             qualifyingCutoff: section.qualifyingCutoff,
             patternNote: section.patternNote,
+            typingPreset: section.typingPreset,
           },
         });
       }
@@ -480,6 +482,7 @@ interface PaperRows {
     meritOrQualifying: MeritType;
     qualifyingCutoff: number | null;
     patternNote: string | null;
+    typingPreset: string | null;
   }[];
 }
 
@@ -518,6 +521,7 @@ function paperRowsOf(
       meritOrQualifying: section.meritOrQualifying ?? MERIT_TYPE.MERIT,
       qualifyingCutoff: section.qualifyingCutoff ?? null,
       patternNote: section.patternNote ?? null,
+      typingPreset: section.typingPreset ?? null,
     })),
   };
 }
@@ -614,6 +618,7 @@ function toDetail(row: DetailRow, editingBy: EditLockHolder | null): BaseConfigD
       meritOrQualifying: section.meritOrQualifying,
       qualifyingCutoff: section.qualifyingCutoff === null ? null : Number(section.qualifyingCutoff),
       patternNote: section.patternNote,
+      typingPreset: section.typingPreset as TypingPresetKey | null,
     })),
   };
 }

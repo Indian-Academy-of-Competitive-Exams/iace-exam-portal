@@ -22,6 +22,8 @@ import {
   type PaperSource,
   type QuestionDraftInput,
   type QuestionImportColumnKey,
+  QUESTION_TYPE,
+  TYPING_PRESET_KEY,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
@@ -583,6 +585,37 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
     await assert.rejects(
       () => work.create(pair, another, viewer(STRANGER)),
       refusedWith(ErrorCodes.NOT_FOUND),
+    );
+  });
+
+  /** The failure this prevents: a typist's work that the section's own paper can never draw. */
+  it('takes a typing passage in a typing section, and only there', async () => {
+    const { work } = await build();
+    const { pair } = await aSection();
+    const passage = draft({
+      type: QUESTION_TYPE.TYPING,
+      stem: { en: `<p>${'word '.repeat(320)}</p>` },
+      options: [],
+      answerKey: null,
+    });
+
+    await assert.rejects(
+      () => work.create(pair, passage, viewer(TYPIST)),
+      refusedWith(ErrorCodes.VALIDATION_ERROR),
+    );
+
+    await prisma.baseConfigSection.update({
+      where: { id: pair.baseConfigSectionId },
+      data: { typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN },
+    });
+    const written = await work.create(pair, passage, viewer(TYPIST));
+    const sheet = await work.one(pair, viewer(TYPIST));
+
+    assert.equal(written.type, QUESTION_TYPE.TYPING);
+    assert.equal(sheet.typingPreset, TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN);
+    await assert.rejects(
+      () => work.create(pair, draft({ stem: { en: 'What is 40% of 150?' } }), viewer(TYPIST)),
+      refusedWith(ErrorCodes.VALIDATION_ERROR),
     );
   });
 

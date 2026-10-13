@@ -581,6 +581,8 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
   drawable: z.stringbool().optional(),
   /** The test this list is being drawn for: it may take its own in-progress work, nobody else's. */
   forTestId: z.string().optional(),
+  /** Drawn for a typing section, which takes typing passages and nothing else. */
+  forTyping: z.stringbool().optional(),
   /** Which side of that split: what its assignments wrote, or the rest of the bank. */
   writtenFor: z.enum(WRITTEN_FOR_VALUES).optional(),
   sort: z.enum(QUESTION_SORT_VALUES).optional().default(QUESTION_SORTS.RECENT),
@@ -818,6 +820,7 @@ export const questionAvailabilityQuerySchema = z.object({
   topicId: csvIdQuery(),
   /** Counted as the draw counts it, so the figure shown and the questions taken cannot disagree. */
   forTestId: z.string().optional(),
+  forTyping: z.stringbool().optional(),
 });
 export type QuestionAvailabilityQuery = z.infer<typeof questionAvailabilityQuerySchema>;
 export type QuestionAvailabilityQueryInput = z.input<typeof questionAvailabilityQuerySchema>;

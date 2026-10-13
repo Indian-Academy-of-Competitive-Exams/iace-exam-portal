@@ -10,6 +10,7 @@ import {
   type BaseConfigDetail,
   type BaseConfigSectionDraft,
   type CreateBaseConfigBody,
+  TYPING_PRESET_KEY,
 } from '@iace/contracts';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
@@ -174,6 +175,50 @@ describe('BaseConfigsService — creating', () => {
     assert.equal(section?.negativeMarks, 0.5);
     assert.equal(section?.meritOrQualifying, MERIT_TYPE.QUALIFYING);
     assert.equal(section?.qualifyingCutoff, 20);
+  });
+
+  it("keeps a typing section's standard on the paper and on a clone of it", async () => {
+    const created = await service.create(
+      draft(await makeStage(prisma), {
+        durationSec: 600,
+        sections: [
+          {
+            name: 'Typing',
+            order: 1,
+            questionCount: 1,
+            marksPerQuestion: 0,
+            negativeMarks: 0,
+            typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN,
+          },
+        ],
+      }),
+      ADMIN,
+    );
+    const clone = await service.clone(created.id, {}, ADMIN);
+
+    assert.equal(created.sections[0]?.typingPreset, TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN);
+    assert.equal(clone.sections[0]?.typingPreset, TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN);
+    assert.equal(created.totalMarks, 0);
+  });
+
+  it("refuses a typing section on a clock that is not its standard's", async () => {
+    const wrongClock = service.create(
+      draft(await makeStage(prisma), {
+        sections: [
+          {
+            name: 'Typing',
+            order: 1,
+            questionCount: 1,
+            marksPerQuestion: 0,
+            negativeMarks: 0,
+            typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN,
+          },
+        ],
+      }),
+      ADMIN,
+    );
+
+    await assert.rejects(wrongClock, (error) => AppException.is(error));
   });
 
   /** The bug this catches: a seeded paper ran 160 minutes over sections that add up to 180. */

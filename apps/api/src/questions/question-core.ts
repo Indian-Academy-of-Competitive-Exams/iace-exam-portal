@@ -207,10 +207,10 @@ export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
 export const OPEN_ASSIGNMENT = { finalizedAt: null, replacedAt: null } as const;
 
 /** What a paper may draw: work written under an assignment is its own test's until that test is done. */
-export const drawableFor = (testId?: string): Prisma.QuestionWhereInput => ({
+export const drawableFor = (testId?: string, typing = false): Prisma.QuestionWhereInput => ({
   status: { not: QUESTION_STATUS.ARCHIVED },
-  // A typing passage has no options to answer with, so no ordinary section may draw one.
-  type: { not: QUESTION_TYPE.TYPING },
+  // A typing section holds a passage and nothing else; no other section can show one to answer.
+  type: typing ? QUESTION_TYPE.TYPING : { not: QUESTION_TYPE.TYPING },
   currentVersionId: { not: null },
   OR: [
     { assignmentId: null },

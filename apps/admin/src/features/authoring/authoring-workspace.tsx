@@ -53,6 +53,8 @@ export interface WorkspaceSource {
   query: (key: string) => { queryKey: QueryKey; queryFn: () => Promise<Held> };
   save: (key: string, held: Held) => Promise<unknown>;
   subjectLocked: boolean;
+  /** The kinds a question here may be; absent, any. A section is a typing test or it is not. */
+  types?: readonly QuestionType[];
   /** Only where a copy of a bank question refuses the save; an import row just becomes a duplicate. */
   checkDuplicates: boolean;
   /** A blank card after the last, for writing the next question; absent where nothing new is written. */
@@ -166,9 +168,9 @@ export function AuthoringWorkspace({
   const blank = useMemo(
     (): Held => ({
       header: lastNew?.header ?? source.create?.header ?? BLANK_HEADER,
-      state: emptyState(lastNew?.type),
+      state: emptyState(lastNew?.type ?? source.types?.[0]),
     }),
-    [lastNew, source.create?.header],
+    [lastNew, source.create?.header, source.types],
   );
 
   const [edits, setEdits] = useState<Record<string, Held>>({});
@@ -339,6 +341,7 @@ export function AuthoringWorkspace({
           header={shown.header}
           state={shown.state}
           subjectLocked={source.subjectLocked}
+          types={source.types}
           disabled={!editable}
           codeError={codeError}
           onHeaderChange={(next) => {

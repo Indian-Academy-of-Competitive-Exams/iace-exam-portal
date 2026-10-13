@@ -3,6 +3,7 @@ import { assignmentSchema } from './assignments';
 import { editLockHolderSchema } from './common';
 import { difficultyLevelSchema } from './questions';
 import { paperSourceSchema } from './tests';
+import { typingPresetKeySchema } from './typing';
 
 /** One section as its typist, proof-reader or test owner works on it; `editable` is the server's call. */
 
@@ -78,6 +79,8 @@ export const sectionWorkSchema = z.object({
   paperSource: paperSourceSchema,
   questionCount: z.number().int(),
   sectionSubjectId: z.string().nullable(),
+  /** Set on a typing section: every question written here is a typing passage. */
+  typingPreset: typingPresetKeySchema.nullable(),
   /** The test has been offered: its paper no longer moves, and nobody but a super admin edits. */
   offered: z.boolean(),
   typist: assignmentSchema.nullable(),

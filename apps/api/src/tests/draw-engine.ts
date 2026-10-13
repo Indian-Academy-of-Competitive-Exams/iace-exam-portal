@@ -26,6 +26,8 @@ export interface DrawSection {
   questionCount: number;
   marksPerQuestion: number;
   negativeMarks: number;
+  /** Set on a typing section, which draws typing passages and nothing else. */
+  typingPreset?: string | null;
 }
 
 /** One row of the paper. Marks come from the SECTION, the version from the QUESTION. */

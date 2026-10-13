@@ -4,6 +4,7 @@ import { paginationQuerySchema } from './envelope';
 import { examRefSchema, languageCodeSchema } from './exams';
 import { displayNameSchema } from './naming';
 import { questionMarksSchema } from './questions';
+import { typingPresetKeySchema } from './typing';
 
 // ============================================================================
 // Base configs — a stage's blueprint. A test inherits its shape from one rather
@@ -144,6 +145,8 @@ const baseConfigSectionSchema = z.object({
   qualifyingCutoff: z.number().nullable(),
   /** The exam-pattern workbook's own words for this section. Reference an exam controller reads; no draw consults it. */
   patternNote: z.string().nullable(),
+  /** Set, the section is a typing test: one passage, no marks, held to this standard. */
+  typingPreset: typingPresetKeySchema.nullable(),
 });
 export type BaseConfigSection = z.infer<typeof baseConfigSectionSchema>;
 
@@ -244,6 +247,7 @@ const baseConfigSectionDraftSchema = z.object({
   qualifyingCutoff: questionMarksSchema.nullish(),
   /** The paper is replaced wholesale, so the editor posts this back on every save; omitting it clears the note. */
   patternNote: z.string().trim().max(PATTERN_NOTE_MAX).nullish(),
+  typingPreset: typingPresetKeySchema.nullish(),
 });
 export type BaseConfigSectionDraft = z.infer<typeof baseConfigSectionDraftSchema>;
 

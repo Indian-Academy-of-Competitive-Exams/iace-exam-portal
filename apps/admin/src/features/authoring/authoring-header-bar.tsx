@@ -35,6 +35,7 @@ export function AuthoringHeaderBar({
   actions,
   lead,
   subjectLocked = false,
+  types = QUESTION_TYPES,
   disabled = false,
   codeError,
   onHeaderChange,
@@ -47,6 +48,8 @@ export function AuthoringHeaderBar({
   lead?: React.ReactNode;
   /** The section a scoped editor was opened on names the subject; a typist must not write past it. */
   subjectLocked?: boolean;
+  /** The kinds this question may be: a typing section takes a passage, any other section anything else. */
+  types?: readonly QuestionType[];
   /** Not the viewer's to change, or held by somebody else: the settings show, and take nothing. */
   disabled?: boolean;
   /** The server's refusal of the question code, shown beside it. */
@@ -138,7 +141,7 @@ export function AuthoringHeaderBar({
             clearable={false}
             className={CONTROL}
             aria-label="Type"
-            items={QUESTION_TYPES.map((type) => ({
+            items={types.map((type) => ({
               value: type,
               label: QUESTION_TYPE_LABELS[type],
             }))}

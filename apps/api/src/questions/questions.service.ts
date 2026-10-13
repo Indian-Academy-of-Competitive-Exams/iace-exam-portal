@@ -207,7 +207,7 @@ export class QuestionsService {
   /** Counted in the database, because a page of a hundred is not what a section can draw from. */
   async availability(query: QuestionAvailabilityQuery): Promise<QuestionAvailability> {
     const where: Prisma.QuestionWhereInput = {
-      ...drawableFor(query.forTestId),
+      ...drawableFor(query.forTestId, query.forTyping),
       ...(query.subjectId ? { subjectId: { in: query.subjectId } } : {}),
       ...(query.topicId ? { topicId: { in: query.topicId } } : {}),
       // One question sits on a paper once, so what the test already holds is out of a fill's reach.

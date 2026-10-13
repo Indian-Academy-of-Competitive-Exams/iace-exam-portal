@@ -348,6 +348,7 @@ Table BaseConfigSection {
   meritOrQualifying MeritType [not null, default: 'MERIT']
   qualifyingCutoff decimal(6, 2)
   patternNote text
+  typingPreset text
   indexes {
     (baseConfigId, moduleId, order) [unique]
     (baseConfigId, id) [unique]

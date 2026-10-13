@@ -22,6 +22,8 @@ import {
   type SectionQuestion,
   type SectionWork,
   type SendBackReason,
+  QUESTION_TYPE,
+  type QuestionType,
 } from '@iace/contracts';
 import {
   Alert,
@@ -81,6 +83,13 @@ import { useWorkClock } from './use-work-clock';
 import { DueStandingBadge } from '../../components/due-standing-badge';
 import { TimeSpent } from '../../components/time-spent';
 import { awaitsViewer, liveTotal, type WorkClock } from './work-clock';
+
+/** A section is a typing test or it is not, and its paper can draw only the kind it is. */
+const TYPING_SECTION_TYPES: readonly QuestionType[] = [QUESTION_TYPE.TYPING];
+const ORDINARY_SECTION_TYPES: readonly QuestionType[] = [
+  QUESTION_TYPE.SINGLE_MCQ,
+  QUESTION_TYPE.TEXT_FIELD,
+];
 
 const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.UNCHECKED]: 'neutral',
@@ -276,6 +285,7 @@ function SectionWorkspace({
         await onSettle(id);
       },
       subjectLocked: work.sectionSubjectId !== null,
+      types: work.typingPreset ? TYPING_SECTION_TYPES : ORDINARY_SECTION_TYPES,
       blocked,
       checkDuplicates: seat.typing,
       create: seat.typing
