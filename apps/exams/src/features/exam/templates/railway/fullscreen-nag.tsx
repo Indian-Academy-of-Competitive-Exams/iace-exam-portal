@@ -3,7 +3,7 @@
  * card over a dimmed paper, 12px bold, two flat blue buttons. Values from the
  * `#popup_container` and `.inputcnf` rules of the captured inline stylesheet.
  */
-import { type ExamView } from '@iace/app-kit';
+import { PAUSE_SAYS, type ExamView } from '@iace/app-kit';
 
 export function RailwayFullscreenNag({
   fullscreen,
@@ -19,6 +19,33 @@ export function RailwayFullscreenNag({
           </button>
           <button type="button" className="rw-nag-btn" onClick={fullscreen.ignore}>
             Carry on without it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The same box, asking before a sitting is left to be come back to. */
+export function RailwayPauseBox({
+  onPause,
+  onCancel,
+}: Readonly<{ onPause: () => void; onCancel: () => void }>) {
+  return (
+    <div className="rw-nag-overlay absolute inset-0 z-50 grid place-items-center p-6">
+      <div
+        role="dialog"
+        aria-modal
+        aria-label={PAUSE_SAYS.title}
+        className="rw-nag flex flex-col gap-5"
+      >
+        <p>{PAUSE_SAYS.hint}</p>
+        <div className="flex justify-end">
+          <button type="button" autoFocus className="rw-nag-btn" onClick={onPause}>
+            {PAUSE_SAYS.confirm}
+          </button>
+          <button type="button" className="rw-nag-btn" onClick={onCancel}>
+            Carry on
           </button>
         </div>
       </div>

@@ -153,7 +153,15 @@ export default function ExamScreen() {
 
   return (
     <View className="flex-1">
-      <ExamSkin view={view} paperQuestions={paper.data?.paper.questions ?? NO_QUESTIONS} />
+      <ExamSkin
+        view={view}
+        paperQuestions={paper.data?.paper.questions ?? NO_QUESTIONS}
+        // Silence is what pauses a sitting: unmounting the engine stops its heartbeat.
+        onPause={() => {
+          view?.leave();
+          router.dismissTo(ROUTES.TESTS);
+        }}
+      />
       {paper.data && attempt.data ? (
         <SittingEngine
           key={reclaims}

@@ -1,6 +1,6 @@
 /** The banking screen's small "Info" box: a blue bar, a line of text, and its buttons on a tinted foot. */
 import { type ReactNode } from 'react';
-import { type ExamView } from '@iace/app-kit';
+import { PAUSE_SAYS, type ExamView } from '@iace/app-kit';
 
 function InfoDialog({
   title = 'Info',
@@ -67,7 +67,6 @@ export function BankingInstructionsDialog({
   );
 }
 
-/** Named with the limits the server keeps, so nobody learns them by losing a sitting. */
 export function BankingPauseDialog({
   onPause,
   onCancel,
@@ -77,7 +76,7 @@ export function BankingPauseDialog({
       foot={
         <>
           <button type="button" autoFocus className="bk-info-yes" onClick={onPause}>
-            Pause
+            {PAUSE_SAYS.confirm}
           </button>
           <button type="button" className="bk-info-no" onClick={onCancel}>
             Carry on
@@ -85,8 +84,7 @@ export function BankingPauseDialog({
         </>
       }
     >
-      Your answers are saved, and you can resume this test from your tests. A break longer than a
-      minute does not cost you time. A test left for 48 hours ends by itself.
+      {PAUSE_SAYS.hint}
     </InfoDialog>
   );
 }

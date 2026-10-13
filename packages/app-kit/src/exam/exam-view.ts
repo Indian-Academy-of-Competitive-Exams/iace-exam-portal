@@ -82,6 +82,13 @@ export function stoodDownSays({ setAside, hasUnsent }: Pick<ExamView, 'setAside'
       };
 }
 
+/** What a candidate is told before pausing, with the limits the server keeps, the same on every skin and both apps. */
+export const PAUSE_SAYS = {
+  title: 'Pause this test?',
+  hint: 'Your answers are saved, and you can resume this test from your tests. A break longer than a minute does not cost you time. A test left for 48 hours ends by itself.',
+  confirm: 'Pause',
+} as const;
+
 /** The ended screen's words, the same on both apps: what happened, and which answers stand. */
 export const SITTING_ENDED_SAYS = {
   title: 'This test has ended',

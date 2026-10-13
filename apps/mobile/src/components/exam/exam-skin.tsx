@@ -9,7 +9,7 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNetworkState } from 'expo-network';
 import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
-import { PAPER_LOCK, submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { PAPER_LOCK, PAUSE_SAYS, submittingSays, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
 import { Alert } from '../ui/alert';
 import { Button } from '../ui/button';
@@ -43,13 +43,16 @@ export interface ExamSkinProps {
   view: ExamView | null;
   /** The paper's full question list, all sections, so a dead zone still shows a figure not yet reached. */
   paperQuestions: readonly ExamQuestion[];
+  /** Leaves the paper to be come back to; the server gives the time away back when it is reopened. */
+  onPause: () => void;
 }
 
-export function ExamSkin({ view, paperQuestions }: Readonly<ExamSkinProps>) {
+export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinProps>) {
   const insets = useSafeAreaInsets();
   const network = useNetworkState();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [pausing, setPausing] = useState(false);
   const offline = network.isConnected === false || network.isInternetReachable === false;
 
   return (
@@ -63,6 +66,7 @@ export function ExamSkin({ view, paperQuestions }: Readonly<ExamSkinProps>) {
           view={view}
           onPalette={() => setPaletteOpen(true)}
           onRules={() => setRulesOpen(true)}
+          onPause={() => setPausing(true)}
         />
       ) : (
         <OpeningBar />
@@ -84,6 +88,15 @@ export function ExamSkin({ view, paperQuestions }: Readonly<ExamSkinProps>) {
           onClosePalette={() => setPaletteOpen(false)}
         />
       ) : null}
+      <ConfirmDialog
+        // iOS presents one Modal at a time, so the focus warning stands this one down.
+        open={pausing && view !== null && !view.fullscreen.nagging}
+        title={PAUSE_SAYS.title}
+        description={PAUSE_SAYS.hint}
+        confirmLabel={PAUSE_SAYS.confirm}
+        onConfirm={onPause}
+        onCancel={() => setPausing(false)}
+      />
     </View>
   );
 }
@@ -113,7 +126,13 @@ function SittingHead({
   view,
   onPalette,
   onRules,
-}: Readonly<{ view: ExamView; onPalette: () => void; onRules: () => void }>) {
+  onPause,
+}: Readonly<{
+  view: ExamView;
+  onPalette: () => void;
+  onRules: () => void;
+  onPause: () => void;
+}>) {
   return (
     <Fragment>
       <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-exam-border px-4 py-2">
@@ -124,6 +143,9 @@ function SittingHead({
           </Button>
           <Button variant="ghost" onPress={onRules}>
             Instructions
+          </Button>
+          <Button variant="ghost" disabled={view.locked !== null} onPress={onPause}>
+            Pause
           </Button>
           <Button
             variant="outline"

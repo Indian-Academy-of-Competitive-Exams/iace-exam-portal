@@ -2,9 +2,19 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { EXAM_TEMPLATE } from '@iace/contracts';
-import { passagesOf } from '@iace/app-kit';
+import { passagesOf, PAUSE_SAYS } from '@iace/app-kit';
 import { DESKTOP_QUERY, useMediaQuery } from '@iace/app-kit/browser';
-import { Button, FILLS, Sheet, SheetClose, SheetContent, SheetTitle, Tabs, cn } from '@iace/ui';
+import {
+  Button,
+  ConfirmDialog,
+  FILLS,
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  Tabs,
+  cn,
+} from '@iace/ui';
 import {
   BottomBar,
   Header,
@@ -19,12 +29,13 @@ import { Passage } from '../../passage';
 import { ScrollPane } from '../../scroll-pane';
 import { PaperPanel, RulesPanel } from './panels';
 
-export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProps>) {
+export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<ExamSlotProps>) {
   const onPaper = config.watermark === 'PAPER';
   const [panel, setPanel] = useState<'PAPER' | 'RULES' | null>(null);
   // Below the rail's breakpoint the palette would take the paper's own room, so it waits in a drawer.
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [pausing, setPausing] = useState(false);
   const passages = view.question
     ? passagesOf(view.question.content, view.languages, view.languageMode)
     : [];
@@ -36,6 +47,7 @@ export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProp
         view={view}
         config={config}
         onOpenCalculator={onOpenCalculator}
+        onPause={onPause ? () => setPausing(true) : undefined}
         onOpenPaper={() => setPanel('PAPER')}
         onOpenRules={() => setPanel('RULES')}
       />
@@ -123,6 +135,17 @@ export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProp
       )}
 
       <BottomBar view={view} config={config} />
+
+      {onPause ? (
+        <ConfirmDialog
+          open={pausing}
+          onOpenChange={setPausing}
+          title={PAUSE_SAYS.title}
+          description={PAUSE_SAYS.hint}
+          confirmLabel={PAUSE_SAYS.confirm}
+          onConfirm={onPause}
+        />
+      ) : null}
 
       <PaperPanel
         view={view}

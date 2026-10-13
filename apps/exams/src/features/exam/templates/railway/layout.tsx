@@ -4,7 +4,7 @@
  * the two skins cannot drift into behaving differently.
  */
 import { useState } from 'react';
-import { Calculator } from 'lucide-react';
+import { Calculator, Pause } from 'lucide-react';
 import { isStateShown, type ExamClock } from '@iace/contracts';
 import {
   passagesOf,
@@ -24,15 +24,22 @@ import { InfoTally } from './info-popup';
 import { PaperModal, InstructionsModal } from './modals';
 import { ScrollPane } from '../../scroll-pane';
 import { RailwaySubmitSummary } from './submit-summary';
+import { RailwayPauseBox } from './fullscreen-nag';
 import './railway.css';
 
 /** The original has no screen this narrow; railway.css folds the palette over the paper at the same width. */
 const PHONE_QUERY = '(max-width: 767px)';
 
-export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamSlotProps>) {
+export function RailwayLayout({
+  view,
+  config,
+  onOpenCalculator,
+  onPause,
+}: Readonly<ExamSlotProps>) {
   const [openPanel, setOpenPanel] = useState<'PAPER' | 'INSTRUCTIONS' | null>(null);
   const phone = useMediaQuery(PHONE_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(!phone);
+  const [pausing, setPausing] = useState(false);
   // Over the paper the palette hides the question it just opened, so opening one puts it away.
   const openQuestion = (questionId: string) => {
     view.openQuestion(questionId);
@@ -73,6 +80,17 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
           <button type="button" className="flex items-center gap-2" onClick={onOpenCalculator}>
             <Calculator aria-hidden />
             <span>Calculator</span>
+          </button>
+        ) : null}
+        {onPause ? (
+          <button
+            type="button"
+            className="flex items-center gap-2"
+            disabled={view.locked !== null}
+            onClick={() => setPausing(true)}
+          >
+            <Pause aria-hidden />
+            <span>Pause Test</span>
           </button>
         ) : null}
       </div>
@@ -215,6 +233,10 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
       {openPanel === 'PAPER' ? <PaperModal view={view} onClose={() => setOpenPanel(null)} /> : null}
       {openPanel === 'INSTRUCTIONS' ? (
         <InstructionsModal view={view} onClose={() => setOpenPanel(null)} />
+      ) : null}
+
+      {onPause && pausing ? (
+        <RailwayPauseBox onPause={onPause} onCancel={() => setPausing(false)} />
       ) : null}
 
       <PaperWatermark view={view} config={config} className="rw-watermark" />

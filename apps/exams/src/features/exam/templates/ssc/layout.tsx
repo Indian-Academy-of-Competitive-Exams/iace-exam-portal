@@ -9,6 +9,7 @@ import { ANSWER_STATE, contentLanguageOf, isStateShown, type ExamClock } from '@
 import {
   htmlOf,
   passagesOf,
+  PAUSE_SAYS,
   shownLanguages,
   TIMER_KIND,
   useAnchoredCountdown,
@@ -318,9 +319,9 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
       )}
 
       {onPause && pausing ? (
-        <SscBox label="Pause Test" says={PAUSE_SAYS}>
+        <SscBox label="Pause Test" says={PAUSE_SAYS.hint}>
           <button type="button" autoFocus onClick={onPause}>
-            Pause
+            {PAUSE_SAYS.confirm}
           </button>
           <button type="button" onClick={() => setPausing(false)}>
             Carry on
@@ -462,10 +463,6 @@ function ExamSummary({
     </div>
   );
 }
-
-/** Named with the limits the server keeps, so nobody learns them by losing a sitting. */
-const PAUSE_SAYS =
-  'Your answers are saved, and you can resume this test from your tests. A break longer than a minute does not cost you time. A test left for 48 hours ends by itself.';
 
 /** The one box this screen says things in: a line of text over its buttons on a grey foot. */
 function SscBox({

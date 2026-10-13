@@ -3,7 +3,17 @@
  * handed — never by a fork, so neither can drift into behaving differently.
  * Nothing here holds state: every value and every callback comes off the view.
  */
-import { Calculator, Eraser, FileText, Flag, Info, LayoutGrid, Maximize, Send } from 'lucide-react';
+import {
+  Calculator,
+  Eraser,
+  FileText,
+  Flag,
+  Info,
+  LayoutGrid,
+  Maximize,
+  Pause,
+  Send,
+} from 'lucide-react';
 import {
   ANSWER_STATES,
   TEST_UI,
@@ -55,6 +65,7 @@ export function Header({
   view,
   config,
   onOpenCalculator,
+  onPause,
   onOpenPaper,
   onOpenRules,
 }: Readonly<ExamSlotProps & { onOpenPaper?: () => void; onOpenRules?: () => void }>) {
@@ -82,6 +93,18 @@ export function Header({
           <Button type="button" variant="ghost" size="sm" onClick={onOpenCalculator}>
             <Calculator aria-hidden />
             <span className={PHONE_ICON_ONLY}>Calculator</span>
+          </Button>
+        ) : null}
+        {onPause ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={view.locked !== null}
+            onClick={onPause}
+          >
+            <Pause aria-hidden />
+            <span className={PHONE_ICON_ONLY}>Pause</span>
           </Button>
         ) : null}
         {/* The way IN: without it a candidate is only ever nagged for leaving a screen never offered. */}
