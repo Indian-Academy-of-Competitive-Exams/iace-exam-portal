@@ -4,14 +4,17 @@
  * `#popup_container` and `.inputcnf` rules of the captured inline stylesheet.
  */
 import { PAUSE_SAYS, type ExamView, type usePause } from '@iace/app-kit';
+import { useModalBox } from '../../use-modal-box';
 
 export function RailwayFullscreenNag({
   fullscreen,
   says,
 }: Readonly<{ fullscreen: ExamView['fullscreen']; says: string }>) {
+  const box = useModalBox<HTMLDivElement>();
+
   return (
     <div className="rw-nag-overlay absolute inset-0 z-50 grid place-items-center p-6">
-      <div className="rw-nag flex flex-col gap-5">
+      <div ref={box} className="rw-nag flex flex-col gap-5">
         <p>{says}</p>
         <div className="flex justify-end">
           <button type="button" autoFocus className="rw-nag-btn" onClick={fullscreen.enter}>
@@ -28,9 +31,12 @@ export function RailwayFullscreenNag({
 
 /** The same box, asking before a sitting is left to be come back to. */
 export function RailwayPauseBox({ pause }: Readonly<{ pause: ReturnType<typeof usePause> }>) {
+  const box = useModalBox<HTMLDivElement>(pause.cancel);
+
   return (
     <div className="rw-nag-overlay absolute inset-0 z-50 grid place-items-center p-6">
       <div
+        ref={box}
         role="dialog"
         aria-modal
         aria-label={PAUSE_SAYS.title}

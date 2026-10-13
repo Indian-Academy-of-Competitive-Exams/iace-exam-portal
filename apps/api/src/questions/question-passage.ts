@@ -1,20 +1,18 @@
 import { hasText, previewTextOf } from '@iace/contracts';
 
 /** The blank line a typist leaves between a passage and its question, as a sheet cell arrives. */
-const BLANK_PARAGRAPH = /<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi;
+const BLANK_PARAGRAPH = /<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/i;
 
 /** How a passage typed into the question cell announces itself. */
 const PASSAGE_OPENING = /^(?:directions?|passage|read the following|study the following)\b/i;
 
-/** A passage typed above its question in one cell: split at the LAST blank line, or null when it is not one. */
-export function splitLeadingPassage(html: string): { passage: string; stem: string } | null {
-  const breaks = [...html.matchAll(BLANK_PARAGRAPH)];
-  const last = breaks.at(-1);
-  if (!last) return null;
+/** Whether a question cell reads as a passage typed above its question: a guess a person settles, never a split. */
+export function opensWithPassage(html: string): boolean {
+  const gap = BLANK_PARAGRAPH.exec(html);
+  if (!gap) return false;
 
-  const passage = html.slice(0, last.index).replaceAll(BLANK_PARAGRAPH, '');
-  const stem = html.slice(last.index + last[0].length);
-  if (!hasText(stem) || !PASSAGE_OPENING.test(previewTextOf(passage))) return null;
-
-  return { passage, stem };
+  const opening = html.slice(0, gap.index);
+  return (
+    hasText(html.slice(gap.index + gap[0].length)) && PASSAGE_OPENING.test(previewTextOf(opening))
+  );
 }

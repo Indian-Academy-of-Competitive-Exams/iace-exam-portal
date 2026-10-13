@@ -185,18 +185,15 @@ describe('the question sheet', () => {
     assert.equal(row.draft?.stem.en, '<p>What is 20% of 150?</p>');
   });
 
-  /** The failure this prevents: a passage typed above its question arriving as one long question. */
-  it('moves a passage typed above the question into the passage, and says so on the row', () => {
+  /** The failure this prevents: a guess at where a passage ends storing half a question as its passage. */
+  it('points out a passage typed above the question, and leaves the cell as it was typed', () => {
     const typed =
       'Directions: Read the table.\nA shop marks every item at 150.\n\nWhat is 20% of 150?';
     const row = rowAt(plan([{ ...MCQ_ROW, stem_en: typed }]).rows);
 
     assert.equal(row.action, 'create');
-    assert.equal(
-      row.draft?.passage?.en,
-      '<p>Directions: Read the table.</p><p>A shop marks every item at 150.</p>',
-    );
-    assert.equal(row.draft?.stem.en, '<p>What is 20% of 150?</p>');
+    assert.equal(row.draft?.passage?.en, undefined);
+    assert.match(row.draft?.stem.en ?? '', /Directions: Read the table\..*What is 20% of 150\?/s);
     assert.deepEqual(
       row.warnings.map((warning) => warning.column),
       ['stem_en'],

@@ -21,7 +21,7 @@ export function AuthoringPreview({
 
   return (
     <section className="flex flex-col gap-4 rounded-md border border-border bg-surface p-5">
-      {hasText(content.passage) ? (
+      {state.type !== QUESTION_TYPE.TYPING && hasText(content.passage) ? (
         <RichContent
           html={content.passage}
           lang={language}

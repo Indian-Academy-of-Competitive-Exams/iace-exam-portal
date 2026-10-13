@@ -31,7 +31,7 @@ import {
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable, normaliseHeader } from '../common/importing';
 import { htmlFromCell } from './question-content';
-import { splitLeadingPassage } from './question-passage';
+import { opensWithPassage } from './question-passage';
 import { importedImageKey, judgeQuestionImage, type CheckedImage } from './question-images';
 import { computeStemHash, languagesIn, validateQuestion } from './question-core';
 import { lookupName, topicKey, type TaxonomyCatalog } from './taxonomy-context';
@@ -331,7 +331,8 @@ function readRow(
   const content = rowContent(row, issues, warnings);
   const names = { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
   const draft = buildDraft(row, content, readType(row, issues), names, catalog, issues);
-  return { content, names, draft: withDetectedPassage(draft, warnings) };
+  warnOfInlinePassage(draft, warnings);
+  return { content, names, draft };
 }
 
 /** The first row that would write a code holds it; the bank's own and an earlier line's are a clash. */
@@ -537,23 +538,16 @@ function readCode(row: CsvRow, issues: ValidationIssue[]): string | null {
   return null;
 }
 
-/** A passage typed above its question in the question cell is moved to where the Passage column would have put it. */
-function withDetectedPassage(draft: QuestionDraft, warnings: ImportWarning[]): QuestionDraft {
-  const stem: LocalizedText = { ...draft.stem };
-  const passage: LocalizedText = { ...draft.passage };
-
+/** A passage typed above its question in the question cell is pointed out, and left where it is. */
+function warnOfInlinePassage(draft: QuestionDraft, warnings: ImportWarning[]): void {
   for (const language of LANGUAGE_ORDER) {
-    const split = blank(passage[language] ?? '') ? splitLeadingPassage(stem[language] ?? '') : null;
-    if (!split) continue;
-    stem[language] = split.stem;
-    passage[language] = split.passage;
+    if (!blank(draft.passage?.[language] ?? '')) continue;
+    if (!opensWithPassage(draft.stem[language] ?? '')) continue;
     warnings.push({
       column: `stem_${language}`,
-      message: `The opening of the ${LANGUAGE_LABELS[language]} question was read as its passage`,
+      message: `The ${LANGUAGE_LABELS[language]} question may open with a passage. Move it to passage_${language} to show it beside the question`,
     });
   }
-
-  return { ...draft, stem, passage };
 }
 
 /** One field across every language, each cell read through `read`. */

@@ -20,8 +20,10 @@ import {
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Button, RichContent, cn } from '@iace/ui';
 import { ScrollPane } from '../../scroll-pane';
+import { useModalBox } from '../../use-modal-box';
 import { Passage } from '../../passage';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
+import { PHONE_QUERY } from '../shared/phone-query';
 import { RailwayQuestion } from '../railway/question';
 import profileImage from '../railway/assets/profile.png';
 import { SscGuide, SscHeader, SscPhotoColumn } from './instructions';
@@ -30,8 +32,6 @@ import './ssc.css';
 import { isTypingQuestion } from '../../../typing/typing-figures';
 import { ExamTyping } from '../shared/exam-typing';
 
-/** ssc.css lays the palette over the paper at the same width. */
-const PHONE_QUERY = '(max-width: 767px)';
 /** The original starts at its smallest and grows a tenth at a time to double. */
 const FONT_STEP = { MIN: 0, MAX: 10 } as const;
 const OPTION_LETTERS = 'abcdefghij';
@@ -378,8 +378,8 @@ function SscPaper({ view }: Readonly<{ view: ExamView }>) {
                     checked={chosen}
                     disabled={off}
                     onChange={() => view.chooseOption(option.id)}
-                    // A chosen radio fires no change, and on this screen a second click takes the answer off.
-                    onClick={() => chosen && view.clearResponse()}
+                    // A chosen radio fires no change, and here a second click clears it; a double-click's second is not one.
+                    onClick={(event) => chosen && event.detail < 2 && view.clearResponse()}
                   />
                   <span>{OPTION_LETTERS[at]})</span>
                   <span className="min-w-0">
@@ -455,10 +455,10 @@ function ExamSummary({
         <>
           <p>Are you sure you want to submit?</p>
           <div className="flex items-center justify-center">
-            <button type="button" onClick={onCancel}>
+            <button type="button" autoFocus onClick={onCancel}>
               Back
             </button>
-            <button type="button" autoFocus onClick={onConfirm}>
+            <button type="button" onClick={onConfirm}>
               {confirmLabel}
             </button>
           </div>
@@ -474,9 +474,11 @@ function SscBox({
   says,
   children,
 }: Readonly<{ label: string; says: string; children: ReactNode }>) {
+  const box = useModalBox<HTMLDivElement>();
+
   return (
     <div className="sc-overlay absolute inset-0 z-50 grid place-items-center p-4">
-      <div role="dialog" aria-modal aria-label={label} className="sc-nag">
+      <div ref={box} role="dialog" aria-modal aria-label={label} className="sc-nag">
         <p>{says}</p>
         <div className="flex flex-wrap items-center justify-end">{children}</div>
       </div>

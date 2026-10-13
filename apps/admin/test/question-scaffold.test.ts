@@ -264,6 +264,28 @@ describe('a question switched to a typed answer', () => {
   });
 });
 
+describe('a question switched to a typing passage', () => {
+  /** The failure this prevents: a passage, an explanation and an answer wiped by one keystroke under a type that draws none of them. */
+  it('keeps what its hidden slots held for the switch back', () => {
+    const before: AuthoringState = { ...typed(), answer: 'B' };
+    before.content.en = {
+      ...before.content.en,
+      passage: '<p>Read this.</p>',
+      solution: '<p>Why.</p>',
+    };
+    const switched: AuthoringState = { ...before, type: QUESTION_TYPE.TYPING };
+
+    const after = stateFrom(switched, 'en', [
+      { key: REGION_KEYS.STEM, label: '', html: '<p>A passage to type.</p>' },
+    ]);
+
+    assert.equal(after.content.en.stem, '<p>A passage to type.</p>');
+    assert.equal(after.content.en.passage, '<p>Read this.</p>');
+    assert.equal(after.content.en.solution, '<p>Why.</p>');
+    assert.equal(after.answer, 'B');
+  });
+});
+
 describe('a previewed import row in the box', () => {
   const rowWith = (seats: number): QuestionDraft => {
     const draft = toDraft(typed(), HEADER);

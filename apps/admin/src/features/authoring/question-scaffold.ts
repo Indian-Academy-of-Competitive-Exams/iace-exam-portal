@@ -166,7 +166,9 @@ export function stateFrom(
   const isMcq = state.type === QUESTION_TYPE.SINGLE_MCQ;
   const options = regions.filter((region) => region.key.startsWith(OPTION_PREFIX));
   const optionCount = isMcq ? options.length : 0;
-  const find = (key: string) => regions.find((region) => region.key === key)?.html ?? '';
+  // A slot this type does not draw keeps what it held, so a switch of type and back loses nothing.
+  const find = (key: string, held: string) =>
+    regions.find((region) => region.key === key)?.html ?? held;
 
   const content = { ...state.content };
   for (const code of LANGUAGE_ORDER) {
@@ -182,14 +184,14 @@ export function stateFrom(
       code === language
         ? {
             ...kept,
-            passage: find(REGION_KEYS.PASSAGE),
-            stem: find(REGION_KEYS.STEM),
-            solution: find(REGION_KEYS.SOLUTION),
+            passage: find(REGION_KEYS.PASSAGE, existing.passage),
+            stem: find(REGION_KEYS.STEM, existing.stem),
+            solution: find(REGION_KEYS.SOLUTION, existing.solution),
           }
         : kept;
   }
 
-  return { ...state, optionCount, answer: find(REGION_KEYS.ANSWER), content };
+  return { ...state, optionCount, answer: find(REGION_KEYS.ANSWER, state.answer), content };
 }
 
 /** Which option the Answer line names. A letter and a number both mean the same seat. */

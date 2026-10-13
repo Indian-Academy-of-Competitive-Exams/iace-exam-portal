@@ -20,6 +20,7 @@ import { Passage } from '../../passage';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
+import { PHONE_QUERY } from '../shared/phone-query';
 import { RailwayPalette } from './palette';
 import { InfoTally } from './info-popup';
 import { PaperModal, InstructionsModal } from './modals';
@@ -29,9 +30,6 @@ import { RailwayPauseBox } from './fullscreen-nag';
 import './railway.css';
 import { isTypingQuestion } from '../../../typing/typing-figures';
 import { ExamTyping } from '../shared/exam-typing';
-
-/** The original has no screen this narrow; railway.css folds the palette over the paper at the same width. */
-const PHONE_QUERY = '(max-width: 767px)';
 
 export function RailwayLayout({
   view,

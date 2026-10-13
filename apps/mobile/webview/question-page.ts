@@ -47,6 +47,7 @@ document.body.append(root);
 
 let current: QuestionScreen | null = null;
 let drawnContent = '';
+let drawnPassage = '';
 let hold: Hold | null = null;
 
 const post = (message: PageMessage): void =>
@@ -141,15 +142,20 @@ function build(screen: QuestionScreen): void {
   const asked = [stem, options, ...(screen.review ? reviewBlocks(screen.review) : [])];
   const split = screen.passage.length > 0;
   root.toggleAttribute(HAS_PASSAGE, split);
-  if (split) {
+  const passageKey = JSON.stringify(screen.passage);
+  const pane = element('div', 'asked');
+  pane.append(...asked);
+  if (split && passageKey === drawnPassage && root.lastElementChild) {
+    // The passage node is left in place: taking it out and back would scroll it to its top between two of its questions.
+    root.lastElementChild.replaceWith(pane);
+  } else if (split) {
     const passage = element('section', 'passage');
     passage.append(...richBlocks(screen.passage));
-    const pane = element('div', 'asked');
-    pane.append(...asked);
     root.replaceChildren(passage, pane);
   } else {
     root.replaceChildren(...asked);
   }
+  drawnPassage = split ? passageKey : '';
   window.scrollTo(0, 0);
 }
 

@@ -39,6 +39,16 @@ export function SscInstructions({ view }: Readonly<{ view: InstructionsView }>) 
             />
           </div>
 
+          <label className="flex shrink-0 items-start justify-center gap-2 px-4 pb-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={view.declared}
+              onChange={(event) => view.declare(event.target.checked)}
+            />
+            <span>I have read and understood the instructions.</span>
+          </label>
+
           <div className="sc-start flex shrink-0 flex-wrap items-center justify-center">
             {view.dual ? null : (
               <label className="flex items-center">
@@ -56,11 +66,7 @@ export function SscInstructions({ view }: Readonly<{ view: InstructionsView }>) 
                 </select>
               </label>
             )}
-            <button
-              type="button"
-              disabled={!view.dual && view.language === ''}
-              onClick={view.begin}
-            >
+            <button type="button" disabled={!view.ready} onClick={view.begin}>
               Start Test
             </button>
           </div>

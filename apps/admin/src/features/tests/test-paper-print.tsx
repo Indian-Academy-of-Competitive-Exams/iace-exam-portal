@@ -25,6 +25,7 @@ import {
   RichContent,
   Skeleton,
   SkeletonParagraph,
+  cn,
   plural,
   type ListFilter,
 } from '@iace/ui';
@@ -241,11 +242,14 @@ function PrintedQuestion({
   question,
   paper,
 }: Readonly<{ question: ExamQuestion; paper: PrintablePaper }>) {
+  const passages = passagesOf(question.content, paper.languages, LANGUAGE_MODE.DUAL);
+
   return (
-    <div className="flex break-inside-avoid gap-3">
+    // A passage can outrun a page, and a block that may not break would be cut off at the foot of one.
+    <div className={cn('flex gap-3', passages.length === 0 && 'break-inside-avoid')}>
       <span className="w-8 shrink-0 text-right font-semibold tabular-nums">{question.order}.</span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {passagesOf(question.content, paper.languages, LANGUAGE_MODE.DUAL).map((passage) => (
+        {passages.map((passage) => (
           <RichContent
             key={passage.language}
             lang={passage.language.toLowerCase()}

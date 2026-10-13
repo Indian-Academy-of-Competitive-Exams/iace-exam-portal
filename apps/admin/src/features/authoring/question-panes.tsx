@@ -6,7 +6,15 @@ import {
   type QuestionLanguage,
 } from '@iace/contracts';
 import { ExternalLink } from 'lucide-react';
-import { Button, SegmentedControl, Tooltip, TooltipContent, TooltipTrigger, cn } from '@iace/ui';
+import {
+  Button,
+  SegmentedControl,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+  toast,
+} from '@iace/ui';
 import { ScaffoldEditor, type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { uploadQuestionImage } from '../../lib/upload-question-image';
 import { openCandidateView } from './candidate-view-store';
@@ -111,7 +119,11 @@ export function QuestionPanes({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={() => openCandidateView({ state, language })}
+                    onClick={() => {
+                      if (!openCandidateView({ state, language })) {
+                        toast.error('Could not open the candidate view.');
+                      }
+                    }}
                   >
                     <ExternalLink aria-hidden />
                     <span className="sr-only">Candidate view</span>

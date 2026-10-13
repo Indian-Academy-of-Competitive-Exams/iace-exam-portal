@@ -108,10 +108,15 @@ export function ScrollPane({
 
     const step = (event: KeyboardEvent) => {
       const by = STEP_BY_KEY[event.key];
-      if (by === undefined || keyTarget() !== node) return;
+      // A paper under a warning is inert: its keys are not the candidate's to scroll with.
+      if (by === undefined || node.closest('[inert]')) return;
       // A typing box moves its own caret with these keys, and must keep them.
       if (event.target instanceof HTMLTextAreaElement) return;
-      // Taken from the option that has focus, or the key would change the answer as well as the view.
+      // Kept from an option whether or not anything scrolls, or the key moves the view on one question and the answer on the next.
+      if (event.target instanceof HTMLInputElement && event.target.type === 'radio') {
+        event.preventDefault();
+      }
+      if (keyTarget() !== node) return;
       event.preventDefault();
       node.scrollTop += by;
     };

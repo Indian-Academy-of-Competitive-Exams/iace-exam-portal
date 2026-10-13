@@ -27,6 +27,7 @@ import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Brandmark, Button, cn } from '@iace/ui';
 import { ScrollPane } from '../../scroll-pane';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
+import { PHONE_QUERY } from '../shared/phone-query';
 import { Passage } from '../../passage';
 import { RailwayOptions, RailwayQuestion } from '../railway/question';
 import profileImage from '../railway/assets/profile.png';
@@ -38,8 +39,6 @@ import './banking.css';
 import { isTypingQuestion } from '../../../typing/typing-figures';
 import { ExamTyping } from '../shared/exam-typing';
 
-/** banking.css lays the palette over the paper at the same width. */
-const PHONE_QUERY = '(max-width: 767px)';
 const FONT_STEP = { MIN: -2, MAX: 4 } as const;
 
 export function BankingLayout({

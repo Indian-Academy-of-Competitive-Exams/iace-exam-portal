@@ -2,6 +2,7 @@
 import { X } from 'lucide-react';
 import { type ExamSection, type PaletteCounts } from '@iace/contracts';
 import { Spinner } from '@iace/ui';
+import { useModalBox } from '../../use-modal-box';
 import { summaryOf } from './states';
 
 export function BankingSummaryDialog({
@@ -21,11 +22,20 @@ export function BankingSummaryDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }>) {
+  const box = useModalBox<HTMLDivElement>(pending ? undefined : onCancel);
+
   return (
     <div className="bk-overlay absolute inset-0 z-40 grid place-items-center p-4">
-      <div role="dialog" aria-modal aria-labelledby="bk-summary-title" className="bk-summary">
+      <div
+        ref={box}
+        role="dialog"
+        aria-modal
+        aria-labelledby="bk-summary-title"
+        className="bk-summary"
+      >
         <button
           type="button"
+          autoFocus
           aria-label="Close"
           className="bk-summary-close"
           disabled={pending}
@@ -69,7 +79,6 @@ export function BankingSummaryDialog({
         <div className="flex items-center justify-center gap-3">
           <button
             type="button"
-            autoFocus
             className="bk-summary-submit"
             disabled={pending}
             onClick={onConfirm}
