@@ -589,6 +589,10 @@
   line-height: 19px;
 }
 
+[data-exam-template='ssc'] .sc-summary > .sc-wait {
+  font-family: Times, 'Times New Roman', serif;
+}
+
 [data-exam-template='ssc'] .sc-summary > div {
   gap: 12px 41px;
 }

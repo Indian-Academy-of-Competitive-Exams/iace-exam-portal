@@ -15,7 +15,7 @@ import {
   type ExamView,
 } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
-import { Alert, Button, RichContent, Spinner, cn } from '@iace/ui';
+import { Alert, Button, RichContent, cn } from '@iace/ui';
 import { ScrollPane } from '../../scroll-pane';
 import { Passage } from '../../passage';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
@@ -370,7 +370,7 @@ function SscPaper({ view }: Readonly<{ view: ExamView }>) {
   );
 }
 
-/** What this screen asks with: the paper gives way to a tally, the question under it, and two plain buttons. */
+/** What this screen asks with: a tally, the question under it and two plain buttons, then a word while it goes in. */
 function ExamSummary({
   view,
   sectionIds,
@@ -418,16 +418,21 @@ function ExamSummary({
             })}
         </tbody>
       </table>
-      <p>Are you sure you want to submit?</p>
-      <div className="flex items-center justify-center">
-        <button type="button" disabled={pending} onClick={onCancel}>
-          Back
-        </button>
-        <button type="button" autoFocus disabled={pending} onClick={onConfirm}>
-          {confirmLabel}
-        </button>
-        {pending ? <Spinner size="sm" label="Submitting" /> : null}
-      </div>
+      {pending ? (
+        <p className="sc-wait">Please Wait ...</p>
+      ) : (
+        <>
+          <p>Are you sure you want to submit?</p>
+          <div className="flex items-center justify-center">
+            <button type="button" onClick={onCancel}>
+              Back
+            </button>
+            <button type="button" autoFocus onClick={onConfirm}>
+              {confirmLabel}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
