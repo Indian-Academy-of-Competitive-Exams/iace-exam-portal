@@ -52,6 +52,21 @@ const SHARED_SELECT = {
       examTemplate: true,
       scope: true,
       scopeRef: true,
+      examStage: {
+        select: {
+          id: true,
+          exam: {
+            select: {
+              name: true,
+              stages: {
+                where: { isActive: true },
+                orderBy: [{ order: 'asc' }, { name: 'asc' }],
+                select: { id: true, name: true, mode: true },
+              },
+            },
+          },
+        },
+      },
       programUnlocks: { select: { programCode: true, opensAt: true } },
       baseConfig: {
         select: {

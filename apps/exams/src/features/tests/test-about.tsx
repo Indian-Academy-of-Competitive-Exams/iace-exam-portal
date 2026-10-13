@@ -42,6 +42,7 @@ import {
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { StartSitting } from '../exam/start-sitting';
+import { ExamJourney } from './exam-journey';
 import { briefQuery, catalogQuery, performanceQuery } from '../../lib/queries';
 import { NAV_ITEMS, ROUTES } from '../../lib/constants';
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
@@ -173,7 +174,7 @@ export function TestAboutPage() {
 
             {listed && offersRetake(listed) ? <Alert variant="info">{RETAKE_SAYS}</Alert> : null}
 
-            <Exits testId={testId} listed={listed} now={now} />
+            <Exits testId={testId} listed={listed} now={now} journey={brief.data.journey} />
 
             {past.length > 0 ? (
               <Section title="Past attempts" meta={plural(past.length, 'attempt')}>
@@ -247,10 +248,12 @@ function Exits({
   testId,
   listed,
   now,
+  journey,
 }: Readonly<{
   testId: string;
   listed: StudentCatalogTest | undefined;
   now: Date;
+  journey: ExamBrief['journey'];
 }>) {
   const action = listed ? testAction(listed) : null;
 
@@ -263,6 +266,7 @@ function Exits({
       ) : (
         <Button disabled>{listed ? shutReason(listed, now) : 'Not open to you'}</Button>
       )}
+      {journey ? <ExamJourney journey={journey} /> : null}
     </div>
   );
 }

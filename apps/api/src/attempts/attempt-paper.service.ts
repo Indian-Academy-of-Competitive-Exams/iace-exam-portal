@@ -142,6 +142,11 @@ export class AttemptPaperService {
         negativeMarks: Number(section.negativeMarks),
         typingPreset: section.typingPreset as TypingPresetKey | null,
       })),
+      journey: {
+        exam: test.examStage.exam.name,
+        stageId: test.examStage.id,
+        stages: test.examStage.exam.stages,
+      },
     };
   }
 

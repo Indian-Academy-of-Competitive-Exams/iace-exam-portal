@@ -35,9 +35,19 @@ export const EXAM_MODE = {
   INTERVIEW: 'INTERVIEW',
   DESCRIPTIVE: 'DESCRIPTIVE',
 } as const;
-const examModeSchema = z.enum(EXAM_MODE);
+export const examModeSchema = z.enum(EXAM_MODE);
 export type ExamMode = z.infer<typeof examModeSchema>;
 export const EXAM_MODES = examModeSchema.options;
+
+export const EXAM_MODE_LABELS: Readonly<Record<ExamMode, string>> = {
+  [EXAM_MODE.CBT]: 'Computer based test',
+  [EXAM_MODE.OMR]: 'OMR',
+  [EXAM_MODE.PSYCHOMETRIC]: 'Psychometric test',
+  [EXAM_MODE.SKILL]: 'Skill test',
+  [EXAM_MODE.PHYSICAL]: 'Physical test',
+  [EXAM_MODE.INTERVIEW]: 'Interview',
+  [EXAM_MODE.DESCRIPTIVE]: 'Descriptive',
+};
 
 export const DEFAULT_EXAM_MODE = EXAM_MODE.CBT;
 

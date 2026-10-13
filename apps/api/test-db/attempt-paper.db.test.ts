@@ -5,8 +5,10 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
+  EXAM_MODE,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
+  STAGE_DISPOSITION,
   TEST_STATUS,
   TEST_UI,
   TIMER_TEMPLATE,
@@ -187,6 +189,11 @@ describe('AttemptPaperService — the brief read before the clock starts', () =>
       data: { durationSec: 1200 },
     });
     await prisma.baseConfig.update({ where: { id: paper.catalog.baseConfigId }, data: config });
+    return briefFor(paper);
+  };
+
+  /** The brief as a student granted the paper's series reads it. */
+  const briefFor = async (paper: Awaited<ReturnType<typeof makePaper>>) => {
     await prisma.test.update({ where: { id: paper.testId }, data: { status: TEST_STATUS.ACTIVE } });
     const student = (await makeStudent(prisma)).id;
     await prisma.studentGrant.create({
@@ -220,6 +227,46 @@ describe('AttemptPaperService — the brief read before the clock starts', () =>
       [brief.timerTemplate, brief.testUi],
       [TIMER_TEMPLATE.SECTIONAL_LOCKED, TEST_UI.OMR],
     );
+  });
+
+  /** THE failure this prevents: a journey that drops the interview nobody sits here, or loses which stage this paper is. */
+  it('lists every active stage of the exam in order and names the one this test is for', async () => {
+    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: [] });
+    const own = await prisma.examStage.findUniqueOrThrow({
+      where: { id: paper.catalog.examStageId },
+      select: { examId: true },
+    });
+    const stage = (name: string, order: number, more: object = {}) => ({
+      id: uid(),
+      examId: own.examId,
+      stageKey: uid(),
+      name,
+      order,
+      ...more,
+    });
+    await prisma.examStage.createMany({
+      data: [
+        stage('Interview', 2, {
+          mode: EXAM_MODE.INTERVIEW,
+          disposition: STAGE_DISPOSITION.CATALOG_ONLY,
+        }),
+        stage('Tier 2', 1),
+        stage('Retired tier', 3, { isActive: false }),
+      ],
+    });
+
+    const { journey } = await briefFor(paper);
+    assert.ok(journey);
+
+    assert.deepEqual(
+      journey.stages.map((row) => [row.name, row.mode, row.id === journey.stageId]),
+      [
+        ['Tier 1', EXAM_MODE.CBT, true],
+        ['Tier 2', EXAM_MODE.CBT, false],
+        ['Interview', EXAM_MODE.INTERVIEW, false],
+      ],
+    );
+    assert.equal(journey.exam, 'Database tier exam');
   });
 });
 

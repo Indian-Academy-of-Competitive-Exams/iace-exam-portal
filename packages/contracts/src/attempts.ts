@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { csvQuery, optionalBooleanQuery } from './common';
-import { languageCodeSchema } from './exams';
+import { examModeSchema, languageCodeSchema } from './exams';
 import {
   examTemplateSchema,
   languageModeSchema,
@@ -258,6 +258,14 @@ export const examBriefSchema = z.object({
       typingPreset: typingPresetKeySchema.nullish(),
     }),
   ),
+  /** Every active stage of the exam in order, and which one this paper is. */
+  journey: z
+    .object({
+      exam: z.string(),
+      stageId: z.string(),
+      stages: z.array(z.object({ id: z.string(), name: z.string(), mode: examModeSchema })),
+    })
+    .optional(),
 });
 export type ExamBrief = z.infer<typeof examBriefSchema>;
 
