@@ -168,6 +168,52 @@ describe('the question sheet', () => {
     assert.equal(row.draft?.options[1]?.isCorrect, true);
   });
 
+  it('reads the Passage column onto the question it sits beside', () => {
+    const row = rowAt(plan([{ ...MCQ_ROW, passage_en: 'A shop marks every item at 150.' }]).rows);
+
+    assert.equal(row.action, 'create');
+    assert.equal(row.draft?.passage?.en, '<p>A shop marks every item at 150.</p>');
+    assert.equal(row.draft?.stem.en, '<p>What is 20% of 150?</p>');
+  });
+
+  /** The failure this prevents: a passage typed above its question arriving as one long question. */
+  it('moves a passage typed above the question into the passage, and says so on the row', () => {
+    const typed =
+      'Directions: Read the table.\nA shop marks every item at 150.\n\nWhat is 20% of 150?';
+    const row = rowAt(plan([{ ...MCQ_ROW, stem_en: typed }]).rows);
+
+    assert.equal(row.action, 'create');
+    assert.equal(
+      row.draft?.passage?.en,
+      '<p>Directions: Read the table.</p><p>A shop marks every item at 150.</p>',
+    );
+    assert.equal(row.draft?.stem.en, '<p>What is 20% of 150?</p>');
+    assert.deepEqual(
+      row.warnings.map((warning) => warning.column),
+      ['stem_en'],
+    );
+  });
+
+  it('leaves a question with a blank line in it alone when it does not open like a passage', () => {
+    const typed = 'Consider the statement below.\n\nWhat is 20% of 150?';
+    const row = rowAt(plan([{ ...MCQ_ROW, stem_en: typed }]).rows);
+
+    assert.equal(row.draft?.passage?.en, undefined);
+    assert.deepEqual(row.warnings, []);
+  });
+
+  it('takes two questions under one passage as two questions, not a duplicate', () => {
+    const shared = { passage_en: 'A shop marks every item at 150.' };
+    const other = { passage_en: 'A shop marks every item at 300.' };
+    const result = plan([
+      { ...MCQ_ROW, ...shared },
+      { ...MCQ_ROW, ...other },
+    ]);
+
+    assert.equal(result.summary.willCreate, 2);
+    assert.equal(result.summary.duplicates, 0);
+  });
+
   it('resolves taxonomy by name, however it was typed', () => {
     const row = plan([{ ...MCQ_ROW, subject: '  quantitative   aptitude ' }]).rows[0];
     assert.ok(row);

@@ -89,6 +89,9 @@ export function validateQuestion(
 function checkMath(draft: QuestionDraft, issues: ValidationIssue[], mathError: MathChecker): void {
   const fields: readonly (readonly [string, string | undefined])[] = [
     ...Object.entries(draft.stem).map(([language, text]) => [`stem.${language}`, text] as const),
+    ...Object.entries(draft.passage ?? {}).map(
+      ([language, text]) => [`passage.${language}`, text] as const,
+    ),
     ...Object.entries(draft.solution ?? {}).map(
       ([language, text]) => [`solution.${language}`, text] as const,
     ),
@@ -128,6 +131,7 @@ function checkLanguages(draft: QuestionDraft, issues: ValidationIssue[]): void {
   const supported = new Set<string>(LANGUAGE_ORDER);
   const seen = new Set<string>([
     ...Object.keys(draft.stem),
+    ...Object.keys(draft.passage ?? {}),
     ...Object.keys(draft.solution ?? {}),
     ...Object.keys(draft.answerKey?.answers ?? {}),
     ...draft.options.flatMap((option) => Object.keys(option.text)),
@@ -158,6 +162,7 @@ function checkStems(draft: QuestionDraft, issues: ValidationIssue[]): void {
     if (authored.has(language)) continue;
 
     const translated =
+      !blank(draft.passage?.[language]) ||
       !blank(draft.solution?.[language]) ||
       !blank(draft.answerKey?.answers[language]) ||
       draft.options.some((option) => !blank(option.text[language]));
@@ -347,6 +352,13 @@ function checkTaxonomy(
 
 /** Two questions in one string: the stem, the options as a SET, and the correct one's text. */
 export function canonicalStemKey(draft: QuestionIdentity): string {
+  const asked = canonicalAskedKey(draft);
+  const passage = foldForCompare(draft.passage?.[DEFAULT_LANGUAGE]);
+  // Appended only when there is one, so a question without a passage keeps the hash it already has.
+  return passage === '' ? asked : [asked, passage].join('||');
+}
+
+function canonicalAskedKey(draft: QuestionIdentity): string {
   const stem = foldForCompare(draft.stem[DEFAULT_LANGUAGE]);
 
   if (draft.type === QUESTION_TYPE.TEXT_FIELD) {

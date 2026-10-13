@@ -38,10 +38,11 @@ interface ContentBearing {
   options: readonly { text: LocalizedRich }[];
 }
 
-/** Every piece of HTML a question carries — stem, any solution, and every option. */
+/** Every piece of HTML a question carries — stem, any passage or solution, and every option. */
 export function htmlOfQuestion(question: ContentBearing): string[] {
   const content = Object.values(question.content).flatMap((held) => [
     ...htmlIn(held?.stem),
+    ...htmlIn(held?.passage),
     ...htmlIn(held?.solution),
   ]);
   const options = question.options.flatMap((option) =>
@@ -64,6 +65,7 @@ export function servedQuestion<Q extends ContentBearing>(
           ? {
               ...held,
               stem: serveRich(held.stem, urls),
+              ...(held.passage ? { passage: serveRich(held.passage, urls) } : {}),
               ...(held.solution ? { solution: serveRich(held.solution, urls) } : {}),
             }
           : held,

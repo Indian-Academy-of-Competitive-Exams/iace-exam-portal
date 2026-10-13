@@ -187,6 +187,8 @@ export function latexIn(html: string): string[] {
 
 const questionContentSchema = z.object({
   stem: richContentSchema,
+  /** What the question is asked ABOUT: a comprehension passage, a data set, a set of directions. */
+  passage: richContentSchema.optional(),
   solution: richContentSchema.optional(),
 });
 
@@ -370,6 +372,8 @@ export const questionDraftSchema = z.object({
   difficulty: difficultyLevelSchema,
   questionCode: questionCodeSchema.nullable().optional(),
   stem: localizedTextSchema,
+  /** Carried by every question it belongs to: there is no grouping, so each holds its own copy. */
+  passage: localizedTextSchema.optional(),
   solution: localizedTextSchema.optional(),
   options: z.array(questionOptionDraftSchema).max(MCQ_OPTION_MAX).default([]),
   answerKey: answerKeyDraftSchema.nullable().optional(),
@@ -386,7 +390,7 @@ export type QuestionDraftInput = z.input<typeof questionDraftSchema>;
 
 /** What a question's identity is read from — all a stored version still has once the draft is gone. */
 export const questionIdentitySchema = questionDraftSchema
-  .pick({ type: true, stem: true, options: true })
+  .pick({ type: true, stem: true, passage: true, options: true })
   .extend({ answerKey: answerKeyDraftSchema.pick({ answers: true }).nullable().optional() });
 export type QuestionIdentity = z.infer<typeof questionIdentitySchema>;
 
@@ -631,6 +635,9 @@ export const QUESTION_IMPORT_COLUMNS = [
     required: true,
     aliases: ['difficulty', 'level'],
   },
+  languageColumn('passage_en', 'Passage', 60, SUPPORTED_LANGUAGES.EN),
+  languageColumn('passage_hi', 'Passage', 60, SUPPORTED_LANGUAGES.HI),
+  languageColumn('passage_te', 'Passage', 60, SUPPORTED_LANGUAGES.TE),
   languageColumn('stem_en', 'Question', 60, SUPPORTED_LANGUAGES.EN, true),
   languageColumn('stem_hi', 'Question', 60, SUPPORTED_LANGUAGES.HI),
   languageColumn('stem_te', 'Question', 60, SUPPORTED_LANGUAGES.TE),

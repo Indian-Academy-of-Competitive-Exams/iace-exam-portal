@@ -312,6 +312,21 @@ describe('canonicalStemKey — what makes two questions the same question', () =
     assert.notEqual(canonicalStemKey(plus), canonicalStemKey(minus));
   });
 
+  /** The failure this prevents: "Which statement is true?" refused under its second passage. */
+  it('tells apart the same question asked about two passages', () => {
+    const first = sound({ passage: { en: '<p>The river rose in June.</p>' } });
+    const second = sound({ passage: { en: '<p>The river fell in June.</p>' } });
+
+    assert.notEqual(canonicalStemKey(first), canonicalStemKey(second));
+  });
+
+  it('gives a question with no passage the key it had before passages existed', () => {
+    assert.equal(
+      canonicalStemKey(sound({ passage: { en: '<p></p>' } })),
+      canonicalStemKey(sound()),
+    );
+  });
+
   it('still reads through markup and a full stop that ends a sentence', () => {
     const plain = sound({ stem: { en: '<p>If x = 2.5, what is 2x?</p>' } });
     const marked = sound({ stem: { en: '<p><strong>IF</strong>  x = 2.5,   what is 2x.</p>' } });

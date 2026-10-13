@@ -235,6 +235,25 @@ describe('QuestionsService.create', () => {
     );
   });
 
+  it('keeps a passage with its question, and takes the same question under another passage', async () => {
+    const { questions } = await build();
+
+    const first = await questions.create(
+      draft({ passage: { en: '<p>A shop marks every item at 150.</p>' } }),
+      ADMIN,
+    );
+    const second = await questions.create(
+      draft({ passage: { en: '<p>A shop marks every item at 300.</p>' } }),
+      ADMIN,
+    );
+
+    assert.equal(
+      first.content.en?.passage?.[0]?.text,
+      '<div><p>A shop marks every item at 150.</p></div>',
+    );
+    assert.notEqual(first.id, second.id);
+  });
+
   it('refuses the same question twice — the failure the bank exists to prevent', async () => {
     const { questions } = await build();
     const first = await questions.create(draft(), ADMIN);

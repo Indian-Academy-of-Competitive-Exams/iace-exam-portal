@@ -77,6 +77,7 @@ const question = {
   content: {
     en: {
       stem: [{ type: 'TEXT', text: 'What comes next?' }],
+      passage: [{ type: 'TEXT', text: 'Study the series 2, 4, 8.' }],
       solution: [{ type: 'TEXT', text: 'Because.' }],
     },
     hi: { stem: [{ type: 'TEXT', text: 'आगे क्या आता है?' }] },
@@ -159,8 +160,9 @@ describe('AttemptPaperService — what a candidate is allowed to see', () => {
 
     const paper = await service.paper(student, attemptId);
 
-    // The stem and the solution sit in one content object; only the stem is the student's to read.
-    assert.deepEqual(Object.keys(paper.questions[0]?.content.en ?? {}), ['stem']);
+    // One content object holds all three; the stem and its passage are the student's to read.
+    assert.deepEqual(Object.keys(paper.questions[0]?.content.en ?? {}), ['stem', 'passage']);
+    assert.ok(JSON.stringify(paper).includes('Study the series 2, 4, 8.'));
     assert.ok(!JSON.stringify(paper).includes('Because.'));
   });
 

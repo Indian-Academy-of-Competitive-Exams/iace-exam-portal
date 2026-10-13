@@ -1,4 +1,5 @@
 import {
+  LANGUAGE_LABELS,
   ANSWER_MODE,
   DEFAULT_LANGUAGE,
   FORMULA_PICTURE_MAX_HEIGHT,
@@ -30,6 +31,7 @@ import {
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable, normaliseHeader } from '../common/importing';
 import { htmlFromCell } from './question-content';
+import { splitLeadingPassage } from './question-passage';
 import { importedImageKey, judgeQuestionImage, type CheckedImage } from './question-images';
 import { computeStemHash, languagesIn, validateQuestion } from './question-core';
 import { lookupName, topicKey, type TaxonomyCatalog } from './taxonomy-context';
@@ -93,7 +95,7 @@ const LABEL_BY_KEY = new Map<string, string>(
 );
 
 /** What a candidate reads may carry a picture; a subject, a code or a typed answer is only ever text. */
-const TAKES_PICTURES = /^(stem|option\d|solution)_/;
+const TAKES_PICTURES = /^(stem|passage|option\d|solution)_/;
 
 /** A cell, by column key, accepting any alias the sheet happens to use. */
 export function cellOf(row: CsvRow, key: string): string {
@@ -325,7 +327,7 @@ function readRow(
   const content = rowContent(row, issues, warnings);
   const names = { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
   const draft = buildDraft(row, content, readType(row, issues), names, catalog, issues);
-  return { content, names, draft };
+  return { content, names, draft: withDetectedPassage(draft, warnings) };
 }
 
 /** The first row that would write a code holds it; the bank's own and an earlier line's are a clash. */
@@ -435,6 +437,7 @@ function buildDraft(
     difficulty: readDifficulty(row, issues),
     questionCode: readCode(row, issues),
     stem: localized('stem', content.html),
+    passage: localized('passage', content.html),
     solution: localized('solution', content.html),
     options: type === QUESTION_TYPE.SINGLE_MCQ ? readOptions(row, content, issues) : [],
     answerKey: type === QUESTION_TYPE.TEXT_FIELD ? readAnswerKey(row, issues) : null,
@@ -515,6 +518,25 @@ function readCode(row: CsvRow, issues: ValidationIssue[]): string | null {
     column: 'question_code',
   });
   return null;
+}
+
+/** A passage typed above its question in the question cell is moved to where the Passage column would have put it. */
+function withDetectedPassage(draft: QuestionDraft, warnings: ImportWarning[]): QuestionDraft {
+  const stem: LocalizedText = { ...draft.stem };
+  const passage: LocalizedText = { ...draft.passage };
+
+  for (const language of LANGUAGE_ORDER) {
+    const split = blank(passage[language] ?? '') ? splitLeadingPassage(stem[language] ?? '') : null;
+    if (!split) continue;
+    stem[language] = split.stem;
+    passage[language] = split.passage;
+    warnings.push({
+      column: `stem_${language}`,
+      message: `The opening of the ${LANGUAGE_LABELS[language]} question was read as its passage`,
+    });
+  }
+
+  return { ...draft, stem, passage };
 }
 
 /** One field across every language, each cell read through `read`. */

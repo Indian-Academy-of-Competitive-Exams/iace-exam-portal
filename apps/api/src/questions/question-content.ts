@@ -5,7 +5,7 @@ import {
   type RichContent,
 } from '@iace/contracts';
 
-/** A question's html sits in a stem, a solution and every option, each per language. */
+/** A question's html sits in a stem, a passage, a solution and every option, each per language. */
 /** Both directions walk it here, because doing it by hand is how one of the three is forgotten. */
 type Html = (html: string) => string;
 
@@ -20,6 +20,7 @@ export function mapQuestionHtml(
 ): string[] {
   const fromContent = Object.values(detail.content).flatMap((field) => [
     ...(field?.stem ?? []),
+    ...(field?.passage ?? []),
     ...(field?.solution ?? []),
   ]);
   const fromOptions = detail.options.flatMap((option) =>
@@ -37,6 +38,7 @@ export function rewriteDraftHtml<T extends QuestionDraft>(draft: T, visit: Html)
   return {
     ...draft,
     stem: textsOf(draft.stem, visit),
+    passage: textsOf(draft.passage, visit),
     solution: textsOf(draft.solution, visit),
     options: draft.options.map((option) => ({ ...option, text: textsOf(option.text, visit) })),
   };
@@ -52,6 +54,7 @@ export function rewriteQuestionHtml(detail: QuestionDetail, visit: Html): Questi
         field && {
           ...field,
           stem: nodesOf(field.stem, visit),
+          passage: nodesOf(field.passage, visit),
           solution: nodesOf(field.solution, visit),
         },
       ]),

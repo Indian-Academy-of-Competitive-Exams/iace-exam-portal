@@ -61,9 +61,11 @@ export function buildContent(draft: QuestionDraft): BuiltQuestion {
 
   const content: LocalizedContent = {};
   for (const language of languages) {
+    const passage = textNode(draft.passage?.[language]);
     const solution = textNode(draft.solution?.[language]);
     content[language] = {
       stem: textNode(draft.stem[language]),
+      ...(passage.length > 0 ? { passage } : {}),
       ...(solution.length > 0 ? { solution } : {}),
     };
   }
@@ -182,6 +184,7 @@ export function storedStemHash(stored: StoredQuestion): string {
   const key = canonicalStemKey({
     type: stored.type,
     stem: { [DEFAULT_LANGUAGE]: plainTextOf(stored.content[DEFAULT_LANGUAGE]?.stem) },
+    passage: { [DEFAULT_LANGUAGE]: plainTextOf(stored.content[DEFAULT_LANGUAGE]?.passage) },
     options: stored.options.map((option) => ({
       position: option.position,
       isCorrect: option.isCorrect,

@@ -93,6 +93,9 @@ const IMPORT_VALUES: Record<QuestionImportColumnKey, CellOf> = {
   subject: (question) => question.subject,
   topic: (question) => question.topic,
   difficulty: (question) => question.difficulty,
+  ...perLanguage('passage_', (question, language) =>
+    cellTextOf(question.content[language]?.passage),
+  ),
   ...perLanguage('stem_', (question, language) => cellTextOf(question.content[language]?.stem)),
   ...optionAt(1),
   ...optionAt(2),

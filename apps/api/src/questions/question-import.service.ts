@@ -309,6 +309,7 @@ export class QuestionImportService {
   private drawable(draft: QuestionDraft): QuestionDraft {
     const html = [
       ...Object.values(draft.stem),
+      ...Object.values(draft.passage ?? {}),
       ...Object.values(draft.solution ?? {}),
       ...draft.options.flatMap((option) => Object.values(option.text)),
     ];

@@ -733,6 +733,9 @@ function contentLeavesOf(row: QuestionRow): Record<string, string> {
 
   for (const [language, field] of Object.entries(contentOf(row))) {
     leaves[`stem.${language.toUpperCase()}`] = readableText(field?.stem);
+    if (field?.passage) {
+      leaves[`passage.${language.toUpperCase()}`] = readableText(field.passage);
+    }
     if (field?.solution) {
       leaves[`solution.${language.toUpperCase()}`] = readableText(field.solution);
     }

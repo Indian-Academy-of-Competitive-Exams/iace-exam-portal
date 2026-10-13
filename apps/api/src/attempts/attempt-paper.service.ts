@@ -323,11 +323,11 @@ function toExamQuestion(row: ServedQuestion, languages: readonly LanguageCode[])
     type: row.question.type,
     marks: Number(row.marks),
     negativeMarks: Number(row.negativeMarks),
-    // The STEM only: `solution` explains the answer, so it stays behind.
+    // What is ASKED only: `solution` explains the answer, so it stays behind.
     content: narrowTo(
       row.questionVersion.content as LocalizedContent | null,
       languages,
-      (held) => ({ stem: held.stem }),
+      (held) => ({ stem: held.stem, ...(held.passage ? { passage: held.passage } : {}) }),
     ),
     options: visible,
   };
