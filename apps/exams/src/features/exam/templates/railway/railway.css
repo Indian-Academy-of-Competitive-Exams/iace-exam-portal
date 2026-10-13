@@ -697,3 +697,36 @@
     border-bottom: 1px solid var(--rw-rule);
   }
 }
+
+/* ----- Typing test: the passage and the box in the paper's own type, square and ruled like its panes ----- */
+
+[data-exam-template='railways'] .typing-pane {
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+[data-exam-template='railways'] .typing-passage,
+[data-exam-template='railways'] .typing-box {
+  border: 1px solid var(--rw-rule);
+  border-radius: 0;
+  background: #fff;
+  padding: 8px 10px;
+  font-size: 17px;
+  line-height: 30px;
+  color: #000;
+  box-shadow: none;
+}
+
+[data-exam-template='railways'] .typing-passage {
+  background: var(--rw-tray);
+}
+
+[data-exam-template='railways'] .typing-box:focus-visible {
+  border-color: var(--rw-blue);
+  box-shadow: 0 0 0 1px var(--rw-blue);
+}
+
+[data-exam-template='railways'] .typing-count {
+  font-size: 14px;
+  color: var(--rw-ink);
+}

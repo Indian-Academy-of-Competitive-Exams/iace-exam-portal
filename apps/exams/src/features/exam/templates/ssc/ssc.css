@@ -765,3 +765,37 @@
     height: 28px;
   }
 }
+
+/* ----- Typing test: the passage and the box in the paper's own face, following its zoom ----- */
+
+[data-exam-template='ssc'] .typing-pane {
+  gap: 8px;
+  padding: 8px 3px;
+}
+
+[data-exam-template='ssc'] .typing-passage,
+[data-exam-template='ssc'] .typing-box {
+  border: 1px solid var(--sc-rule);
+  border-radius: 0;
+  background: #fff;
+  padding: 8px;
+  font-family: verdana, helvetica, sans-serif;
+  font-size: calc(16px * (1 + var(--sc-font-step, 0) * 0.1));
+  line-height: 1.7;
+  color: #000;
+  box-shadow: none;
+}
+
+[data-exam-template='ssc'] .typing-passage {
+  background: var(--sc-flat);
+  border-color: var(--sc-flat-rule);
+}
+
+[data-exam-template='ssc'] .typing-box:focus-visible {
+  border-color: var(--sc-blue);
+  box-shadow: 0 0 0 1px var(--sc-blue);
+}
+
+[data-exam-template='ssc'] .typing-count {
+  font-size: 13px;
+}

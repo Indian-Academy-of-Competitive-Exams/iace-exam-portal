@@ -26,12 +26,18 @@ export function TypingPane({
   const keyDepressions = typingKeyDepressions(passage, value);
 
   return (
-    <div className={cn('flex h-full min-h-0 flex-1 flex-col gap-exam-gap p-exam', className)}>
+    // The `typing-*` names are for a skin's own stylesheet; the default skin needs none of them.
+    <div
+      className={cn(
+        'typing-pane flex h-full min-h-0 flex-1 flex-col gap-exam-gap p-exam',
+        className,
+      )}
+    >
       <section
         aria-label="Passage"
         onCopy={refuse}
         onContextMenu={refuse}
-        className="relative min-h-0 flex-1 select-none overflow-y-auto rounded-exam-option border border-exam-border bg-exam-surface-2 p-exam text-base leading-loose text-exam-ink"
+        className="typing-passage relative min-h-0 flex-1 select-none overflow-y-auto rounded-exam-option border border-exam-border bg-exam-surface-2 p-exam text-base leading-loose text-exam-ink"
       >
         {passage}
       </section>
@@ -58,10 +64,10 @@ export function TypingPane({
         onChange={(event) => {
           if (backspace || event.target.value.startsWith(value)) onChange(event.target.value);
         }}
-        className="h-48 shrink-0 resize-none border-exam-border bg-exam-surface text-base leading-loose text-exam-ink"
+        className="typing-box h-48 shrink-0 resize-none border-exam-border bg-exam-surface text-base leading-loose text-exam-ink"
       />
 
-      <dl className="flex shrink-0 gap-6 text-sm tabular-nums text-exam-ink">
+      <dl className="typing-count flex shrink-0 gap-6 text-sm tabular-nums text-exam-ink">
         <div className="flex items-baseline gap-2">
           <dt className="text-exam-ink-muted">Key depressions</dt>
           <dd className="font-semibold">{keyDepressions.toLocaleString('en-IN')}</dd>
