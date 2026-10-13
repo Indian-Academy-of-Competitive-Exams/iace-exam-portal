@@ -150,7 +150,7 @@ function Board({
   }
 
   return (
-    <div className="flex flex-col gap-6 pb-8">
+    <div className="flex flex-col gap-6">
       <section data-tour={TOUR_TARGETS.LEADERBOARD_PODIUM}>
         <Podium rows={board.podium} />
       </section>
