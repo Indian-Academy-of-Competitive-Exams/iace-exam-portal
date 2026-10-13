@@ -15,6 +15,11 @@ on:
       reason:
         required: true
         type: string
+      skip_when_stopped:
+        description: 'Staging only: a box that is off is reported, not failed — it pulls on its next start.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -39,15 +44,33 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
+      # A box that is off is not a fault on staging: boot-update.sh pulls this image when it starts.
       - name: Find the box
         id: box
         run: |
-          id=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=${{ vars.API_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[].Instances[0].InstanceId' --output text)
-          [ -n "$id" ] && [ "$id" != "None" ] || {
-            echo "::error::No running instance tagged ${{ vars.API_INSTANCE_NAME }}"; exit 1; }
-          echo "id=$id" >> "$GITHUB_OUTPUT"
+          find() {
+            aws ec2 describe-instances \
+              --filters "Name=tag:Name,Values=${{ vars.API_INSTANCE_NAME }}" "Name=instance-state-name,Values=$1" \
+              --query 'Reservations[].Instances[0].InstanceId' --output text
+          }
+          id=$(find running)
+          if [ -n "$id" ] && [ "$id" != "None" ]; then
+            echo "id=$id" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          off=$(find pending,stopping,stopped)
+          if [ "${{ inputs.skip_when_stopped }}" = "true" ] && [ -n "$off" ] && [ "$off" != "None" ]; then
+            msg="ECR updated to ${{ inputs.image_tag }}. The ${{ inputs.environment }} box is off — it pulls this image when it is next switched on."
+            echo "::notice::$msg"
+            {
+              echo "### ${{ inputs.environment }} API: not deployed, the box is off"
+              echo "$msg"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "off=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::No running instance tagged ${{ vars.API_INSTANCE_NAME }}"
+          exit 1
 
       # No ssh, no key, no inbound rule: the agent dials out and runs this as root.
       #
@@ -61,6 +84,7 @@ jobs:
       # the file it started with. A \$ is the box's variable; a bare $ is expanded here.
       - name: Sync, pull and recreate
         id: send
+        if: steps.box.outputs.off != 'true'
         run: |
           CMD=$(aws ssm send-command --instance-ids "${{ steps.box.outputs.id }}" \
             --document-name AWS-RunShellScript --comment "deploy ${{ inputs.image_tag }}" \
@@ -83,6 +107,7 @@ jobs:
 
       # send-command succeeds the moment it is queued, which says nothing about the deploy.
       - name: Wait and report
+        if: steps.box.outputs.off != 'true'
         run: |
           ID=${{ steps.box.outputs.id }}
           for _ in $(seq 1 60); do
