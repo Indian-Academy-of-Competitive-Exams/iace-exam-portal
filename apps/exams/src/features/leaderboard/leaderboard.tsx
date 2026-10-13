@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   EMPTY_STATE_KINDS,
-  Alert,
   Button,
   EmptyState,
   PageHeader,
@@ -19,7 +18,7 @@ import { performanceQuery } from '../../lib/queries';
 import { NAV_ITEMS, ROUTES, leaderboardQueryKey } from '../../lib/constants';
 import { Podium, Standings } from './board';
 import { LEADERBOARD_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
-import { RowsSkeleton, Section } from '../../components/ui';
+import { RowsSkeleton } from '../../components/ui';
 
 const UNTITLED = 'Untitled test';
 
@@ -34,6 +33,7 @@ export function LeaderboardPage() {
     kind: 'choice',
     label: 'Test',
     primary: true,
+    width: 'w-96 max-w-full',
     items: [
       { value: '', label: sat[0]?.title ?? UNTITLED },
       ...sat.slice(1).map((test) => ({ value: test.testId, label: test.title ?? UNTITLED })),
@@ -151,21 +151,13 @@ function Board({
 
   return (
     <div className="flex flex-col gap-6 pb-8">
-      <Alert variant="info">
-        Only a first sitting is ranked. A retake is marked, but it is not on this board.
-      </Alert>
-
-      <Section tour={TOUR_TARGETS.LEADERBOARD_PODIUM} title="Podium">
+      <section data-tour={TOUR_TARGETS.LEADERBOARD_PODIUM}>
         <Podium rows={board.podium} />
-      </Section>
+      </section>
 
-      <Section
-        tour={TOUR_TARGETS.LEADERBOARD_RANKS}
-        title="Ranks"
-        meta={plural(board.cohortSize, 'student')}
-      >
+      <section data-tour={TOUR_TARGETS.LEADERBOARD_RANKS}>
         <Standings board={board} empty="Everyone on this board is on the podium" onPage={onPage} />
-      </Section>
+      </section>
     </div>
   );
 }

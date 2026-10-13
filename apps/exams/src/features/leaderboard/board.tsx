@@ -34,10 +34,10 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
   return (
     <Card
       className={cn(
-        'flex items-center gap-3 p-3 sm:flex-col sm:gap-1 sm:p-4 sm:text-center',
+        'flex items-center gap-3 bg-gradient-to-b from-muted/40 to-card to-45% p-3 sm:flex-col sm:gap-1 sm:p-4 sm:text-center',
         PODIUM_ORDER[row.rank],
-        top && 'border-warning sm:p-5',
-        row.isYou && 'border-primary bg-primary-subtle',
+        top && 'border-warning from-warning-subtle/30 sm:p-5',
+        row.isYou && 'border-primary from-primary-subtle/30',
       )}
     >
       <Avatar
