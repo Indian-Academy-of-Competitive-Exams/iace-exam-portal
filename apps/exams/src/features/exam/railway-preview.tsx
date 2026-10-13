@@ -26,6 +26,7 @@ export function RailwayPreviewPage({
   return (
     <ExamShell
       examTemplate={template}
+      onPause={() => undefined}
       calculatorEnabled
       view={{
         ...view,

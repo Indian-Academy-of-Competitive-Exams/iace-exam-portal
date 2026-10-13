@@ -66,3 +66,27 @@ export function BankingInstructionsDialog({
     </InfoDialog>
   );
 }
+
+/** Named with the limits the server keeps, so nobody learns them by losing a sitting. */
+export function BankingPauseDialog({
+  onPause,
+  onCancel,
+}: Readonly<{ onPause: () => void; onCancel: () => void }>) {
+  return (
+    <InfoDialog
+      foot={
+        <>
+          <button type="button" autoFocus className="bk-info-yes" onClick={onPause}>
+            Pause
+          </button>
+          <button type="button" className="bk-info-no" onClick={onCancel}>
+            Carry on
+          </button>
+        </>
+      }
+    >
+      Your answers are saved, and you can resume this test from your tests. A break longer than a
+      minute does not cost you time. A test left for 48 hours ends by itself.
+    </InfoDialog>
+  );
+}

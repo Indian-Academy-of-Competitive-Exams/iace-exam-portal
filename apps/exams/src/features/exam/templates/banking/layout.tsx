@@ -29,7 +29,7 @@ import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
 import { Passage } from '../../passage';
 import { RailwayOptions, RailwayQuestion } from '../railway/question';
 import profileImage from '../railway/assets/profile.png';
-import { BankingInstructionsDialog } from './info-dialog';
+import { BankingInstructionsDialog, BankingPauseDialog } from './info-dialog';
 import { BankingGeneral } from './instructions';
 import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateBadge } from './states';
 import { BankingSummaryDialog } from './submit-dialog';
@@ -39,11 +39,17 @@ import './banking.css';
 const PHONE_QUERY = '(max-width: 767px)';
 const FONT_STEP = { MIN: -2, MAX: 4 } as const;
 
-export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamSlotProps>) {
+export function BankingLayout({
+  view,
+  config,
+  onOpenCalculator,
+  onPause,
+}: Readonly<ExamSlotProps>) {
   const phone = useMediaQuery(PHONE_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(!phone);
   const [reading, setReading] = useState(false);
   const [fontStep, setFontStep] = useState(0);
+  const [pausing, setPausing] = useState(false);
   // Held by id, so a clock that closes the section first takes the question about it away too.
   const [handingIn, setHandingIn] = useState<string | null>(null);
   const { submitSection } = view;
@@ -94,6 +100,16 @@ export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamS
           >
             <Plus aria-hidden />
           </button>
+          {onPause ? (
+            <button
+              type="button"
+              className="bk-pause"
+              disabled={off}
+              onClick={() => setPausing(true)}
+            >
+              Pause Test
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -271,6 +287,10 @@ export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamS
           onConfirm={view.submit.confirm}
           onCancel={view.submit.cancel}
         />
+      ) : null}
+
+      {onPause && pausing ? (
+        <BankingPauseDialog onPause={onPause} onCancel={() => setPausing(false)} />
       ) : null}
 
       <PaperWatermark view={view} config={config} className="bk-watermark" />

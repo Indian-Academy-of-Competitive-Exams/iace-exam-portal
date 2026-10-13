@@ -3,7 +3,8 @@
  * and a palette of small coloured chips on the right. Every value and callback comes off
  * the view, as in the other skins, so only the markup and the class names differ.
  */
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { CirclePause } from 'lucide-react';
 import { ANSWER_STATE, contentLanguageOf, isStateShown, type ExamClock } from '@iace/contracts';
 import {
   htmlOf,
@@ -33,11 +34,12 @@ const OPTION_LETTERS = 'abcdefghij';
 const READING = { SYMBOLS: 'SYMBOLS', INSTRUCTIONS: 'INSTRUCTIONS' } as const;
 type Reading = (typeof READING)[keyof typeof READING];
 
-export function SscLayout({ view, config, onOpenCalculator }: Readonly<ExamSlotProps>) {
+export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<ExamSlotProps>) {
   const phone = useMediaQuery(PHONE_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(!phone);
   const [reading, setReading] = useState<Reading | null>(null);
   const [fontStep, setFontStep] = useState(0);
+  const [pausing, setPausing] = useState(false);
   // Held by id, so a clock that closes the section first takes the question about it away too.
   const [handingIn, setHandingIn] = useState<string | null>(null);
   const { submitSection, fullscreen } = view;
@@ -90,7 +92,20 @@ export function SscLayout({ view, config, onOpenCalculator }: Readonly<ExamSlotP
         }
       >
         <div className="sc-clock flex shrink-0">
-          <SscTimer view={view} />
+          <div>
+            <SscTimer view={view} />
+            {onPause ? (
+              <button
+                type="button"
+                className="sc-pause flex items-center"
+                disabled={off}
+                onClick={() => setPausing(true)}
+              >
+                <CirclePause aria-hidden />
+                Pause Test
+              </button>
+            ) : null}
+          </div>
           <img src={profileImage} alt="" />
         </div>
       </SscHeader>
@@ -302,6 +317,17 @@ export function SscLayout({ view, config, onOpenCalculator }: Readonly<ExamSlotP
         </>
       )}
 
+      {onPause && pausing ? (
+        <SscBox label="Pause Test" says={PAUSE_SAYS}>
+          <button type="button" autoFocus onClick={onPause}>
+            Pause
+          </button>
+          <button type="button" onClick={() => setPausing(false)}>
+            Carry on
+          </button>
+        </SscBox>
+      ) : null}
+
       <PaperWatermark view={view} config={config} className="sc-watermark" />
     </div>
   );
@@ -437,25 +463,39 @@ function ExamSummary({
   );
 }
 
-/** Leaving full screen, asked about in the box this screen says everything else in. */
+/** Named with the limits the server keeps, so nobody learns them by losing a sitting. */
+const PAUSE_SAYS =
+  'Your answers are saved, and you can resume this test from your tests. A break longer than a minute does not cost you time. A test left for 48 hours ends by itself.';
+
+/** The one box this screen says things in: a line of text over its buttons on a grey foot. */
+function SscBox({
+  label,
+  says,
+  children,
+}: Readonly<{ label: string; says: string; children: ReactNode }>) {
+  return (
+    <div className="sc-overlay absolute inset-0 z-50 grid place-items-center p-4">
+      <div role="dialog" aria-modal aria-label={label} className="sc-nag">
+        <p>{says}</p>
+        <div className="flex flex-wrap items-center justify-end">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export function SscFullscreenNag({
   fullscreen,
   says,
 }: Readonly<{ fullscreen: ExamView['fullscreen']; says: string }>) {
   return (
-    <div className="sc-overlay absolute inset-0 z-50 grid place-items-center p-4">
-      <div role="dialog" aria-modal aria-label="Full screen" className="sc-nag">
-        <p>{says}</p>
-        <div className="flex flex-wrap items-center justify-end">
-          <button type="button" autoFocus onClick={fullscreen.enter}>
-            Return to full screen
-          </button>
-          <button type="button" onClick={fullscreen.ignore}>
-            Carry on without it
-          </button>
-        </div>
-      </div>
-    </div>
+    <SscBox label="Full screen" says={says}>
+      <button type="button" autoFocus onClick={fullscreen.enter}>
+        Return to full screen
+      </button>
+      <button type="button" onClick={fullscreen.ignore}>
+        Carry on without it
+      </button>
+    </SscBox>
   );
 }
 

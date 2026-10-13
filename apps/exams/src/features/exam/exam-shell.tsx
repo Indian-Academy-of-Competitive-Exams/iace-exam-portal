@@ -21,7 +21,13 @@ export function ExamShell({
   examTemplate,
   calculatorEnabled,
   view,
-}: Readonly<{ examTemplate: ExamTemplate; calculatorEnabled: boolean; view: ExamView }>) {
+  onPause,
+}: Readonly<{
+  examTemplate: ExamTemplate;
+  calculatorEnabled: boolean;
+  view: ExamView;
+  onPause?: () => void;
+}>) {
   const { submit, fullscreen } = view;
   const [calculating, setCalculating] = useState(false);
   const online = useNetworkStatus();
@@ -51,6 +57,7 @@ export function ExamShell({
           view={view}
           config={EXAM_TEMPLATE_CONFIG[template]}
           onOpenCalculator={calculatorEnabled ? () => setCalculating(true) : undefined}
+          onPause={onPause}
         />
 
         {/* Mounted here, not in a skin, so a config that offers one cannot be drawn without it. */}

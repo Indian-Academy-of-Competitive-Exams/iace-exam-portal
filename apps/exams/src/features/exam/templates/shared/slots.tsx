@@ -35,6 +35,8 @@ export interface ExamSlotProps {
   config: ExamTemplateConfig;
   /** Absent where the config offers no calculator, which is how a skin knows not to draw it. */
   onOpenCalculator?: () => void;
+  /** Absent where a sitting cannot be left and come back to, which is how a skin knows not to offer it. */
+  onPause?: () => void;
 }
 
 const SWITCH: Readonly<Record<'TABS' | 'BUTTONS', string>> = {

@@ -267,6 +267,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   allows. Past `PAUSE_LIMIT_SEC` of silence the sitting is abandoned, and so is one whose credit is
   spent — the sweeper ends both at their deadline rather than letting a reopened tab hold a sitting
   that can no longer earn a second.
+  The SSC and Banking skins offer this as a **Pause Test** button: it sends what is unsent, leaves
+  the paper for the student's tests, and names these limits before it does. It is the same silence
+  as a closed tab, so it adds no state and no endpoint.
 - **Leaving takes the unsent answers with it.** On the web the unsent copy lives in the tab's
   `sessionStorage`, which dies with the tab. So closing or reloading with anything unsent raises the
   browser's own "changes may not be saved" prompt, and leaving anyway sends it all on a `keepalive`
