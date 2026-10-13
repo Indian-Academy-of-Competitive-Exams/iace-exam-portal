@@ -16,6 +16,7 @@ import {
   type ExamSlotProps,
 } from './slots';
 import { Passage } from '../../passage';
+import { ScrollPane } from '../../scroll-pane';
 import { PaperPanel, RulesPanel } from './panels';
 
 export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProps>) {
@@ -56,16 +57,25 @@ export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProp
               className="flex min-h-0 flex-1 flex-col md:flex-row"
             >
               {passages.length > 0 ? (
-                <div className="relative flex max-h-[40%] shrink-0 flex-col gap-exam-gap overflow-y-auto border-b border-exam-border p-exam md:max-h-none md:w-[55%] md:border-b-0 md:border-r">
-                  <Passage passages={passages} className="text-sm leading-relaxed text-exam-ink" />
-                </div>
+                <ScrollPane
+                  keys
+                  wheel
+                  className="max-h-[40%] shrink-0 border-b border-exam-border md:max-h-none md:w-[55%] md:border-b-0 md:border-r"
+                >
+                  <div className="flex flex-col gap-exam-gap p-exam">
+                    <Passage
+                      passages={passages}
+                      className="text-sm leading-relaxed text-exam-ink"
+                    />
+                  </div>
+                </ScrollPane>
               ) : null}
-              <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto p-exam">
-                <article className="flex min-w-0 flex-col gap-exam-gap">
+              <ScrollPane keys wheel className="min-h-0 min-w-0 flex-1">
+                <article className="flex min-w-0 flex-col gap-exam-gap p-exam">
                   <QuestionPanel view={view} config={config} />
                   <Options view={view} config={config} />
                 </article>
-              </div>
+              </ScrollPane>
             </div>
             {onPaper ? <PaperWatermark view={view} config={config} /> : null}
           </div>

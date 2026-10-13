@@ -1,8 +1,8 @@
 /**
  * A pane the candidate moves by its scrollbar or the Up and Down keys alone: the wheel is
- * refused, so a paper cannot be skimmed past by accident. The bar is drawn here rather
- * than left to the platform, and shows only while the pane is being moved or the pointer
- * is on it. Each skin colours it in its own css.
+ * refused unless a skin asks for it, so a copied paper cannot be skimmed past by accident.
+ * The bar is drawn here rather than left to the platform, and shows only while the pane is
+ * being moved or the pointer is on it. Each skin colours it in its own css.
  */
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { cn } from '@iace/ui';
@@ -33,9 +33,12 @@ function keyTarget(): HTMLDivElement | undefined {
 export function ScrollPane({
   className,
   keys = false,
+  wheel = false,
   children,
 }: Readonly<{
   className?: string;
+  /** Lets the mouse wheel through, for a skin that copies no paper and scrolls like any page. */
+  wheel?: boolean;
   /** Answers the Up and Down keys, for a pane that holds the paper itself. */
   keys?: boolean;
   children: ReactNode;
@@ -82,7 +85,7 @@ export function ScrollPane({
 
     // Sideways is let through: a table wider than the pane has no other way across.
     const refuse = (event: WheelEvent) => {
-      if (Math.abs(event.deltaY) >= Math.abs(event.deltaX)) event.preventDefault();
+      if (!wheel && Math.abs(event.deltaY) >= Math.abs(event.deltaX)) event.preventDefault();
     };
     node.addEventListener('wheel', refuse, { passive: false });
 
@@ -96,7 +99,7 @@ export function ScrollPane({
       node.removeEventListener('wheel', refuse);
       watch.disconnect();
     };
-  }, [measure]);
+  }, [measure, wheel]);
 
   useEffect(() => {
     const node = pane.current;
