@@ -1,12 +1,26 @@
-/** The Test Summary the banking screen asks with: every section's tally over a dimmed paper, then one Submit. */
+/** The Test Summary the banking screen asks with: a tally per section over a dimmed paper, then one button. */
 import { X } from 'lucide-react';
-import { type ExamView } from '@iace/app-kit';
+import { type ExamSection, type PaletteCounts } from '@iace/contracts';
 import { Spinner } from '@iace/ui';
 import { summaryOf } from './states';
 
-export function BankingSubmitDialog({ view }: Readonly<{ view: ExamView }>) {
-  const { submit } = view;
-
+export function BankingSummaryDialog({
+  asks,
+  confirmLabel,
+  sections,
+  countsOf,
+  pending = false,
+  onConfirm,
+  onCancel,
+}: Readonly<{
+  asks: string;
+  confirmLabel: string;
+  sections: readonly ExamSection[];
+  countsOf: (sectionId: string) => PaletteCounts;
+  pending?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}>) {
   return (
     <div className="bk-overlay absolute inset-0 z-40 grid place-items-center p-4">
       <div role="dialog" aria-modal aria-labelledby="bk-summary-title" className="bk-summary">
@@ -14,13 +28,13 @@ export function BankingSubmitDialog({ view }: Readonly<{ view: ExamView }>) {
           type="button"
           aria-label="Close"
           className="bk-summary-close"
-          disabled={submit.isPending}
-          onClick={submit.cancel}
+          disabled={pending}
+          onClick={onCancel}
         >
           <X aria-hidden />
         </button>
         <h1 id="bk-summary-title">Test Summary</h1>
-        <p>Do you want to Submit the Test?</p>
+        <p>{asks}</p>
 
         <div className="bk-summary-scroll">
           <table>
@@ -35,8 +49,8 @@ export function BankingSubmitDialog({ view }: Readonly<{ view: ExamView }>) {
               </tr>
             </thead>
             <tbody>
-              {view.sections.map((section, at) => {
-                const row = summaryOf(view.sectionCounts(section.id));
+              {sections.map((section, at) => {
+                const row = summaryOf(countsOf(section.id));
                 return (
                   <tr key={section.id}>
                     <td>{at + 1}</td>
@@ -57,12 +71,12 @@ export function BankingSubmitDialog({ view }: Readonly<{ view: ExamView }>) {
             type="button"
             autoFocus
             className="bk-summary-submit"
-            disabled={submit.isPending}
-            onClick={submit.confirm}
+            disabled={pending}
+            onClick={onConfirm}
           >
-            Submit
+            {confirmLabel}
           </button>
-          {submit.isPending ? <Spinner size="sm" label="Submitting" /> : null}
+          {pending ? <Spinner size="sm" label="Submitting" /> : null}
         </div>
       </div>
     </div>

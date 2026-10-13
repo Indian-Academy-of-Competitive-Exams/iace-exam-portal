@@ -94,7 +94,8 @@ export function BankingGeneral({
           <li>
             Each section of this examination has its own time, and the countdown timer shows the
             time left for the section you are in. When it reaches zero that section closes, and its
-            questions cannot be opened again.
+            questions cannot be opened again. Clicking <strong>Submit Section</strong> closes it
+            sooner, in the same way.
           </li>
         ) : null}
         <li>

@@ -160,6 +160,7 @@ export function previewView(): ExamView {
     markAndNext: noop,
     clearResponse: noop,
     openSection: noop,
+    submitSection: null,
 
     submit: {
       asking: false,

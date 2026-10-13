@@ -4,18 +4,27 @@
  * as in the other skins, so only the markup and the class names differ.
  */
 import { useState, type CSSProperties } from 'react';
-import { Calculator, ChevronLeft, ChevronRight, Info, Maximize2, Minus, Plus } from 'lucide-react';
+import {
+  Calculator,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Maximize2,
+  Minus,
+  Plus,
+  Type,
+} from 'lucide-react';
 import { ANSWER_STATE, isStateShown, type ExamClock } from '@iace/contracts';
 import { TIMER_KIND, useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
-import { Alert, Button, cn } from '@iace/ui';
+import { Alert, Brandmark, Button, cn } from '@iace/ui';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
 import { RailwayOptions, RailwayQuestion } from '../railway/question';
 import profileImage from '../railway/assets/profile.png';
 import { BankingInstructionsDialog } from './info-dialog';
 import { BankingGeneral } from './instructions';
 import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateBadge } from './states';
-import { BankingSubmitDialog } from './submit-dialog';
+import { BankingSummaryDialog } from './submit-dialog';
 import './banking.css';
 
 /** banking.css lays the palette over the paper at the same width. */
@@ -27,6 +36,9 @@ export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamS
   const [paletteOpen, setPaletteOpen] = useState(!phone);
   const [reading, setReading] = useState(false);
   const [fontStep, setFontStep] = useState(0);
+  // Held by id, so a clock that closes the section first takes the question about it away too.
+  const [handingIn, setHandingIn] = useState<string | null>(null);
+  const { submitSection } = view;
   const off = view.locked !== null;
   const section = view.sections.find((row) => row.id === view.sectionId);
   const states = LEGEND_ORDER.filter((state) => isStateShown(state, view.forwardOnly));
@@ -42,7 +54,7 @@ export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamS
       style={{ '--bk-font-step': fontStep } as CSSProperties}
     >
       <div className="bk-titlebar flex shrink-0 items-center justify-between">
-        <span className="bk-logo">IACE</span>
+        <Brandmark />
         <strong className="bk-testname">{view.title}</strong>
         <div className="flex items-center">
           {view.fullscreen.isSupported ? (
@@ -64,9 +76,7 @@ export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamS
           >
             <Minus aria-hidden />
           </button>
-          <span className="bk-tool-glyph" aria-hidden>
-            T
-          </span>
+          <Type className="bk-tool-glyph" aria-hidden />
           <button
             type="button"
             aria-label="Larger text"
@@ -110,7 +120,6 @@ export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamS
             ) : null}
           </div>
           <div className="bk-photos flex flex-1 items-center justify-center">
-            <img src={profileImage} alt="" />
             <img src={profileImage} alt="" />
           </div>
         </div>
@@ -204,9 +213,20 @@ export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamS
           </button>
         </div>
         <div className="bk-footer-side flex shrink-0 items-center justify-center">
-          <button type="button" className="bk-btn" disabled={off} onClick={view.submit.ask}>
-            SUBMIT
-          </button>
+          {submitSection ? (
+            <button
+              type="button"
+              className="bk-btn"
+              disabled={off}
+              onClick={() => setHandingIn(view.sectionId)}
+            >
+              SUBMIT SECTION
+            </button>
+          ) : (
+            <button type="button" className="bk-btn" disabled={off} onClick={view.submit.ask}>
+              SUBMIT
+            </button>
+          )}
         </div>
       </div>
 
@@ -219,7 +239,31 @@ export function BankingLayout({ view, config, onOpenCalculator }: Readonly<ExamS
         </BankingInstructionsDialog>
       ) : null}
 
-      {view.submit.asking || view.submit.isPending ? <BankingSubmitDialog view={view} /> : null}
+      {submitSection && section && handingIn === view.sectionId ? (
+        <BankingSummaryDialog
+          asks="Do you want to Submit this Section?"
+          confirmLabel="Submit Section"
+          sections={[section]}
+          countsOf={view.sectionCounts}
+          onConfirm={() => {
+            setHandingIn(null);
+            submitSection();
+          }}
+          onCancel={() => setHandingIn(null)}
+        />
+      ) : null}
+
+      {view.submit.asking || view.submit.isPending ? (
+        <BankingSummaryDialog
+          asks="Do you want to Submit the Test?"
+          confirmLabel="Submit"
+          sections={view.sections}
+          countsOf={view.sectionCounts}
+          pending={view.submit.isPending}
+          onConfirm={view.submit.confirm}
+          onCancel={view.submit.cancel}
+        />
+      ) : null}
 
       <PaperWatermark view={view} config={config} className="bk-watermark" />
     </div>

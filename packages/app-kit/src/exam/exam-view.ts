@@ -170,6 +170,8 @@ export interface ExamView {
   markAndNext: () => void;
   clearResponse: () => void;
   openSection: (sectionId: string) => void;
+  /** Hands this section in and opens the next. Null unless a sectional paper has a section left after this one. */
+  submitSection: (() => void) | null;
 
   submit: ExamSubmitView;
   fullscreen: ExamFullscreenView;

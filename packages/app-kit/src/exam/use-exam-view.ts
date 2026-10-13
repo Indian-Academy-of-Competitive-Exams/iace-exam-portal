@@ -324,6 +324,7 @@ export function useExamView(
     nextQuestion,
     record,
     openSection,
+    endSection,
     end,
     inert,
     expire: sectionSec === null ? lapse : endSection,
@@ -365,6 +366,9 @@ export function useExamView(
       openSection: (id: string) => live.current.openSection(id),
       sectionCounts: (id: string) => live.current.sectionCounts[id] ?? live.current.counts,
       expire: () => live.current.expire(),
+      submitSection: () => {
+        if (!live.current.inert) live.current.endSection();
+      },
       retry: () => live.current.end(),
       // The confirmation counts what is unanswered, which a paper still waiting on its saved state cannot know.
       ask: () => {
@@ -416,6 +420,10 @@ export function useExamView(
     [nagging, focus.isFullscreen, focus.isSupported, focus.exits, on],
   );
 
+  // The last section has no "next": handing it in is handing the paper in, which Submit already asks about.
+  const hasSectionAfter =
+    sectional && nextOpenSectionId(paper.sections, state.sections, sectionId) !== null;
+
   const lock = lockOf(inert, submit.isPending || submit.isSuccess, shut || lapsed);
 
   const { answers, isSaving, hasUnsaved, hasUnsent, leave, takenOver, setAside } = state;
@@ -462,6 +470,7 @@ export function useExamView(
       markAndNext: on.markAndNext,
       clearResponse: on.clearResponse,
       openSection: on.openSection,
+      submitSection: hasSectionAfter ? on.submitSection : null,
 
       submit: submitView,
       fullscreen,
@@ -490,6 +499,7 @@ export function useExamView(
       ended,
       lock,
       on,
+      hasSectionAfter,
       submitView,
       fullscreen,
     ],

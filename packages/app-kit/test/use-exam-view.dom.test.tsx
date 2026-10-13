@@ -1181,6 +1181,50 @@ test('a sitting taken over while the submit dialog is up takes the dialog down w
 });
 
 /** The failure this prevents: the last bell leaving a section still drawn as open behind the submit. */
+test('handing a section in shuts it and opens the next, as its clock running out would', async (t) => {
+  const { result, unmount } = await seated(apiGatedSave().api, paper());
+  t.after(unmount);
+
+  assert.deepEqual(result.current.reachable, ['sec1']);
+
+  await act(async () => {
+    result.current.submitSection?.();
+    await settle();
+  });
+
+  assert.deepEqual(result.current.reachable, ['sec2'], 'the section handed in is shut');
+  assert.equal(result.current.sectionId, 'sec2');
+});
+
+test('a paper on one clock offers no section to hand in, because none of them closes', async (t) => {
+  const { result, unmount } = await seated(apiWith({}), onePaperClock());
+  t.after(unmount);
+
+  assert.equal(result.current.submitSection, null);
+});
+
+test('the last open section is not handed in on its own: that is the paper, and Submit asks first', async (t) => {
+  const api = {
+    me: {
+      attemptState: async () => ({
+        answers: {},
+        sections: {
+          sec1: { remainingSec: 0, closed: true },
+          sec2: { remainingSec: 0, closed: true },
+          sec3: { remainingSec: 600, closed: false, openedAt: '2026-09-01T04:50:00.000Z' },
+        },
+        revision: 0,
+      }),
+      saveAttemptState: async () => ({ revision: 0, applied: true }),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = await seated(api, paper());
+  t.after(unmount);
+
+  assert.deepEqual(result.current.reachable, ['sec3']);
+  assert.equal(result.current.submitSection, null);
+});
+
 test('the last section closing leaves none reachable and hands the paper in', async (t) => {
   let tries = 0;
   const api = {
