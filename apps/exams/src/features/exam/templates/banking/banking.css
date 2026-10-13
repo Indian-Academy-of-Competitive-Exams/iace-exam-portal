@@ -16,7 +16,6 @@
   --xp-scroll-track: #eef1f4;
   --xp-scroll-rule: var(--bk-rule);
   --xp-scroll-thumb: #9a9a9a;
-  --xp-scroll-jump: var(--bk-info);
 
   font-family: Poppins, 'Segoe UI', system-ui, sans-serif;
   background: #fff;
@@ -764,17 +763,6 @@
 
 [data-exam-template='banking'] :is(.bi-content, .bk-info-body) strong {
   font-weight: 500;
-}
-
-[data-exam-template='banking'] .bi-jump {
-  display: inline;
-  width: 20px;
-  height: 20px;
-  padding: 3px;
-  border-radius: 50%;
-  background: var(--bk-info);
-  color: #fff;
-  vertical-align: text-bottom;
 }
 
 [data-exam-template='banking'] .bi-red {

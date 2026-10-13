@@ -1,32 +1,50 @@
 /**
- * A pane the candidate moves by its scrollbar or its two arrows alone: the wheel is
+ * A pane the candidate moves by its scrollbar or the Up and Down keys alone: the wheel is
  * refused, so a paper cannot be skimmed past by accident. The bar is drawn here rather
- * than left to the platform, because a macOS overlay scrollbar reserves no width and only
- * shows itself during the very gesture this pane refuses. Each skin colours it in its css.
+ * than left to the platform, and shows only while the pane is being moved or the pointer
+ * is on it. Each skin colours it in its own css.
  */
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp } from 'lucide-react';
 import { cn } from '@iace/ui';
 import './scroll-pane.css';
 
 const THUMB_MIN_PX = 28;
-/** Sub-pixel layouts leave a fraction unscrolled at either end; within one pixel is the end. */
-const END_SLACK_PX = 1;
-const AT_REST = { height: 0, top: 0, shown: false, above: false, below: false };
+/** One press of an arrow key: about a line and a half of the paper's text. */
+const KEY_STEP_PX = 48;
+/** How long the bar stays after the pane last moved. */
+const BAR_LINGER_MS = 1200;
+const AT_REST = { height: 0, top: 0, shown: false };
+const STEP_BY_KEY: Readonly<Record<string, number>> = {
+  ArrowDown: KEY_STEP_PX,
+  ArrowUp: -KEY_STEP_PX,
+};
+
+/** Every pane that answers the arrow keys, in the order they were drawn, and the one under the pointer. */
+const keyed: HTMLDivElement[] = [];
+let hovered: HTMLDivElement | null = null;
+
+const overflows = (node: HTMLDivElement) => node.scrollHeight > node.clientHeight;
+
+/** The pane a key moves: the one under the pointer when it has more to show, else the first that does. */
+function keyTarget(): HTMLDivElement | undefined {
+  return hovered && keyed.includes(hovered) && overflows(hovered) ? hovered : keyed.find(overflows);
+}
 
 export function ScrollPane({
   className,
-  arrows = false,
+  keys = false,
   children,
 }: Readonly<{
   className?: string;
-  /** The two jumps to the top and the bottom, for a pane that holds the paper itself. */
-  arrows?: boolean;
+  /** Answers the Up and Down keys, for a pane that holds the paper itself. */
+  keys?: boolean;
   children: ReactNode;
 }>) {
   const pane = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState(AT_REST);
+  const [moving, setMoving] = useState(false);
+  const rest = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const measure = useCallback(() => {
     const node = pane.current;
@@ -46,10 +64,17 @@ export function ScrollPane({
       height,
       top: (node.scrollTop / hidden) * (node.clientHeight - height),
       shown: true,
-      above: node.scrollTop > END_SLACK_PX,
-      below: hidden - node.scrollTop > END_SLACK_PX,
     });
   }, []);
+
+  const moved = useCallback(() => {
+    measure();
+    setMoving(true);
+    clearTimeout(rest.current);
+    rest.current = setTimeout(() => setMoving(false), BAR_LINGER_MS);
+  }, [measure]);
+
+  useEffect(() => () => clearTimeout(rest.current), []);
 
   useEffect(() => {
     const node = pane.current;
@@ -73,6 +98,27 @@ export function ScrollPane({
     };
   }, [measure]);
 
+  useEffect(() => {
+    const node = pane.current;
+    if (!keys || !node) return;
+    keyed.push(node);
+
+    const step = (event: KeyboardEvent) => {
+      const by = STEP_BY_KEY[event.key];
+      if (by === undefined || keyTarget() !== node) return;
+      // Taken from the option that has focus, or the key would change the answer as well as the view.
+      event.preventDefault();
+      node.scrollTop += by;
+    };
+    window.addEventListener('keydown', step);
+
+    return () => {
+      window.removeEventListener('keydown', step);
+      keyed.splice(keyed.indexOf(node), 1);
+      if (hovered === node) hovered = null;
+    };
+  }, [keys]);
+
   const dragThumb = (event: PointerEvent<HTMLDivElement>) => {
     const node = pane.current;
     if (!node) return;
@@ -83,8 +129,8 @@ export function ScrollPane({
     const travel = node.clientHeight - thumb.height;
     const hidden = node.scrollHeight - node.clientHeight;
 
-    const move = (moved: globalThis.PointerEvent) => {
-      node.scrollTop = fromTop + ((moved.clientY - fromY) / travel) * hidden;
+    const move = (dragged: globalThis.PointerEvent) => {
+      node.scrollTop = fromTop + ((dragged.clientY - fromY) / travel) * hidden;
     };
     const drop = () => {
       window.removeEventListener('pointermove', move);
@@ -95,14 +141,18 @@ export function ScrollPane({
     window.addEventListener('pointerup', drop);
   };
 
-  const jumpTo = (top: number) => pane.current?.scrollTo({ top });
-
   return (
     <div
       className={cn('xp-scrollwrap', className)}
-      data-arrows={(arrows && thumb.shown) || undefined}
+      data-moving={moving || undefined}
+      onPointerEnter={() => {
+        hovered = pane.current;
+      }}
+      onPointerLeave={() => {
+        if (hovered === pane.current) hovered = null;
+      }}
     >
-      <div ref={pane} className="xp-scrollpane" onScroll={measure}>
+      <div ref={pane} className="xp-scrollpane" onScroll={moved}>
         <div ref={content}>{children}</div>
       </div>
       {thumb.shown ? (
@@ -115,26 +165,6 @@ export function ScrollPane({
             onPointerDown={dragThumb}
           />
         </div>
-      ) : null}
-      {arrows && thumb.above ? (
-        <button
-          type="button"
-          aria-label="Go to the top"
-          className="xp-scrolljump xp-scrolljump-up"
-          onClick={() => jumpTo(0)}
-        >
-          <ArrowUp aria-hidden />
-        </button>
-      ) : null}
-      {arrows && thumb.below ? (
-        <button
-          type="button"
-          aria-label="Go to the bottom"
-          className="xp-scrolljump xp-scrolljump-down"
-          onClick={() => jumpTo(pane.current?.scrollHeight ?? 0)}
-        >
-          <ArrowDown aria-hidden />
-        </button>
       ) : null}
     </div>
   );

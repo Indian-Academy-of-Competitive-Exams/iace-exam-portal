@@ -135,13 +135,13 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
           {/* Keyed, so the next question opens both panes at their top and not at the last one's offset. */}
           <div key={view.question?.questionId} className="rw-split flex min-h-0 flex-1">
             {passages.length > 0 ? (
-              <ScrollPane arrows className="rw-passage">
+              <ScrollPane keys className="rw-passage">
                 <div className="questiondiv">
                   <Passage passages={passages} />
                 </div>
               </ScrollPane>
             ) : null}
-            <ScrollPane arrows className="min-h-0 min-w-0 flex-1">
+            <ScrollPane keys className="min-h-0 min-w-0 flex-1">
               {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
             </ScrollPane>
           </div>

@@ -3,7 +3,7 @@
  * language and the declaration pinned under them. The legend draws the sitting's own
  * symbols, so what a candidate is taught here is what they then see.
  */
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   ANSWER_STATE,
   contentLanguageOf,
@@ -133,9 +133,8 @@ export function BankingGeneral({
           of question window.
         </li>
         <li>
-          You can click on <ArrowDown className="bi-jump" aria-label="the down arrow" /> to navigate
-          to the bottom and <ArrowUp className="bi-jump" aria-label="the up arrow" /> to navigate to
-          the top of the question area, without scrolling.
+          Where a question is longer than the question area, use the Up and Down arrow keys or drag
+          the scroll bar to read the rest of it. The mouse wheel does not move the question.
         </li>
       </ol>
 
