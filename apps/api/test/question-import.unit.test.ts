@@ -11,6 +11,7 @@ import {
   TAGS_MAX,
   type QuestionDraft,
   type QuestionImportColumnKey,
+  SECTION_ANSWER_KIND,
 } from '@iace/contracts';
 import { type CsvTable, normaliseHeader } from '../src/common/importing';
 import { htmlFromCell } from '../src/questions/question-content';
@@ -104,11 +105,15 @@ describe('a sheet imported into one section of a test', () => {
       ...MCQ_ROW,
       stem_en: `What is ${at + 1}% of 9731?`,
     }));
-  const within = (subject: ImportScope['subject'], count = 3, typing = false) =>
+  const within = (
+    subject: ImportScope['subject'],
+    count = 3,
+    kind: ImportScope['kind'] = SECTION_ANSWER_KIND.CHOICE,
+  ) =>
     planQuestionImport(table(...sheetOf(count)), catalog(), noDedup(), undefined, undefined, {
       sectionName: 'Quant',
       subject,
-      typing,
+      kind,
     });
   const codes = (planning: QuestionImportPlanning) =>
     planning.rows.map((row) => row.issues[0]?.code ?? row.action);
@@ -129,7 +134,7 @@ describe('a sheet imported into one section of a test', () => {
   /** The failure this prevents: a typist's sheet landing rows their section's paper can never draw. */
   it('skips a row of a kind the section does not take', () => {
     assert.deepEqual(
-      codes(within(null, 3, true)),
+      codes(within(null, 3, SECTION_ANSWER_KIND.TYPING)),
       [1, 2, 3].map(() => CODE.TYPE_OUTSIDE_SECTION),
     );
   });

@@ -112,6 +112,8 @@ interface SectionValues {
   patternNote: string;
   /** A typing standard's key, or empty for an ordinary section. */
   typingPreset: string;
+  /** Written answers: essays, letters, précis. */
+  descriptive: boolean;
 }
 
 interface ModuleValues {
@@ -154,6 +156,7 @@ function emptySection(): SectionValues {
     meritOrQualifying: MERIT_TYPE.MERIT,
     qualifyingCutoff: '',
     typingPreset: '',
+    descriptive: false,
   };
 }
 
@@ -223,6 +226,7 @@ function valuesOf(detail: BaseConfigDetail | null): ConfigFormValues {
       meritOrQualifying: section.meritOrQualifying,
       qualifyingCutoff: section.qualifyingCutoff === null ? '' : String(section.qualifyingCutoff),
       typingPreset: section.typingPreset ?? '',
+      descriptive: section.descriptive,
     })),
   };
 }
@@ -247,6 +251,7 @@ function toSectionDraft(section: SectionValues, index: number): BaseConfigSectio
         ? optionalNumber(section.qualifyingCutoff)
         : null,
     typingPreset: typingPresetKeySchema.safeParse(section.typingPreset).data ?? null,
+    descriptive: section.descriptive,
   };
 }
 
@@ -996,6 +1001,7 @@ function SectionCard({
   const moduleNames = sessionPaper ? modules.map((module) => module.name) : [];
   const typingPreset = useWatch({ control: form.control, name: `sections.${index}.typingPreset` });
   const isTyping = typingPreset !== '';
+  const descriptive = useWatch({ control: form.control, name: `sections.${index}.descriptive` });
 
   // A typing test is one unmarked passage on its standard's clock, so choosing one fills all four.
   const chooseTyping = (key: string) => {
@@ -1198,7 +1204,19 @@ function SectionCard({
         ) : null}
       </div>
 
-      {/* `mandatory` is per section and is the only boolean on one. */}
+      {isTyping ? null : (
+        <Checkbox
+          checked={descriptive}
+          // A written answer is never charged for, so the negative goes as the section becomes one.
+          onChange={(event) => {
+            form.setValue(`sections.${index}.descriptive`, event.target.checked, {
+              shouldDirty: true,
+            });
+            if (event.target.checked) form.setValue(`sections.${index}.negativeMarks`, '0');
+          }}
+          label="Descriptive: essays, letters and précis"
+        />
+      )}
       <Checkbox
         checked={mandatory}
         onChange={(event) => form.setValue(`sections.${index}.mandatory`, event.target.checked)}

@@ -8,9 +8,15 @@ import {
   type AnswerMode,
   type DifficultyLevel,
   type QuestionType,
+  WRITING_FORMATS,
+  type WritingFormat,
 } from '@iace/contracts';
 import { Combobox, Input, SegmentedControl, UPPERCASE_CODE, cn } from '@iace/ui';
-import { ANSWER_MODE_LABELS, QUESTION_TYPE_LABELS } from '../../lib/constants';
+import {
+  ANSWER_MODE_LABELS,
+  QUESTION_TYPE_LABELS,
+  WRITING_FORMAT_LABELS,
+} from '../../lib/constants';
 import { TOUR_TARGETS } from '../../lib/tours';
 import { SubjectPicker, TopicPicker } from '../../components/taxonomy-picker';
 import {
@@ -173,6 +179,42 @@ export function AuthoringHeaderBar({
               }
             />
           </Slot>
+        ) : null}
+
+        {state.type === QUESTION_TYPE.DESCRIPTIVE ? (
+          <>
+            <Slot caption="Format">
+              <Combobox
+                value={state.format}
+                clearable={false}
+                className={CONTROL}
+                aria-label="Format"
+                items={WRITING_FORMATS.map((format) => ({
+                  value: format,
+                  label: WRITING_FORMAT_LABELS[format],
+                }))}
+                onChange={(value) => onStateChange({ ...state, format: value as WritingFormat })}
+              />
+            </Slot>
+            <Slot caption="Words, from">
+              <Input
+                value={state.minWords}
+                inputMode="numeric"
+                aria-label="Lower word limit"
+                className={cn(FIELD, 'w-20')}
+                onChange={(event) => onStateChange({ ...state, minWords: event.target.value })}
+              />
+            </Slot>
+            <Slot caption="to">
+              <Input
+                value={state.maxWords}
+                inputMode="numeric"
+                aria-label="Upper word limit"
+                className={cn(FIELD, 'w-20')}
+                onChange={(event) => onStateChange({ ...state, maxWords: event.target.value })}
+              />
+            </Slot>
+          </>
         ) : null}
 
         {typed && state.answerMode === ANSWER_MODE.NUMERIC ? (

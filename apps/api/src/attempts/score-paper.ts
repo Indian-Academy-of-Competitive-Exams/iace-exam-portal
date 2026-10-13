@@ -7,6 +7,9 @@ import {
   type AttemptSectionScore,
   type PaperQuestionStatus,
   type QuestionType,
+  DEFAULT_LANGUAGE,
+  keyPointsOf,
+  scoreWriting,
 } from '@iace/contracts';
 
 /** One served question with its response and the paper's terms for it, already joined. */
@@ -115,6 +118,7 @@ const isCounted = (row: ScorableQuestion): boolean => row.type !== QUESTION_TYPE
 /** Null when they left it alone, AND when nothing here can judge it — see the two below. */
 function verdictOn(row: ScorableQuestion): boolean | null {
   if (row.type === QUESTION_TYPE.TEXT_FIELD) return typedVerdict(row);
+  if (row.type === QUESTION_TYPE.DESCRIPTIVE) return writtenVerdict(row);
   if (row.selectedOptionId === null || row.correctOptionIds.length === 0) return null;
   return row.correctOptionIds.includes(row.selectedOptionId);
 }
@@ -146,7 +150,25 @@ function awardFor(row: ScorableQuestion, verdict: boolean | null): number {
   if (row.status === PAPER_QUESTION_STATUS.BONUS) return row.marks;
   if (row.status === PAPER_QUESTION_STATUS.DROPPED) return verdict === null ? 0 : row.marks;
   if (verdict === null) return 0;
+  if (row.type === QUESTION_TYPE.DESCRIPTIVE)
+    return fromHundredths(toHundredths(row.marks * writtenShare(row)));
   return verdict ? row.marks : -row.negativeMarks;
+}
+
+/** How much of its marks a written answer earns, by rule: nobody reads it, and no answer is charged for. */
+function writtenShare(row: ScorableQuestion): number {
+  const key = row.answerKey;
+  return scoreWriting(
+    row.typedAnswer ?? '',
+    key?.rubric,
+    keyPointsOf(key?.answers[DEFAULT_LANGUAGE]),
+  ).score;
+}
+
+/** Left blank is unattempted; written, it is right where it earned anything and wrong where it earned nothing. */
+function writtenVerdict(row: ScorableQuestion): boolean | null {
+  if ((row.typedAnswer ?? '').trim() === '') return null;
+  return writtenShare(row) > 0;
 }
 
 /** Case and inner spacing are typing, not knowledge. */

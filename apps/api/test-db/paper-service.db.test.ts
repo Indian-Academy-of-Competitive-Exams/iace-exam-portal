@@ -329,6 +329,31 @@ describe('PaperService — picking a draft paper by hand', () => {
     assert.deepEqual(await heldIds(), [idFor('q1')]);
   });
 
+  it('lets a descriptive section hold a descriptive question and nothing else, and no other section hold one', async () => {
+    const service = await serviceWith();
+    await prisma.baseConfigSection.update({
+      where: { id: idFor('sec_2') },
+      data: { descriptive: true },
+    });
+    await prisma.question.updateMany({
+      where: { id: { in: [idFor('q1'), idFor('r1')] } },
+      data: { type: QUESTION_TYPE.DESCRIPTIVE },
+    });
+    const add = (section: string, question: string) =>
+      service.addQuestions(TEST, {
+        baseConfigSectionId: idFor(section),
+        questionIds: [idFor(question)],
+      });
+
+    const essayElsewhere = await refused(add('sec_1', 'r1'));
+    const choiceInWriting = await refused(add('sec_2', 'q2'));
+    await add('sec_2', 'q1');
+
+    assert.equal(essayElsewhere.code, ErrorCodes.VALIDATION_ERROR);
+    assert.equal(choiceInWriting.code, ErrorCodes.VALIDATION_ERROR);
+    assert.deepEqual(await heldIds(), [idFor('q1')]);
+  });
+
   /** A paper pins a version, so a question with none has nothing to pin. */
   it('refuses a question that is not live in the bank', async () => {
     const service = await serviceWith({

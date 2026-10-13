@@ -60,6 +60,7 @@ const PAPER_SELECT = {
               questionCount: true,
               durationSec: true,
               typingPreset: true,
+              descriptive: true,
             },
             orderBy: { order: 'asc' },
           },
@@ -141,6 +142,7 @@ export class AttemptPaperService {
         marksPerQuestion: Number(section.marksPerQuestion),
         negativeMarks: Number(section.negativeMarks),
         typingPreset: section.typingPreset as TypingPresetKey | null,
+        descriptive: section.descriptive,
       })),
       journey: {
         exam: test.examStage.exam.name,
@@ -307,6 +309,7 @@ export class AttemptPaperService {
         questionCount: section.questionCount,
         durationSec: section.durationSec,
         typingPreset: section.typingPreset as TypingPresetKey | null,
+        descriptive: section.descriptive,
       })),
       questions: this.withImages(
         rows.map((row, index) => toExamQuestion({ ...row, order: index + 1 }, languages)),

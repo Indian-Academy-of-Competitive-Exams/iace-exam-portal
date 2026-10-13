@@ -43,6 +43,8 @@ enum QuestionType {
   TEXT_FIELD
   // A passage to be typed: the stem is the passage, and it has no options and no answer key.
   TYPING
+  // An essay, a letter or a précis: written free, marked by rule against the key points in its answer key.
+  DESCRIPTIVE
 }
 
 // No column uses it — a TEXT_FIELD's mode lives in QuestionVersion.answerKey JSON, as ANSWER_MODE in @iace/contracts.
@@ -416,6 +418,8 @@ model BaseConfigSection {
   patternNote       String?
   // A TYPING_PRESETS key: set, the section is one TYPING question held to that standard.
   typingPreset      String?
+  // Set, the section holds DESCRIPTIVE questions and nothing else, and charges no negative marks.
+  descriptive       Boolean   @default(false)
 
   baseConfig     BaseConfig           @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
   module         BaseConfigModule?    @relation(fields: [baseConfigId, moduleId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)

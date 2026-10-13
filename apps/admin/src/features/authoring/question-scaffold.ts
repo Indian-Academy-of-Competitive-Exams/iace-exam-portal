@@ -18,7 +18,12 @@ import {
   type QuestionLanguage,
   type QuestionType,
   type TaxonomyContext,
+  WRITING_FORMAT,
+  keyPointsOf,
+  type WritingFormat,
+  type WritingRubric,
 } from '@iace/contracts';
+import { optionalNumber } from '@iace/app-kit';
 import { INDIC_SCRIPTS, type IndicScript } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { REGION_KIND } from '@iace/ui/scaffold-region';
@@ -38,6 +43,7 @@ export const REGION_LABELS = {
   PASSAGE: 'Passage',
   STEM: '',
   ANSWER: 'Answer',
+  KEY_POINTS: 'Key points',
   SOLUTION: 'Explanation',
 } as const;
 
@@ -47,6 +53,7 @@ export const PASSAGE_HINT = 'Optional';
 export const ANSWER_HINTS = {
   SINGLE_MCQ: 'Type the option, not its text: B',
   TEXT_FIELD: 'Type the value a student would enter',
+  DESCRIPTIVE: 'The key points an answer should make, one a line',
 } as const;
 
 export const optionKey = (index: number) => `${OPTION_PREFIX}${index}`;
@@ -72,6 +79,10 @@ export interface AuthoringState {
   answer: string;
   answerMode: AnswerMode;
   tolerance: string;
+  /** DESCRIPTIVE only: what the writing is, and the word limits as typed. Its key points are the Answer box. */
+  format: WritingFormat;
+  minWords: string;
+  maxWords: string;
   content: Record<QuestionLanguage, LanguageContent>;
 }
 
@@ -93,6 +104,8 @@ const emptyLanguage = (options: number): LanguageContent => ({
   solution: '',
 });
 
+const NO_RUBRIC = { format: WRITING_FORMAT.ESSAY, minWords: '', maxWords: '' } as const;
+
 export function emptyState(type: QuestionType = QUESTION_TYPE.SINGLE_MCQ): AuthoringState {
   const optionCount = type === QUESTION_TYPE.SINGLE_MCQ ? MCQ_OPTION_COUNT : 0;
   return {
@@ -101,6 +114,7 @@ export function emptyState(type: QuestionType = QUESTION_TYPE.SINGLE_MCQ): Autho
     answer: '',
     answerMode: ANSWER_MODE.NUMERIC,
     tolerance: '',
+    ...NO_RUBRIC,
     content: {
       en: emptyLanguage(optionCount),
       hi: emptyLanguage(optionCount),
@@ -142,7 +156,8 @@ export function regionsFor(state: AuthoringState, language: QuestionLanguage): S
     ...options,
     {
       key: REGION_KEYS.ANSWER,
-      label: REGION_LABELS.ANSWER,
+      label:
+        state.type === QUESTION_TYPE.DESCRIPTIVE ? REGION_LABELS.KEY_POINTS : REGION_LABELS.ANSWER,
       kind: REGION_KIND.NAMED,
       hint: ANSWER_HINTS[state.type],
       roman: true,
@@ -314,17 +329,55 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
           text: localized((language) => state.content[language].options[index] ?? ''),
         }))
       : [],
-    answerKey: isMcq
-      ? null
-      : {
-          mode: state.answerMode,
-          answers: typedAnswers(state),
-          ...(state.answerMode === ANSWER_MODE.NUMERIC && tolerance !== ''
-            ? { tolerance: Number(tolerance) }
-            : {}),
-        },
+    answerKey: answerKeyOf(state, isMcq, tolerance),
   };
 }
+
+function answerKeyOf(
+  state: AuthoringState,
+  isMcq: boolean,
+  tolerance: string,
+): QuestionDraft['answerKey'] {
+  if (isMcq) return null;
+  if (state.type === QUESTION_TYPE.DESCRIPTIVE) {
+    const points = keyPointsOf(state.answer).join('\n');
+    return {
+      mode: ANSWER_MODE.EXACT,
+      // Every language the question has is marked against the same points.
+      answers: localized((language) => (hasText(state.content[language].stem) ? points : '')),
+      rubric: {
+        format: state.format,
+        minWords: optionalNumber(state.minWords),
+        maxWords: optionalNumber(state.maxWords),
+      },
+    };
+  }
+  return {
+    mode: state.answerMode,
+    answers: typedAnswers(state),
+    ...(state.answerMode === ANSWER_MODE.NUMERIC && tolerance !== ''
+      ? { tolerance: Number(tolerance) }
+      : {}),
+  };
+}
+
+/** A stored key's rubric back as the three fields the bar edits. */
+function rubricState(rubric: WritingRubric | undefined) {
+  if (!rubric) return NO_RUBRIC;
+  return {
+    format: rubric.format,
+    minWords: rubric.minWords == null ? '' : String(rubric.minWords),
+    maxWords: rubric.maxWords == null ? '' : String(rubric.maxWords),
+  };
+}
+
+/** Key points are stored one a line; the box shows each as its own paragraph. */
+const asAnswerBox = (type: QuestionType, line: string): string =>
+  type === QUESTION_TYPE.DESCRIPTIVE
+    ? keyPointsOf(line)
+        .map((point) => `<p>${point}</p>`)
+        .join('')
+    : line;
 
 /** A saved question, back in the box. The current version is what an edit starts from. */
 export function stateOf(question: QuestionDetail): AuthoringState {
@@ -345,9 +398,10 @@ export function stateOf(question: QuestionDetail): AuthoringState {
   return {
     type: question.type,
     optionCount,
-    answer: answerLineOf(question, correct),
+    answer: asAnswerBox(question.type, answerLineOf(question, correct)),
     answerMode: question.answerKey?.mode ?? ANSWER_MODE.NUMERIC,
     tolerance: question.answerKey?.tolerance == null ? '' : String(question.answerKey.tolerance),
+    ...rubricState(question.answerKey?.rubric),
     content,
   };
 }
@@ -399,9 +453,10 @@ export function stateOfDraft(draft: QuestionDraft): AuthoringState {
   return {
     type: draft.type,
     optionCount: seats,
-    answer: draftAnswerLine(draft),
+    answer: asAnswerBox(draft.type, draftAnswerLine(draft)),
     answerMode: draft.answerKey?.mode ?? ANSWER_MODE.NUMERIC,
     tolerance: draft.answerKey?.tolerance == null ? '' : String(draft.answerKey.tolerance),
+    ...rubricState(draft.answerKey?.rubric),
     content,
   };
 }

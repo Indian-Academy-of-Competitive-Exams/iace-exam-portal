@@ -6,7 +6,6 @@ import {
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
   QUESTION_STATUS,
-  QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
   canonicalStemKey,
   hasText,
@@ -26,6 +25,9 @@ import {
   type RichContent,
   type TaxonomyContext,
   type ValidationIssue,
+  SECTION_ANSWER_KIND,
+  SECTION_QUESTION_TYPES,
+  type SectionAnswerKind,
 } from '@iace/contracts';
 import { stripImageSrc } from './question-images';
 import { mathErrorIn } from './question-math';
@@ -207,10 +209,13 @@ export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
 export const OPEN_ASSIGNMENT = { finalizedAt: null, replacedAt: null } as const;
 
 /** What a paper may draw: work written under an assignment is its own test's until that test is done. */
-export const drawableFor = (testId?: string, typing = false): Prisma.QuestionWhereInput => ({
+export const drawableFor = (
+  testId?: string,
+  kind: SectionAnswerKind = SECTION_ANSWER_KIND.CHOICE,
+): Prisma.QuestionWhereInput => ({
   status: { not: QUESTION_STATUS.ARCHIVED },
-  // A typing section holds a passage and nothing else; no other section can show one to answer.
-  type: typing ? QUESTION_TYPE.TYPING : { not: QUESTION_TYPE.TYPING },
+  // A section is answered, typed or written, and holds only its own kind: no other could be sat in it.
+  type: { in: [...SECTION_QUESTION_TYPES[kind]] },
   currentVersionId: { not: null },
   OR: [
     { assignmentId: null },

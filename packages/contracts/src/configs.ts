@@ -3,7 +3,7 @@ import { csvIdQuery, editLockHolderSchema, optionalBooleanQuery, searchQuery } f
 import { paginationQuerySchema } from './envelope';
 import { examRefSchema, languageCodeSchema } from './exams';
 import { displayNameSchema } from './naming';
-import { questionMarksSchema } from './questions';
+import { QUESTION_TYPE, questionMarksSchema, type QuestionType } from './questions';
 import { typingPresetKeySchema } from './typing';
 
 // ============================================================================
@@ -109,6 +109,32 @@ export const testUiSchema = z.enum(TEST_UI);
 export type TestUi = z.infer<typeof testUiSchema>;
 export const TEST_UIS = testUiSchema.options;
 
+/** How a section is answered, which is also the one kind of question it may hold. */
+export const SECTION_ANSWER_KIND = {
+  CHOICE: 'CHOICE',
+  TYPING: 'TYPING',
+  WRITING: 'WRITING',
+} as const;
+export const sectionAnswerKindSchema = z.enum(SECTION_ANSWER_KIND);
+export type SectionAnswerKind = z.infer<typeof sectionAnswerKindSchema>;
+
+/** A typing standard makes it a typing test; the descriptive flag, a written one; otherwise it is answered. */
+export const sectionAnswerKindOf = (section: {
+  typingPreset?: string | null;
+  descriptive?: boolean | null;
+}): SectionAnswerKind => {
+  if (section.typingPreset) return SECTION_ANSWER_KIND.TYPING;
+  return section.descriptive ? SECTION_ANSWER_KIND.WRITING : SECTION_ANSWER_KIND.CHOICE;
+};
+
+/** The draw, the picker, a typist's editor and a section's import all read this one table. */
+export const SECTION_QUESTION_TYPES: Readonly<Record<SectionAnswerKind, readonly QuestionType[]>> =
+  {
+    CHOICE: [QUESTION_TYPE.SINGLE_MCQ, QUESTION_TYPE.TEXT_FIELD],
+    TYPING: [QUESTION_TYPE.TYPING],
+    WRITING: [QUESTION_TYPE.DESCRIPTIVE],
+  };
+
 /** Whether a section counts toward merit or only has to be passed. */
 export const MERIT_TYPE = {
   MERIT: 'MERIT',
@@ -147,6 +173,8 @@ const baseConfigSectionSchema = z.object({
   patternNote: z.string().nullable(),
   /** Set, the section is a typing test: one passage, no marks, held to this standard. */
   typingPreset: typingPresetKeySchema.nullable(),
+  /** Set, the section is written answers: essays, letters, précis. */
+  descriptive: z.boolean(),
 });
 export type BaseConfigSection = z.infer<typeof baseConfigSectionSchema>;
 
@@ -248,6 +276,7 @@ const baseConfigSectionDraftSchema = z.object({
   /** The paper is replaced wholesale, so the editor posts this back on every save; omitting it clears the note. */
   patternNote: z.string().trim().max(PATTERN_NOTE_MAX).nullish(),
   typingPreset: typingPresetKeySchema.nullish(),
+  descriptive: z.boolean().optional(),
 });
 export type BaseConfigSectionDraft = z.infer<typeof baseConfigSectionDraftSchema>;
 

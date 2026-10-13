@@ -24,6 +24,7 @@ Enum QuestionType {
   SINGLE_MCQ
   TEXT_FIELD
   TYPING
+  DESCRIPTIVE
 }
 
 Enum AnswerMode {
@@ -349,6 +350,7 @@ Table BaseConfigSection {
   qualifyingCutoff decimal(6, 2)
   patternNote text
   typingPreset text
+  descriptive boolean [not null, default: false]
   indexes {
     (baseConfigId, moduleId, order) [unique]
     (baseConfigId, id) [unique]

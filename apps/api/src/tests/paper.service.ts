@@ -25,6 +25,7 @@ import {
   type TestScope,
   type TypistDoneBody,
   scopedSections,
+  sectionAnswerKindOf,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -684,7 +685,7 @@ export class PaperService {
     const [section, questions] = await Promise.all([
       this.prisma.baseConfigSection.findUnique({
         where: { id: baseConfigSectionId },
-        select: { subjectId: true, typingPreset: true },
+        select: { subjectId: true, typingPreset: true, descriptive: true },
       }),
       this.prisma.question.findMany({
         where: { id: { in: ids } },
@@ -693,7 +694,7 @@ export class PaperService {
     ]);
     // Asked of the database, not of the row: drawability turns on other rows as well as this one.
     const drawable = await this.prisma.question.findMany({
-      where: { id: { in: ids }, ...drawableFor(testId, Boolean(section?.typingPreset)) },
+      where: { id: { in: ids }, ...drawableFor(testId, sectionAnswerKindOf(section ?? {})) },
       select: { id: true },
     });
 
@@ -740,7 +741,7 @@ export class PaperService {
   ): Promise<DrawCandidate[]> {
     const rows = await db.question.findMany({
       where: {
-        ...drawableFor(testId, Boolean(section.typingPreset)),
+        ...drawableFor(testId, sectionAnswerKindOf(section)),
         ...(source === PAPER_SOURCES.FRAMED
           ? // A framed section is made of what its own typist wrote, never of what the bank happens to hold.
             { assignment: { testId, baseConfigSectionId: section.id } }

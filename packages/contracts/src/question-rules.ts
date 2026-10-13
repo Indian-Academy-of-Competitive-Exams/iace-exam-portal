@@ -81,6 +81,7 @@ const ANSWER_CHECKS: Record<
   SINGLE_MCQ: checkOptions,
   TEXT_FIELD: checkTypedAnswer,
   TYPING: checkTypingPassage,
+  DESCRIPTIVE: checkDescriptive,
 };
 
 /** Reported rather than thrown, so a bad row never stops the good ones beside it. */
@@ -361,6 +362,27 @@ function checkTypingPassage(draft: QuestionDraft, issues: ValidationIssue[]): vo
       code: CODE.TYPING_PASSAGE_TOO_SHORT,
       message: `A typing passage needs at least ${TYPING_PASSAGE_MIN_KEY_DEPRESSIONS} key depressions; this has ${keyDepressions}`,
       ...stemField(DEFAULT_LANGUAGE),
+    });
+  }
+}
+
+/** Written free: no options to choose, and limits that an answer could actually sit between. */
+function checkDescriptive(draft: QuestionDraft, issues: ValidationIssue[]): void {
+  if (draft.options.length > 0) {
+    issues.push({
+      code: CODE.OPTIONS_NOT_ALLOWED,
+      message: 'A descriptive question has no options',
+      field: 'options',
+      column: 'option1_en',
+    });
+  }
+  const { minWords, maxWords } = draft.answerKey?.rubric ?? {};
+  if (minWords != null && maxWords != null && minWords > maxWords) {
+    issues.push({
+      code: CODE.WORD_LIMIT_INVALID,
+      message: `The lower word limit (${minWords}) is above the upper one (${maxWords})`,
+      field: 'answerKey.rubric.minWords',
+      column: 'answer_en',
     });
   }
 }

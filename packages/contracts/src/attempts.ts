@@ -256,6 +256,8 @@ export const examBriefSchema = z.object({
       negativeMarks: z.number(),
       /** Set on a typing section, which needs a keyboard: a phone says so before the clock starts. */
       typingPreset: typingPresetKeySchema.nullish(),
+      /** Set on a section of written answers, which wants a keyboard as a typing one does. */
+      descriptive: z.boolean().nullish(),
     }),
   ),
   /** Every active stage of the exam in order, and which one this paper is. */
@@ -543,6 +545,8 @@ export const examSectionSchema = z.object({
   durationSec: z.number().int().nullable(),
   /** Set on a typing section: its one question is typed, and held to this standard. */
   typingPreset: typingPresetKeySchema.nullish(),
+  /** Set on a section of written answers, which wants a keyboard as a typing one does. */
+  descriptive: z.boolean().nullish(),
 });
 export type ExamSection = z.infer<typeof examSectionSchema>;
 

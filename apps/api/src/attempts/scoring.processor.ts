@@ -9,6 +9,7 @@ import {
   NOTIFICATION_TYPE,
   QUESTION_TYPE,
   type AttemptStatus,
+  type QuestionType,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
@@ -229,13 +230,19 @@ function scorableOf(attempt: ScoringRow, terms: readonly PaperTerm[]): ScorableQ
       negativeMarks: term.negativeMarks,
       status: term.status,
       correctOptionIds: term.correctOptionIds,
-      answerKey: term.type === QUESTION_TYPE.TEXT_FIELD ? term.answerKey : null,
+      answerKey: KEYED_TYPES.has(term.type) ? term.answerKey : null,
       selectedOptionId: answer?.selectedOptionId ?? null,
       typedAnswer: answer?.typedAnswer ?? null,
       timeSpentSec: answer?.timeSpentSec ?? 0,
     };
   });
 }
+
+/** The kinds marked against a key held on the question: a compared value, or a written answer's key points. */
+const KEYED_TYPES: ReadonlySet<QuestionType> = new Set([
+  QUESTION_TYPE.TEXT_FIELD,
+  QUESTION_TYPE.DESCRIPTIVE,
+]);
 
 /** The student's own two tables read this sitting, and the scorer already holds every field they need. */
 function foldableOf(

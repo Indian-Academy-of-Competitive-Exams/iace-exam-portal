@@ -328,3 +328,45 @@ describe('scorePaper — a typing passage', () => {
     assert.equal(section?.timeSpentSec, 540);
   });
 });
+
+describe('scorePaper — a written answer', () => {
+  const POINTS = { mode: ANSWER_MODE.EXACT, answers: { en: 'rural branches\ndigital payments' } };
+  const written = (typedAnswer: string | null) =>
+    mcq({
+      type: QUESTION_TYPE.DESCRIPTIVE,
+      marks: 10,
+      negativeMarks: 0,
+      correctOptionIds: [],
+      typedAnswer,
+      answerKey: POINTS,
+    });
+  const filler = Array.from({ length: 50 }, (_, at) => `Term${at}`).join(' ');
+
+  /** The failure this prevents: an essay paid in full or not at all, as if it were a choice. */
+  it('pays part of its marks for part of what it should say', () => {
+    const [half] = scorePaper([written('Rural branches matter a great deal.')]).questions;
+    const [whole] = scorePaper([
+      written(`Rural branches matter. Digital payments matter as much. ${filler}.`),
+    ]).questions;
+
+    assert.equal(whole?.marksAwarded, 10);
+    assert.ok((half?.marksAwarded ?? 0) > 0 && (half?.marksAwarded ?? 0) < 10);
+    assert.equal(half?.isCorrect, true);
+  });
+
+  it('leaves a blank one unattempted, and never charges for one that earned nothing', () => {
+    const scored = scorePaper([
+      written('   '),
+      { ...written('Nothing to the point.'), questionId: 'q2' },
+    ]);
+
+    assert.deepEqual(
+      scored.questions.map((row) => [row.isCorrect, row.marksAwarded]),
+      [
+        [null, 0],
+        [false, 0],
+      ],
+    );
+    assert.deepEqual([scored.unattemptedCount, scored.wrongCount, scored.score], [1, 1, 0]);
+  });
+});

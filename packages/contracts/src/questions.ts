@@ -61,6 +61,8 @@ export const QUESTION_TYPE = {
   TEXT_FIELD: 'TEXT_FIELD',
   /** A passage to be typed: the stem is the passage, with no options and no answer key. */
   TYPING: 'TYPING',
+  /** An essay, a letter or a précis: written free, and marked by rule against the key points its author named. */
+  DESCRIPTIVE: 'DESCRIPTIVE',
 } as const;
 export const questionTypeSchema = z.enum(QUESTION_TYPE);
 export type QuestionType = z.infer<typeof questionTypeSchema>;
@@ -357,13 +359,36 @@ const questionOptionDraftSchema = z.object({
   text: localizedTextSchema,
 });
 
-/** TEXT_FIELD only: what a typed answer is compared against. */
+/** What a piece of writing is, which decides the parts its format is checked for. */
+export const WRITING_FORMAT = {
+  ESSAY: 'ESSAY',
+  LETTER: 'LETTER',
+  PRECIS: 'PRECIS',
+  OTHER: 'OTHER',
+} as const;
+export const writingFormatSchema = z.enum(WRITING_FORMAT);
+export type WritingFormat = z.infer<typeof writingFormatSchema>;
+export const WRITING_FORMATS = writingFormatSchema.options;
+
+export const WRITING_WORDS_MAX = 2000;
+const wordLimitSchema = z.number().int().min(1).max(WRITING_WORDS_MAX);
+
+/** DESCRIPTIVE only: the format and the word limits an answer is held to. Its key points are the key's `answers`. */
+export const writingRubricSchema = z.object({
+  format: writingFormatSchema,
+  minWords: wordLimitSchema.nullish(),
+  maxWords: wordLimitSchema.nullish(),
+});
+export type WritingRubric = z.infer<typeof writingRubricSchema>;
+
+/** What a typed answer is compared against: a TEXT_FIELD's accepted answer, or a DESCRIPTIVE's key points, one a line. */
 const answerKeyDraftSchema = z.object({
   mode: answerModeSchema,
   /** The accepted answer per language. English is required, like every other field. */
   answers: localizedTextSchema,
   /** NUMERIC only: how far either side of the answer still counts. */
   tolerance: toleranceSchema.optional(),
+  rubric: writingRubricSchema.optional(),
 });
 export type AnswerKeyDraft = z.infer<typeof answerKeyDraftSchema>;
 
@@ -424,6 +449,8 @@ export const QUESTION_VALIDATION_CODE = {
   /** A typing passage shorter than any standard could use. */
   TYPING_PASSAGE_TOO_SHORT: 'TYPING_PASSAGE_TOO_SHORT',
   TYPING_PASSAGE_TOO_LONG: 'TYPING_PASSAGE_TOO_LONG',
+  /** A descriptive question whose lower word limit is above its upper one. */
+  WORD_LIMIT_INVALID: 'WORD_LIMIT_INVALID',
   SUBJECT_REQUIRED: 'SUBJECT_REQUIRED',
   SUBJECT_UNKNOWN: 'SUBJECT_UNKNOWN',
   TOPIC_UNKNOWN: 'TOPIC_UNKNOWN',
@@ -486,6 +513,7 @@ export const answerKeySchema = z.object({
   mode: answerModeSchema,
   answers: localizedTextSchema,
   tolerance: z.number().nullable().optional(),
+  rubric: writingRubricSchema.optional(),
 });
 export type AnswerKey = z.infer<typeof answerKeySchema>;
 
@@ -584,8 +612,8 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
   drawable: z.stringbool().optional(),
   /** The test this list is being drawn for: it may take its own in-progress work, nobody else's. */
   forTestId: z.string().optional(),
-  /** Drawn for a typing section, which takes typing passages and nothing else. */
-  forTyping: z.stringbool().optional(),
+  /** The kind of section this is drawn for, which takes its own kind of question and no other. */
+  forKind: z.enum(['CHOICE', 'TYPING', 'WRITING']).optional(),
   /** Which side of that split: what its assignments wrote, or the rest of the bank. */
   writtenFor: z.enum(WRITTEN_FOR_VALUES).optional(),
   sort: z.enum(QUESTION_SORT_VALUES).optional().default(QUESTION_SORTS.RECENT),
@@ -823,7 +851,7 @@ export const questionAvailabilityQuerySchema = z.object({
   topicId: csvIdQuery(),
   /** Counted as the draw counts it, so the figure shown and the questions taken cannot disagree. */
   forTestId: z.string().optional(),
-  forTyping: z.stringbool().optional(),
+  forKind: z.enum(['CHOICE', 'TYPING', 'WRITING']).optional(),
 });
 export type QuestionAvailabilityQuery = z.infer<typeof questionAvailabilityQuerySchema>;
 export type QuestionAvailabilityQueryInput = z.input<typeof questionAvailabilityQuerySchema>;

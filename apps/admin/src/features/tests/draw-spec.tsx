@@ -6,6 +6,7 @@ import {
   type BaseConfigSection,
   type DifficultyMix,
   type SectionDrawSpec,
+  sectionAnswerKindOf,
 } from '@iace/contracts';
 import { Checkbox, Field, RatioBar, type RatioPart, type RatioValues } from '@iace/ui';
 import { api } from '../../lib/api';
@@ -46,7 +47,7 @@ export function DrawSpecEditor({
         subjectId: section.subjectId ? [section.subjectId] : undefined,
         topicId: topicIds.length > 0 ? topicIds : undefined,
         forTestId: testId,
-        forTyping: section.typingPreset ? 'true' : undefined,
+        forKind: sectionAnswerKindOf(section),
       }),
   });
 

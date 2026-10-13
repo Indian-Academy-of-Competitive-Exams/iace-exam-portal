@@ -28,6 +28,8 @@ export interface DrawSection {
   negativeMarks: number;
   /** Set on a typing section, which draws typing passages and nothing else. */
   typingPreset?: string | null;
+  /** Set on a section of written answers, which draws descriptive questions and nothing else. */
+  descriptive?: boolean | null;
 }
 
 /** One row of the paper. Marks come from the SECTION, the version from the QUESTION. */

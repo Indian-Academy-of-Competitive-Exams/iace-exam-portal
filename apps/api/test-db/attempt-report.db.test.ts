@@ -546,6 +546,35 @@ describe('what was typed in a sitting', () => {
   });
 });
 
+describe('a written answer in a sitting', () => {
+  /** The failure this prevents: an essay that the real scorer pays in full, or not at all, or never reaches. */
+  it('is paid part of its marks by rule, and counts in the score', async () => {
+    const paper = await makePaper(prisma, {
+      sections: ['Reasoning', 'Essay'],
+      questions: [
+        'Reasoning',
+        {
+          subject: 'English',
+          section: 1,
+          type: QUESTION_TYPE.DESCRIPTIVE,
+          stem: 'Write on rural banking.',
+          answerKey: { mode: 'EXACT', answers: { en: 'rural branches\ndigital payments' } },
+        },
+      ],
+    });
+    const { studentId, attemptId } = await sat(paper, [RIGHT_OPTION, null], {
+      typed: [null, 'Rural branches matter a great deal to a village.'],
+    });
+
+    const card = await analytics().scoreCard(studentId, attemptId);
+    const essay = card.sections.find((section) => section.name === 'Essay');
+
+    assert.ok((essay?.score ?? 0) > 0 && (essay?.score ?? 0) < 2, 'part of its two marks');
+    assert.equal(card.score, 2 + (essay?.score ?? 0));
+    assert.equal(card.correctCount, 2);
+  });
+});
+
 describe('the report of a test that covers part of its configuration', () => {
   const SECTIONS = ['Reasoning', 'Quant', 'English'];
 

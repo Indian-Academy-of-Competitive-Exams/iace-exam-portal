@@ -14,6 +14,7 @@ import {
   type QuestionImportDraft,
   type QuestionImportPlan,
   type QuestionImportResult,
+  sectionAnswerKindOf,
 } from '@iace/contracts';
 import {
   importFileContentType,
@@ -350,13 +351,18 @@ export class QuestionImportService {
     const [, baseConfigSectionId = ''] = target.split('/');
     const section = await this.prisma.baseConfigSection.findUnique({
       where: { id: baseConfigSectionId },
-      select: { name: true, typingPreset: true, subject: { select: { id: true, name: true } } },
+      select: {
+        name: true,
+        typingPreset: true,
+        descriptive: true,
+        subject: { select: { id: true, name: true } },
+      },
     });
     return (
       section && {
         sectionName: section.name,
         subject: section.subject,
-        typing: section.typingPreset !== null,
+        kind: sectionAnswerKindOf(section),
       }
     );
   }

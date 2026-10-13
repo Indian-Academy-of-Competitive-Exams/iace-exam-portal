@@ -28,8 +28,10 @@ import {
   type SectionWork,
   type SendBackBody,
   type WorkTimeTotal,
-  QUESTION_TYPE,
   type TypingPresetKey,
+  SECTION_QUESTION_TYPES,
+  sectionAnswerKindOf,
+  type SectionAnswerKind,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
@@ -70,6 +72,7 @@ interface Context {
     questionCount: number;
     subjectId: string | null;
     typingPreset: string | null;
+    descriptive: boolean;
   };
   rows: Assignment[];
   typist: Assignment | null;
@@ -102,8 +105,11 @@ const WITH_TYPIST_MESSAGE = 'This question is with the typist until they mark it
 const NO_TYPIST_MESSAGE = 'This section has no typist to send a question back to.';
 const NOT_SENT_BACK_MESSAGE = 'This question was not sent back to you.';
 const TYPISTS_ONLY_MESSAGE = "Only this section's typist marks a question fixed.";
-const TYPING_SECTION_MESSAGE = 'This section is a typing test, so it takes a typing passage.';
-const NOT_A_TYPING_SECTION_MESSAGE = 'A typing passage belongs in a typing section.';
+const WRONG_KIND_MESSAGES: Readonly<Record<SectionAnswerKind, string>> = {
+  CHOICE: 'A typing passage or a descriptive question belongs in a section of its own kind.',
+  TYPING: 'This section is a typing test, so it takes a typing passage.',
+  WRITING: 'This section is descriptive, so it takes a descriptive question.',
+};
 const TYPING_ONLY_MESSAGE = "Only this section's typist does that.";
 const NO_LONGER_TYPING_MESSAGE =
   'This section is no longer yours, so nothing new is typed into it.';
@@ -143,11 +149,11 @@ function reviewOf(row: ReviewRow | undefined): QuestionReview {
   };
 }
 
-/** A typing section is written as a passage and nothing else is: its paper could draw no other kind. */
+/** A section is answered, typed or written, and a typist writes only the kind its paper can draw. */
 function assertTypeFits(section: Context['section'], draft: QuestionDraft): void {
-  const typing = section.typingPreset !== null;
-  if ((draft.type === QUESTION_TYPE.TYPING) === typing) return;
-  const message = typing ? TYPING_SECTION_MESSAGE : NOT_A_TYPING_SECTION_MESSAGE;
+  const kind = sectionAnswerKindOf(section);
+  if (SECTION_QUESTION_TYPES[kind].includes(draft.type)) return;
+  const message = WRONG_KIND_MESSAGES[kind];
   throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
     fieldErrors: { type: [message] },
   });
@@ -187,6 +193,7 @@ export class SectionWorkService {
       questionCount: context.section.questionCount,
       sectionSubjectId: context.section.subjectId,
       typingPreset: context.section.typingPreset as TypingPresetKey | null,
+      answerKind: sectionAnswerKindOf(context.section),
       offered: context.test.finalizedAt !== null,
       typist: context.typist,
       reader: context.reader,
@@ -532,7 +539,13 @@ export class SectionWorkService {
     const [sectionResult, rowsResult] = await Promise.allSettled([
       this.prisma.baseConfigSection.findFirst({
         where: { id: pair.baseConfigSectionId, baseConfigId: test.baseConfigId },
-        select: { name: true, questionCount: true, subjectId: true, typingPreset: true },
+        select: {
+          name: true,
+          questionCount: true,
+          subjectId: true,
+          typingPreset: true,
+          descriptive: true,
+        },
       }),
       this.assignments.sectionAssignments(pair.testId, pair.baseConfigSectionId, viewer),
     ]);

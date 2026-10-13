@@ -49,7 +49,7 @@ function narrowsTheBank(query: QuestionListQuery): Prisma.QuestionWhereInput[] {
     filters.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
   }
   // The picker asks the same question the draw asks, so it cannot offer a row fillSection refuses.
-  if (query.drawable) filters.push(drawableFor(query.forTestId, query.forTyping));
+  if (query.drawable) filters.push(drawableFor(query.forTestId, query.forKind));
   // Resolved through the assignment relation, so no caller has to carry a list of ids in the URL.
   if (query.forTestId && query.writtenFor) {
     const wroteIt = { assignment: { testId: query.forTestId } };

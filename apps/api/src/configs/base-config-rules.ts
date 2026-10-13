@@ -59,6 +59,7 @@ export function configShapeIssues(
     ...sessionIssues(timerTemplate, modules, durationSec),
     ...totalMarksIssues(sections),
     ...typingIssues(timerTemplate, sections, durationSec),
+    ...descriptiveIssues(sections),
   ];
 
   if (timerTemplate !== TIMER_TEMPLATE.SESSION_MODULE_LOCKED && modules.length > 0) {
@@ -103,6 +104,21 @@ function perQuestionIssues(
   return [
     `A per-question paper gives every question its own countdown, and ${untimed.map((section) => section.name).join(', ')} has no seconds per question.`,
   ];
+}
+
+/** Writing is never charged for, and a section is one kind of answer: it cannot be typed and written both. */
+function descriptiveIssues(sections: readonly BaseConfigSectionDraft[]): string[] {
+  return sections.flatMap((section) => {
+    if (!section.descriptive) return [];
+    return [
+      ...(section.typingPreset
+        ? [`${section.name} is a typing test or a descriptive section, not both.`]
+        : []),
+      ...(section.negativeMarks === 0
+        ? []
+        : [`${section.name} is descriptive, and a written answer carries no negative marks.`]),
+    ];
+  });
 }
 
 /** A typing test is one unmarked passage on a clock of exactly its standard's length, shared with nothing. */

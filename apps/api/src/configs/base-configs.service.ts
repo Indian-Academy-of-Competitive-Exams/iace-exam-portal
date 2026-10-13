@@ -307,6 +307,7 @@ export class BaseConfigsService {
             qualifyingCutoff: section.qualifyingCutoff,
             patternNote: section.patternNote,
             typingPreset: section.typingPreset,
+            descriptive: section.descriptive,
           },
         });
       }
@@ -483,6 +484,7 @@ interface PaperRows {
     qualifyingCutoff: number | null;
     patternNote: string | null;
     typingPreset: string | null;
+    descriptive: boolean;
   }[];
 }
 
@@ -522,6 +524,7 @@ function paperRowsOf(
       qualifyingCutoff: section.qualifyingCutoff ?? null,
       patternNote: section.patternNote ?? null,
       typingPreset: section.typingPreset ?? null,
+      descriptive: section.descriptive ?? false,
     })),
   };
 }
@@ -560,6 +563,7 @@ function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSecti
     qualifyingCutoff: section.qualifyingCutoff === null ? null : Number(section.qualifyingCutoff),
     // Carried, or a save that changes only the timer would be judged as if no section were a typing test.
     typingPreset: section.typingPreset as TypingPresetKey | null,
+    descriptive: section.descriptive,
   };
 }
 
@@ -622,6 +626,7 @@ function toDetail(row: DetailRow, editingBy: EditLockHolder | null): BaseConfigD
       qualifyingCutoff: section.qualifyingCutoff === null ? null : Number(section.qualifyingCutoff),
       patternNote: section.patternNote,
       typingPreset: section.typingPreset as TypingPresetKey | null,
+      descriptive: section.descriptive,
     })),
   };
 }

@@ -1,4 +1,9 @@
-import { QUESTION_TYPE, typingPassageText, type ValidationIssue } from '@iace/contracts';
+import {
+  QUESTION_TYPE,
+  keyPointsOf,
+  typingPassageText,
+  type ValidationIssue,
+} from '@iace/contracts';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
 import { KEY_NAMES } from '@iace/ui';
 import { type Check } from './authoring-preview';
@@ -25,6 +30,7 @@ export function checksFor(
     'TYPING_PASSAGE_NOT_PLAIN',
     'TYPING_PASSAGE_TOO_SHORT',
     'TYPING_PASSAGE_TOO_LONG',
+    'WORD_LIMIT_INVALID',
   );
   const answered = failing(
     'CORRECT_OPTION_REQUIRED',
@@ -54,8 +60,8 @@ export function checksFor(
   const answerChecks: Check[] = [
     {
       key: 'answered',
-      label: answered?.message ?? (isMcq ? 'Exactly one correct answer' : 'An answer to compare'),
-      state: answered ? 'fail' : 'pass',
+      label: answered?.message ?? answeredLabel(state),
+      state: answeredState(state, answered !== undefined),
       meta: isMcq && correct !== null ? optionLetter(correct) : undefined,
     },
     {
@@ -93,4 +99,22 @@ export function checksFor(
 function structureMeta(state: AuthoringState, keyDepressions: number): string | undefined {
   if (state.type === QUESTION_TYPE.SINGLE_MCQ) return `${state.optionCount} options`;
   return state.type === QUESTION_TYPE.TYPING ? `${keyDepressions} key depressions` : undefined;
+}
+
+const isWritten = (state: AuthoringState) => state.type === QUESTION_TYPE.DESCRIPTIVE;
+const namesNoPoint = (state: AuthoringState) =>
+  isWritten(state) && keyPointsOf(state.answer).length === 0;
+
+function answeredLabel(state: AuthoringState): string {
+  if (state.type === QUESTION_TYPE.SINGLE_MCQ) return 'Exactly one correct answer';
+  if (!isWritten(state)) return 'An answer to compare';
+  // With no point to mark against, the scorer can only pay a fair attempt in full.
+  return namesNoPoint(state)
+    ? 'No key points: any answer of fair length takes full marks'
+    : 'Key points to mark against';
+}
+
+function answeredState(state: AuthoringState, failing: boolean): Check['state'] {
+  if (failing) return 'fail';
+  return namesNoPoint(state) ? 'warn' : 'pass';
 }

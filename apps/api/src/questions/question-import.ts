@@ -28,6 +28,9 @@ import {
   type QuestionImportPlan,
   type QuestionImportRow,
   type ValidationIssue,
+  SECTION_QUESTION_TYPES,
+  type SectionAnswerKind,
+  type QuestionType,
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable, normaliseHeader } from '../common/importing';
 import { htmlFromCell } from './question-content';
@@ -64,8 +67,8 @@ export interface PlannedRow extends QuestionImportRow {
 export interface ImportScope {
   sectionName: string;
   subject: { id: string; name: string } | null;
-  /** A typing section, which takes typing passages and nothing else. */
-  typing: boolean;
+  /** How the section is answered, which names the one kind of question it takes. */
+  kind: SectionAnswerKind;
 }
 
 /** No row corrected yet: the sheet speaks for every line. */
@@ -364,6 +367,12 @@ function namesOf(
   };
 }
 
+/** The kinds whose sheet row carries an answer: the value compared against, or the key points, one a line. */
+const KEYED_TYPES: ReadonlySet<QuestionType> = new Set([
+  QUESTION_TYPE.TEXT_FIELD,
+  QUESTION_TYPE.DESCRIPTIVE,
+]);
+
 /** A correction cannot shed the tag every imported question carries. */
 function withImportTag(draft: QuestionDraft): QuestionDraft {
   return draft.tags.includes(QUESTION_IMPORT_TAG)
@@ -390,18 +399,22 @@ function outsideSection(draft: QuestionDraft, scope: ImportScope): ValidationIss
   };
 }
 
-/** A row of a kind its section's paper could never draw: a choice in a typing section, or a passage outside one. */
+/** A row of a kind its section's paper could never draw: a section is answered, typed or written. */
 function wrongKindFor(draft: QuestionDraft, scope: ImportScope): ValidationIssue | null {
-  if ((draft.type === QUESTION_TYPE.TYPING) === scope.typing) return null;
+  if (SECTION_QUESTION_TYPES[scope.kind].includes(draft.type)) return null;
   return {
     code: CODE.TYPE_OUTSIDE_SECTION,
-    message: scope.typing
-      ? `${scope.sectionName} is a typing test, so only typing passages go into it`
-      : `A typing passage does not go into ${scope.sectionName}`,
+    message: `${scope.sectionName} ${TAKES_ONLY[scope.kind]}`,
     field: 'type',
     column: 'type',
   };
 }
+
+const TAKES_ONLY: Readonly<Record<SectionAnswerKind, string>> = {
+  CHOICE: 'takes no typing passage and no descriptive question',
+  TYPING: 'is a typing test, so only typing passages go into it',
+  WRITING: 'is descriptive, so only descriptive questions go into it',
+};
 
 /** A row with anything to report is never written, so the duplicate it repeats does not matter. */
 function actionFor(hasIssues: boolean, duplicateOf: string | null): QuestionImportAction {
@@ -458,7 +471,7 @@ function buildDraft(
     passage: localized('passage', content.html),
     solution: localized('solution', content.html),
     options: type === QUESTION_TYPE.SINGLE_MCQ ? readOptions(row, content, issues) : [],
-    answerKey: type === QUESTION_TYPE.TEXT_FIELD ? readAnswerKey(row, issues) : null,
+    answerKey: KEYED_TYPES.has(type) ? readAnswerKey(row, issues) : null,
     tags: readTags(row, issues),
   };
 

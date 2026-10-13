@@ -71,6 +71,7 @@ import {
   SEND_BACK_REASONS,
   type ReviewState,
   type SendBackReason,
+  type WritingFormat,
 } from '@iace/contracts';
 
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -192,6 +193,15 @@ export const QUESTION_TYPE_LABELS: Readonly<Record<QuestionType, string>> = {
   SINGLE_MCQ: 'Multiple choice',
   TEXT_FIELD: 'Typed answer',
   TYPING: 'Typing passage',
+  DESCRIPTIVE: 'Descriptive',
+};
+
+/** What each kind of written answer is called on screen. */
+export const WRITING_FORMAT_LABELS: Readonly<Record<WritingFormat, string>> = {
+  ESSAY: 'Essay',
+  LETTER: 'Letter',
+  PRECIS: 'Précis',
+  OTHER: 'Other',
 };
 
 /** Every exam course as a choice, written the way the institute says it. */

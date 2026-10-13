@@ -202,3 +202,42 @@ describe('configShapeIssues — a typing section', () => {
     assert.match(issues[0] ?? '', /cutoff/);
   });
 });
+
+describe('configShapeIssues — a descriptive section', () => {
+  const writing = (over: Partial<BaseConfigSectionDraft> = {}) =>
+    section({
+      name: 'Essay',
+      questionCount: 1,
+      marksPerQuestion: 15,
+      negativeMarks: 0,
+      descriptive: true,
+      ...over,
+    });
+
+  it('takes a section of written answers that charges nothing for one', () => {
+    assert.deepEqual(configShapeIssues(TIMER_TEMPLATE.COMPOSITE_FREE, [writing()], [], 1800), []);
+  });
+
+  it('refuses a negative mark on writing, and a section that is typed and written both', () => {
+    const charged = configShapeIssues(
+      TIMER_TEMPLATE.COMPOSITE_FREE,
+      [writing({ negativeMarks: 0.25 })],
+      [],
+      1800,
+    );
+    const both = configShapeIssues(
+      TIMER_TEMPLATE.COMPOSITE_FREE,
+      [
+        writing({
+          marksPerQuestion: 0,
+          typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN,
+        }),
+      ],
+      [],
+      600,
+    );
+
+    assert.match(charged[0] ?? '', /no negative marks/);
+    assert.ok(both.some((issue) => /not both/.test(issue)));
+  });
+});
