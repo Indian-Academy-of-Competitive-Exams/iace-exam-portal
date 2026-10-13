@@ -1,0 +1,64 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StartStopTheTwoBoxes",
+      "Effect": "Allow",
+      "Action": ["ec2:StartInstances", "ec2:StopInstances"],
+      "Resource": [
+        "arn:aws:ec2:ap-south-1:598927569098:instance/i-0d1a3dd4cce06c993",
+        "arn:aws:ec2:ap-south-1:598927569098:instance/i-02d91009dacaa7177"
+      ]
+    },
+    {
+      "Sid": "CheckInTagsOnTheApiBox",
+      "Effect": "Allow",
+      "Action": ["ec2:CreateTags", "ec2:DeleteTags"],
+      "Resource": "arn:aws:ec2:ap-south-1:598927569098:instance/i-0d1a3dd4cce06c993"
+    },
+    {
+      "Sid": "StartStopTheDatabase",
+      "Effect": "Allow",
+      "Action": ["rds:StartDBInstance", "rds:StopDBInstance"],
+      "Resource": "arn:aws:rds:ap-south-1:598927569098:db:examprep"
+    },
+    {
+      "Sid": "DescribeCannotBeScoped",
+      "Effect": "Allow",
+      "Action": ["ec2:DescribeInstances", "rds:DescribeDBInstances"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadThePasscode",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "arn:aws:ssm:ap-south-1:598927569098:parameter/examprep/staging/power-passcode"
+    },
+    {
+      "Sid": "DecryptThroughSsmOnly",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "*",
+      "Condition": { "StringEquals": { "kms:ViaService": "ssm.ap-south-1.amazonaws.com" } }
+    },
+    {
+      "Sid": "TheAutoOffSchedule",
+      "Effect": "Allow",
+      "Action": ["scheduler:GetSchedule", "scheduler:UpdateSchedule"],
+      "Resource": "arn:aws:scheduler:ap-south-1:598927569098:schedule/default/examprep-staging-auto-off"
+    },
+    {
+      "Sid": "RestateTheScheduleTarget",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::598927569098:role/examprep-staging-power-scheduler",
+      "Condition": { "StringEquals": { "iam:PassedToService": "scheduler.amazonaws.com" } }
+    },
+    {
+      "Sid": "OwnLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:ap-south-1:598927569098:log-group:/aws/lambda/examprep-staging-power*"
+    }
+  ]
+}

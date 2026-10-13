@@ -91,6 +91,10 @@ jobs:
         if: '!cancelled()'
         run: pnpm test
 
+      - name: Staging power switch
+        if: '!cancelled()'
+        run: node --test deploy/staging-power/logic.test.mjs
+
       - name: Build
         if: '!cancelled()'
         run: pnpm build

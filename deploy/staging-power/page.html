@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Staging</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      body {
+        max-width: 34rem;
+        margin: 0 auto;
+        padding: 1.5rem 1rem;
+        display: grid;
+        gap: 1.25rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0;
+      }
+      section {
+        display: grid;
+        gap: 0.5rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      td {
+        padding: 0.35rem 0;
+        border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+      }
+      td:last-child {
+        text-align: right;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        padding: 0.4rem 0.6rem;
+      }
+      a[aria-disabled='true'] {
+        pointer-events: none;
+        opacity: 0.4;
+      }
+      #error {
+        color: color-mix(in srgb, red 70%, currentColor);
+      }
+      [hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 id="headline">Staging</h1>
+    <p id="error" role="alert" hidden></p>
+
+    <section>
+      <div class="row">
+        <input id="name" placeholder="Your name" autocomplete="name" maxlength="30" />
+        <input id="passcode" type="password" placeholder="Passcode" autocomplete="off" />
+        <button id="load">Show</button>
+      </div>
+    </section>
+
+    <section id="panel" hidden>
+      <div class="row">
+        <button id="on">Switch on</button>
+        <button id="off">Switch off</button>
+        <a id="exams" target="_blank" rel="noopener">Test portal</a>
+        <a id="admin" target="_blank" rel="noopener">Admin portal</a>
+      </div>
+
+      <table>
+        <tbody id="resources"></tbody>
+      </table>
+
+      <section>
+        <strong>Checked in</strong>
+        <ul id="people"></ul>
+        <div class="row">
+          <button id="checkin">Check in</button>
+          <button id="checkout">Check out</button>
+        </div>
+      </section>
+
+      <section>
+        <strong>Switch off automatically</strong>
+        <div class="row">
+          <select id="mode">
+            <option value="none">Never</option>
+            <option value="nightly">Every night at</option>
+            <option value="timed">After</option>
+          </select>
+          <input id="time" type="time" value="21:00" hidden />
+          <label id="hoursLabel" hidden
+            ><input id="hours" type="number" min="1" max="24" value="4" /> hours</label
+          >
+          <button id="saveAutoOff">Save</button>
+        </div>
+        <span id="autoOffNote"></span>
+      </section>
+    </section>
+
+    <script>
+      const USUAL_START_MINUTES = 8;
+      const POLL_MS = 10_000;
+      const READY_POLLS = 2;
+      const KEYS = { NAME: 'staging-name', PASSCODE: 'staging-passcode' };
+      const LABELS = { api: 'Staging API box', valkey: 'Valkey box', db: 'Database' };
+      const IST = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' };
+      const $ = (id) => document.getElementById(id);
+
+      let readyStreak = 0;
+      let sawNotReady = false;
+      let timer;
+      const isReady = () => readyStreak >= (sawNotReady ? READY_POLLS : 1);
+
+      $('name').value = sessionStorage.getItem(KEYS.NAME) ?? '';
+      $('passcode').value = sessionStorage.getItem(KEYS.PASSCODE) ?? '';
+
+      const duration = (ms) => {
+        const total = Math.max(0, Math.round(ms / 1000));
+        return `${Math.floor(total / 60)}m ${total % 60}s`;
+      };
+      const clock = (iso) => new Date(iso).toLocaleTimeString('en-IN', IST);
+      const fail = (text) => {
+        $('error').textContent = text;
+        $('error').hidden = !text;
+      };
+
+      async function call(path, method = 'GET', body) {
+        sessionStorage.setItem(KEYS.NAME, $('name').value);
+        sessionStorage.setItem(KEYS.PASSCODE, $('passcode').value);
+        const response = await fetch(path, {
+          method,
+          headers: { 'x-passcode': $('passcode').value, 'content-type': 'application/json' },
+          body: method === 'GET' ? undefined : JSON.stringify({ name: $('name').value, ...body }),
+        });
+        const data = await response.json();
+        if (response.status === 401) fail('Wrong passcode.');
+        else if (response.status === 400 && data.error === 'name') fail('Enter your name first.');
+        else if (response.status === 400) fail('That auto-off setting is not valid.');
+        else if (response.status >= 500) fail('Something went wrong. Try again in a moment.');
+        else fail('');
+        return { status: response.status, data };
+      }
+
+      function headline(view) {
+        const managed = view.manageShared ? ['api', 'valkey', 'db'] : ['api'];
+        const states = managed.map((name) => view.resources[name].state);
+        const since = view.resources.api.since;
+        if (states.every((state) => state === 'stopped')) return 'Off';
+        if (states.some((state) => state === 'stopping' || state === 'shutting-down'))
+          return 'Stopping';
+        if (view.resources.api.state === 'stopped')
+          return 'Partly on — press Switch off to stop the rest';
+        if (isReady()) return 'Ready';
+        const elapsed = since ? `${duration(Date.now() - Date.parse(since))} so far, ` : '';
+        return `Starting — ${elapsed}usually about ${USUAL_START_MINUTES} min`;
+      }
+
+      function resourceText(name, view) {
+        const { state, since } = view.resources[name];
+        const shared = name !== 'api' && !view.manageShared ? ' (shared, always on)' : '';
+        return `${state}${since ? `, since ${clock(since)}` : ''}${shared}`;
+      }
+
+      function apiText(view) {
+        if (view.api.ready) return 'answering';
+        if (view.api.reason) return view.api.reason;
+        return view.resources.api.state === 'stopped'
+          ? 'off'
+          : 'not answering yet — the box is still starting';
+      }
+
+      function autoOffText(autoOff) {
+        if (autoOff.mode === 'nightly') return `Switches off every night at ${autoOff.time} IST.`;
+        if (autoOff.mode === 'timed' && autoOff.firesAt)
+          return `Switches off at ${clock(autoOff.firesAt)} IST.`;
+        if (autoOff.mode === 'timed')
+          return `Switches off ${autoOff.hours} hours after it is switched on.`;
+        return 'Stays on until someone switches it off.';
+      }
+
+      function row(label, text) {
+        const tr = document.createElement('tr');
+        tr.append(Object.assign(document.createElement('td'), { textContent: label }));
+        tr.append(Object.assign(document.createElement('td'), { textContent: text }));
+        return tr;
+      }
+
+      function showModeFields() {
+        $('time').hidden = $('mode').value !== 'nightly';
+        $('hoursLabel').hidden = $('mode').value !== 'timed';
+      }
+
+      function render(view) {
+        const wasReady = isReady();
+        readyStreak = view.api.ready ? readyStreak + 1 : 0;
+        if (!view.api.ready) sawNotReady = true;
+        const ready = isReady();
+        if (ready && !wasReady && sawNotReady && Notification.permission === 'granted') {
+          new Notification('Staging is ready');
+        }
+
+        $('panel').hidden = false;
+        $('headline').textContent = `Staging: ${headline(view)}`;
+        $('resources').replaceChildren(
+          ...Object.keys(LABELS).map((name) => row(LABELS[name], resourceText(name, view))),
+          row('API', apiText(view)),
+        );
+        $('people').replaceChildren(
+          ...view.checkedIn.map((entry) =>
+            Object.assign(document.createElement('li'), {
+              textContent: `${entry.name}, since ${clock(entry.since)}`,
+            }),
+          ),
+        );
+        if (view.checkedIn.length === 0) $('people').textContent = 'Nobody.';
+
+        for (const [id, href] of [
+          ['exams', view.links.exams],
+          ['admin', view.links.admin],
+        ]) {
+          $(id).href = href;
+          $(id).setAttribute('aria-disabled', String(!ready));
+        }
+        if (document.activeElement?.closest('section') !== $('mode').closest('section')) {
+          $('mode').value = view.autoOff.mode;
+          if (view.autoOff.time) $('time').value = view.autoOff.time;
+          if (view.autoOff.hours) $('hours').value = view.autoOff.hours;
+          showModeFields();
+        }
+        $('autoOffNote').textContent = autoOffText(view.autoOff);
+
+        clearTimeout(timer);
+        const text = headline(view);
+        if (text !== 'Off' && text !== 'Ready') timer = setTimeout(refresh, POLL_MS);
+        return view;
+      }
+
+      async function act(path, body) {
+        const { status, data } = await call(path, 'POST', body);
+        return status === 200 ? render(data) : { refused: data };
+      }
+
+      async function refresh() {
+        const { status, data } = await call('/status');
+        if (status === 200) render(data);
+      }
+
+      async function switchOff() {
+        const result = await act('/off');
+        const others = result.refused?.others;
+        if (!others) return;
+        const who = others.join(' and ');
+        const verb = others.length === 1 ? 'is' : 'are';
+        if (confirm(`${who} ${verb} checked in. Stop anyway?`)) await act('/off', { force: true });
+      }
+
+      $('load').onclick = refresh;
+      $('on').onclick = async () => {
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+        sawNotReady = true;
+        await act('/on');
+      };
+      $('off').onclick = switchOff;
+      $('checkin').onclick = () => act('/checkin');
+      $('checkout').onclick = async () => {
+        const view = await act('/checkout');
+        const running = view.resources?.api.state === 'running';
+        if (
+          running &&
+          view.checkedIn.length === 0 &&
+          confirm('You were the last one checked in. Switch staging off?')
+        ) {
+          await switchOff();
+        }
+      };
+      $('mode').onchange = showModeFields;
+      $('saveAutoOff').onclick = () =>
+        act('/auto-off', {
+          mode: $('mode').value,
+          time: $('time').value,
+          hours: Number($('hours').value),
+        });
+
+      if ($('passcode').value) refresh();
+    </script>
+  </body>
+</html>
