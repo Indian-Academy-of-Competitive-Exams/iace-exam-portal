@@ -15,10 +15,17 @@ import {
   Type,
 } from 'lucide-react';
 import { ANSWER_STATE, isStateShown, type ExamClock } from '@iace/contracts';
-import { TIMER_KIND, useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
+import {
+  passagesOf,
+  TIMER_KIND,
+  useAnchoredCountdown,
+  useClockCountdown,
+  type ExamView,
+} from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Brandmark, Button, cn } from '@iace/ui';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
+import { Passage } from '../../passage';
 import { RailwayOptions, RailwayQuestion } from '../railway/question';
 import profileImage from '../railway/assets/profile.png';
 import { BankingInstructionsDialog } from './info-dialog';
@@ -309,26 +316,35 @@ function SectionTab({
 function BankingPaper({ view }: Readonly<{ view: ExamView }>) {
   if (!view.question) return <p className="bk-question-no">This section is closed.</p>;
 
+  const passages = passagesOf(view.question.content, view.languages, view.languageMode);
+
   return (
-    // Keyed, so the next question opens at its top and not at the last one's offset.
-    <div key={view.question.questionId} className="bk-question-scroll">
-      <div className="bk-question-col">
-        <div className="bk-question-no">{`Question No. ${view.questionIndex + 1} :`}</div>
-        <div className="bk-question">
-          <RailwayQuestion
+    // Keyed, so the next question opens both panes at their top and not at the last one's offset.
+    <div key={view.question.questionId} className="bk-split">
+      {passages.length > 0 ? (
+        <div className="bk-passage">
+          <Passage passages={passages} />
+        </div>
+      ) : null}
+      <div className="bk-question-scroll">
+        <div className="bk-question-col">
+          <div className="bk-question-no">{`Question No. ${view.questionIndex + 1} :`}</div>
+          <div className="bk-question">
+            <RailwayQuestion
+              question={view.question}
+              languages={view.languages}
+              languageMode={view.languageMode}
+            />
+          </div>
+          <RailwayOptions
             question={view.question}
             languages={view.languages}
             languageMode={view.languageMode}
+            selectedOptionId={view.selectedOptionId}
+            disabled={view.locked !== null}
+            onSelect={view.chooseOption}
           />
         </div>
-        <RailwayOptions
-          question={view.question}
-          languages={view.languages}
-          languageMode={view.languageMode}
-          selectedOptionId={view.selectedOptionId}
-          disabled={view.locked !== null}
-          onSelect={view.chooseOption}
-        />
       </div>
     </div>
   );

@@ -246,7 +246,27 @@
 
 /* ---------- the paper ---------- */
 
+[data-exam-template='banking'] .bk-split {
+  display: flex;
+  height: 100%;
+}
+
+/* 960 of the original's 1536px paper column. */
+[data-exam-template='banking'] .bk-passage {
+  flex: 0 0 62.5%;
+  min-width: 0;
+  padding: 10px 15px;
+  border-right: 1px solid var(--bk-rule);
+  overflow-y: auto;
+  font-family: Arial, Verdana, Helvetica, sans-serif;
+  font-size: calc(19.2px + var(--bk-font-step, 0) * 1.6px);
+  line-height: 1.6;
+  text-align: justify;
+}
+
 [data-exam-template='banking'] .bk-question-scroll {
+  flex: 1;
+  min-width: 0;
   height: 100%;
   overflow-y: auto;
 }
@@ -255,6 +275,11 @@
   max-width: 1000px;
   margin: 0 auto;
   padding: 10px;
+}
+
+[data-exam-template='banking'] .bk-passage + .bk-question-scroll .bk-question-col {
+  max-width: none;
+  margin: 0;
 }
 
 [data-exam-template='banking'] .bk-question-no {
@@ -910,5 +935,21 @@
 
   [data-exam-template='banking'] .bk-tabrow {
     overflow-x: auto;
+  }
+
+  [data-exam-template='banking'] .bk-split {
+    flex-direction: column;
+  }
+
+  [data-exam-template='banking'] .bk-passage {
+    flex: 0 0 auto;
+    max-height: 40%;
+    border-right: 0;
+    border-bottom: 1px solid var(--bk-rule);
+  }
+
+  [data-exam-template='banking'] .bk-split .bk-question-scroll {
+    height: auto;
+    min-height: 0;
   }
 }

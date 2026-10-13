@@ -26,6 +26,7 @@ import {
   answerKeyText,
   dispositionLabel,
   htmlOf,
+  passagesOf,
   shownLanguages,
   VERDICT,
   verdictOf,
@@ -33,6 +34,7 @@ import {
   type ReviewedQuestion,
   type Verdict,
 } from '@iace/app-kit';
+import { Passage } from '../exam/passage';
 
 const VERDICT_LABEL: Readonly<Record<Verdict, string>> = {
   [VERDICT.RIGHT]: 'Correct',
@@ -144,6 +146,7 @@ export function ReviewQuestion({
   const verdict = verdictOf(question);
   const disposition = dispositionLabel(question);
   const options = question.options ?? [];
+  const passages = passagesOf(question.content ?? {}, languages, languageMode);
 
   return (
     <div className="flex min-h-0 flex-col gap-4 rounded-lg border border-border p-4">
@@ -164,32 +167,46 @@ export function ReviewQuestion({
         </span>
       </div>
 
-      {shown.map((language) => (
-        <RichContent
-          key={language}
-          html={htmlOf(question.content?.[contentLanguageOf(language)]?.stem)}
-        />
-      ))}
+      <div className={cn('grid min-h-0 gap-4', passages.length > 0 && 'md:grid-cols-2')}>
+        {passages.length > 0 ? (
+          <div
+            // Keyed, so the next question opens its passage at the top.
+            key={question.questionId}
+            className="relative flex max-h-[40vh] flex-col gap-4 overflow-y-auto border-b border-border pb-4 md:max-h-[70vh] md:border-b-0 md:border-r md:pb-0 md:pr-4"
+          >
+            <Passage passages={passages} />
+          </div>
+        ) : null}
 
-      {options.length > 0 ? (
-        <ol className="flex flex-col gap-2">
-          {options.map((option, seat) => (
-            <li key={option.id}>
-              <ReviewOption
-                seat={seat}
-                html={shown
-                  .map((language) => htmlOf(option.text[contentLanguageOf(language)]))
-                  .join('')}
-                chosen={option.id === question.selectedOptionId}
-                correct={option.isCorrect}
-              />
-            </li>
+        <div className="flex min-w-0 flex-col gap-4">
+          {shown.map((language) => (
+            <RichContent
+              key={language}
+              html={htmlOf(question.content?.[contentLanguageOf(language)]?.stem)}
+            />
           ))}
-        </ol>
-      ) : null}
 
-      <TypedAnswer question={question} shown={shown} />
-      <Solution question={question} shown={shown} />
+          {options.length > 0 ? (
+            <ol className="flex flex-col gap-2">
+              {options.map((option, seat) => (
+                <li key={option.id}>
+                  <ReviewOption
+                    seat={seat}
+                    html={shown
+                      .map((language) => htmlOf(option.text[contentLanguageOf(language)]))
+                      .join('')}
+                    chosen={option.id === question.selectedOptionId}
+                    correct={option.isCorrect}
+                  />
+                </li>
+              ))}
+            </ol>
+          ) : null}
+
+          <TypedAnswer question={question} shown={shown} />
+          <Solution question={question} shown={shown} />
+        </div>
+      </div>
 
       {/* The palette jumps anywhere; these two walk the paper the way it was sat. */}
       <div className="flex items-center justify-between gap-2 border-t border-border pt-4">

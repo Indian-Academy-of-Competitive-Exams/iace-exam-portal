@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { EXAM_TEMPLATE } from '@iace/contracts';
+import { passagesOf } from '@iace/app-kit';
 import { DESKTOP_QUERY, useMediaQuery } from '@iace/app-kit/browser';
 import { Button, FILLS, Sheet, SheetClose, SheetContent, SheetTitle, Tabs, cn } from '@iace/ui';
 import {
@@ -14,6 +15,7 @@ import {
   SectionBar,
   type ExamSlotProps,
 } from './slots';
+import { Passage } from '../../passage';
 import { PaperPanel, RulesPanel } from './panels';
 
 export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProps>) {
@@ -22,6 +24,9 @@ export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProp
   // Below the rail's breakpoint the palette would take the paper's own room, so it waits in a drawer.
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const passages = view.question
+    ? passagesOf(view.question.content, view.languages, view.languageMode)
+    : [];
 
   return (
     <>
@@ -46,14 +51,21 @@ export function Layout({ view, config, onOpenCalculator }: Readonly<ExamSlotProp
           {/* The mark sits on this frame, not in the scroller, where it would cover one screenful and scroll away. */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <div
-              // Keyed, so the next question opens at its top and not at the last one's offset.
+              // Keyed, so the next question opens both panes at their top and not at the last one's offset.
               key={view.question?.questionId}
-              className="relative min-h-0 flex-1 overflow-y-auto p-exam"
+              className="flex min-h-0 flex-1 flex-col md:flex-row"
             >
-              <article className="flex min-w-0 flex-col gap-exam-gap">
-                <QuestionPanel view={view} config={config} />
-                <Options view={view} config={config} />
-              </article>
+              {passages.length > 0 ? (
+                <div className="relative flex max-h-[40%] shrink-0 flex-col gap-exam-gap overflow-y-auto border-b border-exam-border p-exam md:max-h-none md:w-[55%] md:border-b-0 md:border-r">
+                  <Passage passages={passages} className="text-sm leading-relaxed text-exam-ink" />
+                </div>
+              ) : null}
+              <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto p-exam">
+                <article className="flex min-w-0 flex-col gap-exam-gap">
+                  <QuestionPanel view={view} config={config} />
+                  <Options view={view} config={config} />
+                </article>
+              </div>
             </div>
             {onPaper ? <PaperWatermark view={view} config={config} /> : null}
           </div>

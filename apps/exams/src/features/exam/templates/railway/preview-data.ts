@@ -70,6 +70,12 @@ const OPTIONS: readonly (readonly string[])[] = [
 
 const rich = (text: string) => [{ type: 'TEXT' as const, text }];
 
+const PASSAGE_QUESTIONS = 3;
+const PASSAGE =
+  '<p>Directions: Read the passage and answer the questions that follow.</p>' +
+  '<p>The Indian Railways carried its first passengers in April 1853, over thirty-four kilometres of track between Bombay and Thane. Within fifty years the network had grown past forty thousand kilometres, built largely by private companies working under a guarantee from the Crown, each of which chose its own gauge. The result was a country crossed by lines that could not exchange wagons: goods moving from the cotton districts to the ports were unloaded and reloaded wherever two gauges met, and every such break added a day and a share of the cargo lost to handling.</p>' +
+  '<p>Project Unigauge, begun in 1992, set out to convert the metre and narrow gauge routes to broad gauge. It has been slow and costly work, but each converted section has brought through trains, heavier loads and higher speeds to districts that had been served for a century by a branch line and a change of train.</p>';
+
 const PREVIEW_QUESTIONS: readonly ExamQuestion[] = Array.from(
   { length: QUESTION_COUNT },
   (_, index) => ({
@@ -79,7 +85,12 @@ const PREVIEW_QUESTIONS: readonly ExamQuestion[] = Array.from(
     type: QUESTION_TYPE.SINGLE_MCQ,
     marks: 1,
     negativeMarks: 0.33,
-    content: { [SUPPORTED_LANGUAGES.EN]: { stem: rich(STEMS[index % STEMS.length] ?? '') } },
+    content: {
+      [SUPPORTED_LANGUAGES.EN]: {
+        stem: rich(STEMS[index % STEMS.length] ?? ''),
+        ...(index < PASSAGE_QUESTIONS ? { passage: rich(PASSAGE) } : {}),
+      },
+    },
     options: (OPTIONS[index % OPTIONS.length] ?? []).map((text, position) => ({
       id: `q-${index + 1}-o-${position}`,
       position,
@@ -125,8 +136,8 @@ export function previewView(): ExamView {
     forwardOnly: false,
 
     questions: PREVIEW_QUESTIONS,
-    question: PREVIEW_QUESTIONS[3],
-    questionIndex: 3,
+    question: PREVIEW_QUESTIONS[1],
+    questionIndex: 1,
     selectedOptionId: null,
     marked: false,
     answers: PREVIEW_ANSWERS,

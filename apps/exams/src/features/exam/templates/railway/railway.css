@@ -190,6 +190,12 @@
   margin: 10px 12px 15px 12px;
 }
 
+[data-exam-template='railways'] .rw-passage {
+  flex: 0 0 55%;
+  min-width: 0;
+  border-right: 1px solid var(--rw-rule);
+}
+
 [data-exam-template='railways'] .questiondiv img,
 [data-exam-template='railways'] .optn img {
   max-width: min(500px, 100%) !important;
@@ -713,5 +719,16 @@
   [data-exam-template='railways'] .rw-summary th,
   [data-exam-template='railways'] .rw-summary td {
     padding: 4px 6px;
+  }
+
+  [data-exam-template='railways'] .rw-split {
+    flex-direction: column;
+  }
+
+  [data-exam-template='railways'] .rw-passage {
+    flex: 0 0 auto;
+    max-height: 40%;
+    border-right: 0;
+    border-bottom: 1px solid var(--rw-rule);
   }
 }

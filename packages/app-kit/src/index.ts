@@ -73,7 +73,7 @@ export {
   type PaperLock,
 } from './exam/exam-view';
 export { useCountdown, useAnchoredCountdown, useClockCountdown } from './exam/use-countdown';
-export { htmlOf, shownLanguages } from './exam/content';
+export { htmlOf, passagesOf, shownLanguages } from './exam/content';
 export {
   MARKING_TRIES,
   SITTING_VOIDED_SAYS,

@@ -6,9 +6,16 @@
 import { useState } from 'react';
 import { Calculator } from 'lucide-react';
 import { isStateShown, type ExamClock } from '@iace/contracts';
-import { TIMER_KIND, useAnchoredCountdown, useClockCountdown, type ExamView } from '@iace/app-kit';
+import {
+  passagesOf,
+  TIMER_KIND,
+  useAnchoredCountdown,
+  useClockCountdown,
+  type ExamView,
+} from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Button, cn } from '@iace/ui';
+import { Passage } from '../../passage';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
@@ -33,6 +40,10 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
   };
   // The original answers Submit by taking the question area over and folding the palette away; it stays while the paper goes in.
   const asking = view.submit.asking || view.submit.isPending;
+  const passages =
+    view.question && !asking
+      ? passagesOf(view.question.content, view.languages, view.languageMode)
+      : [];
   const off = view.locked !== null;
 
   return (
@@ -121,10 +132,19 @@ export function RailwayLayout({ view, config, onOpenCalculator }: Readonly<ExamS
             ) : null}
           </div>
 
-          {/* Keyed, so the next question opens at its top and not at the last one's offset. */}
-          <ScrollPane key={view.question?.questionId} className="min-h-0 flex-1">
-            {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
-          </ScrollPane>
+          {/* Keyed, so the next question opens both panes at their top and not at the last one's offset. */}
+          <div key={view.question?.questionId} className="rw-split flex min-h-0 flex-1">
+            {passages.length > 0 ? (
+              <ScrollPane className="rw-passage">
+                <div className="questiondiv">
+                  <Passage passages={passages} />
+                </div>
+              </ScrollPane>
+            ) : null}
+            <ScrollPane className="min-h-0 min-w-0 flex-1">
+              {asking ? <RailwaySubmitSummary view={view} /> : <RailwayPaper view={view} />}
+            </ScrollPane>
+          </div>
 
           {view.submit.failed ? (
             <Alert variant="danger" className="flex shrink-0 items-center justify-between gap-2">
