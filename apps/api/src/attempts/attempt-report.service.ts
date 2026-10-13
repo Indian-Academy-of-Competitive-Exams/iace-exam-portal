@@ -22,6 +22,11 @@ import {
   scopedSections,
   servedQuestions,
   type TypingPresetKey,
+  DEFAULT_LANGUAGE,
+  QUESTION_TYPE,
+  plainTextOf,
+  typingPassageText,
+  type TypingSitting,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -124,6 +129,43 @@ export class AttemptReportService {
       _sum: { marks: true },
     });
     return new Map(rows.map((row) => [row.testId, round(Number(row._sum.marks ?? 0))]));
+  }
+
+  /** Read off what was typed, so it is ready with the marks and not at the solution gate: a passage is no key. */
+  async typing(studentId: string, attemptId: string): Promise<TypingSitting[]> {
+    const attempt = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId },
+      select: SOLUTION_SELECT,
+    });
+    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
+      throw noResultFor(attempt.status, NOT_REVIEWABLE);
+    }
+
+    const { test } = attempt;
+    const sections = scopedSections(test.baseConfig.sections, test.scope, scopeRefOf(test));
+    // An ordinary paper is answered here, before the paper itself is read.
+    if (sections.every((section) => section.typingPreset === null)) return [];
+
+    const paper = await this.papers.solutionsOf(attempt.testId, test.paperRevision);
+    const rows = answeredRows(paper, attempt);
+    return sections.flatMap((section) => {
+      const row = rows.find(
+        (held) =>
+          held.baseConfigSectionId === section.id && held.question.type === QUESTION_TYPE.TYPING,
+      );
+      if (!row || section.typingPreset === null) return [];
+      const content = row.questionVersion.content as LocalizedContent;
+      return [
+        {
+          sectionId: section.id,
+          sectionName: section.name,
+          presetKey: section.typingPreset as TypingPresetKey,
+          passage: typingPassageText(plainTextOf(content[DEFAULT_LANGUAGE]?.stem)),
+          typed: row.typedAnswer ?? '',
+        },
+      ];
+    });
   }
 
   /** The answer key. Only a sitting the student finished and had marked ever reaches it. */

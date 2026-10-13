@@ -94,7 +94,7 @@ export function scorePaper(paper: readonly ScorableQuestion[]): PaperScore {
     total += toHundredths(awarded);
     if (verdict === true) correctCount += 1;
     else if (verdict === false) wrongCount += 1;
-    else unattemptedCount += 1;
+    else if (isCounted(row)) unattemptedCount += 1;
 
     tallySection(sections, row, verdict, awarded);
   }
@@ -108,6 +108,9 @@ export function scorePaper(paper: readonly ScorableQuestion[]): PaperScore {
     sections: [...sections.values()].map(divideSection),
   };
 }
+
+/** A typing passage is neither right, wrong nor left: its result is read off what was typed, not counted here. */
+const isCounted = (row: ScorableQuestion): boolean => row.type !== QUESTION_TYPE.TYPING;
 
 /** Null when they left it alone, AND when nothing here can judge it — see the two below. */
 function verdictOn(row: ScorableQuestion): boolean | null {
@@ -167,7 +170,7 @@ function tallySection(
   held.score += toHundredths(awarded);
   if (verdict === true) held.correctCount += 1;
   else if (verdict === false) held.wrongCount += 1;
-  else held.unattemptedCount += 1;
+  else if (isCounted(row)) held.unattemptedCount += 1;
   held.timeSpentSec += row.timeSpentSec;
   sections.set(row.baseConfigSectionId, held);
 }

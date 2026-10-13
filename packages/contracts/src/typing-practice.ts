@@ -50,7 +50,18 @@ export const typingPracticeListQuerySchema = paginationQuerySchema.extend({
 export type TypingPracticeListQuery = z.infer<typeof typingPracticeListQuerySchema>;
 export type TypingPracticeListQueryInput = z.input<typeof typingPracticeListQuerySchema>;
 
+/** What was typed in one typing section of a sitting, beside its passage. No key is in it, so no gate holds it. */
+export const typingSittingSchema = z.object({
+  sectionId: z.string(),
+  sectionName: z.string(),
+  presetKey: typingPresetKeySchema,
+  passage: z.string(),
+  typed: z.string(),
+});
+export type TypingSitting = z.infer<typeof typingSittingSchema>;
+
 export const TYPING_ROUTES = {
   passage: '/me/typing/passage',
   practices: '/me/typing/practices',
+  inAttempt: (attemptId: string) => `/me/attempts/${attemptId}/typing`,
 } as const;

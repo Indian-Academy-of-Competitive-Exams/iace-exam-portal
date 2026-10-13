@@ -3,10 +3,12 @@ import {
   TYPING_ROUTES,
   typingPracticePassageSchema,
   typingPracticeSchema,
+  typingSittingSchema,
   type FinishTypingPracticeInput,
   type TypingPractice,
   type TypingPracticeListQueryInput,
   type TypingPracticePassage,
+  type TypingSitting,
 } from '../typing-practice';
 import { type TypingPresetKey } from '../typing';
 import { type LanguageCode } from '../exams';
@@ -256,6 +258,10 @@ export function meClient(core: ApiCore) {
     /** The session as the server scored it, which is the figure the history keeps. */
     finishTypingPractice: (input: FinishTypingPracticeInput): Promise<TypingPractice> =>
       write('POST', TYPING_ROUTES.practices, typingPracticeSchema, input),
+
+    /** Each typing section of a marked sitting: its passage and what they typed. Empty for an ordinary paper. */
+    typingInAttempt: (attemptId: string): Promise<TypingSitting[]> =>
+      get(TYPING_ROUTES.inAttempt(attemptId), typingSittingSchema.array()),
 
     typingPractices: (query: TypingPracticeListQueryInput): Promise<Paginated<TypingPractice>> =>
       list(TYPING_ROUTES.practices, query, typingPracticeSchema),

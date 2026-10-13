@@ -8,6 +8,7 @@ import {
   type ScoreCard,
   type SolutionReport,
   type SolutionsQuery,
+  type TypingSitting,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodQuery } from '../common/zod-validation.pipe';
@@ -35,6 +36,15 @@ export class MeAttemptReportController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<FieldEffort> {
     return this.analytics.fieldEffort(user.id, id);
+  }
+
+  /** What was typed in each typing section, beside its passage. Empty for a paper with none. */
+  @Get('attempts/:id/typing')
+  typing(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<TypingSitting[]> {
+    return this.reports.typing(user.id, id);
   }
 
   /** The answer key, and the ONLY endpoint carrying it. One section at a time, refused until the gate opens. */

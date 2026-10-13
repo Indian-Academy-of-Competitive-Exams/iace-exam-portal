@@ -1,4 +1,4 @@
-/** A finished practice session: the figure it is held to, the rest, and the typing marked word by word. */
+/** A typing result: the figure it is held to, the rest, and the typing marked word by word. */
 import { Link } from 'react-router-dom';
 import {
   TYPED_WORD,
@@ -38,6 +38,7 @@ const WORD_MARKS: Readonly<Record<TypedWordKind, { label: string; className: str
 
 const MARKED_KINDS = [TYPED_WORD.HALF, TYPED_WORD.WRONG, TYPED_WORD.EXTRA, TYPED_WORD.MISSED];
 
+/** A finished practice session, full screen where the session was. */
 export function TypingResultView({
   preset,
   result,
@@ -69,18 +70,10 @@ export function TypingResultView({
 
           <Hero
             eyebrow="Typing practice"
-            figure={
-              <HeroFigure
-                value={headlineOf(preset, result).toLocaleString('en-IN')}
-                unit={METRIC_UNITS[preset.metric]}
-                caption={`Target ${targetLabel(preset)}`}
-              />
-            }
+            figure={<TypingHeadline preset={preset} result={result} />}
             aside={
               <div className="flex flex-col items-start gap-4 sm:items-end">
-                <Badge variant={result.qualified ? 'success' : 'danger'}>
-                  {result.qualified ? 'Qualified' : 'Not qualified'}
-                </Badge>
+                <QualifiedBadge qualified={result.qualified} />
                 <div className="flex gap-2">
                   <Button asChild variant="outline">
                     <Link to={ROUTES.TYPING}>History</Link>
@@ -91,41 +84,69 @@ export function TypingResultView({
             }
           />
 
-          <Section title="Figures">
-            <Card className="flex flex-col gap-3 p-5">
-              <StatRow
-                label="Key depressions"
-                value={result.keyDepressions.toLocaleString('en-IN')}
-              />
-              <StatRow label="Words typed" value={result.wordsTyped.toLocaleString('en-IN')} />
-              <StatRow label="Gross speed (words a minute)" value={result.grossWpm} />
-              <StatRow label="Net speed (words a minute)" value={result.netWpm} />
-              <StatRow label="Mistakes" value={mistakesOf(result)} />
-              <StatRow label="Errors (%)" value={result.errorPct} />
-            </Card>
-          </Section>
-
-          <Section
-            title="Comparison"
-            meta={
-              <span className="flex flex-wrap gap-2">
-                {MARKED_KINDS.map((kind) => (
-                  <span key={kind} className={cn('text-xs', WORD_MARKS[kind].className)}>
-                    {WORD_MARKS[kind].label}
-                  </span>
-                ))}
-              </span>
-            }
-          >
-            <Card className="p-5 text-base leading-loose">
-              {result.words.map((word, index) => (
-                <MarkedWord key={index} word={word} />
-              ))}
-            </Card>
-          </Section>
+          <TypingOutcome result={result} />
         </PageBody>
       </PageFrame>
     </div>
+  );
+}
+
+/** The figure the standard is held to, against its target. */
+export function TypingHeadline({
+  preset,
+  result,
+}: Readonly<{ preset: TypingPreset; result: TypingResult }>) {
+  return (
+    <HeroFigure
+      value={headlineOf(preset, result).toLocaleString('en-IN')}
+      unit={METRIC_UNITS[preset.metric]}
+      caption={`Target ${targetLabel(preset)}`}
+    />
+  );
+}
+
+export function QualifiedBadge({ qualified }: Readonly<{ qualified: boolean }>) {
+  return (
+    <Badge variant={qualified ? 'success' : 'danger'}>
+      {qualified ? 'Qualified' : 'Not qualified'}
+    </Badge>
+  );
+}
+
+/** The rest of a result, which practice and a sitting's score card both show under their own headline. */
+export function TypingOutcome({ result }: Readonly<{ result: TypingResult }>) {
+  return (
+    <>
+      <Section title="Figures">
+        <Card className="flex flex-col gap-3 p-5">
+          <StatRow label="Key depressions" value={result.keyDepressions.toLocaleString('en-IN')} />
+          <StatRow label="Words typed" value={result.wordsTyped.toLocaleString('en-IN')} />
+          <StatRow label="Gross speed (words a minute)" value={result.grossWpm} />
+          <StatRow label="Net speed (words a minute)" value={result.netWpm} />
+          <StatRow label="Mistakes" value={mistakesOf(result)} />
+          <StatRow label="Errors (%)" value={result.errorPct} />
+        </Card>
+      </Section>
+
+      <Section
+        title="Comparison"
+        meta={
+          <span className="flex flex-wrap gap-2">
+            {MARKED_KINDS.map((kind) => (
+              <span key={kind} className={cn('text-xs', WORD_MARKS[kind].className)}>
+                {WORD_MARKS[kind].label}
+              </span>
+            ))}
+          </span>
+        }
+      >
+        <Card className="p-5 text-base leading-loose">
+          {result.words.map((word, index) => (
+            <MarkedWord key={index} word={word} />
+          ))}
+        </Card>
+      </Section>
+    </>
   );
 }
 

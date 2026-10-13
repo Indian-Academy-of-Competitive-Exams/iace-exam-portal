@@ -1,28 +1,45 @@
+import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { EmptyState, EMPTY_STATE_KINDS, Metric, cn } from '@iace/ui';
+import { Card, EmptyState, EMPTY_STATE_KINDS, Metric, StatRow, cn } from '@iace/ui';
 import { CohortFigure, MarksFigure, TimeFigure, type Benchmark } from '@iace/app-kit/browser';
 import { isMarkingPending, isSittingVoided, minutes, ordinalSuffix } from '@iace/app-kit';
 import {
+  TYPING_PRESETS,
   paperCounts,
+  scoreTyping,
   type CohortCurve,
   type ScoreCard,
   type SectionalStanding,
+  type TypingSitting,
 } from '@iace/contracts';
+import { api } from '../../lib/api';
+import { typingInAttemptQueryKey } from '../../lib/constants';
 import { scoreCardQuery } from '../../lib/queries';
+import { METRIC_UNITS, headlineOf, targetLabel } from '../typing/typing-figures';
+import { QualifiedBadge, TypingHeadline, TypingOutcome } from '../typing/typing-result';
 import { SittingSetAside } from './report';
 import {
   Hero,
   HeroFigure,
   PageBody,
   ReportSkeleton,
+  Section,
   StatTile,
   TileGrid,
 } from '../../components/ui';
 
+const NO_TYPING: readonly TypingSitting[] = [];
+
 export function ScoreCardPanel() {
   const { attemptId = '' } = useParams();
   const card = useQuery(scoreCardQuery(attemptId));
+  // Asked only once the paper is marked: before that it would be refused for the same reason the card is.
+  const typing = useQuery({
+    queryKey: typingInAttemptQueryKey(attemptId),
+    queryFn: () => api.me.typingInAttempt(attemptId),
+    enabled: card.isSuccess,
+  });
 
   const again = () => void card.refetch();
 
@@ -50,10 +67,21 @@ export function ScoreCardPanel() {
     );
   }
 
-  return <Result card={card.data} />;
+  return <Result card={card.data} typing={typing.data ?? NO_TYPING} />;
 }
 
-function Result({ card }: Readonly<{ card: ScoreCard }>) {
+function Result({ card, typing }: Readonly<{ card: ScoreCard; typing: readonly TypingSitting[] }>) {
+  // A paper that is a typing test alone carries no marks, so its typing is the whole result.
+  if (card.maxMarks === 0 && typing.length > 0) {
+    return (
+      <PageBody>
+        {typing.map((sitting) => (
+          <TypingSection key={sitting.sectionId} sitting={sitting} leads />
+        ))}
+      </PageBody>
+    );
+  }
+
   const attempted = card.correctCount + card.wrongCount;
   const accuracy = attempted === 0 ? 0 : Math.round((card.correctCount / attempted) * 100);
   // A curve exists only where a cohort drew one; a retake has none to show.
@@ -98,7 +126,46 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
         </div>
         {curve === null ? null : <CohortFigure cohort={curve} />}
       </div>
+
+      {typing.map((sitting) => (
+        <TypingSection key={sitting.sectionId} sitting={sitting} />
+      ))}
     </PageBody>
+  );
+}
+
+/** One typing section's result. It leads the page where it is the whole paper, and sits under the marks where it is not. */
+function TypingSection({
+  sitting,
+  leads = false,
+}: Readonly<{ sitting: TypingSitting; leads?: boolean }>) {
+  const preset = TYPING_PRESETS[sitting.presetKey];
+  const result = useMemo(
+    () => scoreTyping(sitting.passage, sitting.typed, preset),
+    [sitting.passage, sitting.typed, preset],
+  );
+
+  return (
+    <>
+      {leads ? (
+        <Hero
+          eyebrow={sitting.sectionName}
+          figure={<TypingHeadline preset={preset} result={result} />}
+          aside={<QualifiedBadge qualified={result.qualified} />}
+        />
+      ) : (
+        <Section title={sitting.sectionName} meta={<QualifiedBadge qualified={result.qualified} />}>
+          <Card className="flex flex-col gap-3 p-5">
+            <StatRow
+              label={`Speed (${METRIC_UNITS[preset.metric]})`}
+              value={headlineOf(preset, result).toLocaleString('en-IN')}
+            />
+            <StatRow label="Target" value={targetLabel(preset)} />
+          </Card>
+        </Section>
+      )}
+      <TypingOutcome result={result} />
+    </>
   );
 }
 

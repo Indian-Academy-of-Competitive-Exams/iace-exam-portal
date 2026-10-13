@@ -304,3 +304,27 @@ describe('section scores — stored by position, read back by name', () => {
     assert.deepEqual(sectionScoresIn([{ baseConfigSectionId: 'sec_a', score: 1 }, ['sec_b']]), []);
   });
 });
+
+describe('scorePaper — a typing passage', () => {
+  /** The failure this prevents: a candidate who typed the whole passage told they left a question unattempted. */
+  it('is neither right, wrong nor unattempted, pays nothing, and keeps its time', () => {
+    const typing = mcq({
+      questionId: 'q2',
+      baseConfigSectionId: 'sec_typing',
+      type: QUESTION_TYPE.TYPING,
+      marks: 0,
+      negativeMarks: 0,
+      correctOptionIds: [],
+      typedAnswer: 'the quick brown fox',
+      timeSpentSec: 540,
+    });
+
+    const scored = scorePaper([mcq({ selectedOptionId: 'o2' }), typing]);
+    const section = scored.sections.find((row) => row.baseConfigSectionId === 'sec_typing');
+
+    assert.equal(scored.score, MARKS);
+    assert.deepEqual([scored.correctCount, scored.wrongCount, scored.unattemptedCount], [1, 0, 0]);
+    assert.equal(section?.unattemptedCount, 0);
+    assert.equal(section?.timeSpentSec, 540);
+  });
+});

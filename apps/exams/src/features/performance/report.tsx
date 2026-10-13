@@ -154,4 +154,6 @@ function useSittings() {
   return { points, newestFirst: newestFirst(points) };
 }
 
-const marksOf = (point: PerformancePoint) => `${point.score} of ${point.maxMarks} marks`;
+/** A paper that is a typing test alone carries no marks, and "0 of 0" would read as a failure. */
+const marksOf = (point: PerformancePoint) =>
+  point.maxMarks === 0 ? undefined : `${point.score} of ${point.maxMarks} marks`;

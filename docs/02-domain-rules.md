@@ -562,6 +562,17 @@ and needs no mapping at all.
 - **The typing standards are code-owned** (`TYPING_PRESETS` in `packages/contracts/src/typing.ts`),
   like the feature keys: duration, target, and how mistakes count for each board's test. One
   evaluator, `scoreTyping`, runs on the server and in the browser, so both give the same figures.
+- **A section of a paper can be a typing test.** It names its standard (`typingPreset`) and holds
+  one typing passage worth no marks, so it adds nothing to the score or the rank. Its clock is
+  exactly its standard's length and shared with nothing: the section's own clock on a sectional
+  paper, a session of its own on a session paper, or the whole paper where it is the only section.
+  A typing section draws typing passages and nothing else, and its typist writes nothing else.
+- **A typing passage is typed in the sitting like any answer.** What the box holds is the
+  question's typed answer and rides the ordinary autosave; a key is not a save. The scorer counts
+  it as neither right, wrong nor unattempted. Its result is read off what was typed, by the same
+  evaluator, when the score card is opened — nothing about it is stored — and a paper that is a
+  typing test alone shows that result in place of marks and rank. It is typed on a keyboard: the
+  mobile app says to sit it on a computer before any clock starts.
 - **Typing practice sits apart from tests and is never ranked.** A student picks a standard and is
   handed an active typing passage that no test paper holds, so a passage written for a paper is
   not met in practice first. The clock is the device's own. The server re-scores what was typed

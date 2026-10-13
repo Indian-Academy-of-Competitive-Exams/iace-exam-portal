@@ -9,7 +9,9 @@ import {
   TEST_SCOPE,
   TIMER_TEMPLATE,
   scoreCardSchema,
-  type AppException,
+  AppException,
+  QUESTION_TYPE,
+  TYPING_PRESET_KEY,
   type PerformanceReport,
 } from '@iace/contracts';
 import { AttemptReportService } from '../src/attempts/attempt-report.service';
@@ -468,6 +470,59 @@ describe('the Solution Report', () => {
     );
 
     assert.doesNotMatch(shown, /tracker\.example/);
+  });
+});
+
+describe('what was typed in a sitting', () => {
+  const PASSAGE = 'the quick brown fox jumps over the lazy dog';
+
+  /** A paper of one ordinary section and one typing section holding the passage. */
+  async function typingPaper() {
+    const paper = await makePaper(prisma, {
+      sections: ['Reasoning', 'Typing'],
+      questions: [
+        'Reasoning',
+        { subject: 'Typing', section: 1, type: QUESTION_TYPE.TYPING, stem: PASSAGE },
+      ],
+    });
+    const section = paper.items[1]?.sectionId ?? '';
+    await prisma.baseConfigSection.update({
+      where: { id: section },
+      data: { typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN },
+    });
+    return { paper, section };
+  }
+
+  it('gives each typing section its passage and what they typed, once the paper is marked', async () => {
+    const { paper, section } = await typingPaper();
+    const { studentId, attemptId } = await sat(paper, [RIGHT_OPTION, null], {
+      typed: [null, 'the quick brwn fox'],
+    });
+
+    const typing = await reports().typing(studentId, attemptId);
+    const card = await analytics().scoreCard(studentId, attemptId);
+
+    assert.deepEqual(typing, [
+      {
+        sectionId: section,
+        sectionName: 'Typing',
+        presetKey: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN,
+        passage: PASSAGE,
+        typed: 'the quick brwn fox',
+      },
+    ]);
+    assert.equal(card.unattemptedCount, 0, 'a typed passage is not an unattempted question');
+  });
+
+  it('answers nothing for a paper with no typing section, and refuses another student', async () => {
+    const paper = await makePaper(prisma, { questions: ['Reasoning'] });
+    const { studentId, attemptId } = await sat(paper, [RIGHT_OPTION]);
+    const stranger = await makeStudent(prisma);
+
+    assert.deepEqual(await reports().typing(studentId, attemptId), []);
+    await assert.rejects(reports().typing(stranger.id, attemptId), (error) =>
+      AppException.is(error),
+    );
   });
 });
 
