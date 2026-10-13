@@ -19,6 +19,8 @@ import {
   type EndedSitting,
   type ExamSitting,
   type ExamView,
+  NEEDS_KEYBOARD_SAYS,
+  needsKeyboard,
 } from '@iace/app-kit';
 import { api } from '../../src/lib/api';
 import {
@@ -30,7 +32,6 @@ import {
 import { examLanguagesFrom } from '../../src/lib/exam-routes';
 import { deviceTab, sittingStorage } from '../../src/lib/sitting-store';
 import { DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
-import { NEEDS_KEYBOARD_SAYS, needsKeyboard } from '../../src/lib/brief-lines';
 import { briefQuery, endedSittingQuery } from '../../src/lib/queries';
 import { useAuth } from '../../src/providers/auth';
 import { appFocus, onBackground } from '../../src/components/exam/app-focus';

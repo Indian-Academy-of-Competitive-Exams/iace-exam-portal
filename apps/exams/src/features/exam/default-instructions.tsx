@@ -6,7 +6,12 @@ import {
   NAVIGATION_POLICY,
   type LanguageCode,
 } from '@iace/contracts';
-import { FORWARD_ONLY_NOTICE, PALETTE_SAYS } from '@iace/app-kit';
+import {
+  FORWARD_ONLY_NOTICE,
+  NEEDS_KEYBOARD_SAYS,
+  PALETTE_SAYS,
+  needsKeyboard,
+} from '@iace/app-kit';
 import {
   Alert,
   Button,
@@ -142,6 +147,7 @@ export function DefaultInstructions({
         footer={<Walk view={view} />}
       >
         <PageBody className="pb-6">
+          {needsKeyboard(brief) ? <Alert variant="info">{NEEDS_KEYBOARD_SAYS}</Alert> : null}
           {view.step === 'GENERAL' ? (
             <GeneralStep forwardOnly={view.forwardOnly} sectional={view.sectional} omr={view.omr} />
           ) : (

@@ -100,6 +100,12 @@ async function retriedInGrace<T>(handIn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** The kinds whose answer is typed at length, so nothing but the keyboard may remove it. */
+const KEYBOARD_TYPES: ReadonlySet<string | undefined> = new Set([
+  QUESTION_TYPE.TYPING,
+  QUESTION_TYPE.DESCRIPTIVE,
+]);
+
 export function useExamView(
   { paper, arrivedAt, startedByThisCall, title, watermark, onEnded }: Readonly<ExamSitting>,
   deps: Readonly<ExamEngineDeps>,
@@ -307,9 +313,9 @@ export function useExamView(
     if (current && !locked()) state.type(current.questionId, text);
   };
 
-  // One click must not empty ten minutes of typing: a passage is cleared with the keyboard, like any text.
+  // One click must not empty minutes of typing or writing: such an answer is cleared with the keyboard.
   const clear = (): void => {
-    if (current?.type !== QUESTION_TYPE.TYPING) record({ selectedOptionId: null });
+    if (!KEYBOARD_TYPES.has(current?.type)) record({ selectedOptionId: null });
   };
 
   // Null is "no clock of its own" and falls to the paper's; a section spent to 0 still counts, and closes.

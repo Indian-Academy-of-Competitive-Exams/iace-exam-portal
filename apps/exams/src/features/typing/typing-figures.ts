@@ -21,3 +21,11 @@ export function mistakeRuleLabel(rule: TypingRule): string {
 /** Whether this question is typed rather than answered, which every skin asks before drawing options. */
 export const isTypingQuestion = (question: ExamQuestion | undefined): boolean =>
   question?.type === QUESTION_TYPE.TYPING;
+
+/** Whether this question is written free, which every skin asks before drawing options. */
+export const isWrittenQuestion = (question: ExamQuestion | undefined): boolean =>
+  question?.type === QUESTION_TYPE.DESCRIPTIVE;
+
+/** Typed or written: its answer is minutes of work, so one click must never be able to clear it. */
+export const answersByKeyboard = (question: ExamQuestion | undefined): boolean =>
+  isTypingQuestion(question) || isWrittenQuestion(question);

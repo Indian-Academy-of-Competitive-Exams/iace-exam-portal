@@ -28,8 +28,12 @@ import { ScrollPane } from '../../scroll-pane';
 import { RailwaySubmitSummary } from './submit-summary';
 import { RailwayPauseBox } from './fullscreen-nag';
 import './railway.css';
-import { isTypingQuestion } from '../../../typing/typing-figures';
-import { ExamTyping } from '../shared/exam-typing';
+import {
+  answersByKeyboard,
+  isTypingQuestion,
+  isWrittenQuestion,
+} from '../../../typing/typing-figures';
+import { ExamTyping, ExamWriting } from '../shared/exam-typing';
 
 export function RailwayLayout({
   view,
@@ -190,7 +194,7 @@ export function RailwayLayout({
             <button
               type="button"
               className="btn"
-              disabled={off || isTypingQuestion(view.question)}
+              disabled={off || answersByKeyboard(view.question)}
               onClick={view.clearResponse}
             >
               Clear Response
@@ -275,14 +279,18 @@ function RailwayPaper({ view }: Readonly<{ view: ExamView }>) {
           languageMode={view.languageMode}
         />
       </div>
-      <RailwayOptions
-        question={view.question}
-        languages={view.languages}
-        languageMode={view.languageMode}
-        selectedOptionId={view.selectedOptionId}
-        disabled={view.locked !== null}
-        onSelect={view.chooseOption}
-      />
+      {isWrittenQuestion(view.question) ? (
+        <ExamWriting view={view} />
+      ) : (
+        <RailwayOptions
+          question={view.question}
+          languages={view.languages}
+          languageMode={view.languageMode}
+          selectedOptionId={view.selectedOptionId}
+          disabled={view.locked !== null}
+          onSelect={view.chooseOption}
+        />
+      )}
     </>
   );
 }

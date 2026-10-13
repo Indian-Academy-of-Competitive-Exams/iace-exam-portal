@@ -23,6 +23,8 @@ import {
   FORWARD_ONLY_NOTICE,
   isBriefRefused,
   PALETTE_SAYS,
+  NEEDS_KEYBOARD_SAYS,
+  needsKeyboard,
 } from '@iace/app-kit';
 import { Text } from '../../../src/components/ui/text';
 import { briefQuery, testPaperQuery } from '../../../src/lib/queries';
@@ -38,7 +40,7 @@ import { EXAM_RESUME_PARAM } from '../../../src/lib/constants';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { plural } from '../../../src/lib/plural';
-import { NEEDS_KEYBOARD_SAYS, needsKeyboard, sectionLine } from '../../../src/lib/brief-lines';
+import { sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 

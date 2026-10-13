@@ -607,6 +607,8 @@ export const scoreCardSchema = sittingFiguresSchema.extend({
   rank: z.number().int().nullable(),
   percentile: z.number().nullable(),
   cohortSize: z.number().int().nullable(),
+  /** The paper has a section of written answers, which were marked by rule and not by an examiner. */
+  hasWritten: z.boolean().optional(),
 });
 export type ScoreCard = z.infer<typeof scoreCardSchema>;
 

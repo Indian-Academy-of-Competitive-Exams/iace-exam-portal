@@ -128,6 +128,7 @@ const SCORE_CARD_SELECT = {
               order: true,
               questionCount: true,
               marksPerQuestion: true,
+              descriptive: true,
             },
             orderBy: { order: 'asc' },
           },
@@ -247,6 +248,9 @@ export class PerformanceAnalyticsService {
       rank: standing?.rank ?? null,
       percentile: standing?.percentile ?? null,
       cohortSize: standing?.cohortSize ?? null,
+      hasWritten: scopedSections(test.baseConfig.sections, test.scope, scopeRef).some(
+        (section) => section.descriptive,
+      ),
     };
   }
 

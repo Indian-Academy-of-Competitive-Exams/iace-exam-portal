@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Card, EmptyState, EMPTY_STATE_KINDS, Metric, StatRow, cn } from '@iace/ui';
+import { Alert, Card, EmptyState, EMPTY_STATE_KINDS, Metric, StatRow, cn } from '@iace/ui';
 import { CohortFigure, MarksFigure, TimeFigure, type Benchmark } from '@iace/app-kit/browser';
 import { isMarkingPending, isSittingVoided, minutes, ordinalSuffix } from '@iace/app-kit';
 import {
@@ -16,6 +16,7 @@ import {
 import { scoreCardQuery, typingInAttemptQuery } from '../../lib/queries';
 import { METRIC_UNITS, headlineOf, targetLabel } from '@iace/app-kit';
 import { QualifiedBadge, TypingHeadline, TypingOutcome } from '../typing/typing-result';
+import { WRITTEN_NOTICE } from '../typing/written-notice';
 import { SittingSetAside } from './report';
 import {
   Hero,
@@ -96,6 +97,7 @@ function Result({ card, typing }: Readonly<{ card: ScoreCard; typing: readonly T
 
   return (
     <PageBody>
+      {card.hasWritten ? <Alert variant="info">{WRITTEN_NOTICE}</Alert> : null}
       <Hero
         eyebrow="Your result"
         figure={<Headline card={card} />}

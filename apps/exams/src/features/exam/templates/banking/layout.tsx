@@ -36,8 +36,12 @@ import { BankingGeneral } from './instructions';
 import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateBadge } from './states';
 import { BankingSummaryDialog } from './submit-dialog';
 import './banking.css';
-import { isTypingQuestion } from '../../../typing/typing-figures';
-import { ExamTyping } from '../shared/exam-typing';
+import {
+  answersByKeyboard,
+  isTypingQuestion,
+  isWrittenQuestion,
+} from '../../../typing/typing-figures';
+import { ExamTyping, ExamWriting } from '../shared/exam-typing';
 
 const FONT_STEP = { MIN: -2, MAX: 4 } as const;
 
@@ -223,7 +227,7 @@ export function BankingLayout({
             <button
               type="button"
               className="bk-btn bk-btn-outline"
-              disabled={off || isTypingQuestion(view.question)}
+              disabled={off || answersByKeyboard(view.question)}
               onClick={view.clearResponse}
             >
               Clear Response
@@ -355,14 +359,18 @@ function BankingPaper({ view }: Readonly<{ view: ExamView }>) {
               languageMode={view.languageMode}
             />
           </div>
-          <RailwayOptions
-            question={view.question}
-            languages={view.languages}
-            languageMode={view.languageMode}
-            selectedOptionId={view.selectedOptionId}
-            disabled={view.locked !== null}
-            onSelect={view.chooseOption}
-          />
+          {isWrittenQuestion(view.question) ? (
+            <ExamWriting view={view} />
+          ) : (
+            <RailwayOptions
+              question={view.question}
+              languages={view.languages}
+              languageMode={view.languageMode}
+              selectedOptionId={view.selectedOptionId}
+              disabled={view.locked !== null}
+              onSelect={view.chooseOption}
+            />
+          )}
         </div>
       </ScrollPane>
     </div>

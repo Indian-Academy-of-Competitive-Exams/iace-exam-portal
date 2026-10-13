@@ -17,9 +17,3 @@ export function sectionLine(section: ExamBrief['sections'][number]): string {
     .filter((part) => part !== null)
     .join(' · ');
 }
-
-export const NEEDS_KEYBOARD_SAYS = 'This test has a typing section. Sit it on a computer.';
-
-/** A typing section is typed on a real keyboard, so its paper is never started from a phone. */
-export const needsKeyboard = (brief: ExamBrief): boolean =>
-  brief.sections.some((section) => Boolean(section.typingPreset));

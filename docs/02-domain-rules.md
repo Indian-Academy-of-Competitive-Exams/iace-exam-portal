@@ -575,6 +575,18 @@ and needs no mapping at all.
   evaluator, when the score card is opened — nothing about it is stored — and a paper that is a
   typing test alone shows that result in place of marks and rank. It is typed on a keyboard: the
   mobile app says to sit it on a computer before any clock starts.
+- **A descriptive question is written free and marked by rule.** An essay, a letter or a précis is
+  a `DESCRIPTIVE` question: its prompt, a rubric of format and word limits, and the key points an
+  answer should make. Nobody reads the writing. The scorer pays part of its marks — key points
+  found (half), length inside the limits (a quarter), format, and sentence mechanics — and form is
+  paid only beside content: an answer that makes none of its points earns nothing. A question
+  with no key points cannot be judged, so any answer of fair length takes full marks. Every
+  result says the marking was automatic and may not match an examiner's. A written answer is
+  never charged a negative mark, and its marks do count in the score and the rank.
+- **A section is answered, typed or written, and holds only its own kind.** One table
+  (`SECTION_QUESTION_TYPES`) says which question types each kind takes; the draw, the picker, a
+  typist's editor and a section's import all read it. A paper with a typing or a writing section
+  says, on its details and its instructions, that it is to be sat at a keyboard.
 - **Typing practice sits apart from tests and is never ranked.** A student picks a standard and is
   handed an active typing passage that no test paper holds, so a passage written for a paper is
   not met in practice first. The clock is the device's own. The server re-scores what was typed

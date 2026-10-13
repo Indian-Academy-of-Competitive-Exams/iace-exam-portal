@@ -30,6 +30,8 @@ import {
   shutOf,
   shutReason,
   totalMarksOf,
+  NEEDS_KEYBOARD_SAYS,
+  needsKeyboard,
 } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
@@ -136,6 +138,7 @@ export function TestAboutPage() {
         {brief.data ? (
           <>
             {listed ? <Shut test={listed} now={now} /> : null}
+            {needsKeyboard(brief.data) ? <Alert variant="info">{NEEDS_KEYBOARD_SAYS}</Alert> : null}
 
             <StatBand tour={TOUR_TARGETS.ABOUT_BAND}>
               <Metric label="Questions" value={brief.data.totalQuestions} size="sm" />

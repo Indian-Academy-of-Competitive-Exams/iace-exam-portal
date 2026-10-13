@@ -1,11 +1,9 @@
 /** A typing passage in a sitting: the practice screen's own pane, fed by the sitting's answer and its lock. */
-import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_LANGUAGE, TYPING_PRESETS, plainTextOf, typingPassageText } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
 import { TypingPane } from '../../../typing/typing-pane';
-
-/** How long the box is quiet before what it holds is handed to the sitting; a key is not a save. */
-const HAND_OVER_AFTER_MS = 1000;
+import { WritingBox } from '../../../typing/writing-box';
+import { useDraft } from '../../../typing/use-draft';
 
 export function ExamTyping({ view }: Readonly<{ view: ExamView }>) {
   const { question } = view;
@@ -40,28 +38,7 @@ function TypingDraft({
   backspace: boolean;
   disabled: boolean;
 }>) {
-  const [text, setText] = useState(saved);
-  const handed = useRef(saved);
-  const latest = useRef({ text, onHandOver });
-
-  useEffect(() => {
-    latest.current = { text, onHandOver };
-  });
-
-  const handOver = () => {
-    const held = latest.current;
-    if (held.text === handed.current) return;
-    handed.current = held.text;
-    held.onHandOver(held.text);
-  };
-
-  useEffect(() => {
-    const pause = setTimeout(handOver, HAND_OVER_AFTER_MS);
-    return () => clearTimeout(pause);
-  }, [text]);
-
-  // Leaving the question takes the box away; what it held goes with the sitting, not with the box.
-  useEffect(() => handOver, []);
+  const { text, setText, handOver } = useDraft(saved, onHandOver);
 
   return (
     <TypingPane
@@ -73,4 +50,29 @@ function TypingDraft({
       disabled={disabled}
     />
   );
+}
+
+/** A descriptive question's answer: the skin draws the prompt above, and this is the box under it. */
+export function ExamWriting({ view }: Readonly<{ view: ExamView }>) {
+  const { question } = view;
+  if (!question) return null;
+
+  return (
+    <WritingDraft
+      // Keyed on the saved text arriving too, so the box opens on it and never on an empty one.
+      key={`${question.questionId}:${view.answersLoaded}`}
+      saved={view.typedAnswer}
+      onHandOver={view.typeAnswer}
+      disabled={view.locked !== null || !view.answersLoaded}
+    />
+  );
+}
+
+function WritingDraft({
+  saved,
+  onHandOver,
+  disabled,
+}: Readonly<{ saved: string; onHandOver: (text: string) => void; disabled: boolean }>) {
+  const { text, setText, handOver } = useDraft(saved, onHandOver);
+  return <WritingBox value={text} onChange={setText} onBlur={handOver} disabled={disabled} />;
 }

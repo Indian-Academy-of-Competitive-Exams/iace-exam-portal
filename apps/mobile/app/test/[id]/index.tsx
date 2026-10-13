@@ -15,6 +15,8 @@ import {
   shutOf,
   shutReason,
   totalMarksOf,
+  NEEDS_KEYBOARD_SAYS,
+  needsKeyboard,
 } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
@@ -39,7 +41,7 @@ import { cn } from '../../../src/lib/cn';
 import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import { plural } from '../../../src/lib/plural';
-import { NEEDS_KEYBOARD_SAYS, needsKeyboard, sectionLine } from '../../../src/lib/brief-lines';
+import { sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 

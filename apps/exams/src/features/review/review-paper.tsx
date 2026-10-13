@@ -17,6 +17,7 @@ import {
   cn,
 } from '@iace/ui';
 import {
+  QUESTION_TYPE,
   contentLanguageOf,
   type ExamSection,
   type LanguageCode,
@@ -35,6 +36,7 @@ import {
   type Verdict,
 } from '@iace/app-kit';
 import { Passage } from '../exam/passage';
+import { WrittenReview } from '../typing/written-review';
 
 const VERDICT_LABEL: Readonly<Record<Verdict, string>> = {
   [VERDICT.RIGHT]: 'Correct',
@@ -203,7 +205,11 @@ export function ReviewQuestion({
             </ol>
           ) : null}
 
-          <TypedAnswer question={question} shown={shown} />
+          {question.type === QUESTION_TYPE.DESCRIPTIVE ? (
+            <WrittenReview answer={question.typedAnswer} answerKey={question.answerKey} />
+          ) : (
+            <TypedAnswer question={question} shown={shown} />
+          )}
           <Solution question={question} shown={shown} />
         </div>
       </div>

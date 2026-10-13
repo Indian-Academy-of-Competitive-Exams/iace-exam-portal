@@ -29,8 +29,8 @@ import profileImage from '../railway/assets/profile.png';
 import { SscGuide, SscHeader, SscPhotoColumn } from './instructions';
 import { ANALYTICS_ORDER, STATE_CLASS, STATE_LABEL, answeredOf, summaryOf } from './states';
 import './ssc.css';
-import { isTypingQuestion } from '../../../typing/typing-figures';
-import { ExamTyping } from '../shared/exam-typing';
+import { isTypingQuestion, isWrittenQuestion } from '../../../typing/typing-figures';
+import { ExamTyping, ExamWriting } from '../shared/exam-typing';
 
 /** The original starts at its smallest and grows a tenth at a time to double. */
 const FONT_STEP = { MIN: 0, MAX: 10 } as const;
@@ -367,34 +367,38 @@ function SscPaper({ view }: Readonly<{ view: ExamView }>) {
               languageMode={view.languageMode}
             />
           </div>
-          <div className="sc-options">
-            {question.options.map((option, at) => {
-              const chosen = option.id === view.selectedOptionId;
-              return (
-                <label key={option.id} className="sc-opt flex items-start">
-                  <input
-                    type="radio"
-                    name={`q-${question.questionId}`}
-                    checked={chosen}
-                    disabled={off}
-                    onChange={() => view.chooseOption(option.id)}
-                    // A chosen radio fires no change, and here a second click clears it; a double-click's second is not one.
-                    onClick={(event) => chosen && event.detail < 2 && view.clearResponse()}
-                  />
-                  <span>{OPTION_LETTERS[at]})</span>
-                  <span className="min-w-0">
-                    {shown.map((language) => (
-                      <RichContent
-                        key={language}
-                        lang={language.toLowerCase()}
-                        html={htmlOf(option.text[contentLanguageOf(language)])}
-                      />
-                    ))}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
+          {isWrittenQuestion(question) ? (
+            <ExamWriting view={view} />
+          ) : (
+            <div className="sc-options">
+              {question.options.map((option, at) => {
+                const chosen = option.id === view.selectedOptionId;
+                return (
+                  <label key={option.id} className="sc-opt flex items-start">
+                    <input
+                      type="radio"
+                      name={`q-${question.questionId}`}
+                      checked={chosen}
+                      disabled={off}
+                      onChange={() => view.chooseOption(option.id)}
+                      // A chosen radio fires no change, and here a second click clears it; a double-click's second is not one.
+                      onClick={(event) => chosen && event.detail < 2 && view.clearResponse()}
+                    />
+                    <span>{OPTION_LETTERS[at]})</span>
+                    <span className="min-w-0">
+                      {shown.map((language) => (
+                        <RichContent
+                          key={language}
+                          lang={language.toLowerCase()}
+                          html={htmlOf(option.text[contentLanguageOf(language)])}
+                        />
+                      ))}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </ScrollPane>
       </div>
     </>

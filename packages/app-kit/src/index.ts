@@ -163,6 +163,7 @@ export {
   type Verdict,
 } from './review';
 export { REPORT_TABS, newestFirst, reportTabOf, type ReportTab } from './report-tabs';
+export { NEEDS_KEYBOARD_SAYS, needsKeyboard } from './keyboard';
 export {
   METRIC_UNITS,
   headlineOf,

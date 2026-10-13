@@ -38,7 +38,8 @@ import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
 import { QuestionStem } from '../../question-stem';
 import { SectionTimer } from '../../section-timer';
-import { isTypingQuestion } from '../../../typing/typing-figures';
+import { answersByKeyboard, isWrittenQuestion } from '../../../typing/typing-figures';
+import { ExamWriting } from './exam-typing';
 
 /** Every slot is handed the same view, so a skin changes how the sitting LOOKS, never what it does. */
 export interface ExamSlotProps {
@@ -208,6 +209,7 @@ export function QuestionPanel({ view }: Readonly<ExamSlotProps>) {
 
 export function Options({ view }: Readonly<ExamSlotProps>) {
   if (!view.question) return null;
+  if (isWrittenQuestion(view.question)) return <ExamWriting view={view} />;
 
   return (
     <OptionList
@@ -278,7 +280,7 @@ export function BottomBar({ view }: Readonly<ExamSlotProps>) {
             type="button"
             variant="ghost"
             size="sm"
-            disabled={off || isTypingQuestion(view.question)}
+            disabled={off || answersByKeyboard(view.question)}
             onClick={view.clearResponse}
           >
             <Eraser aria-hidden />
