@@ -10,6 +10,7 @@ export * from './saved';
 export * from './branches';
 export * from './exams';
 export * from './configs';
+export * from './typing';
 export * from './tests';
 export * from './attempts';
 export * from './exam-order';
