@@ -9,6 +9,7 @@ import {
   QUESTION_TYPE,
   questionDraftSchema,
   validateQuestion,
+  type QuestionDetail,
   type QuestionDraft,
 } from '@iace/contracts';
 import {
@@ -21,6 +22,7 @@ import {
   tagsIn,
   regionsFor,
   stateFrom,
+  stateOf,
   stateOfDraft,
   taxonomyFor,
   toDraft,
@@ -45,6 +47,7 @@ function typed(over: Partial<AuthoringState> = {}): AuthoringState {
     content: {
       ...state.content,
       en: {
+        passage: '',
         stem: '<p>What is 20% of 150?</p>',
         options: ['<p>25</p>', '<p>30</p>', '<p>35</p>', '<p>40</p>'],
         solution: '<p>A fifth of 150 is 30.</p>',
@@ -117,7 +120,7 @@ describe('the draft the box builds', () => {
       answer: '<p>42</p>',
       content: {
         ...base.content,
-        en: { stem: '<p>What is six times seven?</p>', options: [], solution: '' },
+        en: { passage: '', stem: '<p>What is six times seven?</p>', options: [], solution: '' },
       },
     };
 
@@ -278,5 +281,55 @@ describe('a previewed import row in the box', () => {
 
   it('never opens with fewer seats than a question may have', () => {
     assert.equal(stateOfDraft(rowWith(1)).optionCount, MCQ_OPTION_MIN);
+  });
+});
+
+describe('the passage a question is asked about', () => {
+  const PASSAGE = '<p>Read the following and answer.</p>';
+  const withPassage = (): AuthoringState => {
+    const state = typed();
+    return {
+      ...state,
+      content: { ...state.content, en: { ...state.content.en, passage: PASSAGE } },
+    };
+  };
+
+  it('sits in the slot above the question and is read back from it', () => {
+    const regions = regionsFor(withPassage(), 'en');
+
+    assert.deepEqual(
+      regions.slice(0, 2).map((region) => region.key),
+      [REGION_KEYS.PASSAGE, REGION_KEYS.STEM],
+    );
+    assert.equal(stateFrom(typed(), 'en', regions).content.en.passage, PASSAGE);
+  });
+
+  it('reaches the draft, and an empty one is absent rather than blank', () => {
+    assert.deepEqual(toDraft(withPassage(), HEADER).passage, { en: PASSAGE });
+    assert.equal('passage' in toDraft(typed(), HEADER), false);
+    assert.deepEqual(validateQuestion(toDraft(withPassage(), HEADER), taxonomyFor(HEADER)), []);
+  });
+
+  /** The failure this prevents: an edit of anything else saving the question without its passage. */
+  it('survives a saved question loaded into the box and saved again', () => {
+    const draft = toDraft(withPassage(), HEADER);
+    const node = (text: string | undefined) => (text ? [{ text }] : undefined);
+    const saved = {
+      type: draft.type,
+      content: { en: { stem: node(draft.stem.en), passage: node(PASSAGE) } },
+      options: draft.options.map((option) => ({
+        isCorrect: option.isCorrect,
+        text: { en: node(option.text.en) },
+      })),
+      answerKey: null,
+    } as unknown as QuestionDetail;
+
+    assert.deepEqual(toDraft(stateOf(saved), HEADER).passage, { en: PASSAGE });
+  });
+
+  it('survives an import row opened for correction', () => {
+    const draft = toDraft(withPassage(), HEADER);
+
+    assert.deepEqual(toDraft(stateOfDraft(draft), HEADER).passage, { en: PASSAGE });
   });
 });

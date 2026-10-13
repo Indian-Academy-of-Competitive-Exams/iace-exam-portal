@@ -26,6 +26,7 @@ import { REGION_KIND } from '@iace/ui/scaffold-region';
 /** The box read as slots, never as text between delimiters, into the draft the sheet also builds. */
 
 export const REGION_KEYS = {
+  PASSAGE: 'passage',
   STEM: 'stem',
   ANSWER: 'answer',
   SOLUTION: 'solution',
@@ -34,12 +35,15 @@ export const REGION_KEYS = {
 export const OPTION_PREFIX = 'option:';
 
 export const REGION_LABELS = {
+  PASSAGE: 'Passage',
   STEM: '',
   ANSWER: 'Answer',
   SOLUTION: 'Explanation',
 } as const;
 
 /** The one slot whose value is not what it looks like: the seat, not the text sitting in it. */
+export const PASSAGE_HINT = 'Optional';
+
 export const ANSWER_HINTS = {
   SINGLE_MCQ: 'Type the option, not its text: B',
   TEXT_FIELD: 'Type the value a student would enter',
@@ -53,6 +57,8 @@ const A_CODE = 65;
 
 /** What one language holds. Everything outside this is shared across all three. */
 export interface LanguageContent {
+  /** What the question is asked about; empty when it stands alone. */
+  passage: string;
   stem: string;
   options: string[];
   solution: string;
@@ -81,6 +87,7 @@ export interface AuthoringHeader {
 }
 
 const emptyLanguage = (options: number): LanguageContent => ({
+  passage: '',
   stem: '',
   options: Array.from({ length: options }, () => ''),
   solution: '',
@@ -116,6 +123,13 @@ export function regionsFor(state: AuthoringState, language: QuestionLanguage): S
       : [];
 
   return [
+    {
+      key: REGION_KEYS.PASSAGE,
+      label: REGION_LABELS.PASSAGE,
+      kind: REGION_KIND.NAMED,
+      hint: PASSAGE_HINT,
+      html: content.passage,
+    },
     {
       key: REGION_KEYS.STEM,
       label: REGION_LABELS.STEM,
@@ -163,7 +177,12 @@ export function stateFrom(
     const kept = { ...existing, options: isMcq ? shown : existing.options };
     content[code] =
       code === language
-        ? { ...kept, stem: find(REGION_KEYS.STEM), solution: find(REGION_KEYS.SOLUTION) }
+        ? {
+            ...kept,
+            passage: find(REGION_KEYS.PASSAGE),
+            stem: find(REGION_KEYS.STEM),
+            solution: find(REGION_KEYS.SOLUTION),
+          }
         : kept;
   }
 
@@ -253,6 +272,7 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
   const isMcq = state.type === QUESTION_TYPE.SINGLE_MCQ;
   const correct = isMcq ? answerIndexOf(state.answer, state.optionCount) : null;
   const tolerance = state.tolerance.trim();
+  const passage = localized((language) => state.content[language].passage);
 
   return {
     type: state.type,
@@ -264,6 +284,7 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
       : { questionCode: header.questionCode.trim() || null }),
     tags: tagsIn(header.tags),
     stem: localized((language) => state.content[language].stem),
+    ...(Object.keys(passage).length > 0 ? { passage } : {}),
     solution: localized((language) => state.content[language].solution),
     options: isMcq
       ? Array.from({ length: state.optionCount }, (_, index) => ({
@@ -293,6 +314,7 @@ export function stateOf(question: QuestionDetail): AuthoringState {
   const content = { ...base.content };
   for (const language of LANGUAGE_ORDER) {
     content[language] = {
+      passage: htmlOf(question.content[language]?.passage),
       stem: htmlOf(question.content[language]?.stem),
       solution: htmlOf(question.content[language]?.solution),
       options: question.options.map((option) => htmlOf(option.text[language])),
@@ -346,6 +368,7 @@ export function stateOfDraft(draft: QuestionDraft): AuthoringState {
   const content = emptyState(draft.type).content;
   for (const language of LANGUAGE_ORDER) {
     content[language] = {
+      passage: draft.passage?.[language] ?? '',
       stem: draft.stem[language] ?? '',
       solution: draft.solution?.[language] ?? '',
       options: Array.from({ length: seats }, (_, index) => textAt(index + 1, language)),

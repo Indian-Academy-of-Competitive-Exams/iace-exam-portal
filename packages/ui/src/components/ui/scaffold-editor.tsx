@@ -40,6 +40,8 @@ export interface ScaffoldEditorProps {
   /** Changing it reloads the box from `regions` — a different question, or the same one in another language. */
   docKey: string;
   onChange: (regions: ScaffoldRegion[]) => void;
+  /** The slot the caret lands in when the box loads. The first one, unless a slot above it is optional. */
+  startAt?: string;
   /** Ctrl+Enter. */
   onSave?: () => void;
   /** The one action that is not Up, Down or Enter, because a language is a mode over the whole box. */
@@ -101,6 +103,15 @@ function docFrom(regions: readonly ScaffoldRegion[]): string {
     .join('');
 }
 
+/** Where the caret goes on load: inside the named slot, or the top of the box when no slot has that name. */
+function slotStart(editor: Editor, key: string | undefined): number | 'start' {
+  let at: number | 'start' = 'start';
+  editor.state.doc.forEach((node: ProseNode, offset: number) => {
+    if (key !== undefined && node.attrs.key === key) at = offset + 1;
+  });
+  return at;
+}
+
 /** Every slot, in document order, with its body serialised back to html. */
 function regionsOf(editor: Editor): ScaffoldRegion[] {
   const serializer = DOMSerializer.fromSchema(editor.schema);
@@ -150,6 +161,7 @@ export function ScaffoldEditor({
   regions,
   docKey,
   onChange,
+  startAt,
   onSave,
   onCycleLanguage,
   onUploadImage,
@@ -217,9 +229,9 @@ export function ScaffoldEditor({
         .setContent(docFrom(regions), { emitUpdate: false })
         .run(),
     );
-    // Back at the first slot, which after a save is the stem of the next question.
-    if (!disabled) editor.commands.focus('start');
-  }, [editor, docKey, regions, disabled]);
+    // Back at the opening slot, which after a save is the stem of the next question.
+    if (!disabled) editor.commands.focus(slotStart(editor, startAt));
+  }, [editor, docKey, regions, disabled, startAt]);
 
   return (
     <div

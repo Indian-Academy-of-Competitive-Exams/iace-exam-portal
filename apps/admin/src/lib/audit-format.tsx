@@ -15,6 +15,7 @@ function formatDiffValue(value: unknown): string {
 /** What a question SAYS is logged leaf by leaf (`stem.EN`, `option.3.HI`), so name the leaf. */
 const CONTENT_FIELD_NOUNS: Readonly<Record<string, string>> = {
   stem: 'Stem',
+  passage: 'Passage',
   solution: 'Solution',
   option: 'Option',
 };

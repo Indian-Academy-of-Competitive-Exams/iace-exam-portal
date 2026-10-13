@@ -36,6 +36,7 @@ import {
   toDraft,
   type AuthoringHeader,
   type AuthoringState,
+  type LanguageContent,
 } from './question-scaffold';
 
 interface Saved {
@@ -335,6 +336,11 @@ function restore(key: string): Saved {
     const raw = window.localStorage.getItem(key);
     if (!raw) return blank;
     const kept = { ...blank, ...(JSON.parse(raw) as Partial<Saved>) };
+    // A draft kept before passages existed has none, and the box reads the slot as a string.
+    for (const code of LANGUAGE_ORDER) {
+      const held: Partial<LanguageContent> = kept.state.content[code];
+      held.passage ??= '';
+    }
     // Only an unfinished question earns its settings back; an empty box is a first visit.
     return wasTyped(kept.state) ? kept : { ...blank, romanised: kept.romanised };
   } catch {
@@ -347,6 +353,6 @@ function wasTyped(state: AuthoringState): boolean {
   if (state.answer.trim() !== '') return true;
   return LANGUAGE_ORDER.some((code) => {
     const content = state.content[code];
-    return hasText(content.stem) || hasText(content.solution) || content.options.some(hasText);
+    return [content.passage, content.stem, content.solution, ...content.options].some(hasText);
   });
 }

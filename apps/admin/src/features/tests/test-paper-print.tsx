@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
 import {
   LANGUAGE_LABELS,
+  LANGUAGE_MODE,
   QUESTION_TYPE,
   REPORT_LETTERHEAD,
   contentLanguageOf,
@@ -12,7 +13,7 @@ import {
   type LanguageCode,
   type PrintablePaper,
 } from '@iace/contracts';
-import { htmlOf, logoUrl } from '@iace/app-kit';
+import { htmlOf, logoUrl, passagesOf } from '@iace/app-kit';
 import { PageCrumbs, printElement, useFilterSpec, useFilters } from '@iace/app-kit/browser';
 import {
   EMPTY_STATE_KINDS,
@@ -244,6 +245,13 @@ function PrintedQuestion({
     <div className="flex break-inside-avoid gap-3">
       <span className="w-8 shrink-0 text-right font-semibold tabular-nums">{question.order}.</span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {passagesOf(question.content, paper.languages, LANGUAGE_MODE.DUAL).map((passage) => (
+          <RichContent
+            key={passage.language}
+            lang={passage.language.toLowerCase()}
+            html={passage.html}
+          />
+        ))}
         {paper.languages.map((language) => (
           <RichContent
             key={language}

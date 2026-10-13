@@ -5,11 +5,13 @@ import {
   QUESTION_IMAGE_MAX_BYTES,
   type QuestionLanguage,
 } from '@iace/contracts';
-import { SegmentedControl, cn } from '@iace/ui';
+import { ExternalLink } from 'lucide-react';
+import { Button, SegmentedControl, Tooltip, TooltipContent, TooltipTrigger, cn } from '@iace/ui';
 import { ScaffoldEditor, type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { uploadQuestionImage } from '../../lib/upload-question-image';
+import { openCandidateView } from './candidate-view-store';
 import { AuthoringChecks, AuthoringPreview, type Check } from './authoring-preview';
-import { SCRIPT_OF, regionsFor, type AuthoringState } from './question-scaffold';
+import { REGION_KEYS, SCRIPT_OF, regionsFor, type AuthoringState } from './question-scaffold';
 
 const IMAGE_LIMITS = {
   maxBytes: QUESTION_IMAGE_MAX_BYTES,
@@ -81,6 +83,7 @@ export function QuestionPanes({
             regions={regionsFor(state, language)}
             docKey={`${questionId || 'new'}:${language}:${state.type}:${boxVersion}`}
             onChange={onRegions}
+            startAt={REGION_KEYS.STEM}
             onSave={() => {
               if (canSave) onSave();
             }}
@@ -100,7 +103,25 @@ export function QuestionPanes({
       <section className="flex min-h-0 flex-col">
         <PanelHeading
           lead={<h2 className="text-sm font-semibold">Preview and validation</h2>}
-          action={previewAction}
+          action={
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openCandidateView({ state, language })}
+                  >
+                    <ExternalLink aria-hidden />
+                    <span className="sr-only">Candidate view</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Candidate view</TooltipContent>
+              </Tooltip>
+              {previewAction}
+            </>
+          }
         />
         <div className={cn(SCROLLS, 'gap-4 p-4')}>
           <AuthoringPreview state={state} language={language} />

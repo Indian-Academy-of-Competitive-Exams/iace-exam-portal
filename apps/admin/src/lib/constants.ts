@@ -117,6 +117,9 @@ export const ROUTES = {
   AUTHORING_QUESTION: (id: string) => `/authoring/${id}`,
   AUTHORING_EDITOR_PATTERN: '/authoring/:id',
   AUTHORING_HISTORY: '/authoring/history',
+  /** The question in the box as a candidate meets it: its own tab, outside the shell. */
+  CANDIDATE_VIEW: (viewId: string) => `/candidate-view/${viewId}`,
+  CANDIDATE_VIEW_PATTERN: '/candidate-view/:viewId',
   /** The typist's own queue, and the editor under it — nested, so the rail marks the row it came from. */
   AUTHORING_ASSIGNMENTS: '/authoring/assignments',
   /** A sheet of questions straight into the section it was written for. */
@@ -986,6 +989,8 @@ export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',
   /** The question in the box right now. A closed tab loses nothing; only a save writes a row. */
   AUTHORING_DRAFT: 'iace.admin.authoring',
+  /** One entry per opened candidate view, under a random id the address carries. */
+  CANDIDATE_VIEW: 'iace.admin.candidate-view',
   /** Which page tours this device has been shown; one key holding the set, so a tour added later needs no migration. */
   TOURS: 'iace.admin.tours',
 } as const;

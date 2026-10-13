@@ -1,5 +1,5 @@
 import { Check, CircleAlert, CircleDot, Circle, TriangleAlert } from 'lucide-react';
-import { QUESTION_TYPE, previewTextOf, type QuestionLanguage } from '@iace/contracts';
+import { QUESTION_TYPE, hasText, previewTextOf, type QuestionLanguage } from '@iace/contracts';
 import { Accordion, Badge, RichContent, cn, type BadgeProps } from '@iace/ui';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
 
@@ -21,6 +21,13 @@ export function AuthoringPreview({
 
   return (
     <section className="flex flex-col gap-4 rounded-md border border-border bg-surface p-5">
+      {hasText(content.passage) ? (
+        <RichContent
+          html={content.passage}
+          lang={language}
+          className="border-b border-border pb-4"
+        />
+      ) : null}
       <RichContent html={content.stem} lang={language} />
 
       {isMcq ? (

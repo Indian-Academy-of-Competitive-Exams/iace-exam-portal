@@ -73,6 +73,11 @@ const AuthoringEditorPage = React.lazy(() =>
     default: module.AuthoringEditorPage,
   })),
 );
+const CandidateViewPage = React.lazy(() =>
+  import('./features/authoring/candidate-view').then((module) => ({
+    default: module.CandidateViewPage,
+  })),
+);
 const AuthoringHistoryPage = React.lazy(() =>
   import('./features/authoring/authoring-history').then((module) => ({
     default: module.AuthoringHistoryPage,
@@ -262,6 +267,8 @@ export function App() {
           {screen(ROUTES.AUDIT, <AuditActivityPage />)}
           {screen(ROUTES.AUDIT_IMPORTS, <AuditImportsPage />)}
         </Route>
+        {/* Signed in like the rest, and outside the shell: the whole window is the question. */}
+        {screen(ROUTES.CANDIDATE_VIEW_PATTERN, <CandidateViewPage />)}
       </Route>
       <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
     </Routes>
