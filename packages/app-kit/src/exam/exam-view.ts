@@ -168,6 +168,8 @@ export interface ExamView {
   /** OMR's one write: the option and the flag together, because two records are two saves. */
   bubbleAnswer: (optionId: string, fill: number) => void;
   markAndNext: () => void;
+  /** Flags this question for a second look, or takes the flag off, and stays on it. */
+  toggleMark: () => void;
   clearResponse: () => void;
   openSection: (sectionId: string) => void;
   /** Hands this section in and opens the next. Null unless a sectional paper has a section left after this one. */

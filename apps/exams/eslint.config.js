@@ -5,7 +5,7 @@ export default [
   ...config,
   {
     // These skins reproduce a third-party CBT exactly; a token here would be a deviation from it.
-    files: ['src/features/exam/templates/{railway,banking}/**'],
+    files: ['src/features/exam/templates/{railway,banking,ssc}/**'],
     rules: { 'no-restricted-syntax': 'off' },
   },
   {

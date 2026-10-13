@@ -169,6 +169,7 @@ export function previewView(): ExamView {
     chooseOption: noop,
     bubbleAnswer: noop,
     markAndNext: noop,
+    toggleMark: noop,
     clearResponse: noop,
     openSection: noop,
     submitSection: null,

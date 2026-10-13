@@ -129,6 +129,13 @@ export function App() {
               <LoadingState>Opening your paper</LoadingState>,
             )}
           />
+          <Route
+            path="/ssc-preview"
+            element={whileLoading(
+              <RailwayPreviewPage template={EXAM_TEMPLATE.SSC} />,
+              <LoadingState>Opening your paper</LoadingState>,
+            )}
+          />
         </>
       ) : null}
       <Route

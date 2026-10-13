@@ -355,12 +355,14 @@ export const EXAM_TEMPLATE_LABELS: Readonly<Record<ExamTemplate, string>> = {
   DEFAULT: 'Default',
   RAILWAYS: 'Railways',
   BANKING: 'Banking',
+  SSC: 'SSC',
 };
 
 export const EXAM_TEMPLATE_HINTS: Readonly<Record<ExamTemplate, string>> = {
   DEFAULT: 'Roomier spacing and larger targets',
   RAILWAYS: 'Dense, with the timer in the section bar and the palette on the right',
   BANKING: 'Section tabs across the top, the timer beside them and the palette on the right',
+  SSC: 'The timer in the header, the buttons above the question and the palette on the right',
 };
 
 export const LANGUAGE_MODE_LABELS: Readonly<Record<LanguageMode, string>> = {

@@ -331,6 +331,7 @@ export function useExamView(
     sectionCounts,
     counts,
     focus,
+    marked: isReviewState(current ? state.answers[current.questionId]?.state : undefined),
   };
   const live = useRef(now);
   // Before any child's layout effect, so a handler called in the same commit is already this render's.
@@ -362,6 +363,7 @@ export function useExamView(
         live.current.record({ marked: true });
         live.current.nextQuestion();
       },
+      toggleMark: () => live.current.record({ marked: !live.current.marked }),
       clearResponse: () => live.current.record({ selectedOptionId: null }),
       openSection: (id: string) => live.current.openSection(id),
       sectionCounts: (id: string) => live.current.sectionCounts[id] ?? live.current.counts,
@@ -468,6 +470,7 @@ export function useExamView(
       chooseOption: on.chooseOption,
       bubbleAnswer: on.bubbleAnswer,
       markAndNext: on.markAndNext,
+      toggleMark: on.toggleMark,
       clearResponse: on.clearResponse,
       openSection: on.openSection,
       submitSection: hasSectionAfter ? on.submitSection : null,

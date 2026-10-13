@@ -79,6 +79,7 @@ enum ExamTemplate {
   DEFAULT
   RAILWAYS
   BANKING
+  SSC
 }
 
 // Section-return behaviour derives from this: COMPOSITE_FREE may return,

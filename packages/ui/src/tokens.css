@@ -614,9 +614,10 @@
 }
 
 /* Strict — the austere real-CBT baseline: flat fills, square edges, dense. */
-/* No dark variant: `railway.css` and `banking.css` pin their chrome light, so flipping tokens would darken half the paper. */
+/* No dark variant: `railway.css`, `banking.css` and `ssc.css` pin their chrome light, so flipping tokens would darken half the paper. */
 [data-exam-template='railways'],
-[data-exam-template='banking'] {
+[data-exam-template='banking'],
+[data-exam-template='ssc'] {
   --exam-surface: #ffffff;
   --exam-surface-2: #eef1f5;
   --exam-ink: #10141a;

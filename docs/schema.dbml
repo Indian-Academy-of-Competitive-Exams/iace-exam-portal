@@ -56,6 +56,7 @@ Enum ExamTemplate {
   DEFAULT
   RAILWAYS
   BANKING
+  SSC
 }
 
 Enum TimerTemplate {

@@ -48,6 +48,7 @@ export const EXAM_TEMPLATE = {
   DEFAULT: 'DEFAULT',
   RAILWAYS: 'RAILWAYS',
   BANKING: 'BANKING',
+  SSC: 'SSC',
 } as const;
 export const examTemplateSchema = z.enum(EXAM_TEMPLATE);
 export type ExamTemplate = z.infer<typeof examTemplateSchema>;
@@ -85,6 +86,13 @@ export const EXAM_TEMPLATE_CONFIG: Readonly<Record<ExamTemplate, ExamTemplateCon
     timerFormat: 'LABELLED',
     palettePosition: 'RIGHT',
     sectionSwitch: 'TABS',
+    watermark: 'SCREEN',
+  },
+  [EXAM_TEMPLATE.SSC]: {
+    timerPosition: 'HEADER',
+    timerFormat: 'LABELLED',
+    palettePosition: 'RIGHT',
+    sectionSwitch: 'BUTTONS',
     watermark: 'SCREEN',
   },
 };

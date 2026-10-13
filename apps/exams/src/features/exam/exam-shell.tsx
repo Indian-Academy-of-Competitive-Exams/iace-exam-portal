@@ -15,6 +15,7 @@ import { RailwayLayout } from './templates/railway/layout';
 import { RailwayFullscreenNag } from './templates/railway/fullscreen-nag';
 import { BankingLayout } from './templates/banking/layout';
 import { BankingFullscreenNag } from './templates/banking/info-dialog';
+import { SscFullscreenNag, SscLayout } from './templates/ssc/layout';
 
 export function ExamShell({
   examTemplate,
@@ -87,6 +88,7 @@ const SKINS: Readonly<
   [EXAM_TEMPLATE.DEFAULT]: { Skin: Layout, Nag: FullscreenNag, asksItself: false },
   [EXAM_TEMPLATE.RAILWAYS]: { Skin: RailwayLayout, Nag: RailwayFullscreenNag, asksItself: true },
   [EXAM_TEMPLATE.BANKING]: { Skin: BankingLayout, Nag: BankingFullscreenNag, asksItself: true },
+  [EXAM_TEMPLATE.SSC]: { Skin: SscLayout, Nag: SscFullscreenNag, asksItself: true },
 };
 
 /** The default skin's warning: the design system's own alert, over the paper it interrupts. */

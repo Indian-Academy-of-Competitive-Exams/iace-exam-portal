@@ -812,6 +812,22 @@ test('answering moves the answer, the palette and the flag the bottom bar draws'
   assert.equal(result.current.selectedOptionId, null, 'clearing takes the option off the screen');
 });
 
+test('a mark for review goes on and comes off without leaving the question', async (t) => {
+  const { result, unmount } = await seated(apiWith({}), twoInSectionOne());
+  t.after(unmount);
+
+  act(() => result.current.toggleMark());
+
+  assert.equal(result.current.marked, true);
+  assert.equal(result.current.question?.questionId, 'sec1-q1', 'the question stays on screen');
+  assert.equal(result.current.counts[ANSWER_STATE.MARKED_REVIEW], 1);
+
+  act(() => result.current.toggleMark());
+
+  assert.equal(result.current.marked, false);
+  assert.equal(result.current.counts[ANSWER_STATE.MARKED_REVIEW], 0);
+});
+
 test('moving on swaps the question, its seat number and what that seat holds', async (t) => {
   const { result, unmount } = await seated(apiWith({}), twoInSectionOne());
   t.after(unmount);

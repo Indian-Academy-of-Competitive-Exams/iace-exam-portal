@@ -1,0 +1,748 @@
+/* The SSC skin. Every size and colour was measured off a live SSC mock at 1920px wide;
+   the stylesheet and the glyphs are written here, not copied. Raw values are deliberate:
+   this skin reproduces a third-party screen exactly, so a token would be a deviation.
+   Scoped to the skin attribute and imported by this template alone.
+   Source of record: docs/superpowers/specs/ssc-capture/notes.md */
+
+[data-exam-template='ssc'] {
+  --sc-blue: #285ec8;
+  --sc-chip: #4900fe;
+  --sc-green: #009115;
+  --sc-rule: #999;
+  --sc-flat: #e4edf7;
+  --sc-flat-rule: #a9d0f5;
+  --sc-side: 20%;
+  --sc-side-min: 260px;
+  --xp-scroll-track: #f1f1f1;
+  --xp-scroll-rule: #ddd;
+  --xp-scroll-thumb: #9a9a9a;
+
+  font-family: verdana, helvetica, sans-serif;
+  font-size: 13px;
+  background: #fff;
+  color: #000;
+  /* The app may sit in a dark scheme; this screen is a light one, and native radios follow it. */
+  color-scheme: light;
+}
+
+[data-exam-template='ssc'] button:not(:disabled) {
+  cursor: pointer;
+}
+
+[data-exam-template='ssc'] button:disabled {
+  opacity: 0.55;
+}
+
+/* ---------- header ---------- */
+
+[data-exam-template='ssc'] .sc-header {
+  position: relative;
+  min-height: 76px;
+  padding: 7px 0 0 38px;
+  border-bottom: 1px solid #000;
+  background: #fff;
+}
+
+[data-exam-template='ssc'] .sc-header h2 {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 370px;
+  max-width: 40%;
+  transform: translateX(-50%);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: center;
+}
+
+[data-exam-template='ssc'] .sc-tools {
+  gap: 4px;
+  margin: 4px 0 0 25px;
+}
+
+[data-exam-template='ssc'] .sc-tools > div {
+  gap: 6px;
+}
+
+[data-exam-template='ssc'] .sc-zoom {
+  padding: 2px 16px;
+  border-radius: 5px;
+  background: var(--sc-blue);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+[data-exam-template='ssc'] .sc-fullscreen {
+  padding: 1px 15px;
+  border: 1px solid #00f;
+  border-radius: 5px;
+  background: #fff;
+  color: #00f;
+  font-family: Arial, sans-serif;
+  font-size: 13.33px;
+  line-height: 15px;
+}
+
+[data-exam-template='ssc'] .sc-clock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  gap: 20px;
+}
+
+[data-exam-template='ssc'] .sc-clock img {
+  width: 80px;
+  height: 70px;
+  object-fit: cover;
+}
+
+[data-exam-template='ssc'] .sc-timer {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19px;
+  white-space: nowrap;
+}
+
+[data-exam-template='ssc'] .sc-timer b {
+  background: #fcffcd;
+  color: #f00;
+}
+
+/* ---------- the band above the paper ---------- */
+
+[data-exam-template='ssc'] .sc-band {
+  min-height: 74px;
+  padding: 0 20px 0 25px;
+}
+
+[data-exam-template='ssc'] .sc-links {
+  gap: 10px;
+  padding-top: 5px;
+}
+
+[data-exam-template='ssc'] .sc-links button {
+  color: #f00;
+  font-family: Times, 'Times New Roman', serif;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 18px;
+  text-decoration: underline;
+}
+
+[data-exam-template='ssc'] .sc-total {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+[data-exam-template='ssc'] .sc-total b,
+[data-exam-template='ssc'] .sc-analytics b {
+  background: #ff0;
+  color: #f00;
+}
+
+[data-exam-template='ssc'] .sc-bar {
+  gap: 6px 12px;
+  padding: 3px 0 0 13px;
+}
+
+[data-exam-template='ssc'] .sc-tab {
+  margin: 0 5px 2px 0;
+  padding: 6px 10px;
+  background: var(--sc-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+[data-exam-template='ssc'] .sc-tab.active {
+  background: var(--sc-green);
+}
+
+[data-exam-template='ssc'] .sc-buttons {
+  gap: 6px;
+  /* The original's row stops short of the edge by this much of the screen. */
+  margin-right: 10%;
+}
+
+[data-exam-template='ssc'] .sc-btn {
+  display: inline-block;
+  min-width: 135px;
+  padding: 2px 8px;
+  border: 2px solid var(--sc-blue);
+  border-radius: 5px;
+  background: var(--sc-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 21px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+[data-exam-template='ssc'] .sc-btn-unmark {
+  border-color: #d4c7b7;
+  background: linear-gradient(#d4c7b7, #ede6db);
+  color: #000;
+}
+
+/* ---------- the question ---------- */
+
+[data-exam-template='ssc'] .sc-left {
+  padding: 59px 13px 15px 31px;
+}
+
+[data-exam-template='ssc'] .sc-qno {
+  padding: 15px;
+  border: 1px solid var(--sc-rule);
+  border-bottom: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+[data-exam-template='ssc'] .sc-qpane {
+  border: 1px solid var(--sc-rule);
+  font-size: calc(16px * (1 + var(--sc-font-step, 0) * 0.1));
+  line-height: 1.5;
+}
+
+[data-exam-template='ssc'] .sc-passage {
+  width: 50%;
+  flex-shrink: 0;
+  border-right: 1px solid var(--sc-rule);
+}
+
+[data-exam-template='ssc'] .sc-stem {
+  padding: 1em 3px 0;
+}
+
+[data-exam-template='ssc'] .sc-stem > *,
+[data-exam-template='ssc'] .sc-stem p:not(:last-child) {
+  margin-bottom: 1em;
+}
+
+[data-exam-template='ssc'] .sc-options {
+  padding: 2px 3px 16px;
+}
+
+[data-exam-template='ssc'] .sc-opt {
+  padding: 2px 0;
+}
+
+[data-exam-template='ssc'] .sc-opt input {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  margin: 0.4em 3px 0 5px;
+}
+
+[data-exam-template='ssc'] .sc-opt > span:last-child {
+  padding-left: 4px;
+}
+
+[data-exam-template='ssc'] .sc-opt p {
+  margin: 0;
+}
+
+/* ---------- the palette ---------- */
+
+[data-exam-template='ssc'] .sc-side {
+  width: var(--sc-side);
+  min-width: var(--sc-side-min);
+  padding: 35px 4px 8px 0;
+}
+
+/* Folded, the column is only as wide as its arrow, and the question takes the rest. */
+[data-exam-template='ssc'] :not([data-palette-open]) > .sc-side {
+  width: auto;
+  min-width: 0;
+  padding-right: 20px;
+}
+
+[data-exam-template='ssc'] .sc-fold {
+  flex-shrink: 0;
+  width: 35px;
+  height: 35px;
+  background: #1e7bf2;
+  clip-path: polygon(15% 12%, 88% 50%, 15% 88%);
+}
+
+[data-exam-template='ssc'] :not([data-palette-open]) > .sc-side .sc-fold {
+  clip-path: polygon(85% 12%, 12% 50%, 85% 88%);
+}
+
+[data-exam-template='ssc'] .sc-palette {
+  max-height: 320px;
+  margin-top: 8px;
+  padding: 4px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+[data-exam-template='ssc'] .sc-palette > p {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin-bottom: 5px;
+  background: #fff;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+
+[data-exam-template='ssc'] .sc-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  row-gap: 26px;
+  padding: 3px 3px 26px;
+}
+
+[data-exam-template='ssc'] .sc-chip {
+  position: relative;
+  display: inline-block;
+  width: 28px;
+  height: 15px;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+[data-exam-template='ssc'] .sc-chip.fresh {
+  background: var(--sc-chip);
+}
+
+[data-exam-template='ssc'] .sc-chip.answered {
+  background: #008000;
+}
+
+[data-exam-template='ssc'] .sc-chip.marked {
+  background: #f00;
+}
+
+[data-exam-template='ssc'] .sc-chip.answeredmarked {
+  background: #f7ff17;
+  color: #000;
+}
+
+/* The arrowhead under a marked question, drawn here rather than shipped as a picture. */
+[data-exam-template='ssc'] .sc-chip.marked::after,
+[data-exam-template='ssc'] .sc-chip.answeredmarked::after {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  width: 9px;
+  height: 10px;
+  transform: translateX(-50%);
+  background: #000;
+  clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%);
+  content: '';
+}
+
+[data-exam-template='ssc'] .sc-chip:disabled {
+  opacity: 0.45;
+}
+
+[data-exam-template='ssc'] .sc-analytics {
+  margin-top: 21px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+[data-exam-template='ssc'] .sc-analytics > p {
+  padding: 5px;
+  background: #808080;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+}
+
+[data-exam-template='ssc'] .sc-analytics table {
+  width: 100%;
+  border: 1px solid #000;
+  border-collapse: collapse;
+}
+
+[data-exam-template='ssc'] .sc-analytics td {
+  padding: 8px;
+  border-bottom: 1px solid #000;
+  line-height: 15px;
+}
+
+[data-exam-template='ssc'] .sc-analytics td:first-child {
+  border-right: 1px solid #000;
+}
+
+[data-exam-template='ssc'] .sc-analytics td:last-child {
+  width: 58px;
+  text-align: right;
+}
+
+/* ---------- the guide: before the paper, and again from inside it ---------- */
+
+[data-exam-template='ssc'] .sc-guide {
+  margin: 15px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+/* Inside the sitting the left column already holds the margins. */
+[data-exam-template='ssc'] .sc-left > .sc-guide {
+  margin: 0;
+}
+
+[data-exam-template='ssc'] .sc-guide-lead {
+  font-weight: 700;
+  text-align: center;
+}
+
+[data-exam-template='ssc'] .sc-guide-totals {
+  margin: 32px 0 16px 2%;
+}
+
+[data-exam-template='ssc'] .sc-guide-sections {
+  margin-left: 2%;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+[data-exam-template='ssc'] .sc-guide-sections th,
+[data-exam-template='ssc'] .sc-guide-sections td {
+  border: 1px solid #000;
+}
+
+[data-exam-template='ssc'] .sc-guide-sections th {
+  max-width: 200px;
+  padding: 7px 12px;
+}
+
+[data-exam-template='ssc'] .sc-guide-sections td {
+  height: 36px;
+  padding: 1px 12px;
+}
+
+[data-exam-template='ssc'] .sc-symbols-lead {
+  margin: 50px 0 20px;
+  color: #2278fb;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+[data-exam-template='ssc'] .sc-symbols {
+  width: 100%;
+  margin-bottom: 20px;
+  border: 1px solid #ddd;
+  border-collapse: collapse;
+  /* So "Symbols" opens on the table with its heading clear of the pane's edge. */
+  scroll-margin-top: 8px;
+}
+
+[data-exam-template='ssc'] .sc-symbols th {
+  padding: 10px;
+  background: #d4c7b7;
+  font-weight: 700;
+}
+
+[data-exam-template='ssc'] .sc-symbols td {
+  padding: 10px;
+  border: 1px solid #ddd;
+  color: #2278fb;
+  font-weight: 600;
+}
+
+[data-exam-template='ssc'] .sc-symbols td:first-child {
+  width: 20%;
+  text-align: center;
+}
+
+/* The arrowhead hangs below its chip, so its row is given the room. */
+[data-exam-template='ssc'] .sc-symbols .sc-chip.marked,
+[data-exam-template='ssc'] .sc-symbols .sc-chip.answeredmarked {
+  margin-bottom: 20px;
+}
+
+[data-exam-template='ssc'] .sc-symbols .sc-btn {
+  min-width: 0;
+  padding: 3px 14px;
+  border-radius: 0;
+  font-family: Arial, sans-serif;
+  font-weight: 400;
+}
+
+[data-exam-template='ssc'] .sc-guide h3 {
+  margin: 13px 0;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+[data-exam-template='ssc'] .sc-guide ol {
+  margin: 13px 0;
+  padding-left: 40px;
+  list-style: decimal;
+}
+
+[data-exam-template='ssc'] .sc-red {
+  color: #f00;
+}
+
+[data-exam-template='ssc'] .sc-back {
+  align-self: center;
+  width: 111px;
+  height: 44px;
+  margin-top: 15px;
+  border: 2px solid var(--sc-flat-rule);
+  background: #c7dcf0;
+  font-size: 13px;
+}
+
+[data-exam-template='ssc'] .sc-start {
+  gap: 4px;
+  padding: 0 15px 62px;
+  font-family: Times, 'Times New Roman', serif;
+  font-size: 16px;
+}
+
+[data-exam-template='ssc'] .sc-start select {
+  margin-left: 4px;
+  border: 1px solid #767676;
+  background: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 13.33px;
+}
+
+[data-exam-template='ssc'] .sc-start button {
+  height: 30px;
+  padding: 1px 6px;
+  border: 2px outset #000;
+  background: #ccc;
+  font-family: Arial, sans-serif;
+  font-size: 13.33px;
+  font-weight: 700;
+}
+
+[data-exam-template='ssc'] .sc-photo-col {
+  display: flex;
+  width: var(--sc-side);
+  min-width: var(--sc-side-min);
+  flex-direction: column;
+  align-items: center;
+  padding-top: 180px;
+  border-left: 1px solid #000;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+[data-exam-template='ssc'] .sc-photo-col img {
+  width: 200px;
+  height: 200px;
+  object-fit: cover;
+}
+
+/* ---------- the summary a section or the paper is handed in from ---------- */
+
+[data-exam-template='ssc'] .sc-summary {
+  padding: 15px;
+  overflow-y: auto;
+  font-size: 12px;
+  text-align: center;
+}
+
+[data-exam-template='ssc'] .sc-summary h1 {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19px;
+}
+
+[data-exam-template='ssc'] .sc-summary table {
+  margin: 49px auto 0;
+  border: 1px solid #000;
+  border-collapse: collapse;
+}
+
+[data-exam-template='ssc'] .sc-summary th,
+[data-exam-template='ssc'] .sc-summary td {
+  padding: 10px;
+  border: 1px solid #000;
+  line-height: 15px;
+}
+
+[data-exam-template='ssc'] .sc-summary th {
+  background: var(--sc-flat);
+}
+
+[data-exam-template='ssc'] .sc-summary > p {
+  margin: 32px 0 16px;
+  font-size: 16px;
+  line-height: 19px;
+}
+
+[data-exam-template='ssc'] .sc-summary > div {
+  gap: 12px 41px;
+}
+
+[data-exam-template='ssc'] .sc-summary button {
+  padding: 3px;
+  border: 1px solid var(--sc-flat-rule);
+  background: var(--sc-flat);
+  font-size: 14px;
+  line-height: 17px;
+}
+
+/* ---------- leaving full screen ---------- */
+
+[data-exam-template='ssc'] .sc-overlay {
+  background: rgb(0 0 0 / 70%);
+}
+
+[data-exam-template='ssc'] .sc-nag {
+  width: 312px;
+  max-width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background: #fff;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+  text-align: center;
+}
+
+[data-exam-template='ssc'] .sc-nag p {
+  padding: 48px 15px;
+  font-size: 16px;
+  line-height: 18px;
+}
+
+[data-exam-template='ssc'] .sc-nag > div {
+  gap: 8px;
+  padding: 10px 16px;
+  background: #e7e7e7;
+}
+
+[data-exam-template='ssc'] .sc-nag button {
+  padding: 2px 20px;
+  border-radius: 4px;
+  background: #428bca;
+  color: #fff;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+[data-exam-template='ssc'] .sc-watermark {
+  pointer-events: none;
+}
+
+/* ---------- narrow screens: nothing here is in the original, which is desktop only ---------- */
+
+@media (max-width: 1100px) {
+  [data-exam-template='ssc'] .sc-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 6px 10px;
+  }
+
+  [data-exam-template='ssc'] .sc-header h2 {
+    position: static;
+    width: auto;
+    max-width: none;
+    flex: 1 1 200px;
+    order: 3;
+    transform: none;
+    font-size: 16px;
+    line-height: 20px;
+  }
+
+  [data-exam-template='ssc'] .sc-tools {
+    margin: 0;
+  }
+
+  [data-exam-template='ssc'] .sc-clock {
+    position: static;
+    margin-left: auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  [data-exam-template='ssc'] .sc-clock img {
+    width: 40px;
+    height: 36px;
+  }
+
+  [data-exam-template='ssc'] .sc-band {
+    padding: 0 10px;
+  }
+
+  [data-exam-template='ssc'] .sc-bar {
+    padding-left: 0;
+  }
+
+  [data-exam-template='ssc'] .sc-buttons {
+    margin-right: 0;
+  }
+
+  [data-exam-template='ssc'] .sc-btn {
+    min-width: 0;
+  }
+
+  [data-exam-template='ssc'] .sc-left {
+    padding: 12px 6px 10px 10px;
+  }
+
+  [data-exam-template='ssc'] .sc-side {
+    padding-top: 6px;
+  }
+
+  [data-exam-template='ssc'] .sc-photo-col {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-exam-template='ssc'] .sc-qpane {
+    flex-direction: column;
+  }
+
+  [data-exam-template='ssc'] .sc-passage {
+    width: auto;
+    max-height: 40%;
+    border-right: 0;
+    border-bottom: 1px solid var(--sc-rule);
+  }
+
+  /* Open, the palette lies over the paper; folded, only its arrow stays, at the paper's corner. */
+  [data-exam-template='ssc'] .sc-side {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    width: min(100%, 320px);
+    border-left: 1px solid var(--sc-rule);
+    background: #fff;
+  }
+
+  [data-exam-template='ssc'] :not([data-palette-open]) > .sc-side {
+    bottom: auto;
+    padding: 2px 4px;
+    border-left: 0;
+    background: none;
+  }
+
+  [data-exam-template='ssc'] .sc-fold {
+    width: 28px;
+    height: 28px;
+  }
+}
