@@ -21,6 +21,8 @@ const CANDIDATES = Number(__ENV.CANDIDATES || 1000);
 const OPEN_WINDOW_SEC = Number(__ENV.OPEN_WINDOW_SEC || 120);
 const SITTING_SEC = Number(__ENV.SITTING_SEC || 300);
 const AUTOSAVE_SEC = Number(__ENV.AUTOSAVE_SEC || 25);
+// A hall at the bell, with OPEN_WINDOW_SEC=0: seconds to the one instant all begin on, save on the beat of, and hand in after.
+const BELL_SEC = Number(__ENV.BELL_SEC || 0);
 const LOGIN_PEAK_RPS = Number(__ENV.LOGIN_PEAK_RPS || 40);
 const AFTERMATH_RPS = Number(__ENV.AFTERMATH_RPS || 20);
 const ADMIN_RPS = Number(__ENV.ADMIN_RPS || 2);
@@ -126,6 +128,12 @@ function startableTest(catalog) {
 
 // ---- Tier 1: the live sitting ----------------------------------------------
 
+/** Holds a candidate to a shared wall-clock instant; one already past it goes straight on. */
+function waitUntil(at) {
+  const ms = at - Date.now();
+  if (ms > 0) sleep(ms / 1000);
+}
+
 function answerBatch(questions, from, count, firstActionAt) {
   const batch = [];
   for (let i = from; i < Math.min(from + count, questions.length); i += 1) {
@@ -147,7 +155,7 @@ export function sitting(setup) {
   if (!setup.testId || !setup.questions.length) return;
   sleep(Math.random() * OPEN_WINDOW_SEC);
 
-  const tokens = login(myAccount(), TIERS.SITTING, 'warmup_login');
+  const tokens = login(myAccount(), TIERS.SITTING, 'student_login');
   if (!tokens) return;
   const api = client(tokens.accessToken, TIERS.SITTING);
   const testId = setup.testId;
@@ -157,6 +165,8 @@ export function sitting(setup) {
   // Transferred for real and thrown away: eight thousand VUs each holding a paper is gigabytes.
   api.fire('GET', `/me/tests/${testId}/paper`, 'test_paper');
 
+  // Signed in and holding the paper, the hall waits for the bell.
+  if (setup.bellAt) waitUntil(setup.bellAt);
   const tab = `k6-${exec.vu.idInTest}`;
   const started = api.read('POST', `/me/tests/${testId}/attempt`, 'start', {
     tab,
@@ -171,7 +181,9 @@ export function sitting(setup) {
   let revision = 0;
 
   for (let round = 0; round < saves; round += 1) {
-    sleep(AUTOSAVE_SEC);
+    // On the bell's own beat, not this candidate's, so a slow start cannot spread the saves out.
+    if (setup.bellAt) waitUntil(setup.bellAt + (round + 1) * AUTOSAVE_SEC * 1000);
+    else sleep(AUTOSAVE_SEC);
     revision += 1;
     const answers = answerBatch(setup.questions, cursor, perSave, firstActionAt);
     cursor += answers.length;
@@ -268,7 +280,7 @@ const SCENARIOS = {
     exec: 'sitting',
     vus: CANDIDATES,
     iterations: 1,
-    maxDuration: `${OPEN_WINDOW_SEC + SITTING_SEC + 300}s`,
+    maxDuration: `${OPEN_WINDOW_SEC + BELL_SEC + SITTING_SEC + 300}s`,
   },
   [TIERS.AFTERMATH]: arrival('aftermath', AFTERMATH_RPS, 10),
   [TIERS.LOGIN]: {
@@ -351,6 +363,8 @@ export function setup() {
 
   return {
     testId,
+    // Counted from here, the last thing before the candidates are let in.
+    bellAt: BELL_SEC > 0 ? Date.now() + BELL_SEC * 1000 : 0,
     questions: paper.questions.map((question) => ({
       q: question.questionId,
       o: question.options.map((option) => option.id),
