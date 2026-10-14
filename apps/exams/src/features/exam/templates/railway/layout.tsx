@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { Calculator, Pause } from 'lucide-react';
-import { isStateShown, type ExamClock } from '@iace/contracts';
+import { QUESTION_TYPE, isStateShown, type ExamClock, type QuestionType } from '@iace/contracts';
 import {
   passagesOf,
   TIMER_KIND,
@@ -333,8 +333,15 @@ function OpenPanel({
   return panel === 'INSTRUCTIONS' ? <InstructionsModal view={view} onClose={onClose} /> : null;
 }
 
+const QUESTION_TYPE_LABELS: Readonly<Record<QuestionType, string>> = {
+  SINGLE_MCQ: 'Multiple Choice Question',
+  TEXT_FIELD: 'Short Answer',
+  TYPING: 'Typing Test',
+  DESCRIPTIVE: 'Descriptive',
+};
+
 const questionTypeLabel = (view: ExamView) =>
-  isTypingQuestion(view.question) ? 'Typing Test' : 'Multiple Choice Question';
+  QUESTION_TYPE_LABELS[view.question?.type ?? QUESTION_TYPE.SINGLE_MCQ];
 
 /** One click must not clear minutes of typing or writing, so the button is off on such a question. */
 const clearable = (view: ExamView, off: boolean) => !off && !answersByKeyboard(view.question);
