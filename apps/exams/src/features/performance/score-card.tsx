@@ -3,15 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Card, EmptyState, EMPTY_STATE_KINDS, Metric, StatRow, cn } from '@iace/ui';
 import { CohortFigure, MarksFigure, TimeFigure, type Benchmark } from '@iace/app-kit/browser';
-import {
-  METRIC_UNITS,
-  headlineOf,
-  isMarkingPending,
-  isSittingVoided,
-  minutes,
-  ordinalSuffix,
-  targetLabel,
-} from '@iace/app-kit';
+import { METRIC_UNITS, headlineOf, minutes, ordinalSuffix, targetLabel } from '@iace/app-kit';
 import {
   TYPING_PRESETS,
   paperCounts,
@@ -24,7 +16,7 @@ import {
 import { scoreCardQuery, typingInAttemptQuery } from '../../lib/queries';
 import { QualifiedBadge, TypingHeadline, TypingOutcome } from '../typing/typing-result';
 import { WRITTEN_NOTICE } from '../typing/written-notice';
-import { SittingSetAside } from './report';
+import { ScoreCardGate } from './score-card-gate';
 import {
   Hero,
   HeroFigure,
@@ -43,45 +35,25 @@ export function ScoreCardPanel() {
   // Asked only once the paper is marked: before that it would be refused for the same reason the card is.
   const typing = useQuery({ ...typingInAttemptQuery(attemptId), enabled: card.isSuccess });
 
-  const again = () => void card.refetch();
+  return (
+    <ScoreCardGate card={card} failed="Your score card did not load">
+      {(data) => {
+        // A zero-mark paper is a typing test, so its card waits for the typing rather than showing "0 marks" first.
+        if (data.maxMarks === 0 && typing.isPending) return <ReportSkeleton />;
+        if (typing.isError) {
+          return (
+            <EmptyState
+              kind={EMPTY_STATE_KINDS.FAILURE}
+              title="Your typing result did not load"
+              onRetry={() => void typing.refetch()}
+            />
+          );
+        }
 
-  if (card.isLoading) return <ReportSkeleton />;
-  if (isSittingVoided(card.error)) return <SittingSetAside />;
-  // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
-  if (isMarkingPending(card.error)) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.EMPTY}
-        title="No marks yet"
-        // ui-copy-ok: consequence
-        hint="Your paper is handed in and safe."
-        onRetry={again}
-      />
-    );
-  }
-  if (!card.data) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.FAILURE}
-        title="Your score card did not load"
-        onRetry={again}
-      />
-    );
-  }
-
-  // A zero-mark paper is a typing test, so its card waits for the typing rather than showing "0 marks" first.
-  if (card.data.maxMarks === 0 && typing.isPending) return <ReportSkeleton />;
-  if (typing.isError) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.FAILURE}
-        title="Your typing result did not load"
-        onRetry={() => void typing.refetch()}
-      />
-    );
-  }
-
-  return <Result card={card.data} typing={typing.data ?? NO_TYPING} />;
+        return <Result card={data} typing={typing.data ?? NO_TYPING} />;
+      }}
+    </ScoreCardGate>
+  );
 }
 
 function Result({ card, typing }: Readonly<{ card: ScoreCard; typing: readonly TypingSitting[] }>) {

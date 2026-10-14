@@ -5,21 +5,15 @@
  */
 import { useState } from 'react';
 import { Calculator, Pause } from 'lucide-react';
-import { QUESTION_TYPE, isStateShown, type ExamClock, type QuestionType } from '@iace/contracts';
-import {
-  passagesOf,
-  TIMER_KIND,
-  useAnchoredCountdown,
-  useClockCountdown,
-  usePause,
-  type ExamView,
-} from '@iace/app-kit';
+import { QUESTION_TYPE, isStateShown, type QuestionType } from '@iace/contracts';
+import { passagesOf, usePause, type ExamView } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Button, cn } from '@iace/ui';
 import { Passage } from '../../passage';
 import { RailwayOptions, RailwayQuestion } from './question';
 import { LEGEND_ORDER, TALLY_ORDER } from './states';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
+import { Countdown } from '../shared/countdown';
 import { PHONE_QUERY } from '../shared/phone-query';
 import { RailwayPalette } from './palette';
 import { InfoTally } from './info-popup';
@@ -392,39 +386,15 @@ function RailwayPaper({ view }: Readonly<{ view: ExamView }>) {
   );
 }
 
-function RailwayTimer({ view: { timer } }: Readonly<{ view: ExamView }>) {
-  return timer.kind === TIMER_KIND.SECTION ? (
-    <RailwaySectionClock key={timer.key} allowedSec={timer.allowedSec} onExpire={timer.onExpire} />
-  ) : (
-    <RailwayPaperClock clock={timer.clock} onExpire={timer.onExpire} />
-  );
-}
-
-/** "Time Left : 89:58" — the original counts minutes past 59 rather than rolling into hours. */
-function RailwayPaperClock({
-  clock,
-  onExpire,
-}: Readonly<{ clock: ExamClock; onExpire: () => void }>) {
-  const left = useClockCountdown(clock, onExpire);
-
+function RailwayTimer({ view }: Readonly<{ view: ExamView }>) {
   return (
-    <p aria-live="off" className="right-time">
-      Time Left : <b>{minuteClock(left)}</b>
-    </p>
-  );
-}
-
-/** A duration from the moment the section opened, not a server deadline the paper carries. */
-function RailwaySectionClock({
-  allowedSec,
-  onExpire,
-}: Readonly<{ allowedSec: number; onExpire: () => void }>) {
-  const left = useAnchoredCountdown(allowedSec, onExpire);
-
-  return (
-    <p aria-live="off" className="right-time">
-      Time Left : <b>{minuteClock(left)}</b>
-    </p>
+    <Countdown view={view}>
+      {(left) => (
+        <p aria-live="off" className="right-time">
+          Time Left : <b>{minuteClock(left)}</b>
+        </p>
+      )}
+    </Countdown>
   );
 }
 

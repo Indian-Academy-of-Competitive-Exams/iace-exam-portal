@@ -1,20 +1,12 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Badge,
-  DataTable,
-  EmptyState,
-  EMPTY_STATE_KINDS,
-  TruncatedText,
-  plural,
-  type DataTableColumn,
-} from '@iace/ui';
+import { Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
-import { isMarkingPending, isSittingVoided, minutes } from '@iace/app-kit';
+import { minutes } from '@iace/app-kit';
 import { round2, type SectionalStanding } from '@iace/contracts';
 import { scoreCardQuery } from '../../lib/queries';
-import { SittingSetAside } from './report';
-import { PageBody, ReportSkeleton, Section } from '../../components/ui';
+import { ScoreCardGate } from './score-card-gate';
+import { PageBody, Section } from '../../components/ui';
 
 const DASH = '—';
 
@@ -30,33 +22,11 @@ export function SubjectPanel() {
   const { attemptId = '' } = useParams();
   const card = useQuery(scoreCardQuery(attemptId));
 
-  const again = () => void card.refetch();
-
-  if (card.isLoading) return <ReportSkeleton />;
-  if (isSittingVoided(card.error)) return <SittingSetAside />;
-  // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
-  if (isMarkingPending(card.error)) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.EMPTY}
-        title="No marks yet"
-        // ui-copy-ok: consequence
-        hint="Your paper is handed in and safe."
-        onRetry={again}
-      />
-    );
-  }
-  if (!card.data) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.FAILURE}
-        title="Your sections did not load"
-        onRetry={again}
-      />
-    );
-  }
-
-  return <Body sections={card.data.sections} />;
+  return (
+    <ScoreCardGate card={card} failed="Your sections did not load">
+      {(data) => <Body sections={data.sections} />}
+    </ScoreCardGate>
+  );
 }
 
 function Body({ sections }: Readonly<{ sections: readonly SectionalStanding[] }>) {

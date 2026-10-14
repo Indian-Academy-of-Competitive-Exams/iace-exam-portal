@@ -14,19 +14,13 @@ import {
   Plus,
   Type,
 } from 'lucide-react';
-import { ANSWER_STATE, isStateShown, type ExamClock } from '@iace/contracts';
-import {
-  passagesOf,
-  TIMER_KIND,
-  useAnchoredCountdown,
-  useClockCountdown,
-  usePause,
-  type ExamView,
-} from '@iace/app-kit';
+import { ANSWER_STATE, isStateShown } from '@iace/contracts';
+import { passagesOf, TIMER_KIND, usePause, type ExamView } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Brandmark, Button, cn } from '@iace/ui';
 import { ScrollPane } from '../../scroll-pane';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
+import { Countdown } from '../shared/countdown';
 import { PHONE_QUERY } from '../shared/phone-query';
 import { Passage } from '../../passage';
 import { RailwayOptions, RailwayQuestion } from '../railway/question';
@@ -377,24 +371,8 @@ function BankingPaper({ view }: Readonly<{ view: ExamView }>) {
   );
 }
 
-function BankingTimer({ view: { timer } }: Readonly<{ view: ExamView }>) {
-  return timer.kind === TIMER_KIND.SECTION ? (
-    <SectionClock key={timer.key} allowedSec={timer.allowedSec} onExpire={timer.onExpire} />
-  ) : (
-    <PaperClock clock={timer.clock} onExpire={timer.onExpire} />
-  );
-}
-
-function PaperClock({ clock, onExpire }: Readonly<{ clock: ExamClock; onExpire: () => void }>) {
-  return <TimeLeft left={useClockCountdown(clock, onExpire)} />;
-}
-
-/** A duration from the moment the section opened, not a server deadline the paper carries. */
-function SectionClock({
-  allowedSec,
-  onExpire,
-}: Readonly<{ allowedSec: number; onExpire: () => void }>) {
-  return <TimeLeft left={useAnchoredCountdown(allowedSec, onExpire)} />;
+function BankingTimer({ view }: Readonly<{ view: ExamView }>) {
+  return <Countdown view={view}>{(left) => <TimeLeft left={left} />}</Countdown>;
 }
 
 function TimeLeft({ left }: Readonly<{ left: number }>) {

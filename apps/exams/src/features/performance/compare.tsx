@@ -1,22 +1,15 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import {
-  Alert,
-  ComparisonCards,
-  EmptyState,
-  EMPTY_STATE_KINDS,
-  plural,
-  type ComparisonItem,
-} from '@iace/ui';
+import { Alert, ComparisonCards, plural, type ComparisonItem } from '@iace/ui';
 import { percentLabel, type CohortCurve } from '@iace/contracts';
-import { everySitting, isMarkingPending, isSittingVoided } from '@iace/app-kit';
+import { everySitting } from '@iace/app-kit';
 import { api } from '../../lib/api';
 import { performanceQuery, scoreCardQuery } from '../../lib/queries';
 import { leaderboardQueryKey } from '../../lib/constants';
-import { PageBody, ReportSkeleton, RowsSkeleton, Section } from '../../components/ui';
+import { PageBody, RowsSkeleton, Section } from '../../components/ui';
 import { AttemptCompare } from './attempt-compare';
-import { SittingSetAside } from './report';
+import { ScoreCardGate } from './score-card-gate';
 import { Podium, Standings } from '../leaderboard/board';
 
 /** Who else sat this paper. Without a cohort the benchmark swaps rather than the tab disappearing. */
@@ -35,60 +28,40 @@ export function ComparePanel() {
     placeholderData: keepPreviousData,
   });
 
-  const again = () => void card.refetch();
-
-  if (card.isLoading) return <ReportSkeleton />;
-  if (isSittingVoided(card.error)) return <SittingSetAside />;
-  // Reached before the queued job ran, which is ordinary now that nothing polls on the student's behalf.
-  if (isMarkingPending(card.error)) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.EMPTY}
-        title="No marks yet"
-        // ui-copy-ok: consequence
-        hint="Your paper is handed in and safe."
-        onRetry={again}
-      />
-    );
-  }
-  if (!card.data) {
-    return (
-      <EmptyState
-        kind={EMPTY_STATE_KINDS.FAILURE}
-        title="This comparison did not load"
-        onRetry={again}
-      />
-    );
-  }
-
-  const sittings = everySitting(trend.data).filter((point) => point.testId === testId);
-
   return (
-    <PageBody>
-      {placed ? (
-        <Against cohort={card.data.cohort} maxMarks={card.data.maxMarks} />
-      ) : (
-        <AttemptCompare attemptId={attemptId} sittings={sittings} cohort={card.data.cohort} />
-      )}
+    <ScoreCardGate card={card} failed="This comparison did not load">
+      {(data) => {
+        const sittings = everySitting(trend.data).filter((point) => point.testId === testId);
 
-      <Standing placed={placed} />
+        return (
+          <PageBody>
+            {placed ? (
+              <Against cohort={data.cohort} maxMarks={data.maxMarks} />
+            ) : (
+              <AttemptCompare attemptId={attemptId} sittings={sittings} cohort={data.cohort} />
+            )}
 
-      {placed ? (
-        <Section title="Leaderboard">
-          {board.isLoading ? <RowsSkeleton rows={5} /> : null}
-          {board.data ? (
-            <>
-              <Podium rows={board.data.podium} />
-              <Standings
-                board={board.data}
-                empty="Nobody has been ranked on this paper yet"
-                onPage={setPage}
-              />
-            </>
-          ) : null}
-        </Section>
-      ) : null}
-    </PageBody>
+            <Standing placed={placed} />
+
+            {placed ? (
+              <Section title="Leaderboard">
+                {board.isLoading ? <RowsSkeleton rows={5} /> : null}
+                {board.data ? (
+                  <>
+                    <Podium rows={board.data.podium} />
+                    <Standings
+                      board={board.data}
+                      empty="Nobody has been ranked on this paper yet"
+                      onPage={setPage}
+                    />
+                  </>
+                ) : null}
+              </Section>
+            ) : null}
+          </PageBody>
+        );
+      }}
+    </ScoreCardGate>
   );
 }
 
