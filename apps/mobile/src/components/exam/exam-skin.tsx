@@ -145,7 +145,8 @@ function SittingHead({
     <Fragment>
       <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-exam-border px-4 py-2">
         <SittingClock view={view} />
-        <View className="flex-row gap-2">
+        {/* Four buttons outrun a phone's width; unwrapped, Submit was pushed off the screen. */}
+        <View className="flex-1 flex-row flex-wrap justify-end gap-2">
           <Button variant="outline" onPress={onPalette}>
             Question palette
           </Button>
