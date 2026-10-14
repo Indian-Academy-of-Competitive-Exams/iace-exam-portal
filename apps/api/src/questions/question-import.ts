@@ -4,7 +4,7 @@ import {
   DEFAULT_LANGUAGE,
   FORMULA_PICTURE_MAX_HEIGHT,
   LANGUAGE_ORDER,
-  MCQ_OPTION_COUNT,
+  MCQ_OPTION_MAX,
   previewTextOf,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_MAX_ROWS,
@@ -581,7 +581,7 @@ function readOptions(
   const correct = readCorrectOption(row, issues);
 
   const options: QuestionDraft['options'] = [];
-  for (let position = 1; position <= MCQ_OPTION_COUNT; position += 1) {
+  for (let position = 1; position <= MCQ_OPTION_MAX; position += 1) {
     const text = localized(`option${position}`, content.html);
 
     // An empty slot is not an option: reporting "option 4 has no text" for a row that only ever had three is less use than "this needs four options".
@@ -597,11 +597,11 @@ function readCorrectOption(row: CsvRow, issues: ValidationIssue[]): number | nul
   if (blank(raw)) return null;
 
   const value = Number(raw.replace(/^option\s*/i, ''));
-  if (Number.isInteger(value) && value >= 1 && value <= MCQ_OPTION_COUNT) return value;
+  if (Number.isInteger(value) && value >= 1 && value <= MCQ_OPTION_MAX) return value;
 
   issues.push({
     code: CODE.CORRECT_OPTION_INVALID,
-    message: `"${raw}" is not one of options 1 to ${MCQ_OPTION_COUNT}`,
+    message: `"${raw}" is not one of options 1 to ${MCQ_OPTION_MAX}`,
     field: 'options',
     column: 'correct_option',
   });

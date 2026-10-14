@@ -335,8 +335,26 @@ describe('the question sheet', () => {
     assert.deepEqual(row.draft?.tags, [QUESTION_IMPORT_TAG, 'ssc cgl', 'percentages']);
   });
 
-  it('reports a correct_option outside the four options', () => {
-    const row = plan([{ ...MCQ_ROW, correct_option: '5' }]).rows[0];
+  /** THE failure this prevents: an IBPS or SBI paper's option E, and every answer that is E, lost on import. */
+  it('reads a fifth option and takes it as the answer', () => {
+    const row = plan([{ ...MCQ_ROW, option5_en: '50', correct_option: '5' }]).rows[0];
+    assert.ok(row);
+
+    assert.deepEqual(row.issues, []);
+    assert.deepEqual(
+      row.draft?.options.map((option) => [option.position, option.isCorrect]),
+      [
+        [1, false],
+        [2, false],
+        [3, false],
+        [4, false],
+        [5, true],
+      ],
+    );
+  });
+
+  it('reports a correct_option past the sixth option', () => {
+    const row = plan([{ ...MCQ_ROW, correct_option: '7' }]).rows[0];
     assert.ok(row);
     assert.ok(
       row.issues.some((issue) => issue.code === QUESTION_VALIDATION_CODE.CORRECT_OPTION_INVALID),

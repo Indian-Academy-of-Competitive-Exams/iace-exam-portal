@@ -653,8 +653,9 @@ const languageColumn = <Key extends string>(
     aliases: [key.replaceAll('_', '')],
   }) as const;
 
+/** Six, as the model allows: an IBPS or SBI paper prints A to E. */
 const optionColumns = (language: QuestionLanguage) =>
-  ([1, 2, 3, 4] as const).map((position) =>
+  ([1, 2, 3, 4, 5, 6] as const).map((position) =>
     languageColumn(`option${position}_${language}` as const, `Option ${position}`, 28, language),
   );
 

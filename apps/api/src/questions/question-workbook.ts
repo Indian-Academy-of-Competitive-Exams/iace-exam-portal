@@ -5,6 +5,7 @@ import {
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
+  MCQ_OPTION_MAX,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_SHEETS,
   QUESTION_IMPORT_TAG,
@@ -153,7 +154,7 @@ function writeLists(
   addList('Answer mode', ANSWER_MODES, ANSWER_MODES_RANGE);
   addList(
     'Correct option',
-    Array.from({ length: MCQ_OPTION_COUNT }, (_, index) => index + 1),
+    Array.from({ length: MCQ_OPTION_MAX }, (_, index) => index + 1),
     CORRECT_OPTIONS_RANGE,
   );
 
@@ -247,7 +248,7 @@ const INSTRUCTIONS = [
   'the ones under the subject on that row. Nothing is created by an import, so a name',
   'that matches nothing in the bank is reported against its line.',
   '',
-  `SINGLE_MCQ: fill Option 1 to Option ${MCQ_OPTION_COUNT} and ${headerOf('correct_option')} (1 to ${MCQ_OPTION_COUNT}).`,
+  `SINGLE_MCQ: fill Option 1 to Option ${MCQ_OPTION_COUNT} (up to ${MCQ_OPTION_MAX}) and ${headerOf('correct_option')}.`,
   `TEXT_FIELD: leave the options empty and fill ${headerOf('answer_mode')} and ${headerOf('answer_en')}.`,
   '  EXACT compares the text, ignoring case and spacing.',
   `  NUMERIC compares the number, and ${headerOf('answer_tolerance')} is how far either side`,

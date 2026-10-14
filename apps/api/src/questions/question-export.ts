@@ -81,7 +81,7 @@ function perLanguage<Prefix extends string>(
   ) as Record<`${Prefix}${QuestionLanguage}`, CellOf>;
 }
 
-const optionAt = <Position extends 1 | 2 | 3 | 4>(position: Position) =>
+const optionAt = <Position extends 1 | 2 | 3 | 4 | 5 | 6>(position: Position) =>
   perLanguage(`option${position}_` as `option${Position}_`, (question, language) => {
     const option = question.options.find((candidate) => candidate.position === position);
     return option ? cellTextOf(option.text[language]) : null;
@@ -101,6 +101,8 @@ const IMPORT_VALUES: Record<QuestionImportColumnKey, CellOf> = {
   ...optionAt(2),
   ...optionAt(3),
   ...optionAt(4),
+  ...optionAt(5),
+  ...optionAt(6),
   correct_option: (question) => {
     const correct = question.options.find((option) => option.isCorrect);
     return correct ? String(correct.position) : null;
