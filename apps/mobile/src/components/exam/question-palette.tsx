@@ -8,7 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ANSWER_STATE, ANSWER_STATES, isStateShown, type AnswerState } from '@iace/contracts';
 import { ANSWER_STATE_LABELS, type ExamView } from '@iace/app-kit';
 import { cn } from '../../lib/cn';
+import { useTokenColor } from '../../lib/use-token-color';
 import { Button } from '../ui/button';
+import X from 'lucide-react-native/icons/x';
+import LayoutGrid from 'lucide-react-native/icons/layout-grid';
 
 interface PaletteEntry {
   fill: string;
@@ -46,6 +49,7 @@ export function QuestionPalette({
 }: Readonly<{ view: ExamView; open: boolean; onClose: () => void }>) {
   const currentId = view.question?.questionId ?? null;
   const insets = useSafeAreaInsets();
+  const ink = useTokenColor('--foreground');
 
   return (
     <Modal transparent visible={open} animationType="slide" onRequestClose={onClose}>
@@ -57,8 +61,11 @@ export function QuestionPalette({
           style={{ paddingBottom: Math.max(insets.bottom, 24) }}
         >
           <View className="flex-row items-center justify-between px-4">
-            <Text className="text-lg font-semibold text-exam-ink">Question palette</Text>
-            <Button variant="ghost" onPress={onClose}>
+            <View className="flex-row items-center gap-2">
+              <LayoutGrid size={20} color={ink} />
+              <Text className="text-lg font-semibold text-exam-ink">Question palette</Text>
+            </View>
+            <Button variant="ghost" icon={X} onPress={onClose}>
               Close
             </Button>
           </View>

@@ -22,7 +22,6 @@ import {
   type ScoreCard,
   type TypingSitting,
 } from '@iace/contracts';
-import { Text } from '../ui/text';
 import { scoreCardQuery, typingInAttemptQuery } from '../../lib/queries';
 import { Alert } from '../ui/alert';
 import { Badge } from '../ui/badge';
@@ -34,6 +33,8 @@ import { RefreshScroll } from '../ui/refresh-scroll';
 import { Skeleton } from '../ui/skeleton';
 import { StatTile, StatTileRow } from '../ui/stat-tile';
 import { CohortFigure, TimeFigure } from './score-card-figures';
+import ChartColumn from 'lucide-react-native/icons/chart-column';
+import { SectionTitle } from '../ui/section-title';
 
 export function ScoreCardPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   const card = useQuery(scoreCardQuery(attemptId));
@@ -178,7 +179,7 @@ function Marks({ composition }: Readonly<{ composition: MarkComposition }>) {
 
   return (
     <View className="gap-3">
-      <Text variant="section">Marks</Text>
+      <SectionTitle icon={ChartColumn}>Marks</SectionTitle>
       <Card className="p-5">
         <MeasureBars bars={bars} max={composition.maxMarks} />
       </Card>

@@ -17,6 +17,7 @@ import { Text } from '../ui/text';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { TextField } from '../ui/text-field';
+import Plus from 'lucide-react-native/icons/plus';
 
 export interface HistoryColumn {
   key: string;
@@ -78,6 +79,7 @@ export function HistoryEditor<TValues extends FieldValues>({
       <Button
         variant="outline"
         size="sm"
+        icon={Plus}
         // Capped so a profile cannot become a CV, and a mistyped paste cannot add a thousand rows.
         disabled={fields.length >= PROFILE_LIST_MAX}
         onPress={() => append(emptyRow as never)}

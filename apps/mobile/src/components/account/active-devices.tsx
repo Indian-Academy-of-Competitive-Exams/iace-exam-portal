@@ -16,6 +16,8 @@ import { Card } from '../ui/card';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
+import MonitorSmartphone from 'lucide-react-native/icons/monitor-smartphone';
+import LogOut from 'lucide-react-native/icons/log-out';
 
 const CLIENT_LABELS: Readonly<Record<ClientKind, string>> = {
   [CLIENT_KINDS.WEB]: 'Web',
@@ -80,6 +82,7 @@ export function ActiveDevices() {
         title={`Sign out ${signingOut?.deviceName ?? 'Unknown device'}?`}
         description="That device returns to the sign-in screen at its next request. Anything it has not saved stays on it until the student signs in there again."
         confirmLabel="Sign out"
+        icon={MonitorSmartphone}
         destructive
         loading={signOutSession.isPending}
         onConfirm={() => signingOut && signOutSession.mutate(signingOut.id)}
@@ -111,7 +114,7 @@ function DeviceRow({
       {session.current ? (
         <Text variant="meta">This device</Text>
       ) : (
-        <Button variant="outline" size="sm" onPress={onSignOut}>
+        <Button variant="outline" size="sm" icon={LogOut} onPress={onSignOut}>
           Sign out
         </Button>
       )}

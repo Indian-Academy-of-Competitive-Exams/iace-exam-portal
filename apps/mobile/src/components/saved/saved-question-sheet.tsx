@@ -10,11 +10,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LANGUAGE_MODE, type SavedQuestion } from '@iace/contracts';
 import { isSittingVoided } from '@iace/app-kit';
 import { Text } from '../ui/text';
+import { useTokenColor } from '../../lib/use-token-color';
 import { savedSolutionQuery } from '../../lib/queries';
 import { Button } from '../ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
 import { ReviewContent } from '../review/review-content';
+import X from 'lucide-react-native/icons/x';
+import Bookmark from 'lucide-react-native/icons/bookmark';
 
 export function SavedQuestionSheet({
   saved,
@@ -22,15 +25,17 @@ export function SavedQuestionSheet({
 }: Readonly<{ saved: SavedQuestion; onClose: () => void }>) {
   const held = useSatQuestion(saved);
   const insets = useSafeAreaInsets();
+  const ink = useTokenColor('--foreground');
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         <View className="flex-row items-center justify-between gap-3 border-b border-border px-5 py-3">
+          <Bookmark size={20} color={ink} />
           <Text variant="section" className="flex-1" numberOfLines={1}>
             {saved.testTitle ?? 'This question'}
           </Text>
-          <Button variant="ghost" size="sm" onPress={onClose}>
+          <Button variant="ghost" size="sm" icon={X} onPress={onClose}>
             Close
           </Button>
         </View>

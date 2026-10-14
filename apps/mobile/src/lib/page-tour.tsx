@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { Modal, Pressable, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { CircleQuestionMark } from 'lucide-react-native';
+import CircleQuestionMark from 'lucide-react-native/icons/circle-question-mark';
 import { seenTours, useTourRun, type TourStep } from '@iace/app-kit';
 import { Text } from '../components/ui/text';
 import { Button } from '../components/ui/button';
@@ -20,6 +20,9 @@ import { STORAGE_KEYS } from './constants';
 import { sittingStorage } from './sitting-store';
 import { useTokenColor } from './use-token-color';
 import { cardPlacement, clampedBox, isRingable, ringableSteps, type Box } from './tour-placement';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import Check from 'lucide-react-native/icons/check';
 
 interface Registration {
   readonly id: string;
@@ -285,11 +288,15 @@ function Spotlight({
                 Skip
               </Button>
               {index > 0 ? (
-                <Button variant="outline" size="sm" onPress={onBack}>
+                <Button variant="outline" size="sm" icon={ChevronLeft} onPress={onBack}>
                   Back
                 </Button>
               ) : null}
-              <Button size="sm" onPress={index + 1 === count ? onClose : onNext}>
+              <Button
+                size="sm"
+                icon={index + 1 === count ? Check : ChevronRight}
+                onPress={index + 1 === count ? onClose : onNext}
+              >
                 {index + 1 === count ? 'Done' : 'Next'}
               </Button>
             </View>

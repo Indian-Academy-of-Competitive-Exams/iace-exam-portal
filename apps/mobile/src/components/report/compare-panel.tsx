@@ -16,6 +16,8 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { RefreshScroll } from '../ui/refresh-scroll';
 import { Skeleton } from '../ui/skeleton';
+import ChartColumn from 'lucide-react-native/icons/chart-column';
+import { SectionTitle } from '../ui/section-title';
 
 const DASH = '—';
 
@@ -111,7 +113,7 @@ function Against({ cohort, max }: Readonly<{ cohort: CohortCurve; max: number }>
 
   return (
     <View className="gap-3">
-      <Text variant="section">Marks</Text>
+      <SectionTitle icon={ChartColumn}>Marks</SectionTitle>
       <Card className="p-5">
         <MeasureBars bars={bars} max={max} />
       </Card>

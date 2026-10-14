@@ -30,6 +30,9 @@ import { Skeleton } from '../../src/components/ui/skeleton';
 import { Alert } from '../../src/components/ui/alert';
 import { TestTile } from '../../src/components/tests/test-tile';
 import { ROUTES } from '../../src/lib/nav';
+import TrendingUp from 'lucide-react-native/icons/trending-up';
+import ListChecks from 'lucide-react-native/icons/list-checks';
+import { SectionTitle } from '../../src/components/ui/section-title';
 
 const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 32, gap: 12 };
 
@@ -126,7 +129,7 @@ function SeriesHeader({
           </Text>
         </View>
         <Link href={ROUTES.PERFORMANCE} asChild>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" icon={TrendingUp}>
             Your performance
           </Button>
         </Link>
@@ -141,7 +144,7 @@ function SeriesHeader({
       ) : null}
 
       <View className="flex-row items-baseline justify-between">
-        <Text variant="section">Tests</Text>
+        <SectionTitle icon={ListChecks}>Tests</SectionTitle>
         <Text variant="muted">{plural(series.tests.length, 'test')}</Text>
       </View>
     </View>

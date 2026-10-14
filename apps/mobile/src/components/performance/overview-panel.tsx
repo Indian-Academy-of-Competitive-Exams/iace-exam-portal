@@ -40,6 +40,8 @@ import { RefreshScroll } from '../ui/refresh-scroll';
 import { Skeleton } from '../ui/skeleton';
 import { StatTile, StatTileRow } from '../ui/stat-tile';
 import { ScoreTrend } from './score-trend';
+import BookOpen from 'lucide-react-native/icons/book-open';
+import { SectionTitle } from '../ui/section-title';
 
 const DASH = '—';
 const EVERY_SCOPE = '';
@@ -151,7 +153,7 @@ function Subjects({
 
   return (
     <View className="gap-3">
-      <Text variant="section">Subjects</Text>
+      <SectionTitle icon={BookOpen}>Subjects</SectionTitle>
       <Card className="gap-3 p-5">
         {bars.length > 0 ? <MeasureBars bars={bars} max={100} /> : null}
         {ranked.thin.length > 0 ? (

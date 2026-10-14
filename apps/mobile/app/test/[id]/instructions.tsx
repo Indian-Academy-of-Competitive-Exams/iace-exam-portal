@@ -44,6 +44,11 @@ import { EXAM_RESUME_PARAM } from '../../../src/lib/constants';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { sectionLine } from '../../../src/lib/brief-lines';
+import Play from 'lucide-react-native/icons/play';
+import BookOpen from 'lucide-react-native/icons/book-open';
+import Layers from 'lucide-react-native/icons/layers';
+import LayoutGrid from 'lucide-react-native/icons/layout-grid';
+import { SectionTitle } from '../../../src/components/ui/section-title';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
@@ -171,7 +176,7 @@ function InstructionsContent({
       ) : null}
 
       <View className="gap-2">
-        <Text variant="section">How the paper works</Text>
+        <SectionTitle icon={BookOpen}>How the paper works</SectionTitle>
         <Card className="p-4">
           <PaperRules
             forwardOnly={paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY}
@@ -203,7 +208,7 @@ function InstructionsContent({
       {needsKeyboard(paper) ? (
         <Alert>{NEEDS_KEYBOARD_SAYS}</Alert>
       ) : (
-        <Button disabled={!ready || beginning} onPress={() => onBegin(languages)}>
+        <Button icon={Play} disabled={!ready || beginning} onPress={() => onBegin(languages)}>
           I am ready to begin
         </Button>
       )}
@@ -215,7 +220,7 @@ function SectionsList({ paper }: Readonly<{ paper: ExamBrief }>) {
   return (
     <View className="gap-2">
       <View className="flex-row items-baseline justify-between">
-        <Text variant="section">Sections</Text>
+        <SectionTitle icon={Layers}>Sections</SectionTitle>
         <Text variant="muted">{plural(paper.sections.length, 'section')}</Text>
       </View>
       <Card>
@@ -235,7 +240,7 @@ function PaletteCard({ navigation }: Readonly<{ navigation: NavigationPolicy }>)
 
   return (
     <View className="gap-2">
-      <Text variant="section">Palette</Text>
+      <SectionTitle icon={LayoutGrid}>Palette</SectionTitle>
       <Card className="gap-3 p-4">
         <Text variant="meta">{PALETTE_SAYS[navigation]}</Text>
         {/* The swatches are the exam skin's colours, which a screen outside the paper has to scope itself. */}

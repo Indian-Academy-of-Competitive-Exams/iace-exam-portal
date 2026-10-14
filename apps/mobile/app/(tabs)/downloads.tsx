@@ -23,6 +23,7 @@ import { StatTile, StatTileRow } from '../../src/components/ui/stat-tile';
 import { Text } from '../../src/components/ui/text';
 import { ownReportQuery, performanceQuery } from '../../src/lib/queries';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
+import Printer from 'lucide-react-native/icons/printer';
 
 const NO_SITTINGS: readonly SatSitting[] = [];
 const DASH = '—';
@@ -81,7 +82,7 @@ export default function DownloadsScreen() {
       ) : (
         <>
           <Figures ask={ask} />
-          <Button loading={print.isPending} onPress={() => print.mutate(ask)}>
+          <Button icon={Printer} loading={print.isPending} onPress={() => print.mutate(ask)}>
             Print or save
           </Button>
         </>

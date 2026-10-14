@@ -44,6 +44,16 @@ import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
+import Play from 'lucide-react-native/icons/play';
+import RotateCcw from 'lucide-react-native/icons/rotate-ccw';
+import Layers from 'lucide-react-native/icons/layers';
+import FileText from 'lucide-react-native/icons/file-text';
+import { SectionTitle } from '../../../src/components/ui/section-title';
+import ListOrdered from 'lucide-react-native/icons/list-ordered';
+import Clock from 'lucide-react-native/icons/clock';
+import Award from 'lucide-react-native/icons/award';
+import CircleMinus from 'lucide-react-native/icons/circle-minus';
+import { useTokenColor } from '../../../src/lib/use-token-color';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
@@ -155,10 +165,14 @@ function AboutContent({
 
       <View {...band}>
         <StatTileRow>
-          <StatTile label="Questions" value={brief.totalQuestions} />
-          <StatTile label="Duration (minutes)" value={Math.round(brief.durationSec / 60)} />
-          <StatTile label="Total marks" value={totalMarksOf(brief)} />
-          <StatTile label="Negative" value={negativeOf(brief)} />
+          <StatTile icon={ListOrdered} label="Questions" value={brief.totalQuestions} />
+          <StatTile
+            icon={Clock}
+            label="Duration (minutes)"
+            value={Math.round(brief.durationSec / 60)}
+          />
+          <StatTile icon={Award} label="Total marks" value={totalMarksOf(brief)} />
+          <StatTile icon={CircleMinus} label="Negative" value={negativeOf(brief)} />
         </StatTileRow>
       </View>
 
@@ -195,11 +209,16 @@ function ShutNotice({ test, now }: Readonly<{ test: StudentCatalogTest; now: Dat
 
 /** A time is prose, not a figure: set at a headline size it shouts over the title above it. */
 function Window({ test }: Readonly<{ test: StudentCatalogTest }>) {
+  const ink = useTokenColor('--muted-foreground');
+
   return (
     <View className="gap-1">
-      <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Opens
-      </Text>
+      <View className="flex-row items-center gap-1.5">
+        <CalendarClock size={14} color={ink} />
+        <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Opens
+        </Text>
+      </View>
       <Text className="text-base font-semibold text-foreground">
         {test.opensAt === null ? 'Any time' : instituteDateTimeLabel(test.opensAt)}
       </Text>
@@ -213,7 +232,7 @@ function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
   return (
     <View className="gap-2" {...anchor}>
       <View className="flex-row items-baseline justify-between">
-        <Text variant="section">Sections</Text>
+        <SectionTitle icon={Layers}>Sections</SectionTitle>
         <Text variant="muted">{plural(brief.sections.length, 'section')}</Text>
       </View>
       <Card>
@@ -241,7 +260,7 @@ function PaperCard({ brief }: Readonly<{ brief: ExamBrief }>) {
 
   return (
     <View className="gap-2" {...anchor}>
-      <Text variant="section">The paper</Text>
+      <SectionTitle icon={FileText}>The paper</SectionTitle>
       <Card className="gap-3 p-4">
         <InfoRow label="Languages" value={languagesOf(brief)} />
         <InfoRow label="Sectional timing" value={sectionalOf(brief)} />
@@ -316,7 +335,10 @@ function Proceed({
     <Fragment>
       {listed && offersRetake(listed) ? <Alert>{RETAKE_SAYS}</Alert> : null}
       <Link href={DETAIL_ROUTES.TEST_INSTRUCTIONS(testId, listed?.liveAttemptId)} asChild>
-        <Button variant={action === 'RESUME' ? 'warning' : 'default'}>
+        <Button
+          variant={action === 'RESUME' ? 'warning' : 'default'}
+          icon={action === 'RESUME' ? RotateCcw : Play}
+        >
           {action === 'RESUME' ? 'Resume test' : 'Proceed to test'}
         </Button>
       </Link>

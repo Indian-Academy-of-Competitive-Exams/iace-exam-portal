@@ -23,6 +23,8 @@ import { api } from '../../lib/api';
 import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../../lib/constants';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
+import RefreshCw from 'lucide-react-native/icons/refresh-cw';
+import Upload from 'lucide-react-native/icons/upload';
 
 const MEGABYTES = Math.round(DOCUMENT_MAX_BYTES / 1024 / 1024);
 
@@ -89,6 +91,7 @@ export function DocumentCard({
       <Button
         variant="outline"
         size="sm"
+        icon={url ? RefreshCw : Upload}
         disabled={picking}
         loading={upload.isPending}
         onPress={() => void choose()}

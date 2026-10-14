@@ -32,6 +32,14 @@ import { DateField } from '../src/components/ui/date-field';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
 import { Skeleton } from '../src/components/ui/skeleton';
 import { TextField } from '../src/components/ui/text-field';
+import UserPen from 'lucide-react-native/icons/user-pen';
+import Undo2 from 'lucide-react-native/icons/undo-2';
+import Check from 'lucide-react-native/icons/check';
+import PencilLine from 'lucide-react-native/icons/pencil-line';
+import GraduationCap from 'lucide-react-native/icons/graduation-cap';
+import Files from 'lucide-react-native/icons/files';
+import { SectionTitle } from '../src/components/ui/section-title';
+import UserRound from 'lucide-react-native/icons/user-round';
 
 const DASH = '—';
 
@@ -120,7 +128,7 @@ export default function ProfileScreen() {
             variant="warning"
             action={
               isEditing ? null : (
-                <Button size="sm" onPress={edit}>
+                <Button size="sm" icon={UserPen} onPress={edit}>
                   Add them
                 </Button>
               )
@@ -135,7 +143,7 @@ export default function ProfileScreen() {
 
         {isEditing ? (
           <View className="gap-4">
-            <Text variant="section">Your details</Text>
+            <SectionTitle icon={UserRound}>Your details</SectionTitle>
             <TextField control={form.control} name="fullName" label="Full name" />
             <TextField control={form.control} name="profile.motherName" label="Mother's name" />
             <TextField control={form.control} name="profile.fatherName" label="Father's name" />
@@ -204,6 +212,7 @@ export default function ProfileScreen() {
             <View className="flex-row gap-2">
               <Button
                 variant="secondary"
+                icon={Undo2}
                 className="flex-1"
                 disabled={save.isPending}
                 onPress={() => {
@@ -214,6 +223,7 @@ export default function ProfileScreen() {
                 Discard
               </Button>
               <Button
+                icon={Check}
                 className="flex-1"
                 loading={save.isPending}
                 disabled={!form.formState.isDirty || moved.length > 0}
@@ -225,9 +235,9 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <View className="gap-4">
-            <Text variant="section">Your details</Text>
+            <SectionTitle icon={UserRound}>Your details</SectionTitle>
             <Rows rows={detailsOf(me.data)} />
-            <Button variant="outline" onPress={edit}>
+            <Button variant="outline" icon={PencilLine} onPress={edit}>
               Edit your details
             </Button>
 
@@ -248,7 +258,7 @@ function Enrolment({ me }: Readonly<{ me: Me }>) {
 
   return (
     <View className="gap-4">
-      <Text variant="section">Enrolment</Text>
+      <SectionTitle icon={GraduationCap}>Enrolment</SectionTitle>
       <Rows rows={[{ label: 'Branch', value: enrolment.branch ?? NONE_RECORDED }]} />
       <Card>
         <Names label="Course" names={me.enrolledCourses.map(courseLabel)} />
@@ -354,7 +364,7 @@ const EMPTY_EXAM = { exam: '', year: '', result: '' };
 function Documents({ me }: Readonly<{ me: Me }>) {
   return (
     <View className="gap-4">
-      <Text variant="section">Your documents</Text>
+      <SectionTitle icon={Files}>Your documents</SectionTitle>
       <View className="flex-row gap-3">
         <DocumentCard
           kind={DOCUMENT_KINDS.PHOTO}

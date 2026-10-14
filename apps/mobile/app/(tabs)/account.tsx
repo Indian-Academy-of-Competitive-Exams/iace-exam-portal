@@ -4,6 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import { type LucideIcon } from 'lucide-react-native';
 import { Text } from '../../src/components/ui/text';
 import { ActiveDevices } from '../../src/components/account/active-devices';
 import { Badge } from '../../src/components/ui/badge';
@@ -20,6 +21,13 @@ import { cn } from '../../src/lib/cn';
 import { chooseTheme, savedTheme, THEMES, type Theme } from '../../src/lib/theme';
 import { useAuth } from '../../src/providers/auth';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
+import LogOut from 'lucide-react-native/icons/log-out';
+import UserRound from 'lucide-react-native/icons/user-round';
+import Bell from 'lucide-react-native/icons/bell';
+import Palette from 'lucide-react-native/icons/palette';
+import SmartphoneCharging from 'lucide-react-native/icons/smartphone-charging';
+import Sun from 'lucide-react-native/icons/sun';
+import Moon from 'lucide-react-native/icons/moon';
 
 export default function AccountScreen() {
   useRefetchOnFocus();
@@ -45,9 +53,10 @@ export default function AccountScreen() {
 
       <Card>
         {[
-          { label: 'Your details', to: ACCOUNT_ROUTES.PROFILE, badge: undefined },
+          { label: 'Your details', icon: UserRound, to: ACCOUNT_ROUTES.PROFILE, badge: undefined },
           {
             label: 'Notifications',
+            icon: Bell,
             to: ACCOUNT_ROUTES.NOTIFICATIONS,
             badge: waiting > 0 ? String(waiting) : undefined,
           },
@@ -55,6 +64,7 @@ export default function AccountScreen() {
           <MenuRow
             key={row.label}
             label={row.label}
+            icon={row.icon}
             badge={row.badge}
             divided={index > 0}
             tint={chevron}
@@ -66,6 +76,7 @@ export default function AccountScreen() {
       <Card className="p-4">
         <ChipRow
           label="Appearance"
+          labelIcon={Palette}
           options={THEME_OPTIONS}
           value={theme}
           onChange={(value) => {
@@ -78,7 +89,7 @@ export default function AccountScreen() {
 
       <ActiveDevices />
 
-      <Button variant="outline" onPress={() => setConfirming(true)}>
+      <Button variant="outline" icon={LogOut} onPress={() => setConfirming(true)}>
         Sign out
       </Button>
 
@@ -88,6 +99,7 @@ export default function AccountScreen() {
         title="Sign out of this phone?"
         description="You will need a code sent to your mobile number to sign in again."
         confirmLabel="Sign out"
+        icon={LogOut}
         loading={signingOut}
         // Left open and spinning: signing out takes this screen away with it.
         onConfirm={() => {
@@ -101,19 +113,21 @@ export default function AccountScreen() {
 }
 
 const THEME_OPTIONS = [
-  { value: THEMES.SYSTEM, label: 'System' },
-  { value: THEMES.LIGHT, label: 'Light' },
-  { value: THEMES.DARK, label: 'Dark' },
+  { value: THEMES.SYSTEM, label: 'System', icon: SmartphoneCharging },
+  { value: THEMES.LIGHT, label: 'Light', icon: Sun },
+  { value: THEMES.DARK, label: 'Dark', icon: Moon },
 ];
 
 function MenuRow({
   label,
+  icon: Icon,
   badge,
   divided,
   onPress,
   tint,
 }: Readonly<{
   label: string;
+  icon: LucideIcon;
   badge?: string;
   divided: boolean;
   onPress: () => void;
@@ -125,6 +139,7 @@ function MenuRow({
       onPress={onPress}
       className={cn('flex-row items-center gap-3 p-4', divided && 'border-t border-border')}
     >
+      <Icon size={20} color={tint} />
       <Text className="flex-1 text-base text-foreground">{label}</Text>
       {badge ? <Badge variant="primary">{badge}</Badge> : null}
       <ChevronRight size={18} color={tint} />

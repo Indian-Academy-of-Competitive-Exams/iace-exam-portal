@@ -7,6 +7,8 @@ import { cn } from '../../lib/cn';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { EmptyState } from '../ui/empty-state';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
 
 export function Podium({ rows }: Readonly<{ rows: readonly LeaderboardRow[] }>) {
   if (rows.length === 0) return null;
@@ -73,13 +75,20 @@ export function Standings({
       </Card>
       {pages > 1 ? (
         <View className="flex-row items-center justify-between gap-3">
-          <Button variant="outline" size="sm" disabled={page <= 1} onPress={() => onPage(page - 1)}>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={ChevronLeft}
+            disabled={page <= 1}
+            onPress={() => onPage(page - 1)}
+          >
             Previous
           </Button>
           <Text variant="meta">{`Page ${page} of ${pages}`}</Text>
           <Button
             variant="outline"
             size="sm"
+            icon={ChevronRight}
             disabled={page >= pages}
             onPress={() => onPage(page + 1)}
           >

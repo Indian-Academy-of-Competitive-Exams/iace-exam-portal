@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react';
 import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
+import LogIn from 'lucide-react-native/icons/log-in';
+import MessageSquareText from 'lucide-react-native/icons/message-square-text';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -110,6 +112,7 @@ function MobileStep({
       />
 
       <Button
+        icon={MessageSquareText}
         loading={requestOtp.isPending}
         onPress={form.handleSubmit((values) => requestOtp.mutate(values))}
       >
@@ -189,6 +192,7 @@ function CodeStep({
 
       {/* One request at a time: an answer to one the student moved on from would still sign in, or pull the step back. */}
       <Button
+        icon={LogIn}
         loading={verify.isPending}
         disabled={again.isPending}
         onPress={form.handleSubmit((values) => verify.mutate(values))}

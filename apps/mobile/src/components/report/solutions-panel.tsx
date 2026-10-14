@@ -25,6 +25,9 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
 import { ReviewContent } from '../review/review-content';
 import { ReviewPalette, VERDICT_STYLE } from '../review/review-palette';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import LayoutGrid from 'lucide-react-native/icons/layout-grid';
 
 /** The paper again, once it is marked, a section at a time: their own answer, the marks and the key. */
 export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
@@ -151,17 +154,19 @@ function Paper({
         <Button
           variant="outline"
           size="sm"
+          icon={ChevronLeft}
           disabled={at === 0}
           onPress={() => setOpenId(inSection[at - 1]?.questionId ?? openId)}
         >
           Previous
         </Button>
-        <Button variant="ghost" size="sm" onPress={() => setPalette(true)}>
+        <Button variant="ghost" size="sm" icon={LayoutGrid} onPress={() => setPalette(true)}>
           {`${at + 1} of ${inSection.length}`}
         </Button>
         <Button
           variant="outline"
           size="sm"
+          icon={ChevronRight}
           disabled={at >= inSection.length - 1}
           onPress={() => setOpenId(inSection[at + 1]?.questionId ?? openId)}
         >

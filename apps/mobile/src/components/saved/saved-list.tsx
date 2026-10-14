@@ -16,6 +16,7 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { ListFooter } from '../ui/list-footer';
 import { Skeleton } from '../ui/skeleton';
 import { SavedQuestionSheet } from './saved-question-sheet';
+import BookmarkX from 'lucide-react-native/icons/bookmark-x';
 
 /** What the list is for, said once at the top rather than on every row. */
 const LIST_NOTE = 'Starred from a solution review, and yours to drop.';
@@ -87,6 +88,7 @@ export function SavedList({ state }: Readonly<SavedListProps>) {
         title="Remove this question?"
         description="It leaves your saved questions. Star it again from the solution review to bring it back."
         confirmLabel="Remove"
+        icon={BookmarkX}
         loading={drop.isPending}
         onConfirm={() => {
           if (dropping) drop.mutate(dropping.id);

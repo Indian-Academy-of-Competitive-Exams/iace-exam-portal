@@ -22,6 +22,7 @@ import { Card } from '../../../src/components/ui/card';
 import { Hero, HeroFigure, ScreenTitle } from '../../../src/components/ui/hero';
 import { MeasureBars } from '../../../src/components/ui/measure-bars';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
+import ChartColumn from 'lucide-react-native/icons/chart-column';
 
 export default function SubmittedScreen() {
   const { attemptId = '' } = useLocalSearchParams<{ attemptId: string }>();
@@ -58,7 +59,7 @@ export default function SubmittedScreen() {
         <SectionEffortFigures key={section.id} section={section} field={field.data} />
       ))}
 
-      <Button onPress={() => router.replace(DETAIL_ROUTES.REPORT(attemptId))}>
+      <Button icon={ChartColumn} onPress={() => router.replace(DETAIL_ROUTES.REPORT(attemptId))}>
         See your result
       </Button>
     </ScrollView>

@@ -17,6 +17,8 @@ import { Card } from '../ui/card';
 import { useTokenColor } from '../../lib/use-token-color';
 import { cn } from '../../lib/cn';
 import { DETAIL_ROUTES } from '../../lib/nav';
+import RotateCcw from 'lucide-react-native/icons/rotate-ccw';
+import Play from 'lucide-react-native/icons/play';
 
 /** The pill is read before anything else, so it carries the one fact a shelf is scanned for. */
 const STATES = {
@@ -129,6 +131,7 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
       <Button
         size="sm"
         variant={row.action === 'RESUME' ? 'warning' : 'default'}
+        icon={row.action === 'RESUME' ? RotateCcw : Play}
         onPress={() => router.push(DETAIL_ROUTES.TEST(row.test.id))}
       >
         {row.action === 'RESUME' ? 'Resume' : 'Start test'}

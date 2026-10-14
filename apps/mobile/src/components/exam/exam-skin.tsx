@@ -6,7 +6,12 @@
  */
 import { Fragment, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { Calculator, FileText, Info, Pause, type LucideIcon } from 'lucide-react-native';
+import { type LucideIcon } from 'lucide-react-native';
+import Calculator from 'lucide-react-native/icons/calculator';
+import FileText from 'lucide-react-native/icons/file-text';
+import Info from 'lucide-react-native/icons/info';
+import Pause from 'lucide-react-native/icons/pause';
+import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import { useUnstableNativeVariable } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNetworkState } from 'expo-network';
@@ -31,6 +36,11 @@ import { QuestionContent, type QuestionContentProps } from './question-content';
 import { CalculatorSheet, PaperSheet, RulesSheet } from './exam-sheets';
 import { PaperWatermark } from './paper-watermark';
 import { QuestionPalette } from './question-palette';
+import Send from 'lucide-react-native/icons/send';
+import LayoutGrid from 'lucide-react-native/icons/layout-grid';
+import ArrowRight from 'lucide-react-native/icons/arrow-right';
+import Flag from 'lucide-react-native/icons/flag';
+import Eraser from 'lucide-react-native/icons/eraser';
 
 /** Every paper resolves to the default skin on a phone, whatever its template says. */
 const MOBILE_SKIN = EXAM_TEMPLATE.DEFAULT;
@@ -118,6 +128,7 @@ export function ExamSkin({
         title={PAUSE_SAYS.title}
         description={pause.says}
         confirmLabel={PAUSE_SAYS.confirm}
+        icon={Pause}
         loading={pause.pending}
         onConfirm={pause.confirm}
         onCancel={pause.cancel}
@@ -179,11 +190,12 @@ function SittingHead({
       <View className="flex-row items-center justify-between gap-2 border-b border-exam-border px-4 py-2">
         <SittingClock view={view} />
         <View className="flex-row gap-2">
-          <Button variant="outline" onPress={onPalette}>
+          <Button variant="outline" icon={LayoutGrid} onPress={onPalette}>
             Palette
           </Button>
           <Button
             variant="outline"
+            icon={Send}
             loading={view.submit.isPending}
             disabled={view.locked !== null}
             onPress={view.submit.ask}
@@ -353,14 +365,14 @@ function SittingFoot({
         {submit.failed ? (
           <Fragment>
             <Alert variant="danger">Could not submit this paper.</Alert>
-            <Button variant="outline" onPress={submit.retry}>
+            <Button variant="outline" icon={RotateCw} onPress={submit.retry}>
               Try again
             </Button>
           </Fragment>
         ) : null}
         {/* On a bubble sheet the ink carries all three: a part fill flags it, a full one saves and moves. */}
         {view.testUi === TEST_UI.OMR ? (
-          <Button disabled={off} onPress={view.nextQuestion}>
+          <Button disabled={off} icon={ArrowRight} onPress={view.nextQuestion}>
             Next
           </Button>
         ) : (
@@ -370,6 +382,7 @@ function SittingFoot({
                 <Button
                   variant="outline"
                   className="flex-1"
+                  icon={Flag}
                   disabled={off}
                   onPress={view.markAndNext}
                 >
@@ -378,13 +391,14 @@ function SittingFoot({
               )}
               <Button
                 variant="ghost"
+                icon={Eraser}
                 disabled={off || answersByKeyboard(view.question)}
                 onPress={view.clearResponse}
               >
                 Clear response
               </Button>
             </View>
-            <Button disabled={off} onPress={view.nextQuestion}>
+            <Button disabled={off} icon={ArrowRight} onPress={view.nextQuestion}>
               Save & next
             </Button>
           </Fragment>
@@ -404,6 +418,7 @@ function SittingFoot({
         title="Submit this test?"
         description={submittingSays(view)}
         confirmLabel="Submit"
+        icon={Send}
         loading={submit.isPending}
         onConfirm={submit.confirm}
         onCancel={submit.cancel}
@@ -423,7 +438,9 @@ function SittingFoot({
           <Alert variant="danger">
             {`${leftTheApp(fullscreen.exits)} Your paper is still running and the clock has not stopped.`}
           </Alert>
-          <Button onPress={fullscreen.ignore}>Return to the paper</Button>
+          <Button icon={FileText} onPress={fullscreen.ignore}>
+            Return to the paper
+          </Button>
         </View>
       </Modal>
     </Fragment>

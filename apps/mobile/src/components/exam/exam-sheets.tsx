@@ -18,11 +18,17 @@ import {
   useCalculator,
   type ExamView,
 } from '@iace/app-kit';
+import { type LucideIcon } from 'lucide-react-native';
 import { cn } from '../../lib/cn';
+import { useTokenColor } from '../../lib/use-token-color';
 import { Button } from '../ui/button';
 import { PaperRules } from './paper-rules';
 import { PaperWatermark } from './paper-watermark';
 import { AnsweredTick, PALETTE_LEGEND } from './question-palette';
+import X from 'lucide-react-native/icons/x';
+import Calculator from 'lucide-react-native/icons/calculator';
+import FileText from 'lucide-react-native/icons/file-text';
+import BookOpen from 'lucide-react-native/icons/book-open';
 
 const KEY_CLASS =
   'h-12 items-center justify-center rounded-exam-cell border border-exam-border bg-exam-surface';
@@ -30,10 +36,18 @@ const KEY_CLASS =
 function ExamSheet({
   open,
   title,
+  icon: Icon,
   onClose,
   children,
-}: Readonly<{ open: boolean; title: string; onClose: () => void; children: ReactNode }>) {
+}: Readonly<{
+  open: boolean;
+  title: string;
+  icon: LucideIcon;
+  onClose: () => void;
+  children: ReactNode;
+}>) {
   const insets = useSafeAreaInsets();
+  const ink = useTokenColor('--foreground');
 
   return (
     <Modal transparent visible={open} animationType="slide" onRequestClose={onClose}>
@@ -44,8 +58,13 @@ function ExamSheet({
           style={{ paddingBottom: Math.max(insets.bottom, 24) }}
         >
           <View className="flex-row items-center justify-between px-4">
-            <Text className="text-lg font-semibold text-exam-ink">{title}</Text>
-            <Button variant="ghost" onPress={onClose}>
+            <View className="flex-1 flex-row items-center gap-2">
+              <Icon size={20} color={ink} />
+              <Text numberOfLines={1} className="flex-1 text-lg font-semibold text-exam-ink">
+                {title}
+              </Text>
+            </View>
+            <Button variant="ghost" icon={X} onPress={onClose}>
               Close
             </Button>
           </View>
@@ -86,7 +105,7 @@ export function CalculatorSheet({
   );
 
   return (
-    <ExamSheet open={open} title="Calculator" onClose={onClose}>
+    <ExamSheet open={open} title="Calculator" icon={Calculator} onClose={onClose}>
       <View className="gap-2 px-4">
         <Text
           accessibilityLiveRegion="polite"
@@ -115,7 +134,7 @@ export function PaperSheet({
   const language = shownLanguages(view.languages, view.languageMode)[0];
 
   return (
-    <ExamSheet open={open} title={view.title ?? 'Question paper'} onClose={onClose}>
+    <ExamSheet open={open} title={view.title ?? 'Question paper'} icon={FileText} onClose={onClose}>
       <View className="relative shrink">
         <ScrollView className="shrink grow-0" contentContainerClassName="px-4">
           {view.questions.map((question, index) => (
@@ -144,7 +163,7 @@ export function RulesSheet({
   onClose,
 }: Readonly<{ view: ExamView; open: boolean; onClose: () => void }>) {
   return (
-    <ExamSheet open={open} title="Instructions" onClose={onClose}>
+    <ExamSheet open={open} title="Instructions" icon={BookOpen} onClose={onClose}>
       <ScrollView className="shrink grow-0" contentContainerClassName="gap-4 px-4">
         <PaperRules
           inkClass="text-exam-ink"

@@ -9,6 +9,8 @@ import { Card } from '../ui/card';
 import { DETAIL_ROUTES } from '../../lib/nav';
 import { performanceQuery } from '../../lib/queries';
 import { cn } from '../../lib/cn';
+import FileClock from 'lucide-react-native/icons/file-clock';
+import { SectionTitle } from '../ui/section-title';
 
 const DASH = '—';
 
@@ -21,7 +23,7 @@ export function PastAttempts({ testId }: Readonly<{ testId: string }>) {
   return (
     <View className="gap-2">
       <View className="flex-row items-baseline justify-between">
-        <Text variant="section">Past attempts</Text>
+        <SectionTitle icon={FileClock}>Past attempts</SectionTitle>
         <Text variant="muted">{plural(past.length, 'attempt')}</Text>
       </View>
       <Card>

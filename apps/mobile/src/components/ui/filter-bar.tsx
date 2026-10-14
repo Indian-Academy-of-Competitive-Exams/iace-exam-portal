@@ -16,6 +16,9 @@ import { useTokenColor } from '../../lib/use-token-color';
 import { dayOf, valueOfDay } from '../../lib/picker-day';
 import { Button } from './button';
 import { Chip, ChipRow } from './chip-row';
+import Check from 'lucide-react-native/icons/check';
+import FunnelX from 'lucide-react-native/icons/funnel-x';
+import X from 'lucide-react-native/icons/x';
 
 export interface FilterProps {
   state: FilterState;
@@ -109,6 +112,7 @@ function FilterSheet({
   closeOnChoice,
 }: Readonly<FilterProps & { open: boolean; onClose: () => void; closeOnChoice: boolean }>) {
   const insets = useSafeAreaInsets();
+  const ink = useTokenColor('--foreground');
 
   return (
     <Modal transparent visible={open} animationType="slide" onRequestClose={onClose}>
@@ -119,8 +123,11 @@ function FilterSheet({
           style={{ paddingBottom: Math.max(insets.bottom, 24) }}
         >
           <View className="flex-row items-center justify-between px-4">
-            <Text variant="section">Filters</Text>
-            <Button variant="ghost" onPress={onClose}>
+            <View className="flex-row items-center gap-2">
+              <SlidersHorizontal size={20} color={ink} />
+              <Text variant="section">Filters</Text>
+            </View>
+            <Button variant="ghost" icon={Check} onPress={onClose}>
               Done
             </Button>
           </View>
@@ -138,7 +145,7 @@ function FilterSheet({
 
           {state.activeCount > 0 ? (
             <View className="px-4">
-              <Button variant="outline" onPress={state.clearFilters}>
+              <Button variant="outline" icon={FunnelX} onPress={state.clearFilters}>
                 {`Clear filters (${state.activeCount})`}
               </Button>
             </View>
@@ -216,7 +223,7 @@ function FilterDate({ filter, state }: Readonly<{ filter: FilterSpec; state: Fil
           </Text>
         </Pressable>
         {held ? (
-          <Button variant="ghost" onPress={() => state.setFilter(filter.key, '')}>
+          <Button variant="ghost" icon={X} onPress={() => state.setFilter(filter.key, '')}>
             Clear
           </Button>
         ) : null}

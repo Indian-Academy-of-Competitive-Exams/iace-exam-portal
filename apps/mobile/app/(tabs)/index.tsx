@@ -38,6 +38,14 @@ import { Alert } from '../../src/components/ui/alert';
 import { cn } from '../../src/lib/cn';
 import { useAuth } from '../../src/providers/auth';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
+import TrendingUp from 'lucide-react-native/icons/trending-up';
+import UserPen from 'lucide-react-native/icons/user-pen';
+import ListChecks from 'lucide-react-native/icons/list-checks';
+import RotateCcw from 'lucide-react-native/icons/rotate-ccw';
+import Play from 'lucide-react-native/icons/play';
+import ChartColumn from 'lucide-react-native/icons/chart-column';
+import Hourglass from 'lucide-react-native/icons/hourglass';
+import { SectionTitle } from '../../src/components/ui/section-title';
 
 const DASH = '—';
 
@@ -67,7 +75,11 @@ export default function HomeScreen() {
   return (
     <RefreshScroll refreshing={catalog.isRefetching} onRefresh={refresh}>
       <Text variant="title">{greetingFor(now, identity?.fullName)}</Text>
-      <Button variant="outline" onPress={() => router.navigate(ROUTES.PERFORMANCE)}>
+      <Button
+        variant="outline"
+        icon={TrendingUp}
+        onPress={() => router.navigate(ROUTES.PERFORMANCE)}
+      >
         See your performance
       </Button>
 
@@ -103,7 +115,7 @@ function PreTest({ ready }: Readonly<{ ready: boolean }>) {
       variant="warning"
       icon={ClipboardList}
       action={
-        <Button size="sm" onPress={() => router.navigate(ACCOUNT_ROUTES.PROFILE)}>
+        <Button size="sm" icon={UserPen} onPress={() => router.navigate(ACCOUNT_ROUTES.PROFILE)}>
           Add them
         </Button>
       }
@@ -145,7 +157,12 @@ function NextUp({
         // ui-copy-ok: rule — a test opening is the branch's move, never the student's
         hint="Your branch opens the next one when it is ready."
         action={
-          <Button variant="outline" size="sm" onPress={() => router.navigate(ROUTES.TESTS)}>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={ListChecks}
+            onPress={() => router.navigate(ROUTES.TESTS)}
+          >
             Go to your tests
           </Button>
         }
@@ -195,6 +212,7 @@ function TestExit({ row, small }: Readonly<{ row: Sittable; small?: boolean }>) 
     <Button
       size={small ? 'sm' : 'default'}
       variant={row.action === 'RESUME' ? 'warning' : 'default'}
+      icon={row.action === 'RESUME' ? RotateCcw : Play}
       onPress={() => router.push(DETAIL_ROUTES.TEST(row.test.id))}
     >
       {row.action === 'RESUME' ? 'Resume' : 'Start test'}
@@ -208,8 +226,13 @@ function AlsoWaiting({ waiting, now }: Readonly<{ waiting: readonly Sittable[]; 
   return (
     <View className="gap-3">
       <View className="flex-row items-center justify-between gap-3">
-        <Text variant="section">Also waiting</Text>
-        <Button variant="ghost" size="sm" onPress={() => router.navigate(ROUTES.TESTS)}>
+        <SectionTitle icon={Hourglass}>Also waiting</SectionTitle>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={ListChecks}
+          onPress={() => router.navigate(ROUTES.TESTS)}
+        >
           See all tests
         </Button>
       </View>
@@ -311,7 +334,7 @@ function Recent({
 
   return (
     <View className="gap-3">
-      <Text variant="section">Recent results</Text>
+      <SectionTitle icon={ChartColumn}>Recent results</SectionTitle>
       <Card>
         {recent.map((point, index) => (
           <Pressable

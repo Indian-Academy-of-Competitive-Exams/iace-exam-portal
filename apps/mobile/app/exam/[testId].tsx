@@ -38,6 +38,9 @@ import { appFocus, onBackground } from '../../src/components/exam/app-focus';
 import { ExamSkin } from '../../src/components/exam/exam-skin';
 import { Button } from '../../src/components/ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
+import ChartColumn from 'lucide-react-native/icons/chart-column';
+import ListChecks from 'lucide-react-native/icons/list-checks';
+import Smartphone from 'lucide-react-native/icons/smartphone';
 
 /** Stable identity: a `[]` literal at the call site would re-run the preload memo on every render. */
 const NO_QUESTIONS: readonly ExamQuestion[] = [];
@@ -163,7 +166,11 @@ function Sitting() {
             // Retry first: at a synchronised open the server being busy is likelier than the test being shut.
             <View className="flex-row items-center gap-3">
               <Button onPress={() => void attempt.refetch()}>Retry</Button>
-              <Button variant="outline" onPress={() => router.dismissTo(ROUTES.TESTS)}>
+              <Button
+                variant="outline"
+                icon={ListChecks}
+                onPress={() => router.dismissTo(ROUTES.TESTS)}
+              >
                 Go to your tests
               </Button>
             </View>
@@ -223,7 +230,11 @@ function Sitting() {
             title={stoodDownSays(view).title}
             /* ui-copy-ok: consequence — continuing here is what stops the other one */
             hint={stoodDownSays(view).hint}
-            action={<Button onPress={continueHere}>Continue here</Button>}
+            action={
+              <Button icon={Smartphone} onPress={continueHere}>
+                Continue here
+              </Button>
+            }
           />
         </View>
       ) : null}
@@ -236,7 +247,10 @@ function Sitting() {
             hint={SITTING_ENDED_SAYS.hint}
             action={
               // `replace`: Back must never re-enter a paper that has ended.
-              <Button onPress={() => router.replace(DETAIL_ROUTES.REPORT(startedId))}>
+              <Button
+                icon={ChartColumn}
+                onPress={() => router.replace(DETAIL_ROUTES.REPORT(startedId))}
+              >
                 See your result
               </Button>
             }

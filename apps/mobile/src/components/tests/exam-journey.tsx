@@ -8,10 +8,13 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { cn } from '../../lib/cn';
+import { useTokenColor } from '../../lib/use-token-color';
+import X from 'lucide-react-native/icons/x';
 
 /** The exam's stages in order, with the one this paper prepares for marked. */
 export function ExamJourney({ journey }: Readonly<{ journey: NonNullable<ExamBrief['journey']> }>) {
   const [open, setOpen] = useState(false);
+  const ink = useTokenColor('--foreground');
 
   return (
     <>
@@ -23,7 +26,10 @@ export function ExamJourney({ journey }: Readonly<{ journey: NonNullable<ExamBri
         <View className="flex-1 items-center justify-center bg-[var(--overlay-bg)] p-6">
           <Card className="w-full max-w-md gap-4 p-5">
             <View className="gap-1">
-              <Text variant="section">Exam journey</Text>
+              <View className="flex-row items-center gap-2">
+                <Route size={20} color={ink} />
+                <Text variant="section">Exam journey</Text>
+              </View>
               <Text variant="muted">{journey.exam}</Text>
             </View>
 
@@ -57,7 +63,7 @@ export function ExamJourney({ journey }: Readonly<{ journey: NonNullable<ExamBri
               );
             })}
 
-            <Button variant="secondary" onPress={() => setOpen(false)}>
+            <Button variant="secondary" icon={X} onPress={() => setOpen(false)}>
               Close
             </Button>
           </Card>

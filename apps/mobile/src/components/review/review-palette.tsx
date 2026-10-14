@@ -8,8 +8,11 @@ import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '../ui/text';
 import { cn } from '../../lib/cn';
+import { useTokenColor } from '../../lib/use-token-color';
 import { Button } from '../ui/button';
 import { VERDICT, verdictOf, type ReviewedQuestion, type Verdict } from '@iace/app-kit';
+import X from 'lucide-react-native/icons/x';
+import ListChecks from 'lucide-react-native/icons/list-checks';
 
 interface VerdictStyle {
   label: string;
@@ -58,6 +61,7 @@ export function ReviewPalette({
   onOpenQuestion,
 }: Readonly<ReviewPaletteProps>) {
   const insets = useSafeAreaInsets();
+  const ink = useTokenColor('--foreground');
 
   return (
     <Modal transparent visible={open} animationType="slide" onRequestClose={onClose}>
@@ -69,8 +73,11 @@ export function ReviewPalette({
           style={{ paddingBottom: Math.max(insets.bottom, 24) }}
         >
           <View className="flex-row items-center justify-between px-4">
-            <Text variant="section">Questions</Text>
-            <Button variant="ghost" onPress={onClose}>
+            <View className="flex-row items-center gap-2">
+              <ListChecks size={20} color={ink} />
+              <Text variant="section">Questions</Text>
+            </View>
+            <Button variant="ghost" icon={X} onPress={onClose}>
               Close
             </Button>
           </View>
