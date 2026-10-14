@@ -29,6 +29,7 @@ import type { Prisma } from '@prisma/client';
 import { AuditContext } from '../src/audit';
 import { AdminsService } from '../src/admins/admins.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
+import { SectionProgressService } from '../src/assignments/section-progress.service';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { shiftInstituteDay } from '../src/common/time/institute-day';
@@ -111,11 +112,10 @@ const queue = async (
 ): Promise<AssignmentWithTest[]> =>
   (await assignments.mine(adminId, mineAssignmentsQuerySchema.parse(query))).items;
 
-const progress = async (
-  assignments: AssignmentsService,
-  query: SectionProgressQueryInput = {},
-): Promise<SectionProgressRow[]> =>
-  (await assignments.progress(sectionProgressQuerySchema.parse(query))).items;
+const sectionProgress = new SectionProgressService(prisma);
+
+const progress = async (query: SectionProgressQueryInput = {}): Promise<SectionProgressRow[]> =>
+  (await sectionProgress.progress(sectionProgressQuerySchema.parse(query))).items;
 
 /** A role the paper's source calls for that nobody has been given. */
 const UNHELD = {
@@ -1037,12 +1037,11 @@ describe('AssignmentsService — mine', () => {
 describe('AssignmentsService — section progress', () => {
   /** The reported case: a DRAFT, FRAMED test with not one assignment row on it. */
   it('lists a FRAMED test’s sections that nobody has been assigned', async () => {
-    const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     const test = await framed(catalog, { title: 'SSC CGL Tier 1 — Mock 01' });
     const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
 
-    const rows = await progress(assignments);
+    const rows = await progress();
 
     assert.equal(rows.length, 1);
     assert.deepEqual(
@@ -1085,7 +1084,7 @@ describe('AssignmentsService — section progress', () => {
     await finalizedNow(typing.id);
     await finalizedNow(reading.id);
 
-    const rows = await progress(assignments);
+    const rows = await progress();
 
     assert.equal(rows.length, 1, 'a finished section still answers "how is this test going"');
     assert.ok(rows[0]?.typing?.finalizedAt);
@@ -1122,7 +1121,7 @@ describe('AssignmentsService — section progress', () => {
       reader.id,
     );
 
-    const rows = await progress(assignments);
+    const rows = await progress();
 
     assert.equal(rows.length, 1);
     assert.deepEqual(
@@ -1172,7 +1171,7 @@ describe('AssignmentsService — section progress', () => {
       });
     }
 
-    const rows = await progress(assignments);
+    const rows = await progress();
     const [asReader] = await queue(assignments, reader.id);
 
     assert.equal(rows[0]?.writtenCount, 2);
@@ -1184,12 +1183,11 @@ describe('AssignmentsService — section progress', () => {
   });
 
   it('gives a PICKED test both roles: its typist fixes what the reader sends back', async () => {
-    const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     await makeTest(prisma, catalog, { paperSource: PAPER_SOURCES.PICKED });
     const section = await makeSection(prisma, catalog);
 
-    const rows = await progress(assignments);
+    const rows = await progress();
 
     assert.equal(rows[0]?.baseConfigSectionId, section.id);
     assert.deepEqual(rows[0]?.typing, UNHELD);
@@ -1198,19 +1196,17 @@ describe('AssignmentsService — section progress', () => {
 
   /** A frozen paper cannot be typed or read again, so it is no longer in progress. */
   it('drops every section of a test whose paper has been frozen', async () => {
-    const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     const test = await framed(catalog);
     await makeSection(prisma, catalog);
     await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: new Date() } });
 
-    const rows = await progress(assignments);
+    const rows = await progress();
 
     assert.deepEqual(rows, []);
   });
 
   it('the test and section filters narrow it to one row', async () => {
-    const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     const banking = await framed(catalog, { title: 'Banking prelims mock' });
     await framed(catalog, { title: 'Railway mock' });
@@ -1220,8 +1216,8 @@ describe('AssignmentsService — section progress', () => {
       order: 2,
     });
 
-    const byTest = await progress(assignments, { testId: banking.id });
-    const byBoth = await progress(assignments, {
+    const byTest = await progress({ testId: banking.id });
+    const byBoth = await progress({
       testId: banking.id,
       baseConfigSectionId: quantitative.id,
     });
@@ -1280,8 +1276,8 @@ describe('AssignmentsService — section progress', () => {
       arjun.id,
     );
 
-    const readByArjun = await progress(assignments, { assigneeId: [arjun.id] });
-    const thatWeek = await progress(assignments, { dueFrom: dueIn(0), dueTo: dueIn(1) });
+    const readByArjun = await progress({ assigneeId: [arjun.id] });
+    const thatWeek = await progress({ dueFrom: dueIn(0), dueTo: dueIn(1) });
 
     assert.deepEqual(
       readByArjun.map((one) => one.sectionName),
@@ -1297,17 +1293,16 @@ describe('AssignmentsService — section progress', () => {
 
   /** Institute-wide work outgrows a page, and a list that stops at its first one lies about the rest. */
   it('pages, and reports the whole count with the page', async () => {
-    const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     await framed(catalog);
     for (const order of [1, 2, 3]) {
       await makeSection(prisma, catalog, { name: `Section ${order}`, order });
     }
 
-    const first = await assignments.progress(
+    const first = await sectionProgress.progress(
       sectionProgressQuerySchema.parse({ page: 1, pageSize: 2 }),
     );
-    const second = await assignments.progress(
+    const second = await sectionProgress.progress(
       sectionProgressQuerySchema.parse({ page: 2, pageSize: 2 }),
     );
 
@@ -1990,7 +1985,7 @@ describe('AssignmentsService — time spent on a section', () => {
 
     const [mine] = await queue(assignments, typist.id);
     const onTest = await assignments.forTest(test.id, OWNER);
-    const [row] = await progress(assignments);
+    const [row] = await progress();
 
     assert.equal(mine?.secondsSpent, 120);
     assert.deepEqual(

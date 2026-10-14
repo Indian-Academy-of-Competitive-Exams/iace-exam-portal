@@ -4,7 +4,6 @@ import {
   ADMIN_ROLES,
   ASSIGNMENT_ROLES,
   ASSIGNMENT_SUMMARY_NEXT_ROWS,
-  AUDIT_FEATURE,
   AppException,
   DUE_STANDINGS,
   ErrorCodes,
@@ -22,10 +21,6 @@ import {
   type AssignableAdmin,
   type AssignmentRole,
   type AssignmentSummary,
-  type AssignmentSection,
-  type AssignmentSectionsQuery,
-  type AssignmentTest,
-  type AssignmentTestsQuery,
   type AssignmentWithTest,
   type ChangeAssignmentDueBody,
   type CreateAssignmentBody,
@@ -35,9 +30,6 @@ import {
   type MineAssignmentsQuery,
   type Paginated,
   type PaperSource,
-  type SectionProgressQuery,
-  type SectionProgressRow,
-  type SectionRoleProgress,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -48,12 +40,22 @@ import { scopeRefOf } from '../common/prisma-json';
 import { releaseSectionEditLock } from '../common/edit-lock';
 import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
 import { pageArgs, paged } from '../common/pagination';
-import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
-import { uncheckedOn } from './unread-questions';
+import { endOfInstituteDay } from '../common/time/institute-day';
+import {
+  NO_RELEASE_COUNTS,
+  factsOf,
+  gapFrom,
+  releaseCounts,
+  releaseGapOf,
+  sectionKey,
+  seatKey,
+  spentSeconds,
+  type RowFacts,
+} from './assignment-counts';
+import { removableIds, type RemovableRow } from './assignment-removal';
+import { dueBounds } from './section-progress.service';
 import { OWED_WHERE, doneOpen, finishes, owed, readOpen, standingOf } from './assignment-gates';
 import { formRefusal } from '../common/form-refusal';
-import { everyTermMatches } from '../common/search-terms';
-import { countsBy } from '../common/relation-counts';
 
 const CHOOSE_WITH_DONE_MESSAGE =
   'Mark the section done by choosing its questions, so the reader gets the paper they will read.';
@@ -125,43 +127,6 @@ const ADMIN_ROLE_FOR_ROLE: Record<AssignmentRole, AdminRole> = {
   [ASSIGNMENT_ROLES.PROOFREADER]: ADMIN_ROLES.PROOFREADER,
 };
 
-/** Both sources take both roles: on a picked paper the typist fixes what its reader sends back. */
-const SOURCES_FOR_ROLE: Record<AssignmentRole, readonly PaperSource[]> = {
-  [ASSIGNMENT_ROLES.TYPIST]: [PAPER_SOURCES.FRAMED, PAPER_SOURCES.PICKED],
-  [ASSIGNMENT_ROLES.PROOFREADER]: [PAPER_SOURCES.FRAMED, PAPER_SOURCES.PICKED],
-};
-
-const TEST_QUEUE_SELECT = {
-  id: true,
-  title: true,
-  paperSource: true,
-  finalizedAt: true,
-  scope: true,
-  scopeRef: true,
-  questionPoolFilter: true,
-  baseConfig: {
-    select: {
-      sections: {
-        select: { id: true, name: true, order: true, moduleId: true, questionCount: true },
-        orderBy: { order: 'asc' },
-      },
-    },
-  },
-  assignments: {
-    where: { replacedAt: null },
-    select: {
-      id: true,
-      role: true,
-      baseConfigSectionId: true,
-      assigneeId: true,
-      dueAt: true,
-      finalizedAt: true,
-      replacedAt: true,
-      assignee: { select: { fullName: true, email: true } },
-    },
-  },
-} as const satisfies Prisma.TestSelect;
-
 /** What one admin's standing is counted from: no section fact, so no count beside it. */
 const SUMMARY_SELECT = {
   id: true,
@@ -177,72 +142,6 @@ const SUMMARY_SELECT = {
 } as const satisfies Prisma.QuestionAssignmentSelect;
 
 type SummaryRow = Prisma.QuestionAssignmentGetPayload<{ select: typeof SUMMARY_SELECT }>;
-
-type QueueTest = Prisma.TestGetPayload<{ select: typeof TEST_QUEUE_SELECT }>;
-type QueueSection = QueueTest['baseConfig']['sections'][number];
-
-interface DueBounds {
-  from?: Date;
-  to?: Date;
-}
-
-/** Institute days, inclusive at both ends — a UTC midnight would drop everything due that evening. */
-function dueBounds(query: { dueFrom?: string; dueTo?: string }): DueBounds | undefined {
-  if (!query.dueFrom && !query.dueTo) return undefined;
-  return {
-    ...(query.dueFrom ? { from: startOfInstituteDay(query.dueFrom) } : {}),
-    ...(query.dueTo ? { to: endOfInstituteDay(query.dueTo) } : {}),
-  };
-}
-
-/** A role nobody holds has no due date, so a due-date filter cannot be looking for it. */
-const withinDue = (at: Date | null, bounds: DueBounds): boolean =>
-  at !== null && (!bounds.from || at >= bounds.from) && (!bounds.to || at <= bounds.to);
-
-/** A test still being built: the picker and the progress list must offer and list the same ones. */
-const UNFROZEN_TEST = {
-  finalizedAt: null,
-  paperSource: { not: null },
-} as const satisfies Prisma.TestWhereInput;
-
-const sectionsOf = (test: QueueTest): QueueSection[] => [
-  ...scopedSections(test.baseConfig.sections, test.scope, scopeRefOf(test)),
-];
-
-/** Null where the paper's source gives the role nothing to do; otherwise who holds it, if anybody. */
-function roleProgress(
-  test: QueueTest,
-  section: QueueSection,
-  role: AssignmentRole,
-): SectionRoleProgress | null {
-  const source = test.paperSource;
-  if (source === null || !SOURCES_FOR_ROLE[role].includes(source)) return null;
-
-  const held =
-    test.assignments.find((row) => row.role === role && row.baseConfigSectionId === section.id) ??
-    null;
-
-  return {
-    assignmentId: held?.id ?? null,
-    assigneeId: held?.assigneeId ?? null,
-    assigneeName: held ? (held.assignee.fullName ?? held.assignee.email) : null,
-    dueAt: held?.dueAt?.toISOString() ?? null,
-    finalizedAt: held?.finalizedAt?.toISOString() ?? null,
-    standing: held ? standingOf({ ...held, test }) : null,
-    secondsSpent: 0,
-  };
-}
-
-const roles = (row: SectionProgressRow): SectionRoleProgress[] =>
-  [row.typing, row.reading].filter((held): held is SectionRoleProgress => held !== null);
-
-/** Either half satisfies it: a section is theirs if they type it or read it. */
-const heldByAnyOf = (row: SectionProgressRow, wanted: readonly string[]): boolean =>
-  roles(row).some((held) => held.assigneeId !== null && wanted.includes(held.assigneeId));
-
-/** Either half satisfies it: the two roles carry their own dates and need not agree. */
-const dueWithin = (row: SectionProgressRow, bounds: DueBounds): boolean =>
-  roles(row).some((held) => withinDue(held.dueAt === null ? null : new Date(held.dueAt), bounds));
 
 const otherRole = (role: AssignmentRole): AssignmentRole =>
   role === ASSIGNMENT_ROLES.TYPIST ? ASSIGNMENT_ROLES.PROOFREADER : ASSIGNMENT_ROLES.TYPIST;
@@ -267,7 +166,10 @@ export class AssignmentsService {
       include: ASSIGNMENT_INCLUDE,
       orderBy: [{ baseConfigSection: { order: 'asc' } }, { role: 'asc' }],
     });
-    const [facts, removable] = await Promise.all([this.factsOf(rows), this.removableIds(rows)]);
+    const [facts, removable] = await Promise.all([
+      factsOf(this.prisma, rows),
+      removableIds(this.prisma, rows),
+    ]);
     return sentTo(
       viewer,
       rows.map((row) => toAssignment(row, facts(row), removable.has(row.id))),
@@ -285,7 +187,7 @@ export class AssignmentsService {
       include: ASSIGNMENT_INCLUDE,
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    const facts = await this.factsOf(rows);
+    const facts = await factsOf(this.prisma, rows);
     return sentTo(
       viewer,
       rows.map((row) => toAssignment(row, facts(row))),
@@ -442,104 +344,7 @@ export class AssignmentsService {
 
   /** Typed, edited, reviewed, commented or finished anything on the section: then it is a record. */
   private async removable(row: RemovableRow): Promise<boolean> {
-    return (await this.removableIds([row])).has(row.id);
-  }
-
-  /** The same six checks for a whole page at once — six reads, not six per row. */
-  private async removableIds(rows: readonly RemovableRow[]): Promise<Set<string>> {
-    const open = rows.filter((row) => !row.finalizedAt && !row.replacedAt);
-    if (open.length === 0) return new Set();
-
-    const onSection = await this.questionsOn(sectionPairs(open));
-    const worked = await this.handsThatWorked(open, onSection);
-    return new Set(open.filter((row) => !worked.has(row.id)).map((row) => row.id));
-  }
-
-  /** Every question a section holds, placed on its paper or typed under its typist. */
-  private async questionsOn(pairs: readonly SectionPair[]): Promise<ReadonlyMap<string, string[]>> {
-    // Two indexed reads: one OR across both relations planned as a scan of the whole bank.
-    const [placed, typedHere] = await Promise.all([
-      this.prisma.paperQuestion.findMany({
-        where: { OR: [...pairs] },
-        select: { testId: true, baseConfigSectionId: true, questionId: true },
-      }),
-      this.prisma.question.findMany({
-        where: { assignment: { OR: [...pairs], role: ASSIGNMENT_ROLES.TYPIST } },
-        select: { id: true, assignment: { select: { testId: true, baseConfigSectionId: true } } },
-      }),
-    ]);
-    const onSection = new Map<string, string[]>();
-    for (const row of placed) alsoOn(onSection, sectionKey(row), row.questionId);
-    for (const row of typedHere) {
-      if (row.assignment) alsoOn(onSection, sectionKey(row.assignment), row.id);
-    }
-    return onSection;
-  }
-
-  /** Which of the rows have work under them: typed, reviewed, commented on, or edited since. */
-  private async handsThatWorked(
-    open: readonly RemovableRow[],
-    onSection: ReadonlyMap<string, string[]>,
-  ): Promise<ReadonlySet<string>> {
-    const pairs = [...sectionPairs(open)];
-    const who = [...new Set(open.map((row) => row.assigneeId))];
-    const since = new Date(Math.min(...open.map((row) => row.createdAt.getTime())));
-    const onAnySection = [...new Set([...onSection.values()].flat())];
-
-    const [typed, reviewed, said, edited] = await Promise.all([
-      this.prisma.question.groupBy({
-        by: ['assignmentId'],
-        where: { assignmentId: { in: open.map((row) => row.id) } },
-        _count: true,
-      }),
-      this.prisma.questionReview.findMany({
-        where: { AND: [{ OR: pairs }, { OR: reviewedByAnyOf(who) }] },
-        select: REVIEW_HAND_SELECT,
-      }),
-      this.prisma.sectionComment.groupBy({
-        by: ['testId', 'baseConfigSectionId', 'authorId'],
-        where: { AND: [{ OR: pairs }, { authorId: { in: who } }] },
-        _count: true,
-      }),
-      // The latest edit per question and admin: a row is a record once one lands after it began.
-      this.prisma.rowActionLog.groupBy({
-        by: ['actorId', 'entityId'],
-        where: {
-          actorId: { in: who },
-          feature: AUDIT_FEATURE.QUESTION,
-          createdAt: { gte: since },
-          entityId: { in: onAnySection },
-        },
-        _max: { createdAt: true },
-      }),
-    ]);
-
-    const wrote = countsBy(typed, 'assignmentId');
-    const touched = new Set([
-      ...reviewed.flatMap(handsOnReview),
-      ...said.map((row) => handKey(sectionKey(row), row.authorId)),
-    ]);
-    const editedAt = new Map(
-      edited.flatMap((row) =>
-        row.actorId === null ? [] : [[handKey(row.entityId, row.actorId), row._max.createdAt]],
-      ),
-    );
-    const editedSince = (row: RemovableRow): boolean =>
-      (onSection.get(sectionKey(row)) ?? []).some((questionId) => {
-        const at = editedAt.get(handKey(questionId, row.assigneeId));
-        return at !== null && at !== undefined && at >= row.createdAt;
-      });
-
-    return new Set(
-      open
-        .filter(
-          (row) =>
-            (wrote.get(row.id) ?? 0) > 0 ||
-            touched.has(handKey(sectionKey(row), row.assigneeId)) ||
-            editedSince(row),
-        )
-        .map((row) => row.id),
-    );
+    return (await removableIds(this.prisma, [row])).has(row.id);
   }
 
   /** One admin's own rows, whichever role they came in as. Their work, and their actions. */
@@ -567,8 +372,11 @@ export class AssignmentsService {
     ]);
     // The whole page's release counts at once: one reading per row was three statements each.
     const [facts, counted] = await Promise.all([
-      this.factsOf(rows),
-      this.releaseCounts(rows.filter((row) => readOpen(row))),
+      factsOf(this.prisma, rows),
+      releaseCounts(
+        this.prisma,
+        rows.filter((row) => readOpen(row)),
+      ),
     ]);
     return paged(
       query,
@@ -592,7 +400,7 @@ export class AssignmentsService {
     });
     if (rows.length === 0) return undefined;
 
-    const spent = await this.spentSeconds(rows);
+    const spent = await spentSeconds(this.prisma, rows);
     const secondsOn = (row: SummaryRow) => spent.get(seatKey(row)) ?? 0;
     const today = todayISO();
     const roles = Object.values(ASSIGNMENT_ROLES).flatMap((role) => {
@@ -627,95 +435,6 @@ export class AssignmentsService {
         secondsSpent: secondsOn(row),
       }));
     return { roles, next };
-  }
-
-  /** Expanded in memory: the cross of unfrozen tests and their sections is thousands of rows here, not millions. */
-  async progress(query: SectionProgressQuery): Promise<Paginated<SectionProgressRow>> {
-    const due = dueBounds(query);
-    const tests = await this.prisma.test.findMany({
-      where: {
-        ...UNFROZEN_TEST,
-        ...(query.testId ? { id: query.testId } : {}),
-      },
-      select: TEST_QUEUE_SELECT,
-      orderBy: [{ title: 'asc' }, { id: 'asc' }],
-    });
-
-    const rows = tests
-      .flatMap((test) =>
-        sectionsOf(test)
-          .filter(
-            (section) => !query.baseConfigSectionId || section.id === query.baseConfigSectionId,
-          )
-          .map((section) => sectionRow(test, section)),
-      )
-      .filter((row) => !query.assigneeId || heldByAnyOf(row, query.assigneeId))
-      .filter((row) => !due || dueWithin(row, due));
-
-    const { skip, take } = pageArgs(query);
-    const items = rows.slice(skip, skip + take);
-    const [written, spent] = await Promise.all([
-      this.sectionWrittenCounts(items),
-      this.spentSeconds(items.flatMap(seatsOf)),
-    ]);
-    return paged(
-      query,
-      items.map((row) => ({
-        ...withTime(row, spent),
-        writtenCount: (written.get(sectionKey(row)) ?? NO_COUNTS).writtenCount,
-      })),
-      rows.length,
-    );
-  }
-
-  /** What a test picker offers: their own tests, or every unfrozen one when a super admin asks. */
-  async tests(
-    query: AssignmentTestsQuery,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<Paginated<AssignmentTest>> {
-    const where: Prisma.TestWhereInput = {
-      ...UNFROZEN_TEST,
-      ...(ownScope(query, isSuperAdmin) ? { assignments: { some: heldBy(adminId, query) } } : {}),
-      ...everyTermMatches<Prisma.TestWhereInput>(query.q, (term) => [
-        { title: { contains: term, mode: 'insensitive' } },
-      ]),
-      ...(query.id ? { id: { in: query.id } } : {}),
-    };
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.test.findMany({
-        where,
-        select: { id: true, title: true },
-        orderBy: [{ title: 'asc' }, { id: 'asc' }],
-        ...pageArgs(query),
-      }),
-      this.prisma.test.count({ where }),
-    ]);
-    return paged(query, rows, total);
-  }
-
-  /** The chosen test's sections, in the test's own order — a dozen rows, so no page to ask for. */
-  async sectionChoices(
-    testId: string,
-    query: AssignmentSectionsQuery,
-    adminId: string,
-    isSuperAdmin: boolean,
-  ): Promise<AssignmentSection[]> {
-    if (ownScope(query, isSuperAdmin)) {
-      const held = await this.prisma.questionAssignment.findMany({
-        where: { testId, ...heldBy(adminId, query) },
-        select: { baseConfigSection: { select: { id: true, name: true } } },
-        orderBy: { baseConfigSection: { order: 'asc' } },
-      });
-      return held.map((row) => row.baseConfigSection);
-    }
-
-    const test = await this.prisma.test.findUnique({
-      where: { id: testId },
-      select: TEST_QUEUE_SELECT,
-    });
-    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
-    return sectionsOf(test).map((section) => ({ id: section.id, name: section.name }));
   }
 
   /** A reader's release, by the row the section resolved. Idempotent: a repeat leaves the first stamp. A typist uses Done. */
@@ -771,135 +490,12 @@ export class AssignmentsService {
     needed: number,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<string | null> {
-    const counted = await this.releaseCounts([{ ...section, test: { paperSource } }], db);
+    const counted = await releaseCounts(db, [{ ...section, test: { paperSource } }]);
     return releaseGapOf(counted.get(sectionKey(section)) ?? NO_RELEASE_COUNTS, needed);
   }
 
-  /** The three counts a release turns on, for every section named at once — a page of the queue asked one section at a time was three statements a row. */
-  private async releaseCounts(
-    rows: readonly (SectionPair & { test: { paperSource: PaperSource | null } })[],
-    db: Prisma.TransactionClient = this.prisma,
-  ): Promise<Map<string, ReleaseCounts>> {
-    const sections = sectionPairs(rows);
-    if (sections.length === 0) return new Map();
-
-    // A picked section's typist only fixes what comes back, so it never finishes the section.
-    const typed = sectionPairs(rows.filter((row) => row.test.paperSource === PAPER_SOURCES.FRAMED));
-    const [typing, onPaper, unchecked] = await Promise.all([
-      typed.length === 0
-        ? []
-        : db.questionAssignment.groupBy({
-            by: ['testId', 'baseConfigSectionId'],
-            where: {
-              OR: typed,
-              role: ASSIGNMENT_ROLES.TYPIST,
-              finalizedAt: null,
-              replacedAt: null,
-            },
-            _count: { _all: true },
-          }),
-      db.paperQuestion.groupBy({
-        by: ['testId', 'baseConfigSectionId'],
-        where: { OR: sections },
-        _count: { _all: true },
-      }),
-      db.paperQuestion.groupBy({
-        by: ['testId', 'baseConfigSectionId'],
-        where: {
-          OR: sections.map(({ testId, baseConfigSectionId }) => ({
-            ...uncheckedOn(testId),
-            baseConfigSectionId,
-          })),
-        },
-        _count: { _all: true },
-      }),
-    ]);
-
-    const [typingBy, onPaperBy, uncheckedBy] = [typing, onPaper, unchecked].map(sectionCountsIn);
-    return new Map(
-      sections.map((row) => {
-        const key = sectionKey(row);
-        return [
-          key,
-          {
-            typing: typingBy?.get(key) ?? 0,
-            onPaper: onPaperBy?.get(key) ?? 0,
-            unchecked: uncheckedBy?.get(key) ?? 0,
-          },
-        ];
-      }),
-    );
-  }
-
-  /** Every assignment on a row's own (test, section), not just the row's — the typist's work counts for the reader. */
-  private async sectionWrittenCounts(
-    rows: readonly { testId: string; baseConfigSectionId: string }[],
-  ): Promise<Map<string, SectionCounts>> {
-    const sections = [...new Map(rows.map((row) => [sectionKey(row), row])).values()];
-    if (sections.length === 0) return new Map();
-
-    const held = await this.prisma.questionAssignment.findMany({
-      where: {
-        OR: sections.map(({ testId, baseConfigSectionId }) => ({ testId, baseConfigSectionId })),
-      },
-      select: { id: true, testId: true, baseConfigSectionId: true },
-    });
-    const ids = held.map((row) => row.id);
-    const written =
-      ids.length === 0
-        ? []
-        : await this.prisma.question.groupBy({
-            by: ['assignmentId'],
-            where: { assignmentId: { in: ids } },
-            _count: { _all: true },
-          });
-    const writtenBy = new Map(written.map((row) => [row.assignmentId, row._count._all]));
-
-    const bySection = new Map(sections.map((row) => [sectionKey(row), NO_COUNTS]));
-    for (const row of held) {
-      const key = sectionKey(row);
-      const so_far = bySection.get(key);
-      if (!so_far) continue;
-      bySection.set(key, { writtenCount: so_far.writtenCount + (writtenBy.get(row.id) ?? 0) });
-    }
-    return bySection;
-  }
-
-  /** Seconds each holder has had their section's questions on screen, in the seat they hold it from. */
-  private async spentSeconds(rows: readonly SeatRow[]): Promise<Map<string, number>> {
-    if (rows.length === 0) return new Map();
-
-    const groups = await this.prisma.questionWorkTime.groupBy({
-      by: ['testId', 'baseConfigSectionId', 'adminId', 'role'],
-      // Whole tests, not each section: one index range a test, and a seat nobody asked about is never looked up.
-      where: {
-        testId: { in: [...new Set(rows.map((row) => row.testId))] },
-        adminId: { in: [...new Set(rows.map((row) => row.assigneeId))] },
-      },
-      _sum: { seconds: true },
-    });
-    return new Map(
-      groups.map((group) => [
-        seatKey({ ...group, assigneeId: group.adminId }),
-        group._sum.seconds ?? 0,
-      ]),
-    );
-  }
-
-  /** What a row reads off its section and its holder, for every row asked about at once. */
-  private async factsOf(rows: readonly SeatRow[]): Promise<(row: SeatRow) => RowFacts> {
-    const [written, spent] = await Promise.all([
-      this.sectionWrittenCounts(rows),
-      this.spentSeconds(rows),
-    ]);
-    return (row) => ({
-      ...(written.get(sectionKey(row)) ?? NO_COUNTS),
-      secondsSpent: spent.get(seatKey(row)) ?? 0,
-    });
-  }
-
   private async withFacts(row: AssignmentRow): Promise<Assignment> {
-    return toAssignment(row, (await this.factsOf([row]))(row));
+    return toAssignment(row, (await factsOf(this.prisma, [row]))(row));
   }
 
   private async requireTest(id: string) {
@@ -996,164 +592,6 @@ export class AssignmentsService {
   }
 }
 
-/** A super admin reads the whole institute unless they ask for their own queue; nobody else ever does. */
-const ownScope = (query: { mine?: boolean }, isSuperAdmin: boolean): boolean =>
-  !isSuperAdmin || query.mine === true;
-
-const heldBy = (
-  adminId: string,
-  query: { role?: AssignmentRole },
-): Prisma.QuestionAssignmentWhereInput => ({
-  assigneeId: adminId,
-  ...(query.role ? { role: query.role } : {}),
-});
-
-/** One row per (test, section), carrying both halves of its work — never one row per role. */
-function sectionRow(test: QueueTest, section: QueueSection): SectionProgressRow {
-  return {
-    testId: test.id,
-    testTitle: test.title,
-    baseConfigSectionId: section.id,
-    sectionName: section.name,
-    paperSource: test.paperSource,
-    ...NO_COUNTS,
-    sectionQuestionCount: section.questionCount,
-    typing: roleProgress(test, section, ASSIGNMENT_ROLES.TYPIST),
-    reading: roleProgress(test, section, ASSIGNMENT_ROLES.PROOFREADER),
-  };
-}
-
-/** A section is only unique within its own test — two tests can share a base config's section id. */
-const sectionKey = (row: { testId: string; baseConfigSectionId: string }): string =>
-  `${row.testId}:${row.baseConfigSectionId}`;
-
-/** One admin's hands on one thing, so a section's and a question's work read out of one set. */
-const handKey = (what: string, adminId: string): string => `${what}|${adminId}`;
-
-interface SectionPair {
-  testId: string;
-  baseConfigSectionId: string;
-}
-
-/** One admin in one role on one section — what their time on it is kept under. */
-interface SeatRow extends SectionPair {
-  assigneeId: string;
-  role: AssignmentRole;
-}
-
-const seatKey = (row: SeatRow): string => `${handKey(sectionKey(row), row.assigneeId)}|${row.role}`;
-
-/** Each role somebody holds on a section, as the seat their time is kept under. */
-const seatsOf = (row: SectionProgressRow): SeatRow[] =>
-  (
-    [
-      [ASSIGNMENT_ROLES.TYPIST, row.typing],
-      [ASSIGNMENT_ROLES.PROOFREADER, row.reading],
-    ] as const
-  ).flatMap(([role, held]) =>
-    held?.assigneeId
-      ? [
-          {
-            testId: row.testId,
-            baseConfigSectionId: row.baseConfigSectionId,
-            assigneeId: held.assigneeId,
-            role,
-          },
-        ]
-      : [],
-  );
-
-function withTime(row: SectionProgressRow, spent: Map<string, number>): SectionProgressRow {
-  const seconds = new Map(seatsOf(row).map((seat) => [seat.role, spent.get(seatKey(seat)) ?? 0]));
-  const timed = (held: SectionRoleProgress | null, role: AssignmentRole) =>
-    held && { ...held, secondsSpent: seconds.get(role) ?? 0 };
-  return {
-    ...row,
-    typing: timed(row.typing, ASSIGNMENT_ROLES.TYPIST),
-    reading: timed(row.reading, ASSIGNMENT_ROLES.PROOFREADER),
-  };
-}
-
-/** A `groupBy` over (test, section) as a lookup on the key the rest of this file uses. */
-const sectionCountsIn = (
-  groups: readonly (SectionPair & { _count: { _all: number } })[],
-): Map<string, number> => new Map(groups.map((group) => [sectionKey(group), group._count._all]));
-
-/** What a release turns on: typing still open on the section, its rows on the paper, and the unchecked ones among them. */
-interface ReleaseCounts {
-  typing: number;
-  onPaper: number;
-  unchecked: number;
-}
-
-const NO_RELEASE_COUNTS: ReleaseCounts = { typing: 0, onPaper: 0, unchecked: 0 };
-
-function releaseGapOf(counts: ReleaseCounts, needed: number): string | null {
-  if (counts.typing > 0) return 'Its typist has not marked this section done yet.';
-  if (counts.onPaper < needed) {
-    return `The paper holds ${counts.onPaper} of the ${needed} questions this section needs.`;
-  }
-  if (counts.unchecked > 0) {
-    return `${counts.unchecked} of this section's questions are not checked yet.`;
-  }
-  return null;
-}
-
-/** A page row's own gap: a section the counts never saw holds nothing, which is a gap of its whole count. */
-const gapFrom = (
-  counts: ReleaseCounts | undefined,
-  row: { baseConfigSection: { questionCount: number } },
-): string | null => releaseGapOf(counts ?? NO_RELEASE_COUNTS, row.baseConfigSection.questionCount);
-
-/** What `removable` is decided on, whichever read the row came off. */
-interface RemovableRow extends SectionPair {
-  id: string;
-  assigneeId: string;
-  finalizedAt: Date | null;
-  replacedAt: Date | null;
-  createdAt: Date;
-}
-
-const sectionPairs = (rows: readonly SectionPair[]): SectionPair[] =>
-  [...new Map(rows.map((row) => [sectionKey(row), row])).values()].map(
-    ({ testId, baseConfigSectionId }) => ({ testId, baseConfigSectionId }),
-  );
-
-function alsoOn(held: Map<string, string[]>, key: string, questionId: string): void {
-  const so_far = held.get(key) ?? [];
-  so_far.push(questionId);
-  held.set(key, so_far);
-}
-
-const REVIEW_HAND_SELECT = {
-  testId: true,
-  baseConfigSectionId: true,
-  checkedById: true,
-  sentBackById: true,
-  fixedById: true,
-} as const satisfies Prisma.QuestionReviewSelect;
-
-const reviewedByAnyOf = (who: readonly string[]): Prisma.QuestionReviewWhereInput[] => [
-  { checkedById: { in: [...who] } },
-  { sentBackById: { in: [...who] } },
-  { fixedById: { in: [...who] } },
-];
-
-/** Whoever's hand is on this review, as the section keys the batch compares against. */
-const handsOnReview = (
-  row: Prisma.QuestionReviewGetPayload<{ select: typeof REVIEW_HAND_SELECT }>,
-): string[] =>
-  [row.checkedById, row.sentBackById, row.fixedById].flatMap((adminId) =>
-    adminId === null ? [] : [handKey(sectionKey(row), adminId)],
-  );
-
-/** What a section holds, counted across every assignment on it. */
-export interface SectionCounts {
-  writtenCount: number;
-}
-
-const NO_COUNTS: SectionCounts = { writtenCount: 0 };
-
 /** Whoever a read is for, as far as another seat's time goes. */
 interface TimeViewer {
   id: string;
@@ -1169,11 +607,6 @@ function sentTo(viewer: TimeViewer, rows: readonly Assignment[]): Assignment[] {
       ? { ...row, secondsSpent: null }
       : row,
   );
-}
-
-/** A section's counts, and the time of the one row's holder beside them. */
-interface RowFacts extends SectionCounts {
-  secondsSpent: number;
 }
 
 function toAssignment(

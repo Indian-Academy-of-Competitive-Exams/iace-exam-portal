@@ -55,6 +55,7 @@ import {
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AssignmentsService } from './assignments.service';
+import { SectionProgressService } from './section-progress.service';
 import { SectionThreadService } from './section-thread.service';
 
 /** Either half of the work shares one queue — filtered by neither key alone. */
@@ -70,7 +71,10 @@ const THREAD_FEATURES = [...ASSIGNEE_FEATURES, FEATURE_KEYS.TEST_MANAGEMENT] as 
 @Controller('admin/assignments')
 @Actors(ActorTypes.ADMIN)
 export class AssignmentsController {
-  constructor(private readonly assignments: AssignmentsService) {}
+  constructor(
+    private readonly assignments: AssignmentsService,
+    private readonly sectionProgress: SectionProgressService,
+  ) {}
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('tests/:testId')
@@ -119,7 +123,7 @@ export class AssignmentsController {
   progress(
     @Query(new ZodQuery(sectionProgressQuerySchema)) query: SectionProgressQuery,
   ): Promise<Paginated<SectionProgressRow>> {
-    return this.assignments.progress(query);
+    return this.sectionProgress.progress(query);
   }
 
   /** What the queue's test picker offers. `mine` is how a super admin narrows it to their own. */
@@ -129,7 +133,7 @@ export class AssignmentsController {
     @Query(new ZodQuery(assignmentTestsQuerySchema)) query: AssignmentTestsQuery,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<Paginated<AssignmentTest>> {
-    return this.assignments.tests(query, user.id, user.isSuperAdmin);
+    return this.sectionProgress.tests(query, user.id, user.isSuperAdmin);
   }
 
   @RequiresAnyFeature(THREAD_FEATURES, PERMISSION_LEVELS.READ)
@@ -139,7 +143,7 @@ export class AssignmentsController {
     @Query(new ZodQuery(assignmentSectionsQuerySchema)) query: AssignmentSectionsQuery,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<AssignmentSection[]> {
-    return this.assignments.sectionChoices(testId, query, user.id, user.isSuperAdmin);
+    return this.sectionProgress.sectionChoices(testId, query, user.id, user.isSuperAdmin);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
