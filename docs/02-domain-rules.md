@@ -110,7 +110,10 @@ Setup, then paper, then offer. There is no certificate step.
   opened; a save made from a draft another save has since overtaken is refused, never merged.
 - `finalizedAt` is the watermark that makes a repeated offer idempotent: a retired test offered again
   only changes status, and never re-freezes or re-draws its paper.
-- Offering needs a whole paper and every assignment read. The series it reaches a student through is
+- Offering needs a whole paper, **a proof-reader on every section in scope**, and every assignment
+  read. Nothing outstanding is not the same as read: a section nobody was asked to read is refused
+  by name. A super admin alone may offer past the reading (never past a short paper), and the Offer
+  step says which of the two the viewer is. The series it reaches a student through is
   not a second condition: a test is created inside one and cannot leave.
 - **An offered test's paper no longer moves** — adding, replacing and removing are refused, and so is
   any test edit that could change what the paper holds; a rename and a re-skin cannot, so they are

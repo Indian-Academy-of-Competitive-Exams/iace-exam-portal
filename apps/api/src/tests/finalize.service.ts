@@ -54,8 +54,12 @@ export class FinalizeService {
       return;
     }
 
-    await this.assertAssignmentsRead(tx, test.id, isSuperAdmin);
-    await this.assertPaperIsWhole(tx, test, await this.paperOf(tx, test));
+    const sections = await this.scopedSectionsOf(tx, test);
+    if (!isSuperAdmin) {
+      await this.assertEverySectionHasAReader(tx, test.id, sections);
+      await this.assertAssignmentsRead(tx, test.id);
+    }
+    this.assertPaperIsWhole(sections, await this.paperOf(tx, test));
     const finalizedAt = new Date();
     // The status rides the SAME write, so the two can never land apart.
     await tx.test.update({
@@ -72,20 +76,22 @@ export class FinalizeService {
     });
   }
 
-  private async assertPaperIsWhole(
-    tx: Prisma.TransactionClient,
-    test: OfferRow,
-    paper: readonly PaperRowRef[],
-  ): Promise<void> {
+  /** The sections the test's scope puts in play, in paper order. */
+  private async scopedSectionsOf(tx: Prisma.TransactionClient, test: OfferRow) {
     const sections = await tx.baseConfigSection.findMany({
       where: { baseConfigId: test.baseConfigId },
       select: { id: true, name: true, questionCount: true, moduleId: true },
       orderBy: { order: 'asc' },
     });
-    const scoped = scopedSections(sections, test.scope, scopeRefOf(test));
+    return scopedSections(sections, test.scope, scopeRefOf(test));
+  }
 
+  private assertPaperIsWhole(
+    sections: Parameters<typeof paperCompletenessIssues>[0],
+    paper: readonly PaperRowRef[],
+  ): void {
     const issues = paperCompletenessIssues(
-      scoped,
+      sections,
       paper.map((row) => row.baseConfigSectionId),
     );
     const [first] = issues;
@@ -96,14 +102,25 @@ export class FinalizeService {
     });
   }
 
-  /** A section still being typed or read is not ready for a student to sit. No rows, no gate. */
-  private async assertAssignmentsRead(
+  /** Nothing outstanding is not the same as read: a section nobody was asked to read has no reading to wait on. */
+  private async assertEverySectionHasAReader(
     db: ReadingClient,
     testId: string,
-    isSuperAdmin: boolean,
+    sections: readonly { id: string; name: string }[],
   ): Promise<void> {
-    if (isSuperAdmin) return;
+    const readers = await db.questionAssignment.findMany({
+      where: { testId, role: ASSIGNMENT_ROLES.PROOFREADER, replacedAt: null },
+      select: { baseConfigSectionId: true },
+    });
+    const read = new Set(readers.map((row) => row.baseConfigSectionId));
+    const names = sections.filter((section) => !read.has(section.id)).map((row) => row.name);
+    if (names.length === 0) return;
+    const message = `${names.length} section${names.length === 1 ? ' has' : 's have'} no proof-reader: ${names.join(', ')}`;
+    throw formRefusal(ErrorCodes.VALIDATION_ERROR, message);
+  }
 
+  /** A section still being typed or read is not ready for a student to sit. */
+  private async assertAssignmentsRead(db: ReadingClient, testId: string): Promise<void> {
     // A picked section's typist only fixes what comes back, so theirs is never a job to finish.
     const outstanding = await db.questionAssignment.findMany({
       where: {

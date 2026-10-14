@@ -100,6 +100,29 @@ async function readSection(paper: Paper, sectionIndex: number, unchecked: readon
   });
 }
 
+describe('FinalizeService — every section has a proof-reader', () => {
+  /** THE failure this prevents: a paper nobody was asked to read, offered because nothing was outstanding. */
+  it('refuses a paper whose sections have no proof-reader, naming them', async () => {
+    const paper = await draft();
+    await readSection(paper, 1);
+
+    await assert.rejects(
+      () => offerTest(prisma, paper.testId),
+      (error: unknown) =>
+        AppException.is(error) && /1 section has no proof-reader: Reasoning/.test(error.message),
+    );
+    assert.equal((await testRow(paper)).finalizedAt, null);
+  });
+
+  it('lets a super admin offer a paper nobody was asked to read', async () => {
+    const paper = await draft();
+
+    await offerTest(prisma, paper.testId, true);
+
+    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+  });
+});
+
 describe('FinalizeService — a reading covers the paper, not just the section', () => {
   /** The failure this prevents: a question nobody checked reaching a student because the row said released. */
   it('refuses a paper question its reader has not checked', async () => {
@@ -159,7 +182,7 @@ describe('FinalizeService — a reading covers the paper, not just the section',
     await readSection(paper, 0);
     await readSection(paper, 1);
 
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId, true);
 
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
   });
@@ -169,7 +192,7 @@ describe('FinalizeService — the offer freezes the paper', () => {
   it('stamps the test, opens it, and bumps the optimistic version in one write', async () => {
     const paper = await draft();
 
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId, true);
 
     const test = await testRow(paper);
     assert.ok(test.finalizedAt);
@@ -182,7 +205,7 @@ describe('FinalizeService — the offer freezes the paper', () => {
   it('leaves the config alone, because nobody is sitting anything yet', async () => {
     const paper = await draft();
 
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId, true);
 
     assert.equal((await configRow(paper)).locked, false);
   });
@@ -192,9 +215,9 @@ describe('FinalizeService — a second offer', () => {
   it('is a no-op that reports the first one’s outcome', async () => {
     const paper = await draft();
 
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId, true);
     const first = await testRow(paper);
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId, true);
 
     const second = await testRow(paper);
     assert.deepEqual(second.finalizedAt, first.finalizedAt);
@@ -204,7 +227,10 @@ describe('FinalizeService — a second offer', () => {
   it('lets exactly one of two concurrent offers do the work', async () => {
     const paper = await draft();
 
-    await Promise.all([offerTest(prisma, paper.testId), offerTest(prisma, paper.testId)]);
+    await Promise.all([
+      offerTest(prisma, paper.testId, true),
+      offerTest(prisma, paper.testId, true),
+    ]);
 
     // Both read version 0; only the one whose conditional update still matched may write.
     assert.equal((await testRow(paper)).version, 1);
@@ -240,14 +266,14 @@ describe('FinalizeService — a second offer', () => {
   /** `finalizedAt` is the watermark: without it a retired test re-offered would re-freeze its paper. */
   it('opens a retired test again without re-freezing its paper', async () => {
     const paper = await draft();
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId, true);
     const first = await testRow(paper);
     await prisma.test.update({
       where: { id: paper.testId },
       data: { status: TEST_STATUS.INACTIVE },
     });
 
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId, true);
 
     const again = await testRow(paper);
     assert.equal(again.status, TEST_STATUS.ACTIVE);
@@ -261,7 +287,7 @@ describe('FinalizeService — a scoped test is judged by its own sections alone'
   it('offers a SECTIONAL test whose one scoped section is full', async () => {
     const paper = await sectionalDraft(3);
 
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, paper.testId, true);
 
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
     assert.ok((await testRow(paper)).finalizedAt);
@@ -270,7 +296,7 @@ describe('FinalizeService — a scoped test is judged by its own sections alone'
   it('still refuses a SECTIONAL test whose scoped section is short, naming only that section', async () => {
     const paper = await sectionalDraft(2);
 
-    const error = await offerTest(prisma, paper.testId)
+    const error = await offerTest(prisma, paper.testId, true)
       .then(() => null)
       .catch((thrown: unknown) => thrown);
 
@@ -286,7 +312,7 @@ describe('FinalizeService — what it refuses to offer', () => {
     const paper = await draft([0, 0]);
 
     await assert.rejects(
-      () => offerTest(prisma, paper.testId),
+      () => offerTest(prisma, paper.testId, true),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.VALIDATION_ERROR,
     );
     const test = await testRow(paper);
@@ -298,7 +324,7 @@ describe('FinalizeService — what it refuses to offer', () => {
   it('refuses a section short of the count its config asks for, and puts the claim back', async () => {
     const paper = await draft([3, 1]);
 
-    await assert.rejects(() => offerTest(prisma, paper.testId), /Quant holds 1 of the 2/);
+    await assert.rejects(() => offerTest(prisma, paper.testId, true), /Quant holds 1 of the 2/);
 
     // The refusal happens INSIDE the transaction, so nothing it had already written survives.
     const test = await testRow(paper);

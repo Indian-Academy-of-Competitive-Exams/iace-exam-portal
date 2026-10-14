@@ -1527,14 +1527,26 @@ describe('the offer gate', () => {
       }),
       typist.id,
     );
+    const reader = await makeAdmin(prisma);
+    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
+    const reading = await assignments.assign(
+      paper.testId,
+      body({
+        baseConfigSectionId: paper.sectionIds[0] ?? '',
+        assigneeId: reader.id,
+        role: ASSIGNMENT_ROLES.PROOFREADER,
+      }),
+      reader.id,
+    );
+    await releasedNow(reading.id);
 
     await offerTest(prisma, paper.testId);
 
     assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
   });
 
-  /** This replaces nothing: a test with no assignments offers exactly as it does today. */
-  it('does not block a test that never had any assignments', async () => {
+  /** Nothing outstanding is not the same as read: a test nobody was asked to read waits for a reader. */
+  it('refuses a test that never had any assignments', async () => {
     const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
     await sayFramed(paper.testId);
     await prisma.baseConfigSection.update({
@@ -1542,9 +1554,8 @@ describe('the offer gate', () => {
       data: { questionCount: 1 },
     });
 
-    await offerTest(prisma, paper.testId);
-
-    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
+    await assert.rejects(() => offerTest(prisma, paper.testId), /has no proof-reader: Reasoning/);
+    assert.equal(await statusOf(paper.testId), TEST_STATUS.DRAFT);
   });
 });
 

@@ -116,7 +116,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
 
     await offering.moveToSeries(draft.id, { testSeriesId: seriesId });
     const picked = await testRow(draft.id);
-    await offerTest(prisma, draft.id);
+    await offerTest(prisma, draft.id, true);
 
     // A publishable mock: frozen, carried by a series, and offered — one call does all three.
     const test = await testRow(draft.id);
@@ -140,7 +140,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
           offered,
           expectedVersion: (await testRow(draft.id)).version,
         },
-        false,
+        true,
       );
 
     await assert.rejects(() => done(true), AppException.is);
@@ -159,10 +159,10 @@ describe('the invariants Phase 2 must not have broken', () => {
   it('one paper per sitting: once it is sat it cannot be edited, and a second offer does nothing', async () => {
     const { draft, paper, pickWholePaper, bank } = await builder();
     await pickWholePaper();
-    await offerTest(prisma, draft.id);
+    await offerTest(prisma, draft.id, true);
     const frozenAt = (await testRow(draft.id)).finalizedAt;
 
-    await offerTest(prisma, draft.id);
+    await offerTest(prisma, draft.id, true);
     assert.deepEqual((await testRow(draft.id)).finalizedAt, frozenAt);
 
     const before = await rowsOf(draft.id);
@@ -189,7 +189,7 @@ describe('the invariants Phase 2 must not have broken', () => {
   it('refuses every paper edit once the test has been offered, sat or not', async () => {
     const { draft, paper, pickWholePaper, bank } = await builder();
     await pickWholePaper();
-    await offerTest(prisma, draft.id);
+    await offerTest(prisma, draft.id, true);
     const [first] = await rowsOf(draft.id);
     const conflict = (error: unknown) =>
       AppException.is(error) && error.code === ErrorCodes.CONFLICT;

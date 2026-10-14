@@ -8,6 +8,7 @@ import {
   type TestDetail,
 } from '@iace/contracts';
 import {
+  Alert,
   Checkbox,
   ConfirmDialog,
   DateTimePicker,
@@ -17,6 +18,7 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
+import { useAuth } from '../../providers/auth';
 import { ProgramPicker, TestSeriesPicker } from '../../components/access-picker';
 import { QUERY_KEYS } from '../../lib/constants';
 import { opensLabel } from '../../lib/duration';
@@ -37,6 +39,12 @@ const OVERTAKEN_PROGRAMS_DROPPED =
   "A program opening you have not changed, now later than the test's own, is dropped.";
 
 const EVERY_PROGRAM_DROPPED = 'Every program opening is dropped with it.';
+
+const READING_RULE =
+  'Every section needs a proof-reader who has finished before this test can be offered. Only a super admin can offer it sooner.';
+
+const READING_SKIPPED =
+  'As a super admin, you can offer this test before every section has a proof-reader who has finished. Any other admin is refused until then.';
 
 type EditOffer = (next: Partial<OfferDraft>) => void;
 
@@ -233,9 +241,16 @@ function OfferSection({
   onEdit,
 }: Readonly<{ detail: TestDetail; saved: OfferDraft; held: OfferDraft; onEdit: EditOffer }>) {
   const ready = !owesAPaper(detail);
+  const isSuperAdmin = useAuth().identity?.isSuperAdmin ?? false;
 
   return (
     <FormSection title="Offer">
+      {detail.finalizedAt === null ? (
+        /* ui-copy-ok: rule */
+        <Alert variant={isSuperAdmin ? 'warning' : 'info'}>
+          {isSuperAdmin ? READING_SKIPPED : READING_RULE}
+        </Alert>
+      ) : null}
       <Checkbox
         id="test-offered"
         checked={held.offered}
