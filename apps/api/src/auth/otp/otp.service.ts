@@ -296,6 +296,7 @@ function codeExpired(): AppException {
 
 /** The channels a student's code can go out on here, first choice first. */
 function studentChannels(config: AppConfigService): [OtpChannel, ...OtpChannel[]] {
+  if (!config.get('OTP_WHATSAPP_ENABLED')) return [OTP_CHANNELS.SMS];
   switch (config.get('OTP_SENDER')) {
     // Billed on delivery, so it goes first; SMS is what a student asks for when it does not arrive.
     case OTP_SENDERS.WHATSAPP:

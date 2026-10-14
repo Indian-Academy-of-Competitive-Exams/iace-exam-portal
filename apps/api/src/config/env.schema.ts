@@ -96,6 +96,8 @@ export const envSchema = z.object({
   // What numbers with no account may spend in a day, apart from the above: a stranger cannot spend a student's sign-in.
   OTP_SIGNUP_DAILY_BUDGET_PAISE: z.coerce.number().int().positive().default(50_000),
   OTP_SENDER: z.enum(OTP_SENDERS).default(OTP_SENDERS.CONSOLE),
+  // Off: a student's code goes by SMS alone, whatever OTP_SENDER says. The WhatsApp path is kept.
+  OTP_WHATSAPP_ENABLED: boolFromEnv(false),
 
   // Rate limits per minute, generous because a branch of two hundred shares one address (.env.example).
   RATE_LIMIT_DEFAULT_PER_MIN: z.coerce.number().int().positive().default(300),

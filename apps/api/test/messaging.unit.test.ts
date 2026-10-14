@@ -188,7 +188,8 @@ describe('Provider selection', () => {
 });
 
 describe('OTP falls back rather than stranding a student', () => {
-  const whatsappFirst = () => new FakeConfig({ OTP_SENDER: 'whatsapp' });
+  const whatsappFirst = () =>
+    new FakeConfig({ OTP_SENDER: 'whatsapp', OTP_WHATSAPP_ENABLED: true });
 
   it('reaches a student on WhatsApp when that is the configured channel', async () => {
     const { service, sender } = otpService(whatsappFirst());

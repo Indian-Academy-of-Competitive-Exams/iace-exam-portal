@@ -511,7 +511,7 @@ describe('OtpService — a stranger cannot spend a student’s sign-in', () => {
 });
 
 describe('OtpService — WhatsApp or SMS, one at a time', () => {
-  const both = { OTP_SENDER: 'whatsapp', OTP_RESEND_COOLDOWN_SEC: 0 };
+  const both = { OTP_SENDER: 'whatsapp', OTP_WHATSAPP_ENABLED: true, OTP_RESEND_COOLDOWN_SEC: 0 };
   const channelsSent = (sender: FakeMessageSender) => sender.sent.map((message) => message.channel);
 
   it('sends on the first choice, and names the one a student may ask for instead', async () => {
@@ -557,6 +557,16 @@ describe('OtpService — WhatsApp or SMS, one at a time', () => {
 
     assert.deepEqual(channelsSent(sender), ['sms']);
     assert.equal(challenge.channel, 'SMS');
+  });
+
+  /** Switched off, the WhatsApp path is never taken, even where the sender is set to it. */
+  it('sends by SMS alone and offers nothing else while WhatsApp is switched off', async () => {
+    const { otp, sender } = build({ ...both, OTP_WHATSAPP_ENABLED: false });
+
+    const challenge = await otp.request(ActorTypes.STUDENT, MOBILE, IP, { channel: 'WHATSAPP' });
+
+    assert.deepEqual(channelsSent(sender), ['sms']);
+    assert.deepEqual([challenge.channel, challenge.otherChannel], ['SMS', undefined]);
   });
 
   it('names no channel for an admin, whose code is emailed', async () => {
