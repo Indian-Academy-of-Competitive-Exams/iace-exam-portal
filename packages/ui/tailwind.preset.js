@@ -26,6 +26,8 @@ const token =
         `color-mix(in srgb, var(${name}) ${Number((Number(opacityValue) * 100).toFixed(4))}%, transparent)`;
   };
 
+const shared = require('./tailwind.tokens.cjs')(token);
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   // Merged with each app's own `content`, so an app declares only itself.
@@ -34,132 +36,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: token('--background'),
-        surface: { DEFAULT: token('--surface'), 2: token('--surface-2') },
-        // `secondary` is the dimmer body ink — quieter than --foreground, not as quiet as --muted-foreground; an undeclared colour is not a Tailwind error, the class just matches nothing and emits no CSS.
-        foreground: { DEFAULT: token('--foreground'), secondary: token('--foreground-secondary') },
-        border: token('--border'),
-        input: token('--input'),
-        ring: token('--ring'),
-
-        // shadcn-compatible roles
-        card: { DEFAULT: token('--surface'), foreground: token('--foreground') },
-        popover: { DEFAULT: token('--surface'), foreground: token('--foreground') },
-        muted: { DEFAULT: token('--muted'), foreground: token('--muted-foreground') },
-        placeholder: token('--placeholder'),
-        // The three tokens.css declared for a switched-off control and nothing read.
-        disabled: {
-          DEFAULT: token('--disabled-bg'),
-          foreground: token('--disabled-fg'),
-          border: token('--disabled-border'),
-        },
-        accent: { DEFAULT: token('--muted'), foreground: token('--foreground') },
-
-        primary: {
-          DEFAULT: token('--primary'),
-          hover: token('--primary-hover'),
-          foreground: token('--primary-foreground'),
-          // The quiet brand pair — a tinted ground with brand-coloured ink, for marking something current without shouting; must be mapped here or `bg-primary-subtle text-primary-ink` emits nothing at all.
-          subtle: token('--primary-subtle'),
-          ink: token('--primary-ink'),
-        },
-        secondary: {
-          DEFAULT: token('--secondary'),
-          hover: token('--secondary-hover'),
-          foreground: token('--secondary-foreground'),
-        },
-        destructive: {
-          DEFAULT: token('--destructive'),
-          hover: token('--destructive-hover'),
-          foreground: token('--destructive-foreground'),
-        },
-        success: {
-          DEFAULT: token('--success'),
-          foreground: token('--success-foreground'),
-          subtle: token('--success-subtle'),
-          ink: token('--success-ink'),
-        },
-        warning: {
-          DEFAULT: token('--warning'),
-          foreground: token('--warning-foreground'),
-          subtle: token('--warning-subtle'),
-          ink: token('--warning-ink'),
-          solid: token('--warning-solid'),
-        },
-        info: {
-          DEFAULT: token('--info'),
-          foreground: token('--info-foreground'),
-          subtle: token('--info-subtle'),
-          ink: token('--info-ink'),
-        },
-
-        // chart series (assign in fixed order, never cycle)
-        series: {
-          1: token('--series-1'),
-          2: token('--series-2'),
-          3: token('--series-3'),
-          4: token('--series-4'),
-          5: token('--series-5'),
-          6: token('--series-6'),
-          7: token('--series-7'),
-          8: token('--series-8'),
-        },
-        chart: {
-          surface: token('--chart-surface'),
-          grid: token('--chart-grid'),
-          axis: token('--chart-axis'),
-          ink: token('--chart-ink'),
-        },
-
-        // exam CBT palette, scoped by [data-exam-template] — never brand semantics
-        exam: {
-          surface: token('--exam-surface'),
-          'surface-2': token('--exam-surface-2'),
-          ink: token('--exam-ink'),
-          'ink-muted': token('--exam-ink-muted'),
-          border: token('--exam-border'),
-          answered: token('--exam-answered'),
-          'answered-ink': token('--exam-answered-ink'),
-          notanswered: token('--exam-notanswered'),
-          'notanswered-ink': token('--exam-notanswered-ink'),
-          notvisited: token('--exam-notvisited'),
-          'notvisited-ink': token('--exam-notvisited-ink'),
-          marked: token('--exam-marked'),
-          'marked-ink': token('--exam-marked-ink'),
-          'answered-marked': token('--exam-answered-marked'),
-          'answered-marked-ink': token('--exam-answered-marked-ink'),
-          'answered-marked-tick': token('--exam-answered-marked-tick'),
-          current: token('--exam-current'),
-          option: token('--exam-option-bg'),
-          'option-border': token('--exam-option-border'),
-          'option-selected': token('--exam-option-selected-bg'),
-          'option-selected-border': token('--exam-option-selected-border'),
-          'section-ink': token('--exam-section-ink'),
-          'section-active': token('--exam-section-active-bg'),
-          'section-active-ink': token('--exam-section-active-ink'),
-          'timer-ink': token('--exam-timer-ink'),
-          'timer-bg': token('--exam-timer-bg'),
-          'timer-border': token('--exam-timer-border'),
-          'timer-urgent': token('--exam-timer-urgent-bg'),
-          'timer-urgent-ink': token('--exam-timer-urgent-ink'),
-          'timer-urgent-border': token('--exam-timer-urgent-border'),
-        },
+        ...shared.colors,
+        warning: { ...shared.colors.warning, solid: token('--warning-solid') },
       },
-      spacing: {
-        exam: token('--exam-pad'),
-        'exam-gap': token('--exam-gap'),
-        'exam-cell': token('--exam-cell-size'),
-        'exam-cell-gap': token('--exam-cell-gap'),
-      },
-      borderRadius: {
-        sm: token('--radius-sm'),
-        md: token('--radius-md'),
-        lg: token('--radius-lg'),
-        xl: token('--radius-xl'),
-        '2xl': token('--radius-2xl'),
-        'exam-cell': token('--exam-cell-radius'),
-        'exam-option': token('--exam-option-radius'),
-      },
+      spacing: shared.spacing,
+      borderRadius: shared.borderRadius,
       boxShadow: {
         sm: token('--shadow-sm'),
         md: token('--shadow-md'),
@@ -242,13 +123,7 @@ module.exports = {
         'sheet-out-left': 'sheet-out-left 180ms cubic-bezier(0.4, 0, 1, 1)',
         'sheet-out-right': 'sheet-out-right 180ms cubic-bezier(0.4, 0, 1, 1)',
       },
-      fontFamily: {
-        // Single source of truth: the bilingual Inter + Noto stack lives in tokens.css (--font-sans); keeping it here too would drift.
-        sans: ['var(--font-sans)'],
-        // Mapped for the same reason; omitting it isn't neutral — `font-mono` still works but silently falls back to Tailwind's default stack, leaving two mono faces in play.
-        mono: ['var(--font-mono)'],
-        brand: ['var(--font-brand)'],
-      },
+      fontFamily: shared.fontFamily,
       // The WHOLE scale: an unmapped step silently renders Tailwind's size, not the token's.
       fontSize: {
         '2xs': ['var(--text-2xs)', { lineHeight: 'var(--leading-snug)' }],
@@ -263,13 +138,7 @@ module.exports = {
         // lineHeight 1 sets it solid: the plate's height is then padding alone.
         brand: ['var(--text-brand)', { lineHeight: '1' }],
       },
-      letterSpacing: {
-        tight: 'var(--tracking-tight)',
-        snug: 'var(--tracking-snug)',
-        normal: 'var(--tracking-normal)',
-        wide: 'var(--tracking-wide)',
-        brand: 'var(--tracking-brand)',
-      },
+      letterSpacing: shared.letterSpacing,
       lineHeight: {
         tight: 'var(--leading-tight)',
         snug: 'var(--leading-snug)',

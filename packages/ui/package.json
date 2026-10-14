@@ -21,6 +21,7 @@
   "files": [
     "src",
     "tailwind.preset.js",
+    "tailwind.tokens.cjs",
     "test/support"
   ],
   "scripts": {
