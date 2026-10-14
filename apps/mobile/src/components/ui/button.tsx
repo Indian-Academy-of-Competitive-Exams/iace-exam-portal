@@ -42,7 +42,8 @@ const SPINNER_TOKEN = {
 
 export interface ButtonProps extends Omit<PressableProps, 'children'> {
   variant?: keyof typeof VARIANTS;
-  size?: 'default' | 'sm';
+  /** `compact` is web's sm, only where a larger tap target already surrounds it (a card that opens the same thing). */
+  size?: 'default' | 'sm' | 'compact';
   loading?: boolean;
   /** Leading glyph; `loading` swaps it for the spinner. */
   icon?: LucideIcon;
@@ -74,8 +75,9 @@ export function Button({
       disabled={isOff}
       className={cn(
         // h-11 is --control-h-lg, the 44px touch floor: a small button narrows, never shortens.
-        'h-11 flex-row items-center justify-center gap-2 rounded-md',
-        size === 'sm' ? 'px-3' : 'px-4',
+        'flex-row items-center justify-center gap-2 rounded-md',
+        size === 'compact' ? 'h-8 gap-1.5 px-3' : 'h-11',
+        size === 'default' ? 'px-4' : 'px-3',
         VARIANTS[variant],
         isDisabled && OFF_VARIANTS[variant],
         className,
@@ -84,11 +86,14 @@ export function Button({
     >
       {loading ? <ActivityIndicator color={ink} /> : null}
       {Icon && !loading ? (
-        <Icon size={16} color={isDisabled && typeof offInk === 'string' ? offInk : ink} />
+        <Icon
+          size={size === 'compact' ? 14 : 16}
+          color={isDisabled && typeof offInk === 'string' ? offInk : ink}
+        />
       ) : null}
       <Text
         className={cn(
-          'text-sm font-medium',
+          size === 'compact' ? 'text-xs font-medium' : 'text-sm font-medium',
           isDisabled ? 'text-disabled-foreground' : TEXT_VARIANTS[variant],
         )}
       >

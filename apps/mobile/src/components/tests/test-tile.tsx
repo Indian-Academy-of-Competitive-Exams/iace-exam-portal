@@ -68,9 +68,9 @@ export function TestTile({ row, now, result, fullWidth = false }: Readonly<TestT
 
   return (
     <Link href={DETAIL_ROUTES.TEST(row.test.id)} asChild>
-      <Pressable>
+      <Pressable className="flex-1">
         <Card
-          className={cn('gap-3 p-4', fullWidth ? 'w-full' : 'w-72 shrink-0')}
+          className={cn('flex-1 gap-3 p-4', fullWidth ? 'w-full' : 'w-72 shrink-0')}
           style={washOf(wash, surface, state.alpha)}
         >
           <Text
@@ -89,7 +89,10 @@ export function TestTile({ row, now, result, fullWidth = false }: Readonly<TestT
 
           <PaperFacts test={row.test} now={now} />
 
-          <TileFoot row={row} result={result} />
+          {/* The foot sits at the bottom, so tiles on one shelf line up whatever their facts. */}
+          <View className="mt-auto pt-1">
+            <TileFoot row={row} result={result} />
+          </View>
         </Card>
       </Pressable>
     </Link>
@@ -129,7 +132,7 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
   if (row.action) {
     return (
       <Button
-        size="sm"
+        size="compact"
         variant={row.action === 'RESUME' ? 'warning' : 'default'}
         icon={row.action === 'RESUME' ? RotateCcw : Play}
         onPress={() => router.push(DETAIL_ROUTES.TEST(row.test.id))}
@@ -141,7 +144,7 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
 
   return (
     <Button
-      size="sm"
+      size="compact"
       variant="outline"
       onPress={() => router.push(DETAIL_ROUTES.TEST(row.test.id))}
     >
