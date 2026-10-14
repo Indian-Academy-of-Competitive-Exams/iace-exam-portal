@@ -10,7 +10,7 @@ import { useTokenColor } from '../../src/lib/use-token-color';
 const TAB_ICON_SIZE = 28;
 
 /** The pill's box, given to the navigator's icon slot too, which is otherwise 31 by 28 and would cut it. */
-const PILL = { width: 64, height: 36 } as const;
+const PILL = { width: 52, height: 32 } as const;
 
 /** The tab you are on wears a pill drawn here: the navigator's own active fill is square. */
 const renderTabIcon =
