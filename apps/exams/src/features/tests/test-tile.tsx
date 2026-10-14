@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChartColumn } from 'lucide-react';
 import { Button, Card, StatRow, TruncatedText, cn, linkVariants } from '@iace/ui';
 import {
   instituteDateTimeLabel,
@@ -95,7 +95,7 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
           to={ROUTES.REPORT(result.attemptId)}
         >
           Report
-          <ChevronRight aria-hidden />
+          <ChartColumn aria-hidden />
         </Link>
       </div>
     );

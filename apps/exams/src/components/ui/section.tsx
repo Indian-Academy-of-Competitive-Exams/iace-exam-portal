@@ -1,9 +1,12 @@
 import * as React from 'react';
+import { type LucideIcon } from 'lucide-react';
 import { SectionHeading, cn } from '@iace/ui';
 
 export interface SectionProps {
   /** The plain noun for the region below. */
   title: string;
+  /** One muted glyph ahead of the title. */
+  icon?: LucideIcon;
   /** A value the region carries — a count, a name. Never a sentence. */
   meta?: React.ReactNode;
   /** The way deeper into what this names — a link, never a second heading. */
@@ -17,6 +20,7 @@ export interface SectionProps {
 /** A named block on a student screen: the heading, then its content at `--gap-group`. */
 export function Section({
   title,
+  icon,
   meta,
   action,
   children,
@@ -25,7 +29,7 @@ export function Section({
 }: Readonly<SectionProps>) {
   return (
     <section data-tour={tour} className={cn('flex min-w-0 flex-col gap-4', className)}>
-      <SectionHeading title={title} meta={meta} action={action} />
+      <SectionHeading title={title} icon={icon} meta={meta} action={action} />
       {children}
     </section>
   );

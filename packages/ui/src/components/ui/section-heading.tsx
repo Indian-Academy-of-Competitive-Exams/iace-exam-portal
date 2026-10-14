@@ -1,10 +1,13 @@
 import * as React from 'react';
+import { type LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface SectionHeadingProps {
   /** The plain noun for the region below. Never a phrase, never a pronoun. */
   title: string;
   level?: 2 | 3;
+  /** One muted glyph ahead of the title. */
+  icon?: LucideIcon;
   /** A value the region carries — a count, a name. Never a sentence about it. */
   meta?: React.ReactNode;
   action?: React.ReactNode;
@@ -22,6 +25,7 @@ const HEADING_CLASS = {
 export function SectionHeading({
   title,
   level = 2,
+  icon: Icon,
   meta,
   action,
   className,
@@ -30,7 +34,10 @@ export function SectionHeading({
 
   return (
     <div className={cn('flex flex-wrap items-baseline gap-x-3 gap-y-1', className)}>
-      <Tag className={HEADING_CLASS[level]}>{title}</Tag>
+      <Tag className={cn(HEADING_CLASS[level], Icon && 'inline-flex items-center gap-2')}>
+        {Icon ? <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : null}
+        {title}
+      </Tag>
       {meta ? <span className="text-sm text-muted-foreground">{meta}</span> : null}
       {action ? <span className="ml-auto">{action}</span> : null}
     </div>

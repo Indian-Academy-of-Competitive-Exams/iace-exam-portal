@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, TrendingUp, Hourglass, ChartColumn } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
   EmptyState,
@@ -82,7 +82,10 @@ export function DashboardPage() {
           title={greetingFor(now, student?.fullName)}
           action={
             <Button asChild variant="outline">
-              <Link to={ROUTES.PERFORMANCE}>See your performance</Link>
+              <Link to={ROUTES.PERFORMANCE}>
+                <TrendingUp aria-hidden />
+                See your performance
+              </Link>
             </Button>
           }
         />
@@ -105,6 +108,7 @@ export function DashboardPage() {
         {waiting.length > 1 ? (
           <Section
             title="Also waiting"
+            icon={Hourglass}
             action={
               <Link
                 className={cn(linkVariants(), 'inline-flex items-center gap-1 [&_svg]:size-4')}
@@ -271,6 +275,7 @@ function RecentResults({
   return (
     <Section
       title="Recent results"
+      icon={ChartColumn}
       action={
         <Link
           className={cn(linkVariants(), 'inline-flex items-center gap-1 [&_svg]:size-4')}

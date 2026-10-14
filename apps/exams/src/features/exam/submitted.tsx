@@ -3,6 +3,7 @@
  * field's. Nothing here is a mark, so nothing here waits on marking; the result is the last step.
  */
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
+import { ChartColumn } from 'lucide-react';
 import { usePrefetchQuery, useQuery } from '@tanstack/react-query';
 import { Button, ChartFigure, MeasureBars, Metric, PageFrame, PageHeader, plural } from '@iace/ui';
 import {
@@ -64,7 +65,10 @@ export function SubmittedPage() {
 
         <div className="flex justify-end">
           <Button asChild className="w-full sm:w-auto">
-            <Link to={ROUTES.REPORT(attemptId)}>See your result</Link>
+            <Link to={ROUTES.REPORT(attemptId)}>
+              <ChartColumn aria-hidden />
+              See your result
+            </Link>
           </Button>
         </div>
       </PageBody>

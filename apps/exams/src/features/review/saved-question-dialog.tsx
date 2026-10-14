@@ -3,6 +3,7 @@
  * than a second one, so a bookmark shows exactly what the solutions screen would have shown.
  */
 import { useQuery } from '@tanstack/react-query';
+import { BookOpenText } from 'lucide-react';
 import { LANGUAGE_MODE, type SavedQuestion } from '@iace/contracts';
 import { isSittingVoided } from '@iace/app-kit';
 import {
@@ -45,7 +46,10 @@ export function SavedQuestionDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>{saved.testTitle ?? 'This question'}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <BookOpenText className="size-4 shrink-0" aria-hidden />
+            {saved.testTitle ?? 'This question'}
+          </DialogTitle>
         </DialogHeader>
 
         <DialogBody className="py-5">

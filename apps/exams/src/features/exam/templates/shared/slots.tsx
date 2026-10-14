@@ -8,11 +8,13 @@ import {
   Eraser,
   FileText,
   Flag,
-  Info,
+  BookOpen,
   LayoutGrid,
   Maximize,
   Pause,
   Send,
+  RotateCw,
+  ArrowRight,
 } from 'lucide-react';
 import { TEST_UI, type ExamTemplateConfig } from '@iace/contracts';
 import {
@@ -88,7 +90,7 @@ export function Header({
         ) : null}
         {onOpenRules ? (
           <Button type="button" variant="ghost" size="sm" onClick={onOpenRules}>
-            <Info aria-hidden />
+            <BookOpen aria-hidden />
             <span className={PHONE_ICON_ONLY}>Instructions</span>
           </Button>
         ) : null}
@@ -240,6 +242,7 @@ export function BottomBar({ view }: Readonly<ExamSlotProps>) {
         <Alert variant="danger" className="flex w-full items-center justify-between gap-2">
           Could not submit this paper.
           <Button type="button" variant="outline" size="sm" onClick={view.submit.retry}>
+            <RotateCw aria-hidden />
             Try again
           </Button>
         </Alert>
@@ -248,6 +251,7 @@ export function BottomBar({ view }: Readonly<ExamSlotProps>) {
       {view.testUi === TEST_UI.OMR ? (
         <Button type="button" size="sm" disabled={off} onClick={view.nextQuestion}>
           Next
+          <ArrowRight aria-hidden />
         </Button>
       ) : (
         <>
@@ -275,6 +279,7 @@ export function BottomBar({ view }: Readonly<ExamSlotProps>) {
           </Button>
           <Button type="button" size="sm" disabled={off} onClick={view.nextQuestion}>
             Save &amp; next
+            <ArrowRight aria-hidden />
           </Button>
         </>
       )}

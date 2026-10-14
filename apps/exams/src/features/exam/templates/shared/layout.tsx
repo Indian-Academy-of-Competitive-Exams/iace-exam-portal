@@ -1,6 +1,6 @@
 /** Where the slots sit. Both skins compose the same way; the config moves the pieces. */
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Pause, LayoutGrid } from 'lucide-react';
 import { EXAM_TEMPLATE } from '@iace/contracts';
 import { passagesOf, PAUSE_SAYS, usePause } from '@iace/app-kit';
 import { DESKTOP_QUERY, useMediaQuery } from '@iace/app-kit/browser';
@@ -145,7 +145,10 @@ function PaletteDrawer({
         className="gap-4 overflow-y-auto bg-exam-surface text-exam-ink"
       >
         <div className="flex items-center justify-between">
-          <SheetTitle>Question palette</SheetTitle>
+          <SheetTitle className="flex items-center gap-2">
+            <LayoutGrid className="size-4 shrink-0" aria-hidden />
+            Question palette
+          </SheetTitle>
           <SheetClose asChild>
             <Button variant="ghost" size="iconSm" aria-label="Close question palette">
               <X aria-hidden />
@@ -177,6 +180,7 @@ function PauseConfirm({ pause }: Readonly<{ pause: ReturnType<typeof usePause> }
       title={PAUSE_SAYS.title}
       description={pause.says}
       confirmLabel={PAUSE_SAYS.confirm}
+      icon={Pause}
       loading={pause.pending}
       onConfirm={pause.confirm}
     />

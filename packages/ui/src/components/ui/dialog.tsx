@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { AlertTriangle, X } from 'lucide-react';
+import { CircleQuestionMark, TriangleAlert, X, type LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 
@@ -185,6 +185,8 @@ export interface ConfirmDialogProps {
   confirmLabel: string;
   /** Crimson button, warning glyph — for anything that destroys or revokes. */
   destructive?: boolean;
+  /** The glyph in the disc; defaults to a warning when destructive, a question otherwise. */
+  icon?: LucideIcon;
   /** Keeps the dialog open and inert while the action it started is running. */
   loading?: boolean;
   onConfirm: () => void;
@@ -200,11 +202,13 @@ function ConfirmDialog({
   description,
   confirmLabel,
   destructive = false,
+  icon,
   loading = false,
   onConfirm,
   children,
 }: Readonly<ConfirmDialogProps>) {
   const cancelRef = React.useRef<HTMLButtonElement>(null);
+  const Glyph = icon ?? (destructive ? TriangleAlert : CircleQuestionMark);
 
   // No Escape or outside click while the action is in flight.
   const blockWhileLoading = (event: Event) => {
@@ -225,11 +229,14 @@ function ConfirmDialog({
         }}
       >
         <DialogHeader className="pr-[--modal-pad]">
-          {destructive ? (
-            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-destructive/12 text-destructive">
-              <AlertTriangle className="size-5" aria-hidden />
-            </span>
-          ) : null}
+          <span
+            className={cn(
+              'grid size-10 shrink-0 place-items-center rounded-full',
+              destructive ? 'bg-destructive/12 text-destructive' : 'bg-primary-subtle text-primary',
+            )}
+          >
+            <Glyph className="size-5" aria-hidden />
+          </span>
           <div className="flex flex-1 flex-col gap-2">
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{description}</DialogDescription>

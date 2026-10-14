@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpenText, Trash2 } from 'lucide-react';
+import { BookOpenText, Trash2, BookmarkX } from 'lucide-react';
 import { PageCrumbs, useListScreen, usePageTour } from '@iace/app-kit/browser';
 import { SAVED_FILTER_FIELDS } from '@iace/app-kit';
 import {
@@ -144,6 +144,7 @@ function SavedList() {
             title="Remove this question?"
             description="It leaves your saved questions. Star it again from the solution review to bring it back."
             confirmLabel="Remove"
+            icon={BookmarkX}
             destructive
             loading={drop.isPending}
             onConfirm={() => {

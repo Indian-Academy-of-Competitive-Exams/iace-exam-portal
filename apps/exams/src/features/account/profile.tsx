@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import {
+  PencilLine,
+  Undo2,
+  Check,
+  ClipboardList,
+  UserRound,
+  Files,
+  GraduationCap,
+} from 'lucide-react';
 import {
   courseLabel,
   DOCUMENT_KINDS,
@@ -117,6 +125,7 @@ export function ProfilePage() {
             <Button
               type="button"
               variant="secondary"
+              icon={<Undo2 aria-hidden />}
               onClick={() => {
                 form.reset();
                 setIsEditing(false);
@@ -126,6 +135,7 @@ export function ProfilePage() {
             </Button>
             <Button
               type="submit"
+              icon={<Check aria-hidden />}
               loading={save.isPending}
               disabled={!form.formState.isDirty || moved.length > 0}
             >
@@ -143,7 +153,7 @@ export function ProfilePage() {
             action={
               ready && !isEditing ? (
                 <Button variant="outline" size="sm" onClick={edit}>
-                  <Pencil aria-hidden />
+                  <PencilLine aria-hidden />
                   Edit details
                 </Button>
               ) : undefined
@@ -164,7 +174,7 @@ export function ProfilePage() {
       )}
       {ready && me.data && (
         <>
-          <FormSection title="Needed before a test">
+          <FormSection title="Needed before a test" icon={ClipboardList}>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField form={form} name="profile.motherName" label="Mother's name">
                 {(control) => <Input {...control} />}
@@ -195,7 +205,7 @@ export function ProfilePage() {
             </div>
           </FormSection>
 
-          <FormSection title="About you">
+          <FormSection title="About you" icon={UserRound}>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField form={form} name="fullName" label="Full name">
                 {(control) => <Input {...control} />}
@@ -248,7 +258,7 @@ export function ProfilePage() {
 
           <Standing me={me.data} />
 
-          <FormSection title="Your documents">
+          <FormSection title="Your documents" icon={Files}>
             <div className="flex flex-wrap gap-4">
               <DocumentCard
                 kind={DOCUMENT_KINDS.PHOTO}
@@ -305,7 +315,7 @@ function Standing({ me }: Readonly<{ me: Me }>) {
   const { enrolment } = me;
 
   return (
-    <FormSection title="Enrolment">
+    <FormSection title="Enrolment" icon={GraduationCap}>
       <div className="flex flex-col gap-3">
         <StatRow label="Branch" value={enrolment.branch ?? NONE_RECORDED} />
         <StatRow label="Course" value={<Names names={me.enrolledCourses.map(courseLabel)} />} />

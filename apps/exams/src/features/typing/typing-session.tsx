@@ -1,5 +1,6 @@
 /** One practice session, full screen like the sitting it rehearses: fetch a passage, type, see the result. */
 import { useRef, useState } from 'react';
+import { Send, LogOut } from 'lucide-react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -141,10 +142,12 @@ function Sitting({
       />
 
       <footer className="flex shrink-0 justify-between gap-4 border-t border-exam-border px-exam py-2">
-        <Button variant="outline" onClick={() => setLeaving(true)}>
+        <Button variant="outline" icon={<LogOut aria-hidden />} onClick={() => setLeaving(true)}>
           Leave
         </Button>
-        <Button onClick={() => setConfirming(true)}>Submit</Button>
+        <Button icon={<Send aria-hidden />} onClick={() => setConfirming(true)}>
+          Submit
+        </Button>
       </footer>
 
       <ConfirmDialog
@@ -163,6 +166,7 @@ function Sitting({
         title="Submit typing"
         description={`The test ends now, with ${typingKeyDepressions(passage, typed).toLocaleString('en-IN')} key depressions typed.`}
         confirmLabel="Submit"
+        icon={Send}
         onConfirm={finish}
       />
     </div>

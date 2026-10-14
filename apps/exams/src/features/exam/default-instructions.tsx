@@ -1,4 +1,5 @@
 /** The default skin's read-before-you-begin: the rules, then the paper, over two screens. */
+import { ChevronLeft, ChevronRight, Layers, Play } from 'lucide-react';
 import {
   contentLanguageOf,
   EXAM_TEMPLATE,
@@ -89,15 +90,26 @@ export function DefaultInstructions({
 function Walk({ view }: Readonly<{ view: InstructionsView }>) {
   return (
     <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
-      <Button type="button" variant="outline" onClick={view.back}>
+      <Button
+        type="button"
+        variant="outline"
+        icon={<ChevronLeft aria-hidden />}
+        onClick={view.back}
+      >
         Back
       </Button>
       {view.step === 'GENERAL' ? (
         <Button type="button" onClick={view.next}>
           Next
+          <ChevronRight aria-hidden />
         </Button>
       ) : (
-        <Button type="button" disabled={!view.ready} onClick={view.begin}>
+        <Button
+          type="button"
+          icon={<Play aria-hidden />}
+          disabled={!view.ready}
+          onClick={view.begin}
+        >
           I am ready to begin
         </Button>
       )}
@@ -142,7 +154,7 @@ function PaperStep({
         <Metric label="Sections" value={brief.sections.length} size="sm" />
       </StatBand>
 
-      <Section title="Sections" meta={plural(brief.sections.length, 'section')}>
+      <Section title="Sections" icon={Layers} meta={plural(brief.sections.length, 'section')}>
         <DividedList>
           {brief.sections.map((section) => (
             <DividedRow

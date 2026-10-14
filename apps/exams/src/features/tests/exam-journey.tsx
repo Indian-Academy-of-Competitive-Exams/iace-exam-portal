@@ -27,7 +27,10 @@ export function ExamJourney({ journey }: Readonly<{ journey: NonNullable<ExamBri
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Exam journey</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Route className="size-4" aria-hidden />
+              Exam journey
+            </DialogTitle>
             <DialogDescription>{journey.exam}</DialogDescription>
           </DialogHeader>
 

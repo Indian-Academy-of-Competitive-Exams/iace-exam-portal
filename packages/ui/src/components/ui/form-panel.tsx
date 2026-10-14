@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { type LucideIcon } from 'lucide-react';
 import { cn, FILLS, TOUR_ANCHORS } from '../../lib/utils';
 import { Card } from './card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
@@ -128,6 +129,8 @@ export function FormPanel({
 
 export interface FormSectionProps {
   title: string;
+  /** One muted glyph ahead of the title. */
+  icon?: LucideIcon;
   /** A value the section is summing up. Never a sentence about what the section is. */
   meta?: React.ReactNode;
   children: React.ReactNode;
@@ -135,11 +138,25 @@ export interface FormSectionProps {
 }
 
 /** One group inside the panel. A heading and spacing, never a border — see the card rule. */
-export function FormSection({ title, meta, children, className }: Readonly<FormSectionProps>) {
+export function FormSection({
+  title,
+  icon: Icon,
+  meta,
+  children,
+  className,
+}: Readonly<FormSectionProps>) {
   return (
     <section className={cn('flex flex-col gap-4', className)}>
       <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
+        <h2
+          className={cn(
+            'text-sm font-semibold tracking-tight text-foreground',
+            Icon && 'inline-flex items-center gap-2',
+          )}
+        >
+          {Icon ? <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : null}
+          {title}
+        </h2>
         {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
       </div>
       {children}

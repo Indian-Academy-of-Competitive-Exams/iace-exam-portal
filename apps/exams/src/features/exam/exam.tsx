@@ -4,6 +4,7 @@
  * sitting behaves, and a skin decides nothing about what it saves.
  */
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ChartColumn, Monitor, RotateCw } from 'lucide-react';
 import { AppException, ErrorCodes, type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Button, EmptyState, EMPTY_STATE_KINDS, LoadingState } from '@iace/ui';
 import {
@@ -50,7 +51,11 @@ export function ExamPage() {
             title={HELD_ELSEWHERE_SAYS.title}
             /* ui-copy-ok: rule — the other device going quiet is the one thing that releases it */
             hint={HELD_ELSEWHERE_SAYS.hint}
-            action={<Button onClick={() => void attempt.refetch()}>Try again</Button>}
+            action={
+              <Button icon={<RotateCw aria-hidden />} onClick={() => void attempt.refetch()}>
+                Try again
+              </Button>
+            }
           />
         </div>
       );
@@ -142,6 +147,7 @@ function ExamHall(
           hint={SITTING_ENDED_SAYS.hint}
           action={
             <Button
+              icon={<ChartColumn aria-hidden />}
               onClick={() => {
                 void focus.exit();
                 // `replace`: Back must never re-enter a paper that has ended.
@@ -167,6 +173,7 @@ function ExamHall(
           hint={says.hint}
           action={
             <Button
+              icon={<Monitor aria-hidden />}
               onClick={() => {
                 // What is unsent here is the next load's to settle, so this reload asks nothing.
                 releaseLeave();

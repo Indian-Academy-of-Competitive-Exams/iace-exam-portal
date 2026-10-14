@@ -4,6 +4,7 @@
  * without them — and the data attribute is what scopes that skin's tokens.
  */
 import { useState, type ReactNode } from 'react';
+import { Send } from 'lucide-react';
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, Calculator, ConfirmDialog } from '@iace/ui';
 import { CALCULATOR_KEYPAD, submittingSays, useCalculator, type ExamView } from '@iace/app-kit';
@@ -74,6 +75,7 @@ export function ExamShell({
         title="Submit this test?"
         description={submittingSays(view)}
         confirmLabel="Submit"
+        icon={Send}
         loading={submit.isPending}
         onConfirm={submit.confirm}
       />

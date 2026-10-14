@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, LockKeyhole } from 'lucide-react';
+import { CalendarClock, LockKeyhole, FileClock } from 'lucide-react';
 import {
   Alert,
   Button,
@@ -180,7 +180,7 @@ export function TestAboutPage() {
             <Exits testId={testId} listed={listed} now={now} journey={brief.data.journey} />
 
             {past.length > 0 ? (
-              <Section title="Past attempts" meta={plural(past.length, 'attempt')}>
+              <Section title="Past attempts" icon={FileClock} meta={plural(past.length, 'attempt')}>
                 <DataTable
                   columns={PAST_COLUMNS}
                   rows={past}

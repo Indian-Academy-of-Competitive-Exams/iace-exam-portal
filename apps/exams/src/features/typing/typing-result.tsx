@@ -1,5 +1,6 @@
 /** A typing result: the figure it is held to, the rest, and the typing marked word by word. */
 import { Link } from 'react-router-dom';
+import { RotateCw } from 'lucide-react';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   TYPED_WORD,
@@ -71,7 +72,13 @@ export function TypingResultView({
           {saveFailed ? (
             <Alert variant="danger">
               This session is not in your history.{' '}
-              <Button variant="outline" size="sm" loading={saving} onClick={onSaveAgain}>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<RotateCw aria-hidden />}
+                loading={saving}
+                onClick={onSaveAgain}
+              >
                 Save it again
               </Button>
             </Alert>

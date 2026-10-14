@@ -1,5 +1,6 @@
 /** The two things a candidate may re-read mid-sitting: the whole paper, and the rules. */
 import { contentLanguageOf, EXAM_TEMPLATE, TEST_UI } from '@iace/contracts';
+import { FileText, BookOpen } from 'lucide-react';
 import { htmlOf, shownLanguages, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, RichContent } from '@iace/ui';
 import { PaperRules } from '../../default-instructions';
@@ -23,7 +24,10 @@ export function PaperPanel({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{view.title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="size-4 shrink-0" aria-hidden />
+            {view.title}
+          </DialogTitle>
         </DialogHeader>
 
         <ol className="flex max-h-[60vh] flex-col overflow-y-auto">
@@ -60,7 +64,10 @@ export function RulesPanel({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Instructions</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <BookOpen className="size-4 shrink-0" aria-hidden />
+            Instructions
+          </DialogTitle>
         </DialogHeader>
 
         <div

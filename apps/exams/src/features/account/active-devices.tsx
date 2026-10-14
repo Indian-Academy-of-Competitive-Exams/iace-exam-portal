@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { MonitorSmartphone, LogOut } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CLIENT_KINDS,
@@ -23,7 +24,7 @@ export function ActiveDevices() {
   });
 
   return (
-    <Section title="Active devices">
+    <Section title="Active devices" icon={MonitorSmartphone}>
       {sessions.isPending ? <RowsSkeleton rows={2} /> : null}
       {sessions.isError ? (
         <EmptyState
@@ -66,7 +67,12 @@ function DeviceRow({ session }: Readonly<{ session: DeviceSession }>) {
           session.current ? (
             <span className="text-sm text-muted-foreground">This device</span>
           ) : (
-            <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={<LogOut aria-hidden />}
+              onClick={() => setConfirming(true)}
+            >
               Sign out
             </Button>
           )
@@ -79,6 +85,7 @@ function DeviceRow({ session }: Readonly<{ session: DeviceSession }>) {
         title={`Sign out ${deviceName}?`}
         description="That device returns to the sign-in screen at its next request. Anything it has not saved stays on it until the student signs in there again."
         confirmLabel="Sign out"
+        icon={MonitorSmartphone}
         destructive
         loading={signOut.isPending}
         onConfirm={() => signOut.mutate(session.id)}

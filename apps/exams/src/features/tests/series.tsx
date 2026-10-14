@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LockKeyhole } from 'lucide-react';
+import { LockKeyhole, TrendingUp, ListChecks } from 'lucide-react';
 import {
   EmptyState,
   EMPTY_STATE_KINDS,
@@ -87,7 +87,10 @@ export function SeriesPage() {
           meta={progress ? `${progress.done} of ${plural(progress.total, 'test')} done` : undefined}
           action={
             <Button asChild variant="outline">
-              <Link to={ROUTES.PERFORMANCE}>Your performance</Link>
+              <Link to={ROUTES.PERFORMANCE}>
+                <TrendingUp aria-hidden />
+                Your performance
+              </Link>
             </Button>
           }
         />
@@ -125,7 +128,7 @@ export function SeriesPage() {
               </Alert>
             ) : null}
 
-            <Section title="Tests" meta={plural(series.tests.length, 'test')}>
+            <Section title="Tests" icon={ListChecks} meta={plural(series.tests.length, 'test')}>
               <DataTable
                 columns={episodeColumns(now)}
                 rows={series.tests}

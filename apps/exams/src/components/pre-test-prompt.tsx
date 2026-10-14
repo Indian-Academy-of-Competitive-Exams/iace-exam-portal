@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, UserPen } from 'lucide-react';
 import { Alert, Button } from '@iace/ui';
 import { ROUTES } from '../lib/constants';
 
@@ -23,12 +23,15 @@ export function PreTestPrompt({
         </span>
         {/* Already on the profile, the fields are here — so it opens them rather than navigating. */}
         {onAdd ? (
-          <Button size="sm" onClick={onAdd}>
+          <Button size="sm" icon={<UserPen aria-hidden />} onClick={onAdd}>
             Add them
           </Button>
         ) : (
           <Button size="sm" asChild>
-            <Link to={ROUTES.PROFILE}>Add them</Link>
+            <Link to={ROUTES.PROFILE}>
+              <UserPen aria-hidden />
+              Add them
+            </Link>
           </Button>
         )}
       </div>

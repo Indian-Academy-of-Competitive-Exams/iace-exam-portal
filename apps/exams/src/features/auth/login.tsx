@@ -3,7 +3,7 @@ import { useForm, type FieldValues, type Path, type UseFormReturn } from 'react-
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Info } from 'lucide-react';
+import { ArrowLeft, Info, MessageSquareText, LogIn } from 'lucide-react';
 import {
   otpCodeFormSchema,
   requestStudentOtpSchema,
@@ -113,7 +113,11 @@ function MobileStep({
       >
         <MobileField form={form} name="mobile" autoFocus />
 
-        <Button type="submit" loading={requestOtp.isPending}>
+        <Button
+          type="submit"
+          icon={<MessageSquareText aria-hidden />}
+          loading={requestOtp.isPending}
+        >
           Send code
         </Button>
       </form>
@@ -183,7 +187,12 @@ function CodeStep({
         ) : null}
 
         {/* One request at a time: an answer to one the student moved on from would still sign in, or pull the step back. */}
-        <Button type="submit" loading={verify.isPending} disabled={again.isPending}>
+        <Button
+          type="submit"
+          icon={<LogIn aria-hidden />}
+          loading={verify.isPending}
+          disabled={again.isPending}
+        >
           Sign in
         </Button>
 
