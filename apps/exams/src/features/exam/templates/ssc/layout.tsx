@@ -20,7 +20,7 @@ import {
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Button, RichContent, cn } from '@iace/ui';
 import { ScrollPane } from '../../scroll-pane';
-import { useModalBox } from '../../use-modal-box';
+import { MODAL_BOX, useModalBox } from '../../use-modal-box';
 import { Passage } from '../../passage';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
 import { PHONE_QUERY } from '../shared/phone-query';
@@ -47,11 +47,6 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
   // Held by id, so a clock that closes the section first takes the question about it away too.
   const [handingIn, setHandingIn] = useState<string | null>(null);
   const { submitSection, fullscreen } = view;
-  const off = view.locked !== null;
-  const sectional = view.timer.kind === TIMER_KIND.SECTION;
-  const section = view.sections.find((row) => row.id === view.sectionId);
-  const counts = view.sectionCounts(view.sectionId);
-  const previous = view.questions[view.questionIndex - 1];
   const leavingSection = submitSection !== null && handingIn === view.sectionId;
   const leavingPaper = view.submit.asking || view.submit.isPending;
   // Over the paper the palette hides the question it just opened, so opening one puts it away.
@@ -67,51 +62,9 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
     >
       <SscHeader
         title={view.title}
-        tools={
-          <div className="sc-tools flex flex-col items-center">
-            <div className="flex">
-              <button
-                type="button"
-                className="sc-zoom"
-                disabled={fontStep >= FONT_STEP.MAX}
-                onClick={() => setFontStep((step) => step + 1)}
-              >
-                Zoom (+)
-              </button>
-              <button
-                type="button"
-                className="sc-zoom"
-                disabled={fontStep <= FONT_STEP.MIN}
-                onClick={() => setFontStep((step) => step - 1)}
-              >
-                Zoom (−)
-              </button>
-            </div>
-            {fullscreen.isSupported && !fullscreen.isFullscreen ? (
-              <button type="button" className="sc-fullscreen" onClick={fullscreen.enter}>
-                Enter Full Screen
-              </button>
-            ) : null}
-          </div>
-        }
+        tools={<SscTools fontStep={fontStep} onStep={setFontStep} fullscreen={fullscreen} />}
       >
-        <div className="sc-clock flex shrink-0">
-          <div>
-            <SscTimer view={view} />
-            {onPause ? (
-              <button
-                type="button"
-                className="sc-pause flex items-center"
-                disabled={off}
-                onClick={pause.ask}
-              >
-                <CirclePause aria-hidden />
-                Pause Test
-              </button>
-            ) : null}
-          </div>
-          <img src={profileImage} alt="" />
-        </div>
+        <SscClock view={view} onPause={onPause ? pause.ask : undefined} />
       </SscHeader>
 
       {view.submit.failed ? (
@@ -124,216 +77,357 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
       ) : null}
 
       {leavingSection || leavingPaper ? (
-        <div className="flex min-h-0 flex-1">
-          {leavingSection ? (
-            <ExamSummary
-              view={view}
-              sectionIds={[view.sectionId]}
-              confirmLabel="Next Section"
-              onConfirm={() => {
-                setHandingIn(null);
-                submitSection();
-              }}
-              onCancel={() => setHandingIn(null)}
-            />
-          ) : (
-            <ExamSummary
-              view={view}
-              sectionIds={sectional ? [view.sectionId] : view.sections.map((row) => row.id)}
-              confirmLabel="Submit Test"
-              pending={view.submit.isPending}
-              onConfirm={view.submit.confirm}
-              onCancel={view.submit.cancel}
-            />
-          )}
-          <SscPhotoColumn />
-        </div>
+        <SscLeaving view={view} ofSection={leavingSection} onClose={() => setHandingIn(null)} />
       ) : (
         <>
-          <div className="sc-band shrink-0">
-            <div className="flex items-start justify-between">
-              <div className="sc-links flex flex-wrap">
-                <button type="button" onClick={() => setReading(READING.SYMBOLS)}>
-                  SYMBOLS
-                </button>
-                <button type="button" onClick={() => setReading(READING.INSTRUCTIONS)}>
-                  INSTRUCTIONS
-                </button>
-                {onOpenCalculator ? (
-                  <button type="button" onClick={onOpenCalculator}>
-                    CALCULATOR
-                  </button>
-                ) : null}
-              </div>
-              <p className="sc-total">
-                Total Questions answered : <b>{answeredOf(counts)}</b>
-              </p>
-            </div>
-
-            {reading ? null : (
-              <div className="sc-bar flex flex-wrap items-center justify-between">
-                <div className="flex min-w-0 flex-wrap">
-                  {view.sections
-                    .filter((row) => view.reachable.includes(row.id))
-                    .map((row) => (
-                      <button
-                        key={row.id}
-                        type="button"
-                        className={cn('sc-tab', row.id === view.sectionId && 'active')}
-                        disabled={off}
-                        onClick={() => view.openSection(row.id)}
-                      >
-                        {row.name}
-                      </button>
-                    ))}
-                </div>
-                <div className="sc-buttons flex flex-wrap">
-                  {view.forwardOnly ? null : (
-                    <>
-                      <button
-                        type="button"
-                        className="sc-btn"
-                        disabled={off || !previous || !view.canOpen(previous.questionId)}
-                        onClick={() => previous && view.openQuestion(previous.questionId)}
-                      >
-                        Previous
-                      </button>
-                      <button
-                        type="button"
-                        className={cn('sc-btn', view.marked && 'sc-btn-unmark')}
-                        disabled={off}
-                        onClick={view.toggleMark}
-                      >
-                        {view.marked ? 'Unmark' : 'Mark for Review'}
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className="sc-btn"
-                    disabled={off}
-                    onClick={view.nextQuestion}
-                  >
-                    Save &amp; Next
-                  </button>
-                  {submitSection ? (
-                    <button
-                      type="button"
-                      className="sc-btn"
-                      disabled={off}
-                      onClick={() => setHandingIn(view.sectionId)}
-                    >
-                      Next Section
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="sc-btn"
-                      disabled={off}
-                      onClick={view.submit.ask}
-                    >
-                      Submit
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <SscBand
+            view={view}
+            reading={reading}
+            onRead={setReading}
+            onOpenCalculator={onOpenCalculator}
+            onHandIn={() => setHandingIn(view.sectionId)}
+          />
 
           <div
             className="relative flex min-h-0 flex-1"
             data-palette-open={paletteOpen || undefined}
           >
-            <div className="sc-left flex min-w-0 flex-1 flex-col">
-              {reading ? (
-                <>
-                  {/* Keyed, so asking for the symbols after the instructions scrolls to them again. */}
-                  <div key={reading} className="sc-guide min-h-0 flex-1">
-                    <SscGuide
-                      sections={view.sections}
-                      forwardOnly={view.forwardOnly}
-                      sectional={sectional}
-                      startAtSymbols={reading === READING.SYMBOLS}
-                    />
-                  </div>
-                  <button type="button" className="sc-back" onClick={() => setReading(null)}>
-                    Back
-                  </button>
-                </>
-              ) : (
-                <SscPaper view={view} />
-              )}
-            </div>
+            <SscLeft view={view} reading={reading} onBack={() => setReading(null)} />
 
-            <aside className="sc-side flex min-h-0 shrink-0 flex-col">
-              <button
-                type="button"
-                aria-label={paletteOpen ? 'Collapse question palette' : 'Expand question palette'}
-                className="sc-fold"
-                onClick={() => setPaletteOpen((open) => !open)}
-              />
-              {paletteOpen ? (
-                <>
-                  <div className="sc-palette min-h-0">
-                    <p>{section?.name} :</p>
-                    <div className="sc-grid">
-                      {view.questions.map((row, index) => {
-                        const state =
-                          view.answers[row.questionId]?.state ?? ANSWER_STATE.NOT_VISITED;
-                        return (
-                          <button
-                            key={row.questionId}
-                            type="button"
-                            aria-current={row.questionId === view.question?.questionId}
-                            disabled={!view.canOpen(row.questionId)}
-                            aria-label={`Question ${index + 1}, ${STATE_LABEL[state]}`}
-                            className={cn('sc-chip', STATE_CLASS[state])}
-                            onClick={() => openQuestion(row.questionId)}
-                          >
-                            {index + 1}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="sc-analytics shrink-0">
-                    <p>Analytics</p>
-                    <table>
-                      <tbody>
-                        {ANALYTICS_ORDER.filter((state) =>
-                          isStateShown(state, view.forwardOnly),
-                        ).map((state) => (
-                          <tr key={state}>
-                            <td>{STATE_LABEL[state]}</td>
-                            <td>
-                              <b>{counts[state]}</b>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              ) : null}
-            </aside>
+            <SscSide
+              view={view}
+              open={paletteOpen}
+              onToggle={() => setPaletteOpen((open) => !open)}
+              onOpen={openQuestion}
+            />
           </div>
         </>
       )}
 
-      {pause.asking ? (
-        <SscBox label="Pause Test" says={pause.says}>
-          <button type="button" disabled={pause.pending} onClick={pause.confirm}>
-            {PAUSE_SAYS.confirm}
-          </button>
-          <button type="button" autoFocus onClick={pause.cancel}>
-            Carry on
-          </button>
-        </SscBox>
-      ) : null}
+      {pause.asking ? <SscPauseBox pause={pause} /> : null}
 
       <PaperWatermark view={view} config={config} className="sc-watermark" />
     </div>
+  );
+}
+
+type Fullscreen = ExamView['fullscreen'];
+
+/** The header's own tools: the two zoom steps and the way into full screen. */
+function SscTools({
+  fontStep,
+  onStep,
+  fullscreen,
+}: Readonly<{ fontStep: number; onStep: (step: number) => void; fullscreen: Fullscreen }>) {
+  return (
+    <div className="sc-tools flex flex-col items-center">
+      <div className="flex">
+        <button
+          type="button"
+          className="sc-zoom"
+          disabled={fontStep >= FONT_STEP.MAX}
+          onClick={() => onStep(fontStep + 1)}
+        >
+          Zoom (+)
+        </button>
+        <button
+          type="button"
+          className="sc-zoom"
+          disabled={fontStep <= FONT_STEP.MIN}
+          onClick={() => onStep(fontStep - 1)}
+        >
+          Zoom (−)
+        </button>
+      </div>
+      {fullscreen.isSupported && !fullscreen.isFullscreen ? (
+        <button type="button" className="sc-fullscreen" onClick={fullscreen.enter}>
+          Enter Full Screen
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function SscClock({ view, onPause }: Readonly<{ view: ExamView; onPause?: () => void }>) {
+  return (
+    <div className="sc-clock flex shrink-0">
+      <div>
+        <SscTimer view={view} />
+        {onPause ? (
+          <button
+            type="button"
+            className="sc-pause flex items-center"
+            disabled={view.locked !== null}
+            onClick={onPause}
+          >
+            <CirclePause aria-hidden />
+            Pause Test
+          </button>
+        ) : null}
+      </div>
+      <img src={profileImage} alt="" />
+    </div>
+  );
+}
+
+/** The summary a candidate confirms before a section, or the paper, is handed in. */
+function SscLeaving({
+  view,
+  ofSection,
+  onClose,
+}: Readonly<{ view: ExamView; ofSection: boolean; onClose: () => void }>) {
+  const { submitSection } = view;
+  const sectional = view.timer.kind === TIMER_KIND.SECTION;
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      {ofSection ? (
+        <ExamSummary
+          view={view}
+          sectionIds={[view.sectionId]}
+          confirmLabel="Next Section"
+          onConfirm={() => {
+            onClose();
+            submitSection?.();
+          }}
+          onCancel={onClose}
+        />
+      ) : (
+        <ExamSummary
+          view={view}
+          sectionIds={sectional ? [view.sectionId] : view.sections.map((row) => row.id)}
+          confirmLabel="Submit Test"
+          pending={view.submit.isPending}
+          onConfirm={view.submit.confirm}
+          onCancel={view.submit.cancel}
+        />
+      )}
+      <SscPhotoColumn />
+    </div>
+  );
+}
+
+/** The band above the paper: the links, the running count, and the bar of sections and moves. */
+function SscBand({
+  view,
+  reading,
+  onRead,
+  onOpenCalculator,
+  onHandIn,
+}: Readonly<{
+  view: ExamView;
+  reading: Reading | null;
+  onRead: (reading: Reading) => void;
+  onOpenCalculator?: () => void;
+  onHandIn: () => void;
+}>) {
+  const counts = view.sectionCounts(view.sectionId);
+
+  return (
+    <div className="sc-band shrink-0">
+      <div className="flex items-start justify-between">
+        <div className="sc-links flex flex-wrap">
+          <button type="button" onClick={() => onRead(READING.SYMBOLS)}>
+            SYMBOLS
+          </button>
+          <button type="button" onClick={() => onRead(READING.INSTRUCTIONS)}>
+            INSTRUCTIONS
+          </button>
+          {onOpenCalculator ? (
+            <button type="button" onClick={onOpenCalculator}>
+              CALCULATOR
+            </button>
+          ) : null}
+        </div>
+        <p className="sc-total">
+          Total Questions answered : <b>{answeredOf(counts)}</b>
+        </p>
+      </div>
+
+      {reading ? null : <SscBar view={view} onHandIn={onHandIn} />}
+    </div>
+  );
+}
+
+function SscBar({ view, onHandIn }: Readonly<{ view: ExamView; onHandIn: () => void }>) {
+  const { submitSection } = view;
+  const off = view.locked !== null;
+  const previous = view.questions[view.questionIndex - 1];
+
+  return (
+    <div className="sc-bar flex flex-wrap items-center justify-between">
+      <div className="flex min-w-0 flex-wrap">
+        {view.sections
+          .filter((row) => view.reachable.includes(row.id))
+          .map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              className={cn('sc-tab', row.id === view.sectionId && 'active')}
+              disabled={off}
+              onClick={() => view.openSection(row.id)}
+            >
+              {row.name}
+            </button>
+          ))}
+      </div>
+      <div className="sc-buttons flex flex-wrap">
+        {view.forwardOnly ? null : (
+          <>
+            <button
+              type="button"
+              className="sc-btn"
+              disabled={off || !previous || !view.canOpen(previous.questionId)}
+              onClick={() => previous && view.openQuestion(previous.questionId)}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className={cn('sc-btn', view.marked && 'sc-btn-unmark')}
+              disabled={off}
+              onClick={view.toggleMark}
+            >
+              {view.marked ? 'Unmark' : 'Mark for Review'}
+            </button>
+          </>
+        )}
+        <button type="button" className="sc-btn" disabled={off} onClick={view.nextQuestion}>
+          Save &amp; Next
+        </button>
+        {submitSection ? (
+          <button type="button" className="sc-btn" disabled={off} onClick={onHandIn}>
+            Next Section
+          </button>
+        ) : (
+          <button type="button" className="sc-btn" disabled={off} onClick={view.submit.ask}>
+            Submit
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The left of the screen: the guide while it is being read, the paper otherwise. */
+function SscLeft({
+  view,
+  reading,
+  onBack,
+}: Readonly<{ view: ExamView; reading: Reading | null; onBack: () => void }>) {
+  const sectional = view.timer.kind === TIMER_KIND.SECTION;
+
+  return (
+    <div className="sc-left flex min-w-0 flex-1 flex-col">
+      {reading ? (
+        <>
+          {/* Keyed, so asking for the symbols after the instructions scrolls to them again. */}
+          <div key={reading} className="sc-guide min-h-0 flex-1">
+            <SscGuide
+              sections={view.sections}
+              forwardOnly={view.forwardOnly}
+              sectional={sectional}
+              startAtSymbols={reading === READING.SYMBOLS}
+            />
+          </div>
+          <button type="button" className="sc-back" onClick={onBack}>
+            Back
+          </button>
+        </>
+      ) : (
+        <SscPaper view={view} />
+      )}
+    </div>
+  );
+}
+
+function SscSide({
+  view,
+  open,
+  onToggle,
+  onOpen,
+}: Readonly<{
+  view: ExamView;
+  open: boolean;
+  onToggle: () => void;
+  onOpen: (questionId: string) => void;
+}>) {
+  return (
+    <aside className="sc-side flex min-h-0 shrink-0 flex-col">
+      <button
+        type="button"
+        aria-label={open ? 'Collapse question palette' : 'Expand question palette'}
+        className="sc-fold"
+        onClick={onToggle}
+      />
+      {open ? <SscPalette view={view} onOpen={onOpen} /> : null}
+    </aside>
+  );
+}
+
+/** The section's question chips and the tally under them. */
+function SscPalette({
+  view,
+  onOpen,
+}: Readonly<{ view: ExamView; onOpen: (questionId: string) => void }>) {
+  const section = view.sections.find((row) => row.id === view.sectionId);
+  const counts = view.sectionCounts(view.sectionId);
+
+  return (
+    <>
+      <div className="sc-palette min-h-0">
+        <p>{section?.name} :</p>
+        <div className="sc-grid">
+          {view.questions.map((row, index) => {
+            const state = view.answers[row.questionId]?.state ?? ANSWER_STATE.NOT_VISITED;
+            return (
+              <button
+                key={row.questionId}
+                type="button"
+                aria-current={row.questionId === view.question?.questionId}
+                disabled={!view.canOpen(row.questionId)}
+                aria-label={`Question ${index + 1}, ${STATE_LABEL[state]}`}
+                className={cn('sc-chip', STATE_CLASS[state])}
+                onClick={() => onOpen(row.questionId)}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="sc-analytics shrink-0">
+        <p>Analytics</p>
+        <table>
+          <tbody>
+            {ANALYTICS_ORDER.filter((state) => isStateShown(state, view.forwardOnly)).map(
+              (state) => (
+                <tr key={state}>
+                  <td>{STATE_LABEL[state]}</td>
+                  <td>
+                    <b>{counts[state]}</b>
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function SscPauseBox({ pause }: Readonly<{ pause: ReturnType<typeof usePause> }>) {
+  return (
+    <SscBox label="Pause Test" says={pause.says}>
+      <button type="button" disabled={pause.pending} onClick={pause.confirm}>
+        {PAUSE_SAYS.confirm}
+      </button>
+      <button type="button" autoFocus onClick={pause.cancel}>
+        Carry on
+      </button>
+    </SscBox>
   );
 }
 
@@ -478,14 +572,14 @@ function SscBox({
   says,
   children,
 }: Readonly<{ label: string; says: string; children: ReactNode }>) {
-  const box = useModalBox<HTMLDivElement>();
+  const box = useModalBox<HTMLDialogElement>();
 
   return (
     <div className="sc-overlay absolute inset-0 z-50 grid place-items-center p-4">
-      <div ref={box} role="dialog" aria-modal aria-label={label} className="sc-nag">
+      <dialog ref={box} open aria-modal aria-label={label} className={cn(MODAL_BOX, 'sc-nag')}>
         <p>{says}</p>
         <div className="flex flex-wrap items-center justify-end">{children}</div>
-      </div>
+      </dialog>
     </div>
   );
 }

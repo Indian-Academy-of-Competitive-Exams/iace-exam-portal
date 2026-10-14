@@ -316,9 +316,9 @@ function SectionTab({
       >
         {name}
       </button>
-      <span className="bk-info-dot" tabIndex={0} role="button" aria-label={`Status for ${name}`}>
+      <button type="button" className="bk-info-dot" aria-label={`Status for ${name}`}>
         <Info aria-hidden />
-      </span>
+      </button>
       <div className="bk-tally">
         <div className="bk-tally-title">{name}</div>
         {LEGEND_ORDER.filter((state) => isStateShown(state, view.forwardOnly)).map((state) => (

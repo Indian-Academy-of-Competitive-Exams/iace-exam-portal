@@ -31,16 +31,14 @@ import { isTypingQuestion } from '../../../typing/typing-figures';
 import { ExamTyping } from './exam-typing';
 import { PaperPanel, RulesPanel } from './panels';
 
+type PanelName = 'PAPER' | 'RULES' | null;
+
 export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<ExamSlotProps>) {
-  const onPaper = config.watermark === 'PAPER';
-  const [panel, setPanel] = useState<'PAPER' | 'RULES' | null>(null);
+  const [panel, setPanel] = useState<PanelName>(null);
   // Below the rail's breakpoint the palette would take the paper's own room, so it waits in a drawer.
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const pause = usePause(onPause);
-  const passages = view.question
-    ? passagesOf(view.question.content, view.languages, view.languageMode)
-    : [];
 
   return (
     <>
@@ -63,99 +61,146 @@ export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<Exa
         />
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          {/* The mark sits on this frame, not in the scroller, where it would cover one screenful and scroll away. */}
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            <div
-              // Keyed, so the next question opens both panes at their top and not at the last one's offset.
-              key={view.question?.questionId}
-              className="flex min-h-0 flex-1 flex-col md:flex-row"
-            >
-              {passages.length > 0 ? (
-                <ScrollPane
-                  keys
-                  wheel
-                  className="max-h-[40%] shrink-0 border-b border-exam-border md:max-h-none md:w-[55%] md:border-b-0 md:border-r"
-                >
-                  <div className="flex flex-col gap-exam-gap p-exam">
-                    <Passage
-                      passages={passages}
-                      className="text-sm leading-relaxed text-exam-ink"
-                    />
-                  </div>
-                </ScrollPane>
-              ) : null}
-              <Answered view={view} config={config} />
-            </div>
-            {onPaper ? <PaperWatermark view={view} config={config} /> : null}
-          </div>
-
-          {isDesktop ? (
-            <aside
-              className={cn(
-                'relative min-h-0 w-72 shrink-0 overflow-y-auto border-exam-border p-exam',
-                config.palettePosition === 'LEFT' ? 'order-first border-r' : 'order-last border-l',
-              )}
-            >
-              <Palette view={view} config={config} />
-            </aside>
-          ) : null}
+          <PaperArea view={view} config={config} />
+          {isDesktop ? <PaletteRail view={view} config={config} /> : null}
         </div>
       </Tabs>
 
       {isDesktop ? null : (
-        <Sheet open={paletteOpen} onOpenChange={setPaletteOpen}>
-          {/* Portalled out of the shell, so the drawer names the skin itself or its swatches have no colour. */}
-          <SheetContent
-            side="right"
-            aria-describedby={undefined}
-            data-exam-template={EXAM_TEMPLATE.DEFAULT.toLowerCase()}
-            className="gap-4 overflow-y-auto bg-exam-surface text-exam-ink"
-          >
-            <div className="flex items-center justify-between">
-              <SheetTitle>Question palette</SheetTitle>
-              <SheetClose asChild>
-                <Button variant="ghost" size="iconSm" aria-label="Close question palette">
-                  <X aria-hidden />
-                </Button>
-              </SheetClose>
-            </div>
-            <Palette
-              view={view}
-              config={config}
-              onOpen={(questionId) => {
-                view.openQuestion(questionId);
-                setPaletteOpen(false);
-              }}
-            />
-          </SheetContent>
-        </Sheet>
+        <PaletteDrawer
+          view={view}
+          config={config}
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+        />
       )}
 
       <BottomBar view={view} config={config} />
 
-      {onPause ? (
-        <ConfirmDialog
-          open={pause.asking}
-          onOpenChange={(open) => !open && pause.cancel()}
-          title={PAUSE_SAYS.title}
-          description={pause.says}
-          confirmLabel={PAUSE_SAYS.confirm}
-          loading={pause.pending}
-          onConfirm={pause.confirm}
-        />
-      ) : null}
+      {onPause ? <PauseConfirm pause={pause} /> : null}
+      <Panels view={view} config={config} panel={panel} onPanel={setPanel} />
+    </>
+  );
+}
 
+/** The paper itself: a passage beside its question where there is one, under the mark where it prints on paper. */
+function PaperArea({ view, config }: Readonly<ExamSlotProps>) {
+  const passages = view.question
+    ? passagesOf(view.question.content, view.languages, view.languageMode)
+    : [];
+
+  return (
+    // The mark sits on this frame, not in the scroller, where it would cover one screenful and scroll away.
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <div
+        // Keyed, so the next question opens both panes at their top and not at the last one's offset.
+        key={view.question?.questionId}
+        className="flex min-h-0 flex-1 flex-col md:flex-row"
+      >
+        {passages.length > 0 ? (
+          <ScrollPane
+            keys
+            wheel
+            className="max-h-[40%] shrink-0 border-b border-exam-border md:max-h-none md:w-[55%] md:border-b-0 md:border-r"
+          >
+            <div className="flex flex-col gap-exam-gap p-exam">
+              <Passage passages={passages} className="text-sm leading-relaxed text-exam-ink" />
+            </div>
+          </ScrollPane>
+        ) : null}
+        <Answered view={view} config={config} />
+      </div>
+      {config.watermark === 'PAPER' ? <PaperWatermark view={view} config={config} /> : null}
+    </div>
+  );
+}
+
+function PaletteRail({ view, config }: Readonly<ExamSlotProps>) {
+  return (
+    <aside
+      className={cn(
+        'relative min-h-0 w-72 shrink-0 overflow-y-auto border-exam-border p-exam',
+        config.palettePosition === 'LEFT' ? 'order-first border-r' : 'order-last border-l',
+      )}
+    >
+      <Palette view={view} config={config} />
+    </aside>
+  );
+}
+
+/** The palette below the rail's breakpoint: a drawer that puts itself away once a question is opened from it. */
+function PaletteDrawer({
+  view,
+  config,
+  open,
+  onOpenChange,
+}: Readonly<ExamSlotProps & { open: boolean; onOpenChange: (open: boolean) => void }>) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      {/* Portalled out of the shell, so the drawer names the skin itself or its swatches have no colour. */}
+      <SheetContent
+        side="right"
+        aria-describedby={undefined}
+        data-exam-template={EXAM_TEMPLATE.DEFAULT.toLowerCase()}
+        className="gap-4 overflow-y-auto bg-exam-surface text-exam-ink"
+      >
+        <div className="flex items-center justify-between">
+          <SheetTitle>Question palette</SheetTitle>
+          <SheetClose asChild>
+            <Button variant="ghost" size="iconSm" aria-label="Close question palette">
+              <X aria-hidden />
+            </Button>
+          </SheetClose>
+        </div>
+        <Palette
+          view={view}
+          config={config}
+          onOpen={(questionId) => {
+            view.openQuestion(questionId);
+            onOpenChange(false);
+          }}
+        />
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function PauseConfirm({ pause }: Readonly<{ pause: ReturnType<typeof usePause> }>) {
+  const closed = (open: boolean) => {
+    if (!open) pause.cancel();
+  };
+
+  return (
+    <ConfirmDialog
+      open={pause.asking}
+      onOpenChange={closed}
+      title={PAUSE_SAYS.title}
+      description={pause.says}
+      confirmLabel={PAUSE_SAYS.confirm}
+      loading={pause.pending}
+      onConfirm={pause.confirm}
+    />
+  );
+}
+
+/** The question paper and the rules, one open at a time. */
+function Panels({
+  view,
+  config,
+  panel,
+  onPanel,
+}: Readonly<ExamSlotProps & { panel: PanelName; onPanel: (next: PanelName) => void }>) {
+  const toggled = (name: NonNullable<PanelName>) => (open: boolean) => onPanel(open ? name : null);
+
+  return (
+    <>
       <PaperPanel
         view={view}
         config={config}
         open={panel === 'PAPER'}
-        onOpenChange={(open) => setPanel(open ? 'PAPER' : null)}
+        onOpenChange={toggled('PAPER')}
       />
-      <RulesPanel
-        view={view}
-        open={panel === 'RULES'}
-        onOpenChange={(open) => setPanel(open ? 'RULES' : null)}
-      />
+      <RulesPanel view={view} open={panel === 'RULES'} onOpenChange={toggled('RULES')} />
     </>
   );
 }

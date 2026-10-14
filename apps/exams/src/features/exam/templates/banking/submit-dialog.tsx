@@ -1,8 +1,8 @@
 /** The Test Summary the banking screen asks with: a tally per section over a dimmed paper, then one button. */
 import { X } from 'lucide-react';
 import { type ExamSection, type PaletteCounts } from '@iace/contracts';
-import { Spinner } from '@iace/ui';
-import { useModalBox } from '../../use-modal-box';
+import { Spinner, cn } from '@iace/ui';
+import { MODAL_BOX, useModalBox } from '../../use-modal-box';
 import { summaryOf } from './states';
 
 export function BankingSummaryDialog({
@@ -22,16 +22,16 @@ export function BankingSummaryDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }>) {
-  const box = useModalBox<HTMLDivElement>(pending ? undefined : onCancel);
+  const box = useModalBox<HTMLDialogElement>(pending ? undefined : onCancel);
 
   return (
     <div className="bk-overlay absolute inset-0 z-40 grid place-items-center p-4">
-      <div
+      <dialog
         ref={box}
-        role="dialog"
+        open
         aria-modal
         aria-labelledby="bk-summary-title"
-        className="bk-summary"
+        className={cn(MODAL_BOX, 'bk-summary')}
       >
         <button
           type="button"
@@ -87,7 +87,7 @@ export function BankingSummaryDialog({
           </button>
           {pending ? <Spinner size="sm" label="Submitting" /> : null}
         </div>
-      </div>
+      </dialog>
     </div>
   );
 }

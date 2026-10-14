@@ -41,7 +41,7 @@ export function RailwayLayout({
   onOpenCalculator,
   onPause,
 }: Readonly<ExamSlotProps>) {
-  const [openPanel, setOpenPanel] = useState<'PAPER' | 'INSTRUCTIONS' | null>(null);
+  const [openPanel, setOpenPanel] = useState<PanelName>(null);
   const phone = useMediaQuery(PHONE_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(!phone);
   const pause = usePause(onPause);
@@ -52,10 +52,6 @@ export function RailwayLayout({
   };
   // The original answers Submit by taking the question area over and folding the palette away; it stays while the paper goes in.
   const asking = view.submit.asking || view.submit.isPending;
-  const passages =
-    view.question && !asking
-      ? passagesOf(view.question.content, view.languages, view.languageMode)
-      : [];
   const off = view.locked !== null;
 
   return (
@@ -64,41 +60,12 @@ export function RailwayLayout({
         <span className="rw-logo">IACE</span>
       </div>
 
-      <div className="rw-utilitybar flex items-center justify-end gap-6 px-4">
-        <button
-          type="button"
-          className="flex items-center gap-2"
-          onClick={() => setOpenPanel('PAPER')}
-        >
-          <span className="rw-icon questionpaper_icon" aria-hidden />
-          <span>Question paper</span>
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-2"
-          onClick={() => setOpenPanel('INSTRUCTIONS')}
-        >
-          <span className="rw-icon instruction_icon" aria-hidden />
-          <span>Instruction</span>
-        </button>
-        {onOpenCalculator ? (
-          <button type="button" className="flex items-center gap-2" onClick={onOpenCalculator}>
-            <Calculator aria-hidden />
-            <span>Calculator</span>
-          </button>
-        ) : null}
-        {onPause ? (
-          <button
-            type="button"
-            className="flex items-center gap-2"
-            disabled={view.locked !== null}
-            onClick={pause.ask}
-          >
-            <Pause aria-hidden />
-            <span>Pause Test</span>
-          </button>
-        ) : null}
-      </div>
+      <UtilityBar
+        locked={off}
+        onOpen={setOpenPanel}
+        onOpenCalculator={onOpenCalculator}
+        onPause={onPause ? pause.ask : undefined}
+      />
 
       <div className="relative flex min-h-0 flex-1" data-palette-open={paletteOpen || undefined}>
         <div className="flex min-w-0 flex-1 flex-col">
@@ -114,58 +81,11 @@ export function RailwayLayout({
             <RailwayTimer view={view} />
           </div>
 
-          <div className="rw-sectionbar flex shrink-0 flex-wrap items-center gap-1 px-3 py-1">
-            {view.sections.map((section) => (
-              <span
-                key={section.id}
-                className={cn('subjcttab', section.id === view.sectionId && 'active')}
-              >
-                <button
-                  type="button"
-                  disabled={off || !view.reachable.includes(section.id)}
-                  onClick={() => view.openSection(section.id)}
-                >
-                  {section.name}
-                </button>
-                <InfoTally
-                  counts={view.sectionCounts(section.id)}
-                  states={tallyOf(view)}
-                  label={`Status for ${section.name}`}
-                />
-              </span>
-            ))}
-          </div>
+          <SectionTabs view={view} off={off} />
 
-          <div className="new-tab-second flex shrink-0 items-center justify-between">
-            <span className="rw-qtype">Question Type : {questionTypeLabel(view)}</span>
-            {view.question ? (
-              <span className="rw-marks">
-                Marks For Correct Answer: <em>{view.question.marks}</em> | Negative Mark:{' '}
-                <em className="rw-penalty">{view.question.negativeMarks}</em>
-              </span>
-            ) : null}
-          </div>
+          <QuestionHead view={view} />
 
-          <div className="questn flex shrink-0 items-center justify-between">
-            <span>{`Question No. ${view.questionIndex + 1}`}</span>
-            {view.fullscreen.isSupported ? (
-              <button type="button" className="fulscrnbtn" onClick={view.fullscreen.enter}>
-                View Full Screen
-              </button>
-            ) : null}
-          </div>
-
-          {/* Keyed, so the next question opens both panes at their top and not at the last one's offset. */}
-          <div key={view.question?.questionId} className="rw-split flex min-h-0 flex-1">
-            {passages.length > 0 ? (
-              <ScrollPane keys className="rw-passage">
-                <div className="questiondiv">
-                  <Passage passages={passages} />
-                </div>
-              </ScrollPane>
-            ) : null}
-            <RailwayAnswered view={view} asking={asking} />
-          </div>
+          <PaperSplit view={view} asking={asking} />
 
           {view.submit.failed ? (
             <Alert variant="danger" className="flex shrink-0 items-center justify-between gap-2">
@@ -176,78 +96,241 @@ export function RailwayLayout({
             </Alert>
           ) : null}
 
-          <div className={cn('rw-buttons flex items-center gap-2', asking && 'hidden')}>
-            {view.forwardOnly ? null : (
-              <button type="button" className="btn" disabled={off} onClick={view.markAndNext}>
-                Mark for Review &amp; Next
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn"
-              disabled={!clearable(view, off)}
-              onClick={view.clearResponse}
-            >
-              Clear Response
-            </button>
-            <button
-              type="button"
-              className="savenext ml-auto"
-              disabled={off}
-              onClick={view.nextQuestion}
-            >
-              Save &amp; Next
-            </button>
-          </div>
+          <AnswerButtons view={view} off={off} asking={asking} />
         </div>
 
-        <div className={cn('relative w-0 shrink-0', asking && 'hidden')}>
-          <button
-            type="button"
-            aria-label={paletteOpen ? 'Collapse question palette' : 'Expand question palette'}
-            className="rw-palette-toggle"
-            onClick={() => setPaletteOpen((open) => !open)}
-          >
-            {paletteOpen ? '›' : '‹'}
-          </button>
-        </div>
-
-        <aside
-          className={cn(
-            'rw-palette min-h-0 shrink-0 flex-col',
-            paletteOpen && !asking ? 'flex' : 'hidden',
-          )}
-        >
-          <RailwayPalette
-            questionIds={view.questions.map((row) => row.questionId)}
-            answers={view.answers}
-            currentId={view.question?.questionId ?? null}
-            counts={view.sectionCounts(view.sectionId)}
-            candidate={view.watermark}
-            states={statesOf(view)}
-            canOpen={view.canOpen}
-            onOpen={openQuestion}
-          />
-
-          {/* Pinned, so it holds its place however far the grid above it scrolls. */}
-          <div className="palettebottom flex justify-center">
-            <button type="button" className="rw-submit" disabled={off} onClick={view.submit.ask}>
-              Submit
-            </button>
-          </div>
-        </aside>
+        <PaletteColumn
+          view={view}
+          open={paletteOpen}
+          asking={asking}
+          onToggle={() => setPaletteOpen((open) => !open)}
+          onOpen={openQuestion}
+        />
       </div>
 
-      {openPanel === 'PAPER' ? <PaperModal view={view} onClose={() => setOpenPanel(null)} /> : null}
-      {openPanel === 'INSTRUCTIONS' ? (
-        <InstructionsModal view={view} onClose={() => setOpenPanel(null)} />
-      ) : null}
+      <OpenPanel view={view} panel={openPanel} onClose={() => setOpenPanel(null)} />
 
       {pause.asking ? <RailwayPauseBox pause={pause} /> : null}
 
       <PaperWatermark view={view} config={config} className="rw-watermark" />
     </div>
   );
+}
+
+type PanelName = 'PAPER' | 'INSTRUCTIONS' | null;
+
+/** The black strip under the header: the paper, the instructions, and the two tools a paper may offer. */
+function UtilityBar({
+  locked,
+  onOpen,
+  onOpenCalculator,
+  onPause,
+}: Readonly<{
+  locked: boolean;
+  onOpen: (panel: NonNullable<PanelName>) => void;
+  onOpenCalculator?: () => void;
+  onPause?: () => void;
+}>) {
+  return (
+    <div className="rw-utilitybar flex items-center justify-end gap-6 px-4">
+      <button type="button" className="flex items-center gap-2" onClick={() => onOpen('PAPER')}>
+        <span className="rw-icon questionpaper_icon" aria-hidden />
+        <span>Question paper</span>
+      </button>
+      <button
+        type="button"
+        className="flex items-center gap-2"
+        onClick={() => onOpen('INSTRUCTIONS')}
+      >
+        <span className="rw-icon instruction_icon" aria-hidden />
+        <span>Instruction</span>
+      </button>
+      {onOpenCalculator ? (
+        <button type="button" className="flex items-center gap-2" onClick={onOpenCalculator}>
+          <Calculator aria-hidden />
+          <span>Calculator</span>
+        </button>
+      ) : null}
+      {onPause ? (
+        <button
+          type="button"
+          className="flex items-center gap-2"
+          disabled={locked}
+          onClick={onPause}
+        >
+          <Pause aria-hidden />
+          <span>Pause Test</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function SectionTabs({ view, off }: Readonly<{ view: ExamView; off: boolean }>) {
+  return (
+    <div className="rw-sectionbar flex shrink-0 flex-wrap items-center gap-1 px-3 py-1">
+      {view.sections.map((section) => (
+        <span
+          key={section.id}
+          className={cn('subjcttab', section.id === view.sectionId && 'active')}
+        >
+          <button
+            type="button"
+            disabled={off || !view.reachable.includes(section.id)}
+            onClick={() => view.openSection(section.id)}
+          >
+            {section.name}
+          </button>
+          <InfoTally
+            counts={view.sectionCounts(section.id)}
+            states={tallyOf(view)}
+            label={`Status for ${section.name}`}
+          />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** The two bars over a question: what kind it is and what it pays, then its number. */
+function QuestionHead({ view }: Readonly<{ view: ExamView }>) {
+  return (
+    <>
+      <div className="new-tab-second flex shrink-0 items-center justify-between">
+        <span className="rw-qtype">Question Type : {questionTypeLabel(view)}</span>
+        {view.question ? (
+          <span className="rw-marks">
+            Marks For Correct Answer: <em>{view.question.marks}</em> | Negative Mark:{' '}
+            <em className="rw-penalty">{view.question.negativeMarks}</em>
+          </span>
+        ) : null}
+      </div>
+
+      <div className="questn flex shrink-0 items-center justify-between">
+        <span>{`Question No. ${view.questionIndex + 1}`}</span>
+        {view.fullscreen.isSupported ? (
+          <button type="button" className="fulscrnbtn" onClick={view.fullscreen.enter}>
+            View Full Screen
+          </button>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+/** The passage beside its question, neither shown while the submit summary has the pane. */
+function PaperSplit({ view, asking }: Readonly<{ view: ExamView; asking: boolean }>) {
+  const passages =
+    view.question && !asking
+      ? passagesOf(view.question.content, view.languages, view.languageMode)
+      : [];
+
+  return (
+    // Keyed, so the next question opens both panes at their top and not at the last one's offset.
+    <div key={view.question?.questionId} className="rw-split flex min-h-0 flex-1">
+      {passages.length > 0 ? (
+        <ScrollPane keys className="rw-passage">
+          <div className="questiondiv">
+            <Passage passages={passages} />
+          </div>
+        </ScrollPane>
+      ) : null}
+      <RailwayAnswered view={view} asking={asking} />
+    </div>
+  );
+}
+
+function AnswerButtons({
+  view,
+  off,
+  asking,
+}: Readonly<{ view: ExamView; off: boolean; asking: boolean }>) {
+  return (
+    <div className={cn('rw-buttons flex items-center gap-2', asking && 'hidden')}>
+      {view.forwardOnly ? null : (
+        <button type="button" className="btn" disabled={off} onClick={view.markAndNext}>
+          Mark for Review &amp; Next
+        </button>
+      )}
+      <button
+        type="button"
+        className="btn"
+        disabled={!clearable(view, off)}
+        onClick={view.clearResponse}
+      >
+        Clear Response
+      </button>
+      <button type="button" className="savenext ml-auto" disabled={off} onClick={view.nextQuestion}>
+        Save &amp; Next
+      </button>
+    </div>
+  );
+}
+
+/** The palette and the tab that folds it; both step aside while the submit summary is up. */
+function PaletteColumn({
+  view,
+  open,
+  asking,
+  onToggle,
+  onOpen,
+}: Readonly<{
+  view: ExamView;
+  open: boolean;
+  asking: boolean;
+  onToggle: () => void;
+  onOpen: (questionId: string) => void;
+}>) {
+  return (
+    <>
+      <div className={cn('relative w-0 shrink-0', asking && 'hidden')}>
+        <button
+          type="button"
+          aria-label={open ? 'Collapse question palette' : 'Expand question palette'}
+          className="rw-palette-toggle"
+          onClick={onToggle}
+        >
+          {open ? '›' : '‹'}
+        </button>
+      </div>
+
+      <aside
+        className={cn('rw-palette min-h-0 shrink-0 flex-col', open && !asking ? 'flex' : 'hidden')}
+      >
+        <RailwayPalette
+          questionIds={view.questions.map((row) => row.questionId)}
+          answers={view.answers}
+          currentId={view.question?.questionId ?? null}
+          counts={view.sectionCounts(view.sectionId)}
+          candidate={view.watermark}
+          states={statesOf(view)}
+          canOpen={view.canOpen}
+          onOpen={onOpen}
+        />
+
+        {/* Pinned, so it holds its place however far the grid above it scrolls. */}
+        <div className="palettebottom flex justify-center">
+          <button
+            type="button"
+            className="rw-submit"
+            disabled={view.locked !== null}
+            onClick={view.submit.ask}
+          >
+            Submit
+          </button>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function OpenPanel({
+  view,
+  panel,
+  onClose,
+}: Readonly<{ view: ExamView; panel: PanelName; onClose: () => void }>) {
+  if (panel === 'PAPER') return <PaperModal view={view} onClose={onClose} />;
+  return panel === 'INSTRUCTIONS' ? <InstructionsModal view={view} onClose={onClose} /> : null;
 }
 
 const questionTypeLabel = (view: ExamView) =>

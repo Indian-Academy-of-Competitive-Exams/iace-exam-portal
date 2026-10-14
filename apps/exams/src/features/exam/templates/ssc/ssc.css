@@ -124,7 +124,7 @@
 
 [data-exam-template='ssc'] .sc-timer b {
   background: #fcffcd;
-  color: #f00;
+  color: #c00;
 }
 
 /* ---------- the band above the paper ---------- */
@@ -158,7 +158,7 @@
 [data-exam-template='ssc'] .sc-total b,
 [data-exam-template='ssc'] .sc-analytics b {
   background: #ff0;
-  color: #f00;
+  color: #c00;
 }
 
 [data-exam-template='ssc'] .sc-bar {
@@ -652,7 +652,7 @@
 [data-exam-template='ssc'] .sc-nag button {
   padding: 2px 20px;
   border-radius: 4px;
-  background: #428bca;
+  background: #2f6fa7;
   color: #fff;
   font-size: 14px;
   line-height: 21px;

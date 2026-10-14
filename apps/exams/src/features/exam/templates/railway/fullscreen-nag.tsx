@@ -4,7 +4,8 @@
  * `#popup_container` and `.inputcnf` rules of the captured inline stylesheet.
  */
 import { PAUSE_SAYS, type ExamView, type usePause } from '@iace/app-kit';
-import { useModalBox } from '../../use-modal-box';
+import { cn } from '@iace/ui';
+import { MODAL_BOX, useModalBox } from '../../use-modal-box';
 
 export function RailwayFullscreenNag({
   fullscreen,
@@ -31,16 +32,16 @@ export function RailwayFullscreenNag({
 
 /** The same box, asking before a sitting is left to be come back to. */
 export function RailwayPauseBox({ pause }: Readonly<{ pause: ReturnType<typeof usePause> }>) {
-  const box = useModalBox<HTMLDivElement>(pause.cancel);
+  const box = useModalBox<HTMLDialogElement>(pause.cancel);
 
   return (
     <div className="rw-nag-overlay absolute inset-0 z-50 grid place-items-center p-6">
-      <div
+      <dialog
         ref={box}
-        role="dialog"
+        open
         aria-modal
         aria-label={PAUSE_SAYS.title}
-        className="rw-nag flex flex-col gap-5"
+        className={cn(MODAL_BOX, 'rw-nag flex flex-col gap-5')}
       >
         <p>{pause.says}</p>
         <div className="flex justify-end">
@@ -56,7 +57,7 @@ export function RailwayPauseBox({ pause }: Readonly<{ pause: ReturnType<typeof u
             Carry on
           </button>
         </div>
-      </div>
+      </dialog>
     </div>
   );
 }

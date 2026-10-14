@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react';
 
+/** A `<dialog>` brings its own frame; this takes it off, so the box is drawn by its skin's class alone. */
+export const MODAL_BOX =
+  'static m-0 max-h-none max-w-none border-0 bg-transparent p-0 text-inherit';
+
 /** Makes a skin's own dialog box modal in fact: everything beside its overlay is inert while it is up, so the paper behind cannot be tabbed to or answered. */
 export function useModalBox<T extends HTMLElement>(onEscape?: () => void) {
   const box = useRef<T>(null);

@@ -1,6 +1,7 @@
 /** The banking screen's small "Info" box: a blue bar, a line of text, and its buttons on a tinted foot. */
 import { type ReactNode } from 'react';
-import { useModalBox } from '../../use-modal-box';
+import { cn } from '@iace/ui';
+import { MODAL_BOX, useModalBox } from '../../use-modal-box';
 import { PAUSE_SAYS, type ExamView, type usePause } from '@iace/app-kit';
 
 function InfoDialog({
@@ -16,16 +17,16 @@ function InfoDialog({
   children: ReactNode;
   foot?: ReactNode;
 }>) {
-  const box = useModalBox<HTMLDivElement>(onClose);
+  const box = useModalBox<HTMLDialogElement>(onClose);
 
   return (
     <div className="bk-overlay absolute inset-0 z-50 grid place-items-center p-4">
-      <div
+      <dialog
         ref={box}
-        role="dialog"
+        open
         aria-modal
         aria-label={title}
-        className="bk-info"
+        className={cn(MODAL_BOX, 'bk-info')}
         data-wide={wide}
       >
         <div className="bk-info-head flex items-center justify-between">
@@ -38,7 +39,7 @@ function InfoDialog({
         </div>
         <div className="bk-info-body">{children}</div>
         {foot ? <div className="bk-info-foot flex justify-center gap-2">{foot}</div> : null}
-      </div>
+      </dialog>
     </div>
   );
 }

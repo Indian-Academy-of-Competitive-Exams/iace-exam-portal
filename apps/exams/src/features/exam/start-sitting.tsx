@@ -16,7 +16,7 @@ export function StartSitting({
   testId: string;
   resume?: string | null;
   size?: NonNullable<React.ComponentProps<typeof Button>['size']>;
-  variant?: React.ComponentProps<typeof Button>['variant'];
+  variant?: NonNullable<React.ComponentProps<typeof Button>['variant']>;
   className?: string;
   children: React.ReactNode;
 }>) {
