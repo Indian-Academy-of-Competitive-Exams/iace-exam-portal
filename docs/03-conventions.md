@@ -233,6 +233,16 @@ once. A sweep claims the rows with no `pushedAt` (`SKIP LOCKED`), books the paid
 announcement chose, and pushes them. The welcome is the one left on the bus: auth commits no
 transaction it could join, so the listener writes it after the fact.
 
+**A broadcast is resolved, not copied.** A notification to a cohort — an in-app announcement, a
+test opening — is ONE row for everybody: the `Announcement`, or the `Test` once the opening sweep
+stamps `announcedAt`. `BellService` resolves who it reaches when a student reads the bell (the
+announcement's audience filter, among students who existed when it was sent; the test's series in
+their catalog) over the last `BELL_WINDOW_DAYS`, and merges it into their own rows. Only a read is
+written per student, into `BroadcastRead`. The push is a worker job over the cohort with no ledger.
+A PAID announcement is still copied per student by its delivery job, because each copy is a billed
+message and the paid chain runs off it. Copies written before this rule stand for their broadcast:
+the bell skips a broadcast the student already holds a copy of.
+
 This inverts one guarantee deliberately. A notification that cannot be written now FAILS the write
 that caused it, where before it was swallowed. That is the point: rolling the grant back is
 recoverable, and a student silently never told is not.

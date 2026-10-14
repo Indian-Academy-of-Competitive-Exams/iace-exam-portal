@@ -13,6 +13,7 @@ import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import {
   NOTIFICATION_JOBS,
   RELAY_BATCH,
+  type AnnounceJobData,
   QUEUE_NAMES,
   QUEUE_POLICY,
   keyedJob,
@@ -28,6 +29,7 @@ import {
 import { PushService } from './push.service';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { TestOpeningService } from './test-opening.service';
+import { AnnouncementsService } from './announcements.service';
 import { QueueFailures } from '../common/metrics/queue-failures';
 import { MS_PER_SECOND } from '../common/time/units';
 
@@ -52,6 +54,7 @@ export class NotificationsProcessor extends ReportingWorkerHost {
     private readonly prisma: PrismaService,
     private readonly push: PushService,
     private readonly openings: TestOpeningService,
+    private readonly announcements: AnnouncementsService,
     private readonly deliveryRepair: NotificationDeliveryProcessor,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
@@ -63,6 +66,10 @@ export class NotificationsProcessor extends ReportingWorkerHost {
   async process(job: Job): Promise<void> {
     if (job.name === NOTIFICATION_JOBS.TESTS_OPENED) {
       await this.openings.sweep();
+      return;
+    }
+    if (job.name === NOTIFICATION_JOBS.ANNOUNCE) {
+      await this.announcements.deliver((job.data as AnnounceJobData).announcementId);
       return;
     }
     // The sweep, or a write job queued before this deploy: either way the rows are already written.

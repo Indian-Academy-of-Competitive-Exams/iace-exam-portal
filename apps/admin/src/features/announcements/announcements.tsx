@@ -203,34 +203,52 @@ function AnnouncementPanel({ announcement }: Readonly<{ announcement: Announceme
     queryFn: () => api.admin.announcements.detail(announcement.id),
   });
 
+  // In-app only keeps no ledger: the bell resolves it, so its reads are all there is to count.
+  const paid = announcement.paidChannels.length > 0;
+
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm">{announcement.body}</p>
 
-      {retired(announcement.createdAt) ? (
+      {paid && retired(announcement.createdAt) ? (
         <Alert variant="info">
           {`The delivery ledger is kept for ${DELIVERY_RETENTION_DAYS} days, so the counts below read zero and the export is empty for an announcement this old.`}
         </Alert>
       ) : null}
 
-      <DeliveryCounts stats={detail.data?.stats} failed={detail.isError} onRetry={detail.refetch} />
+      <DeliveryCounts
+        stats={detail.data?.stats}
+        paid={paid}
+        failed={detail.isError}
+        onRetry={detail.refetch}
+      />
 
-      <div>
-        <ExportButton
-          label="Export deliveries"
-          kind={EXPORT_KINDS.ANNOUNCEMENT_DELIVERIES}
-          download={() => api.admin.announcements.deliveriesExport(announcement.id)}
-        />
-      </div>
+      {paid ? (
+        <div>
+          <ExportButton
+            label="Export deliveries"
+            kind={EXPORT_KINDS.ANNOUNCEMENT_DELIVERIES}
+            download={() => api.admin.announcements.deliveriesExport(announcement.id)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function DeliveryCounts({
   stats,
+  paid,
   failed,
   onRetry,
-}: Readonly<{ stats?: AnnouncementStats; failed: boolean; onRetry: () => void }>) {
+}: Readonly<{ stats?: AnnouncementStats; paid: boolean; failed: boolean; onRetry: () => void }>) {
+  if (stats && !paid) {
+    return (
+      <MetricGroup>
+        <Metric label="Read" value={stats.readCount} />
+      </MetricGroup>
+    );
+  }
   if (stats) {
     return (
       <MetricGroup>

@@ -1,17 +1,20 @@
 /**
  * Tells whoever reaches a test that it has opened. A test opens by the CLOCK, so nothing writes at
  * the moment it happens and there is no event to hang this off — a sweep is the only shape that
- * works. `Test.announcedAt` is what stops a finished one being seen again, and the dedupe key on
- * each bell row is what makes a replayed fan-out land once rather than tell a cohort twice.
+ * works. Stamping `Test.announcedAt` IS the bell entry: the bell lists an announced test to every
+ * student whose catalog holds its series, so nothing is written per student. The push follows it.
  */
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
-import { NOTIFICATION_TYPE, TEST_STATUS } from '@iace/contracts';
+import { TEST_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { type AccessResolverService } from '../access';
-import { NotificationsService } from './notifications.service';
+import { PushService } from './push.service';
 
-/** One student at a time would be one transaction each; this is the fan-out the announcer uses. */
-const CHUNK = 500;
+/** How many students' devices one push page reads. */
+const CHUNK = 1000;
+
+/** What the bell and the push call a test with no title yet. */
+export const OPENED_TITLE = 'A new test is open';
 
 /** A sweep speaks about a handful of tests, never a backlog — the watermark keeps it that way. */
 const TESTS_PER_SWEEP = 20;
@@ -31,7 +34,7 @@ export class TestOpeningService {
       ),
     )
     private readonly access: AccessResolverService,
-    private readonly notifications: NotificationsService,
+    private readonly push: PushService,
   ) {}
 
   /** Returns how many tests it spoke about, so a caller can tell a quiet sweep from a stuck one. */
@@ -63,26 +66,11 @@ export class TestOpeningService {
     test: { id: string; title: string | null; testSeriesId: string },
     now: Date,
   ): Promise<void> {
-    const recipients = await this.access.studentsReaching(test.testSeriesId);
-
-    // A batch at a time, not one transaction over the cohort: 8K rows under one lock outlive its ceiling.
-    for (const batch of chunked(recipients)) {
-      await this.notifications.tell(
-        this.prisma,
-        ...batch.map((studentId) => ({
-          studentId,
-          type: NOTIFICATION_TYPE.TEST_ASSIGNED,
-          title: test.title ?? 'A new test is open',
-          body: 'It is open now, and stays open. Sit it whenever you are ready.',
-          // The natural key of the fact: this test opening, once, however often the sweep runs.
-          dedupeKey: `test-open:${test.id}`,
-          testId: test.id,
-          testSeriesId: test.testSeriesId,
-        })),
-      );
-    }
-    // Stamped last, so a crash leaves the cohort part-told and the next sweep lands only the rest.
+    // Stamped first: a crash before the push costs the push, never a second one.
     await this.prisma.test.update({ where: { id: test.id }, data: { announcedAt: now } });
+    const recipients = await this.access.studentsReaching(test.testSeriesId);
+    const message = { broadcastId: test.id, title: test.title ?? OPENED_TITLE };
+    for (const batch of chunked(recipients)) await this.push.broadcast(batch, message);
   }
 }
 

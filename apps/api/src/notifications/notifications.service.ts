@@ -1,15 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  AppException,
-  ErrorCodes,
-  type Notification,
-  type NotificationListQuery,
-  type NotificationType,
-  type Paginated,
-} from '@iace/contracts';
-import { pageArgs, paged } from '../common/pagination';
-import { withinInstituteDays } from '../common/time/institute-day';
+import { type NotificationType } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** What one notification is written from. `testSeriesId` is the deep link, not decoration. */
@@ -30,18 +21,7 @@ export interface NewNotification {
   testSeriesId?: string;
 }
 
-interface NotificationColumns {
-  id: string;
-  type: NotificationType;
-  title: string;
-  body: string | null;
-  testId: string | null;
-  testSeriesId: string | null;
-  isRead: boolean;
-  createdAt: Date;
-}
-
-/** Owns `Notification` (docs/03 §5) — what the platform told one student, and whether they read it. */
+/** Owns `Notification` (docs/03 §5) — what the platform told one student. The bell reads it through `BellService`. */
 @Injectable()
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -60,73 +40,6 @@ export class NotificationsService {
     });
     return student?.mobile ?? null;
   }
-
-  /** One student's own bell, newest first; a cursor pages after that row, not by position. The student id is never taken from the request. */
-  async list(studentId: string, query: NotificationListQuery): Promise<Paginated<Notification>> {
-    const where: Prisma.NotificationWhereInput = { studentId, AND: narrowedBy(query) };
-
-    // The cursor row is excluded by id, not `skip: 1`: once read it leaves the unread filter and skip would eat the next row.
-    const page: Prisma.NotificationFindManyArgs = query.cursor
-      ? {
-          where: { ...where, id: { not: query.cursor } },
-          cursor: { id: query.cursor },
-          take: query.pageSize,
-        }
-      : { where, ...pageArgs(query) };
-
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.notification.findMany({
-        ...page,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      }),
-      this.prisma.notification.count({ where }),
-    ]);
-
-    return paged(query, rows.map(toNotification), total);
-  }
-
-  /** Scoped by student, so somebody else's id in the path finds nothing rather than their row. */
-  async markRead(studentId: string, id: string): Promise<Notification> {
-    const row = await this.prisma.notification.findFirst({ where: { id, studentId } });
-    if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such notification');
-    if (row.isRead) return toNotification(row);
-
-    const updated = await this.prisma.notification.update({
-      where: { id },
-      data: { isRead: true, readAt: new Date() },
-    });
-    return toNotification(updated);
-  }
-}
-
-/** Every filter the bell is read through; an empty list narrows nothing. */
-function narrowedBy(query: NotificationListQuery): Prisma.NotificationWhereInput[] {
-  const filters: Prisma.NotificationWhereInput[] = [];
-  if (query.unreadOnly) filters.push(unreadAsOf(query.unreadAsOf));
-  if (query.type) filters.push({ type: { in: query.type } });
-  if (query.from || query.to)
-    filters.push({ createdAt: withinInstituteDays(query.from, query.to) });
-  if (query.q)
-    filters.push({ OR: [{ title: textHolding(query.q) }, { body: textHolding(query.q) }] });
-  return filters;
-}
-
-const textHolding = (q: string) => ({ contains: q, mode: 'insensitive' }) as const;
-
-const unreadAsOf = (asOf: string | undefined): Prisma.NotificationWhereInput =>
-  asOf ? { OR: [{ isRead: false }, { readAt: { gt: new Date(asOf) } }] } : { isRead: false };
-
-function toNotification(row: NotificationColumns): Notification {
-  return {
-    id: row.id,
-    type: row.type,
-    title: row.title,
-    body: row.body,
-    testId: row.testId,
-    testSeriesId: row.testSeriesId,
-    isRead: row.isRead,
-    createdAt: row.createdAt.toISOString(),
-  };
 }
 
 function toRow(input: NewNotification): Prisma.NotificationCreateManyInput {

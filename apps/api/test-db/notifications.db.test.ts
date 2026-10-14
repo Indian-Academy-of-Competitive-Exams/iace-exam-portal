@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { AppException, ErrorCodes, NOTIFICATION_TYPE } from '@iace/contracts';
-import { NotificationsService } from '../src/notifications/notifications.service';
 import {
+  AppException,
+  ErrorCodes,
+  NOTIFICATION_TYPE,
+  TEST_SERIES_KIND,
+  type AnnouncementAudience,
+} from '@iace/contracts';
+import { AccessResolverService } from '../src/access/access-resolver.service';
+import { BellService } from '../src/notifications/bell.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
+import { FakeRedis } from '../test/support/fakes';
+import {
+  makeAdmin,
+  makeBranch,
   makeCatalog,
   makeNotification,
   makeStudent,
+  makeTest,
   resetDatabase,
   testPrisma,
 } from './support/database';
@@ -16,6 +28,10 @@ const PAGE = { page: 1, pageSize: 20, unreadOnly: undefined, q: undefined };
 
 const prisma = testPrisma();
 const service = new NotificationsService(prisma);
+const bell = new BellService(
+  prisma,
+  new AccessResolverService(prisma, new FakeRedis().asService()),
+);
 
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
@@ -44,7 +60,7 @@ describe('NotificationsService — one student’s own bell', () => {
   it('lists only what belongs to the student asking', async () => {
     const { me, newer, older } = await twoStudents();
 
-    const page = await service.list(me.id, PAGE);
+    const page = await bell.list(me.id, PAGE);
 
     assert.deepEqual(
       page.items.map((item) => item.id),
@@ -56,7 +72,7 @@ describe('NotificationsService — one student’s own bell', () => {
   it('narrows to what has not been read yet', async () => {
     const { me, newer } = await twoStudents();
 
-    const page = await service.list(me.id, { ...PAGE, unreadOnly: true });
+    const page = await bell.list(me.id, { ...PAGE, unreadOnly: true });
 
     assert.deepEqual(
       page.items.map((item) => item.id),
@@ -67,7 +83,7 @@ describe('NotificationsService — one student’s own bell', () => {
   it('marks one row read and leaves the rest alone', async () => {
     const { me, newer, theirs } = await twoStudents();
 
-    const marked = await service.markRead(me.id, newer.id);
+    const marked = await bell.markRead(me.id, newer.id);
 
     assert.equal(marked.isRead, true);
     assert.equal(await readOf(newer.id), true);
@@ -77,7 +93,7 @@ describe('NotificationsService — one student’s own bell', () => {
   it('refuses to mark somebody else’s notification read', async () => {
     const { me, theirs } = await twoStudents();
 
-    const error = await service.markRead(me.id, theirs.id).catch((e: unknown) => e);
+    const error = await bell.markRead(me.id, theirs.id).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
@@ -95,7 +111,7 @@ describe('NotificationsService — one student’s own bell', () => {
       testSeriesId,
     });
 
-    const [created] = (await service.list(student.id, PAGE)).items;
+    const [created] = (await bell.list(student.id, PAGE)).items;
     assert.ok(created);
     assert.equal(typeof created.createdAt, 'string');
     assert.equal(created.body, null);
@@ -129,15 +145,15 @@ describe('NotificationsService — paging by cursor', () => {
     const [newest, second, third, fourth, oldest] = [...rows].reverse().map((row) => row.id);
     const unread = { ...PAGE, pageSize: 2, unreadOnly: true };
 
-    const first = await service.list(me.id, unread);
+    const first = await bell.list(me.id, unread);
     assert.deepEqual(idsOf(first), [newest, second]);
-    for (const id of idsOf(first)) await service.markRead(me.id, id);
+    for (const id of idsOf(first)) await bell.markRead(me.id, id);
 
-    const next = await service.list(me.id, { ...unread, page: 2, cursor: second });
+    const next = await bell.list(me.id, { ...unread, page: 2, cursor: second });
     assert.deepEqual(idsOf(next), [third, fourth]);
     assert.equal(next.total, 3);
 
-    const last = await service.list(me.id, { ...unread, page: 3, cursor: fourth });
+    const last = await bell.list(me.id, { ...unread, page: 3, cursor: fourth });
     assert.deepEqual(idsOf(last), [oldest]);
   });
 
@@ -151,7 +167,7 @@ describe('NotificationsService — paging by cursor', () => {
     const seen: string[] = [];
 
     for (let cursor: string | undefined; ;) {
-      const page = await service.list(me.id, { ...PAGE, pageSize: 2, cursor });
+      const page = await bell.list(me.id, { ...PAGE, pageSize: 2, cursor });
       if (page.items.length === 0) break;
       seen.push(...idsOf(page));
       cursor = page.items.at(-1)?.id;
@@ -164,7 +180,7 @@ describe('NotificationsService — paging by cursor', () => {
     const { me, rows } = await fiveUnread();
     const newestFirst = [...rows].reverse().map((row) => row.id);
 
-    const second = await service.list(me.id, { ...PAGE, page: 2, pageSize: 2 });
+    const second = await bell.list(me.id, { ...PAGE, page: 2, pageSize: 2 });
 
     assert.deepEqual(idsOf(second), newestFirst.slice(2, 4));
     assert.equal(second.page, 2);
@@ -182,7 +198,7 @@ describe('Telling a student', () => {
     }
 
     assert.equal(
-      (await service.list(student.id, PAGE)).total,
+      (await bell.list(student.id, PAGE)).total,
       Object.values(NOTIFICATION_TYPE).length,
     );
     assert.equal(await prisma.notificationDelivery.count(), 0);
@@ -255,7 +271,7 @@ describe('NotificationsService — narrowing the bell', () => {
       createdAt: new Date('2026-06-01T20:00:00.000Z'),
     });
     const ids = async (narrowed: object) =>
-      (await service.list(me.id, { ...PAGE, ...narrowed })).items.map((row) => row.id);
+      (await bell.list(me.id, { ...PAGE, ...narrowed })).items.map((row) => row.id);
 
     assert.deepEqual(await ids({ type: [NOTIFICATION_TYPE.RESULT_READY] }), [result.id]);
     assert.deepEqual(await ids({ q: 'holiday' }), [holiday.id]);
@@ -282,19 +298,174 @@ describe('NotificationsService — narrowing the bell', () => {
     ];
     const unread = { ...PAGE, pageSize: 1, unreadOnly: true, unreadAsOf: new Date().toISOString() };
 
-    const first = await service.list(me.id, unread);
+    const first = await bell.list(me.id, unread);
     assert.deepEqual(
       first.items.map((row) => row.id),
       [newest.id],
     );
-    await service.markRead(me.id, newest.id);
+    await bell.markRead(me.id, newest.id);
 
-    const second = await service.list(me.id, { ...unread, page: 2 });
+    const second = await bell.list(me.id, { ...unread, page: 2 });
     assert.deepEqual(
       second.items.map((row) => row.id),
       [middle.id],
     );
     assert.equal(second.total, 3);
     assert.notEqual(second.items[0]?.id, oldest.id);
+  });
+});
+
+describe('BellService — a broadcast is resolved, never copied', () => {
+  const unread = { ...PAGE, unreadOnly: true };
+
+  /** An in-app announcement to one branch, sent now: one row for everybody it reaches. */
+  async function announcementTo(audience: AnnouncementAudience, at = new Date()) {
+    const admin = await makeAdmin(prisma);
+    return prisma.announcement.create({
+      data: {
+        title: 'Branch closed on Friday',
+        body: 'Classes move online.',
+        audience,
+        paidChannels: [],
+        recipientCount: 1,
+        estimatedCostPaise: 0,
+        createdById: admin.id,
+        createdAt: at,
+      },
+    });
+  }
+
+  /** THE failure this prevents: an announcement to 1L students written as 1L rows. */
+  it('lists an announcement to the students its audience matches, and writes nothing per student', async () => {
+    const north = await makeBranch(prisma);
+    const [inside, outside] = [
+      await makeStudent(prisma, {
+        currentBranchId: north.id,
+        createdAt: new Date(Date.now() - 60_000),
+      }),
+      await makeStudent(prisma, { createdAt: new Date(Date.now() - 60_000) }),
+    ];
+    const sent = await announcementTo({
+      branchId: [north.id],
+      match: 'all',
+    } as AnnouncementAudience);
+
+    assert.deepEqual(
+      (await bell.list(inside.id, PAGE)).items.map((item) => item.id),
+      [sent.id],
+    );
+    assert.equal((await bell.list(outside.id, PAGE)).total, 0);
+    assert.equal(await prisma.notification.count(), 0);
+  });
+
+  it('never shows a student one sent before they joined', async () => {
+    const sent = await announcementTo(
+      { match: 'all' } as AnnouncementAudience,
+      new Date(Date.now() - 60_000),
+    );
+    const joinedAfter = await makeStudent(prisma);
+
+    assert.equal((await bell.list(joinedAfter.id, PAGE)).total, 0);
+    assert.ok(sent.id);
+  });
+
+  it('marks one read for that student alone, by a row of its own', async () => {
+    const [me, other] = [
+      await makeStudent(prisma, { createdAt: new Date(Date.now() - 60_000) }),
+      await makeStudent(prisma, { createdAt: new Date(Date.now() - 60_000) }),
+    ];
+    const sent = await announcementTo({ match: 'all' } as AnnouncementAudience);
+
+    const marked = await bell.markRead(me.id, sent.id);
+
+    assert.equal(marked.isRead, true);
+    assert.equal((await bell.list(me.id, unread)).total, 0);
+    assert.equal((await bell.list(other.id, unread)).total, 1);
+    assert.equal(await prisma.broadcastRead.count(), 1);
+  });
+
+  it('refuses to mark read a broadcast that does not reach the student', async () => {
+    const north = await makeBranch(prisma);
+    const outside = await makeStudent(prisma, { createdAt: new Date(Date.now() - 60_000) });
+    const sent = await announcementTo({
+      branchId: [north.id],
+      match: 'all',
+    } as AnnouncementAudience);
+
+    const error = await bell.markRead(outside.id, sent.id).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('lists a test opened in a series the student reaches, and not one in a series they do not', async () => {
+    const me = await makeStudent(prisma, { createdAt: new Date(Date.now() - 60_000) });
+    const free = await makeCatalog(prisma);
+    await prisma.testSeries.update({
+      where: { id: free.testSeriesId },
+      data: { kind: TEST_SERIES_KIND.FREE },
+    });
+    const reached = await makeTest(prisma, free, { title: 'Mock 7' });
+    const unreached = await makeTest(prisma, await makeCatalog(prisma), { title: 'Mock 8' });
+    for (const test of [reached, unreached]) {
+      await prisma.test.update({ where: { id: test.id }, data: { announcedAt: new Date() } });
+    }
+
+    // A fresh resolver: these series were written straight to the table, past the catalog's epoch.
+    const fresh = new BellService(
+      prisma,
+      new AccessResolverService(prisma, new FakeRedis().asService()),
+    );
+    const [opened, ...rest] = (await fresh.list(me.id, PAGE)).items;
+
+    assert.deepEqual(rest, []);
+    assert.equal(opened?.id, reached.id);
+    assert.equal(opened?.type, NOTIFICATION_TYPE.TEST_ASSIGNED);
+    assert.equal(opened?.testSeriesId, free.testSeriesId);
+  });
+
+  /** A copy written before broadcasts were resolved stands for it, so nobody sees one twice. */
+  it('shows a broadcast the student already holds a copy of only once, as that copy', async () => {
+    const me = await makeStudent(prisma, { createdAt: new Date(Date.now() - 60_000) });
+    const sent = await announcementTo({ match: 'all' } as AnnouncementAudience);
+    const copy = await prisma.notification.create({
+      data: {
+        studentId: me.id,
+        type: NOTIFICATION_TYPE.GENERIC,
+        title: sent.title,
+        announcementId: sent.id,
+      },
+    });
+
+    assert.deepEqual(
+      (await bell.list(me.id, PAGE)).items.map((item) => item.id),
+      [copy.id],
+    );
+  });
+
+  it('pages one list of rows and broadcasts by cursor, newest first, each once', async () => {
+    const me = await makeStudent(prisma, { createdAt: new Date(Date.now() - 600_000) });
+    const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+    const oldRow = await makeNotification(prisma, { studentId: me.id, createdAt: minutesAgo(4) });
+    const broadcast = await announcementTo({ match: 'all' } as AnnouncementAudience, minutesAgo(3));
+    const newRow = await makeNotification(prisma, { studentId: me.id, createdAt: minutesAgo(2) });
+
+    const first = await bell.list(me.id, { ...PAGE, pageSize: 2 });
+    const next = await bell.list(me.id, {
+      ...PAGE,
+      pageSize: 2,
+      page: 2,
+      cursor: first.items.at(-1)?.id,
+    });
+
+    assert.deepEqual(
+      first.items.map((item) => item.id),
+      [newRow.id, broadcast.id],
+    );
+    assert.deepEqual(
+      next.items.map((item) => item.id),
+      [oldRow.id],
+    );
+    assert.equal(first.total, 3);
   });
 });

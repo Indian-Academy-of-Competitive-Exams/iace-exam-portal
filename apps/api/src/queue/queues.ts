@@ -140,7 +140,16 @@ export const NOTIFICATION_JOBS = {
   SWEEP: 'relay-sweep',
   /** Finds tests that have opened since anybody was last told, and tells whoever reaches them. */
   TESTS_OPENED: 'tests-opened-sweep',
+  /** Delivers one sent announcement off the request: its paid rows, or its in-app push. */
+  ANNOUNCE: 'announce',
 } as const;
+
+export interface AnnounceJobData {
+  announcementId: string;
+}
+
+/** One delivery per announcement, however often it is asked for. */
+export const announceJobId = (announcementId: string) => `announce-${announcementId}`;
 
 /** Sweep only, unlike scoring: nothing here is latency-sensitive beside a ten-minute window. */
 export const NOTIFICATION_SWEEP_EVERY_MS = 1 * MS_PER_MINUTE;

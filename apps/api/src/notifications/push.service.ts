@@ -20,6 +20,12 @@ import { FcmSender } from './fcm.sender';
 import { PUSH_OUTCOMES, WebPushSender, type PushOutcome } from './web-push.sender';
 import { MS_PER_MINUTE } from '../common/time/units';
 
+/** A broadcast's push: its title, and the id the bell lists it under. */
+export interface BroadcastPush {
+  broadcastId: string;
+  title: string;
+}
+
 /** What one push is sent from. The title only — the body may name marks, and a push must not. */
 export interface PushDelivery {
   notificationId: string;
@@ -98,15 +104,60 @@ export class PushService {
     }
   }
 
+  /** A broadcast has no ledger: a send that fails is not retried, and the bell still holds it. */
+  async broadcast(studentIds: readonly string[], message: BroadcastPush): Promise<void> {
+    if (studentIds.length === 0) return;
+    try {
+      const { browsers, phones } = await this.targetsOf(studentIds);
+      const payload = {
+        title: message.title,
+        url: NOTIFICATION_INBOX_PATH,
+        notificationId: message.broadcastId,
+      };
+      const sends = [
+        ...[...browsers.values()].flat().map((target) => async (dead: Dead) => {
+          if ((await this.sender.send(target, payload)) === PUSH_OUTCOMES.GONE)
+            dead.endpoints.push(target.endpoint);
+        }),
+        ...[...phones.values()].flat().map((device) => async (dead: Dead) => {
+          if ((await this.fcm.send(device.token, payload)) === PUSH_OUTCOMES.GONE)
+            dead.tokens.push(device.token);
+        }),
+      ];
+      const dead: Dead = { endpoints: [], tokens: [] };
+      for (let at = 0; at < sends.length; at += PUSH_LANES) {
+        await Promise.all(sends.slice(at, at + PUSH_LANES).map((send) => send(dead)));
+      }
+      await this.settle({ ledger: [], deadEndpoints: dead.endpoints, deadTokens: dead.tokens });
+    } catch (error) {
+      this.logger.warn(`Pushing broadcast ${message.broadcastId} failed`, error);
+    }
+  }
+
   private async reachOf(inputs: readonly PushDelivery[]): Promise<Reach> {
-    const notificationId = { in: inputs.map((input) => input.notificationId) };
-    const studentId = { in: [...new Set(inputs.map((input) => input.studentId))] };
-    const [priors, subscriptions, devices] = await Promise.all([
+    const [priors, targets] = await Promise.all([
       // A ledger row is what a redelivered job reads to see it must not push the same thing twice.
       this.prisma.notificationDelivery.findMany({
-        where: { notificationId, channel: { in: PUSH_CHANNELS } },
+        where: {
+          notificationId: { in: inputs.map((input) => input.notificationId) },
+          channel: { in: PUSH_CHANNELS },
+        },
         select: { notificationId: true, channel: true, status: true, attempts: true },
       }),
+      this.targetsOf(inputs.map((input) => input.studentId)),
+    ]);
+    return {
+      priors: new Map(
+        priors.map((row) => [ledgerKey(row.notificationId, row.channel), row] as const),
+      ),
+      ...targets,
+    };
+  }
+
+  /** Each student's live browsers and phones; a target whose sign-in has ended is dropped as read. */
+  private async targetsOf(studentIds: readonly string[]): Promise<Omit<Reach, 'priors'>> {
+    const studentId = { in: [...new Set(studentIds)] };
+    const [subscriptions, devices] = await Promise.all([
       this.sender.isConfigured
         ? this.prisma.pushSubscription.findMany({
             where: { studentId },
@@ -149,9 +200,6 @@ export class PushService {
     }
 
     return {
-      priors: new Map(
-        priors.map((row) => [ledgerKey(row.notificationId, row.channel), row] as const),
-      ),
       browsers: Map.groupBy(
         subscriptions.filter((target) => isAllowedPushEndpoint(target.endpoint) && live(target)),
         (target) => target.studentId,
@@ -340,6 +388,11 @@ interface Reach {
   priors: ReadonlyMap<string, { status: DeliveryStatus; attempts: number }>;
   browsers: ReadonlyMap<string, WebTarget[]>;
   phones: ReadonlyMap<string, { token: string }[]>;
+}
+
+interface Dead {
+  endpoints: string[];
+  tokens: string[];
 }
 
 interface PageOutcome {

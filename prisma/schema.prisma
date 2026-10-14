@@ -832,6 +832,7 @@ model Student {
   savedQuestions    SavedQuestion[]
   mobileHistory     StudentMobileHistory[]
   typingPractices   TypingPractice[]
+  broadcastReads    BroadcastRead[]
 
   @@index([mobile])
   @@index([externalRef])
@@ -1142,6 +1143,19 @@ model Notification {
   @@index([testId])
   @@index([testSeriesId])
   @@index([announcementId])
+}
+
+// A broadcast (in-app announcement, test opening) is one row the bell resolves; only a read is per student.
+model BroadcastRead {
+  studentId   String   @db.Uuid
+  // The announcement's or the test's id: what the bell listed the broadcast under.
+  broadcastId String   @db.Uuid
+  readAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, broadcastId])
+  @@index([broadcastId])
 }
 
 // What an admin said, to whom, and what it was expected to cost. One row per SEND: there are no

@@ -44,7 +44,7 @@ import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security'
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AuthService } from '../auth';
-import { NotificationsService, PushService } from '../notifications';
+import { BellService, PushService } from '../notifications';
 import { MeService } from './me.service';
 
 /** The signed-in student's own account. No ids in any route — the subject is always `user.id` from the token, so no request shape can reach another student's record. */
@@ -61,7 +61,7 @@ export class MeController {
   constructor(
     private readonly me: MeService,
     private readonly auth: AuthService,
-    private readonly notifications: NotificationsService,
+    private readonly bell: BellService,
     private readonly push: PushService,
   ) {}
 
@@ -81,7 +81,7 @@ export class MeController {
     @CurrentUser() user: AuthenticatedUser,
     @Query(new ZodQuery(notificationListQuerySchema)) query: NotificationListQuery,
   ): Promise<Paginated<Notification>> {
-    return this.notifications.list(user.id, query);
+    return this.bell.list(user.id, query);
   }
 
   @Patch('notifications/:id/read')
@@ -89,7 +89,7 @@ export class MeController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ): Promise<Notification> {
-    return this.notifications.markRead(user.id, id);
+    return this.bell.markRead(user.id, id);
   }
 
   /** The key this browser would subscribe to push with. There is nothing else left to choose. */

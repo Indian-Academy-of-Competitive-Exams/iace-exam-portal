@@ -3,12 +3,13 @@
  * vocabulary the Students screen already speaks and the preview count is the number shown there.
  */
 import { Injectable } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { type Queue } from 'bullmq';
 import { DeliveryStatus, Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
   NOTIFICATION_TYPE,
-  STUDENT_SORTS,
   type Announcement,
   type AnnouncementAudience,
   type AnnouncementChannel,
@@ -23,7 +24,14 @@ import {
 } from '@iace/contracts';
 import { pageArgs, paged } from '../common/pagination';
 import { withinInstituteDays } from '../common/time/institute-day';
-import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  NOTIFICATION_JOBS,
+  QUEUE_NAMES,
+  announceJobId,
+  keyedJob,
+  type AnnounceJobData,
+} from '../queue/queues';
 import { AppConfigService } from '../config/app-config.service';
 import {
   EXPORT_DATE_FORMATS,
@@ -32,15 +40,14 @@ import {
   writeWorkbook,
   type ExportColumn,
 } from '../common/exporting';
-import { studentCardsOf, studentWhere, type StudentCard } from '../students';
+import { studentCardsOf, type StudentCard } from '../students';
+import { cohortWhere, reachedBy } from './announcement-cohort';
 import { SKIP_REASONS } from './notification-policy';
 import { NotificationsService, type NewNotification } from './notifications.service';
+import { PushService } from './push.service';
 
-/** How many recipients one fan-out writes per statement. */
+/** How many recipients one page of a delivery reads, writes or pushes. */
 const CHUNK = 1000;
-
-/** A cohort is read by id alone: nothing else about a student is what a fan-out needs. */
-const RECIPIENT_SELECT = { id: true } as const;
 
 @Injectable()
 export class AnnouncementsService {
@@ -48,6 +55,8 @@ export class AnnouncementsService {
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
     private readonly notifications: NotificationsService,
+    private readonly push: PushService,
+    @InjectQueue(QUEUE_NAMES.NOTIFICATIONS) private readonly queue: Queue,
   ) {}
 
   /** Asked before sending and again at send, because the roster moves between the two. */
@@ -68,70 +77,82 @@ export class AnnouncementsService {
     };
   }
 
-  /** One transaction, so a crash cannot leave half a cohort told and no record of the send. */
+  /** Records the send and queues its delivery: nothing on this request grows with the cohort. */
   async send(input: CreateAnnouncementBody, createdById: string): Promise<Announcement> {
     const cap = this.config.get('NOTIFICATION_MAX_RECIPIENTS');
-    const where = cohortWhere(input.audience);
+    const recipientCount = await this.prisma.student.count({ where: cohortWhere(input.audience) });
 
-    // Judged on the rows fetched, not an earlier count: `cap + 1` both bounds and detects.
-    const recipients = await this.prisma.student.findMany({
-      where,
-      select: RECIPIENT_SELECT,
-      take: cap + 1,
-    });
-
-    if (recipients.length > cap) {
+    if (recipientCount > cap) {
       throw new AppException(
         ErrorCodes.VALIDATION_ERROR,
         `That reaches more than the ${cap} students a single send allows`,
       );
     }
-    if (recipients.length === 0) {
+    if (recipientCount === 0) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, 'That reaches nobody');
     }
 
-    const estimatedCostPaise = this.priceOf(recipients.length, input.paidChannels);
-
-    const id = await this.prisma.$transaction(async (tx) => {
-      const announcement = await tx.announcement.create({
-        data: {
-          title: input.title,
-          body: input.body,
-          audience: input.audience as unknown as Prisma.InputJsonValue,
-          paidChannels: [...input.paidChannels],
-          recipientCount: recipients.length,
-          estimatedCostPaise,
-          createdById,
-        },
-        select: { id: true },
-      });
-
-      for (const batch of chunked(recipients)) {
-        await this.notifications.tell(
-          tx,
-          ...batch.map((student) => this.intentFor(student.id, announcement.id, input)),
-        );
-      }
-      return announcement.id;
-    }, TX_LIMITS.BULK);
+    const { id } = await this.prisma.announcement.create({
+      data: {
+        title: input.title,
+        body: input.body,
+        audience: input.audience as unknown as Prisma.InputJsonValue,
+        paidChannels: [...input.paidChannels],
+        recipientCount,
+        estimatedCostPaise: this.priceOf(recipientCount, input.paidChannels),
+        createdById,
+      },
+      select: { id: true },
+    });
+    const job: AnnounceJobData = { announcementId: id };
+    await this.queue.add(NOTIFICATION_JOBS.ANNOUNCE, job, keyedJob(announceJobId(id)));
 
     return this.detail(id);
+  }
+
+  /** The worker's half. In-app only is pushed and never copied; a paid send needs its billed rows. */
+  async deliver(announcementId: string): Promise<void> {
+    const sent = await this.prisma.announcement.findUnique({ where: { id: announcementId } });
+    if (!sent) return;
+    const audience = sent.audience as unknown as AnnouncementAudience;
+    const paid = sent.paidChannels.length > 0;
+
+    let after: string | undefined;
+    for (;;) {
+      const page = await this.prisma.student.findMany({
+        where: { AND: [reachedBy(audience, sent.createdAt), after ? { id: { gt: after } } : {}] },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: CHUNK,
+      });
+      if (page.length === 0) return;
+      const ids = page.map((student) => student.id);
+      // A replayed page lands once: the dedupe key is the send, and the push has nothing to repeat into.
+      if (paid) {
+        await this.notifications.tell(
+          this.prisma,
+          ...ids.map((studentId) => this.intentFor(studentId, sent)),
+        );
+      } else {
+        await this.push.broadcast(ids, { broadcastId: sent.id, title: sent.title });
+      }
+      after = ids.at(-1);
+    }
   }
 
   /** The one message, addressed to one student. The body rides `data` so a template can render it. */
   private intentFor(
     studentId: string,
-    announcementId: string,
-    input: CreateAnnouncementBody,
+    sent: { id: string; title: string; body: string },
   ): NewNotification {
     return {
       studentId,
       type: NOTIFICATION_TYPE.GENERIC,
-      title: input.title,
-      body: input.body,
-      data: { message: input.body },
-      dedupeKey: `announcement:${announcementId}`,
-      announcementId,
+      title: sent.title,
+      body: sent.body,
+      data: { message: sent.body },
+      dedupeKey: `announcement:${sent.id}`,
+      announcementId: sent.id,
     };
   }
 
@@ -205,8 +226,10 @@ export class AnnouncementsService {
 
   /** Counted off the ledger rather than stored: a delivery's status keeps moving after the send. */
   private async statsOf(announcementId: string): Promise<AnnouncementStats> {
-    const [readCount, groups] = await Promise.all([
+    // A paid send's reads are on its rows, an in-app one's on its broadcast; the other side counts none.
+    const [copiesRead, broadcastReads, groups] = await Promise.all([
       this.prisma.notification.count({ where: { announcementId, isRead: true } }),
+      this.prisma.broadcastRead.count({ where: { broadcastId: announcementId } }),
       // One pass over the ledger, grouped, rather than one count per status over the same rows.
       this.prisma.notificationDelivery.groupBy({
         by: ['status', 'skipReason'],
@@ -219,7 +242,7 @@ export class AnnouncementsService {
       groups.filter(keep).reduce((sum, row) => sum + row._count._all, 0);
 
     return {
-      readCount,
+      readCount: copiesRead + broadcastReads,
       sent: counted((row) => row.status === DeliveryStatus.SENT),
       // DELIVERED is never counted: it waits on a provider delivery receipt nothing sends yet.
       failed: counted((row) => row.status === DeliveryStatus.FAILED),
@@ -253,20 +276,6 @@ const DELIVERY_COLUMNS: ExportColumn<DeliveryRow>[] = [
   { header: 'Sent at', width: 18, date: AT, value: (row) => exportInstant(row.sentAt) },
   { header: 'Failed at', width: 18, date: AT, value: (row) => exportInstant(row.failedAt) },
 ];
-
-/** Live students only: a soft-deleted or anonymised row is not somebody to announce anything to. */
-function cohortWhere(audience: AnnouncementAudience): Prisma.StudentWhereInput {
-  return {
-    AND: [
-      studentWhere({ ...audience, page: 1, pageSize: 1, sort: STUDENT_SORTS.RECENT }),
-      { deletedAt: null },
-    ],
-  };
-}
-
-function* chunked<T>(rows: readonly T[]): Generator<T[]> {
-  for (let at = 0; at < rows.length; at += CHUNK) yield rows.slice(at, at + CHUNK);
-}
 
 interface AnnouncementRow {
   id: string;

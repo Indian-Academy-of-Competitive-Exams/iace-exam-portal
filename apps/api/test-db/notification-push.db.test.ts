@@ -35,7 +35,9 @@ function build(pushed: string[] = []) {
   const processor = new NotificationsProcessor(
     prisma,
     push,
-    new TestOpeningService(prisma, access, notifications),
+    new TestOpeningService(prisma, access, push),
+    // Nothing here sends an announcement, so its delivery is never reached.
+    undefined as never,
     new NotificationDeliveryProcessor(
       prisma,
       notifications,

@@ -10,7 +10,9 @@ import {
 import { DeliveryChannel } from '@prisma/client';
 import { AnnouncementsService } from '../src/notifications/announcements.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
-import { FakeConfig } from '../test/support/fakes';
+import { type BroadcastPush } from '../src/notifications/push.service';
+import { NOTIFICATION_JOBS, announceJobId } from '../src/queue/queues';
+import { FakeConfig, FakeQueue } from '../test/support/fakes';
 import {
   makeAdmin,
   makeAnnouncement,
@@ -27,9 +29,15 @@ import { sheetRows } from './support/workbook';
 
 const prisma = testPrisma();
 
-beforeEach(() => resetDatabase(prisma));
+beforeEach(async () => {
+  await resetDatabase(prisma);
+  queue.jobs.length = 0;
+  pushed.length = 0;
+});
 after(() => prisma.$disconnect());
 
+const queue = new FakeQueue();
+const pushed: { studentIds: string[]; message: BroadcastPush }[] = [];
 const service = new AnnouncementsService(
   prisma,
   new FakeConfig({
@@ -38,6 +46,13 @@ const service = new AnnouncementsService(
     NOTIFICATION_MAX_RECIPIENTS: 10,
   }).asService(),
   new NotificationsService(prisma),
+  {
+    broadcast: (studentIds: readonly string[], message: BroadcastPush) => {
+      pushed.push({ studentIds: [...studentIds], message });
+      return Promise.resolve();
+    },
+  } as never,
+  queue.asQueue(),
 );
 
 /** One branch of `students`, and an admin to send as. Parsed through the real schema's defaults. */
@@ -82,13 +97,18 @@ describe('Pricing an announcement before it is sent', () => {
 });
 
 describe('Sending an announcement', () => {
-  it('writes the record and one message per recipient, together', async () => {
+  /** THE failure this prevents: a send to 42K students writing 42K rows while the admin waits. */
+  it('records the send and queues its delivery, writing no message on the request', async () => {
     const { admin, draft } = await branchOf();
 
-    await service.send(draft(), admin.id);
+    const sent = await service.send(draft(), admin.id);
 
-    assert.equal(await prisma.announcement.count(), 1);
-    assert.equal((await messagesWritten()).length, 3, 'one message per student in the cohort');
+    assert.equal(sent.recipientCount, 3);
+    assert.equal((await messagesWritten()).length, 0);
+    assert.deepEqual(
+      queue.jobs.map((job) => [job.name, job.jobId]),
+      [[NOTIFICATION_JOBS.ANNOUNCE, announceJobId(sent.id)]],
+    );
   });
 
   /** The failure this prevents: a mistargeted broadcast becoming an invoice instead of an error. */
@@ -107,18 +127,50 @@ describe('Sending an announcement', () => {
 
     await assert.rejects(service.send(draft(), admin.id), /reaches nobody/);
   });
+});
 
-  /** What the admin chose to spend on IS the fallback chain for every message in the send. */
-  it('ties every message to the send whose channels are its chain', async () => {
+describe('Delivering a sent announcement', () => {
+  /** In-app only is one row for everybody: the bell resolves it, so the worker only pushes. */
+  it('pushes an in-app send to its cohort and copies it to nobody', async () => {
+    const { admin, roster, draft } = await branchOf();
+    const sent = await service.send(draft(), admin.id);
+
+    await service.deliver(sent.id);
+
+    assert.deepEqual(
+      pushed.flatMap((page) => page.studentIds).sort(),
+      roster.map((s) => s.id).sort(),
+    );
+    assert.equal(pushed[0]?.message.broadcastId, sent.id);
+    assert.equal((await messagesWritten()).length, 0);
+  });
+
+  /** What the admin chose to spend on IS the fallback chain, and each message is billed, so it is a row. */
+  it('writes one message per recipient of a paid send, tied to it, and none twice when replayed', async () => {
     const { admin, draft } = await branchOf(2);
-
     const sent = await service.send(draft(['WHATSAPP', 'SMS']), admin.id);
+
+    await service.deliver(sent.id);
+    await service.deliver(sent.id);
 
     const messages = await messagesWritten();
     assert.equal(messages.length, 2);
     assert.ok(messages.every((message) => message.announcementId === sent.id));
-    const chain = await prisma.announcement.findUniqueOrThrow({ where: { id: sent.id } });
-    assert.deepEqual(chain.paidChannels, ['WHATSAPP', 'SMS']);
+    assert.deepEqual(pushed, []);
+  });
+
+  it('reaches nobody who joined after it was sent', async () => {
+    const { admin, draft } = await branchOf(1);
+    const sent = await service.send(draft(['SMS']), admin.id);
+    const branchId = draft().audience.branchId?.[0] ?? null;
+    await makeStudent(prisma, {
+      currentBranchId: branchId,
+      createdAt: new Date(Date.now() + 60_000),
+    });
+
+    await service.deliver(sent.id);
+
+    assert.equal((await messagesWritten()).length, 1);
   });
 });
 

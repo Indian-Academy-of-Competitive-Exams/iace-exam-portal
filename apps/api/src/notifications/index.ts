@@ -3,3 +3,4 @@ export { NotificationsModule } from './notifications.module';
 export { NotificationsService } from './notifications.service';
 export { PushService } from './push.service';
 export { AnnouncementsService } from './announcements.service';
+export { BellService } from './bell.service';

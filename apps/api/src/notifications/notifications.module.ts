@@ -17,6 +17,7 @@ import { NotificationsProcessor } from './notifications.processor';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { NotificationPruneProcessor } from './notification-prune.processor';
 import { AnnouncementsService } from './announcements.service';
+import { BellService } from './bell.service';
 import { AnnouncementsController } from './announcements.controller';
 import { FcmSender } from './fcm.sender';
 import { PushService } from './push.service';
@@ -38,6 +39,7 @@ import { API_ROLES, onRole, servesRole } from '../config/api-role';
   controllers: onRole([API_ROLES.CORE], [AnnouncementsController]),
   providers: [
     AnnouncementsService,
+    BellService,
     NotificationsService,
     ...onRole(
       [API_ROLES.WORKER],
@@ -49,7 +51,7 @@ import { API_ROLES, onRole, servesRole } from '../config/api-role';
     NotificationListener,
     WebPushSender,
   ],
-  exports: [NotificationsService, PushService, AnnouncementsService],
+  exports: [NotificationsService, PushService, AnnouncementsService, BellService],
 })
 export class NotificationsModule implements OnModuleInit {
   constructor(
