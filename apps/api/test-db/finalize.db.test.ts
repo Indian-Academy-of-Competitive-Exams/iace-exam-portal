@@ -62,6 +62,16 @@ async function sectionalDraft(held: number): Promise<Paper> {
   return paper;
 }
 
+/** A whole draft whose config is sat in English and Hindi, while its questions carry English alone. */
+async function hindiAndEnglish(): Promise<Paper> {
+  const paper = await draft();
+  await prisma.baseConfig.update({
+    where: { id: paper.catalog.baseConfigId },
+    data: { languages: ['EN', 'HI'] },
+  });
+  return paper;
+}
+
 const testRow = (paper: Paper) => prisma.test.findUniqueOrThrow({ where: { id: paper.testId } });
 
 const configRow = (paper: Paper) =>
@@ -334,21 +344,36 @@ describe('FinalizeService — what it refuses to offer', () => {
 
   /** The failure this prevents: a Hindi-medium candidate shown a question that has no Hindi. */
   it('refuses a paper whose questions lack a language the config is sat in, even for a super admin', async () => {
-    const paper = await draft();
-    await prisma.baseConfig.update({
-      where: { id: paper.catalog.baseConfigId },
-      data: { languages: ['EN', 'HI'] },
-    });
+    const paper = await hindiAndEnglish();
 
     await assert.rejects(
       () => offerTest(prisma, paper.testId, true),
       /Reasoning has 3 questions with no Hindi/,
     );
-    assert.equal(await statusOf(paper), TEST_STATUS.DRAFT);
+    const test = await testRow(paper);
+    assert.deepEqual([test.status, test.languageWaivedById], [TEST_STATUS.DRAFT, null]);
+  });
 
+  it('offers past the missing language when an admin waives it, and names them on the test', async () => {
+    const paper = await hindiAndEnglish();
+    const admin = await makeAdmin(prisma);
+
+    await offerTest(prisma, paper.testId, true, admin.id);
+
+    const test = await testRow(paper);
+    assert.equal(test.status, TEST_STATUS.ACTIVE);
+    assert.equal(test.languageWaivedById, admin.id);
+    assert.deepEqual(test.languageWaivedAt, test.finalizedAt);
+  });
+
+  it('records no waiver on a paper that had nothing to waive', async () => {
+    const paper = await hindiAndEnglish();
     await prisma.$executeRaw`UPDATE "QuestionVersion" SET "content" = "content" || jsonb_build_object('hi', "content"->'en')`;
-    await offerTest(prisma, paper.testId, true);
-    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+
+    await offerTest(prisma, paper.testId, true, (await makeAdmin(prisma)).id);
+
+    const test = await testRow(paper);
+    assert.deepEqual([test.status, test.languageWaivedById], [TEST_STATUS.ACTIVE, null]);
   });
 
   it('refuses a test that does not exist', async () => {

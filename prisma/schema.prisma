@@ -554,6 +554,9 @@ model Test {
   paperRevision      Int          @default(0)
   // Set by the first offer and never cleared: the paper is frozen iff this is set.
   finalizedAt        DateTime?    @db.Timestamptz(3)
+  // The admin who offered it while questions lacked a language its config is sat in, and when.
+  languageWaivedById String?      @db.Uuid
+  languageWaivedAt   DateTime?    @db.Timestamptz(3)
   createdById        String?      @db.Uuid
   createdAt          DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -578,6 +581,7 @@ model Test {
   questionStats     TestQuestionStat[]
   programUnlocks    TestProgramUnlock[]
   testSeries        TestSeries           @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
+  languageWaivedBy  Admin?               @relation("LanguageWaiver", fields: [languageWaivedById], references: [id], onDelete: Restrict)
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -898,6 +902,7 @@ model Admin {
   questionsAuthored Question[]
   assignments       QuestionAssignment[]     @relation("AssignmentAssignee")
   sectionComments   SectionComment[]
+  languagesWaived   Test[]                   @relation("LanguageWaiver")
 }
 
 // One row per feature an admin holds, at one level; featureKey is code-owned (FEATURE_KEYS), never a table.

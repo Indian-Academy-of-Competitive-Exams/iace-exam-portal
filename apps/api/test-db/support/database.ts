@@ -445,15 +445,19 @@ export async function makePaper(prisma: PrismaService, input: PaperInput): Promi
   return { testId: test.id, catalog, scope, sectionIds, items };
 }
 
+/** Who an Offer step save comes from; nobody's id is written unless the save waives a missing language. */
+export const offerer = (isSuperAdmin = false, adminId = uid()) => ({ adminId, isSuperAdmin });
+
 /** The freeze as the Offer step's save runs it: the Test row held first, in one transaction. */
 export function offerTest(
   prisma: PrismaService,
   testId: string,
   isSuperAdmin = false,
+  waivedById: string | null = null,
 ): Promise<void> {
   return prisma.$transaction(async (tx) => {
     await beginPaperEdit(tx, testId);
-    return new FinalizeService().offerWithin(tx, testId, isSuperAdmin);
+    return new FinalizeService().offerWithin(tx, testId, { isSuperAdmin, waivedById });
   }, TX_LIMITS.MEDIUM);
 }
 

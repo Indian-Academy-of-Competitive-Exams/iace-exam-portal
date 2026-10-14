@@ -17,6 +17,7 @@ const draftTest = (over: Partial<OfferDraft> = {}): OfferDraft => ({
   series: { id: 'srs_1', name: 'SSC CGL Mocks' },
   schedule: { opensAt: '', programs: [] },
   offered: false,
+  waiveLanguageGaps: false,
   version: 3,
   ...over,
 });
@@ -170,5 +171,15 @@ describe('an opening Done would write that is not far enough ahead', () => {
     ]);
 
     assert.deepEqual([...passedOpenings(saved, held, NOW).programs], ['SSC 2026']);
+  });
+});
+
+describe('the waiver Done sends', () => {
+  it('asks the server to pass missing languages only when the admin ticked it', () => {
+    assert.equal(offeringBodyOf(draftTest({ offered: true })).waiveLanguageGaps, undefined);
+    assert.equal(
+      offeringBodyOf(draftTest({ offered: true, waiveLanguageGaps: true })).waiveLanguageGaps,
+      true,
+    );
   });
 });

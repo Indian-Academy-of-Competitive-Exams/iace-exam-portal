@@ -10,6 +10,7 @@ import {
   TEST_BUILDER_STEPS,
   testBuilderStepOf,
   owesAPaper,
+  languageGapSays,
   paperBlockerOf,
   scopedSections,
   type BaseConfigDetail,
@@ -311,6 +312,11 @@ function TestBuilder({
           </div>
 
           {banner ? <Alert variant="danger">{banner}</Alert> : null}
+          {step === TEST_BUILDER_STEP.PAPER &&
+          detail?.finalizedAt === null &&
+          detail.languageGaps.length > 0 ? (
+            <Alert variant="warning">{detail.languageGaps.map(languageGapSays).join(' ')}</Alert>
+          ) : null}
           {step === TEST_BUILDER_STEP.PAPER && paperBlocker ? (
             <Alert variant="info">{paperBlocker}</Alert>
           ) : null}

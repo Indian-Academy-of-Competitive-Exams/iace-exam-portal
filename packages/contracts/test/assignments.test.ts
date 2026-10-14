@@ -6,7 +6,6 @@ import {
   PAPER_SOURCES,
   dueStanding,
   paperBlockerOf,
-  type PaperLanguageGap,
 } from '../src/index';
 
 /** Due on the 9th, kept as that day's last instant at the institute. */
@@ -61,7 +60,6 @@ describe('paperBlockerOf', () => {
     totalQuestions: 5,
     finalizedAt: null,
     paperSource: PAPER_SOURCES.PICKED,
-    languageGaps: [] as PaperLanguageGap[],
   });
   const blocker = (input: Partial<Parameters<typeof paperBlockerOf>[0]>) =>
     paperBlockerOf({
@@ -98,15 +96,6 @@ describe('paperBlockerOf', () => {
         assignments: [reader('r'), reader('q'), typist],
       }) ?? '',
       /Quant/,
-    );
-  });
-
-  /** THE failure this prevents: a Hindi candidate sitting a question that has no Hindi. */
-  it('holds a paper missing a language it is sat in, even for a super admin', () => {
-    const gap = { section: 'Reasoning', language: 'HI' as const, missing: 4 };
-    assert.equal(
-      blocker({ test: { ...test(), languageGaps: [gap] }, skipsReading: true }),
-      'Reasoning has 4 questions with no Hindi.',
     );
   });
 

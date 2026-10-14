@@ -39,6 +39,7 @@ import {
   resetDatabase,
   testPrisma,
   type BuilderSection,
+  offerer,
 } from './support/database';
 
 /** One uuid per label, shared across the file so a test can name an id by what it means. */
@@ -1493,7 +1494,7 @@ describe('PaperService — every paper edit moves the test’s version', () => {
       offering.saveOffering(
         TEST,
         { opensAt: null, programOpenings: [], offered: true, expectedVersion: opened },
-        false,
+        offerer(),
       ),
     );
 

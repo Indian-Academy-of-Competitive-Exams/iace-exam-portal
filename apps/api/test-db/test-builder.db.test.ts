@@ -21,6 +21,7 @@ import {
   offerTest,
   resetDatabase,
   testPrisma,
+  offerer,
 } from './support/database';
 
 const ADMIN = randomUUID();
@@ -140,7 +141,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
           offered,
           expectedVersion: (await testRow(draft.id)).version,
         },
-        true,
+        offerer(true),
       );
 
     await assert.rejects(() => done(true), AppException.is);

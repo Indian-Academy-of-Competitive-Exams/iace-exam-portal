@@ -79,6 +79,7 @@ const TEST_INCLUDE = {
   },
   testSeries: { select: { name: true } },
   programUnlocks: { select: { programCode: true, opensAt: true } },
+  languageWaivedBy: { select: { fullName: true, email: true } },
 } as const satisfies Prisma.TestInclude;
 
 type TestRow = Prisma.TestGetPayload<{ include: typeof TEST_INCLUDE }>;
@@ -487,5 +488,12 @@ function toTestSchedule(
       opensAt: unlock.opensAt.toISOString(),
     })),
     updatedAt: row.updatedAt.toISOString(),
+    languageWaiver:
+      row.languageWaivedBy && row.languageWaivedAt
+        ? {
+            by: row.languageWaivedBy.fullName ?? row.languageWaivedBy.email,
+            at: row.languageWaivedAt.toISOString(),
+          }
+        : null,
   };
 }

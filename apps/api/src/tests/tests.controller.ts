@@ -187,7 +187,10 @@ export class TestsController {
     @Body(new ZodBody(saveOfferingSchema)) body: SaveOfferingBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<TestOffering> {
-    return this.offering.saveOffering(id, body, user.isSuperAdmin);
+    return this.offering.saveOffering(id, body, {
+      adminId: user.id,
+      isSuperAdmin: user.isSuperAdmin,
+    });
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)

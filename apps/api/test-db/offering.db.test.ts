@@ -26,6 +26,7 @@ import {
   makeStudent,
   resetDatabase,
   testPrisma,
+  offerer,
 } from './support/database';
 
 /** One uuid per label, shared across the file so a test can name an id by what it means. */
@@ -124,7 +125,7 @@ async function save(
       expectedVersion: row.version,
       ...over,
     },
-    false,
+    offerer(),
     now,
   );
 }
@@ -325,7 +326,7 @@ describe('OfferingService — a move takes its turn', () => {
       opening = service.saveOffering(
         idFor('tst_9'),
         { opensAt: A_DAY_LATER, programOpenings: [], offered: false, expectedVersion: 0 },
-        false,
+        offerer(),
         NOW,
       );
       return opening;

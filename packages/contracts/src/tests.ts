@@ -394,8 +394,10 @@ export const testDetailSchema = testSchema.extend({
   programUnlocks: z.array(testProgramUnlockSchema),
   /** Sent back as `expectedUpdatedAt`, so Setup or a draw-from saved from a stale screen is refused. */
   updatedAt: z.string(),
-  /** Questions on the paper missing a language the config lists; any one refuses the offer. */
+  /** Questions on the paper missing a language the config lists; any one refuses the offer unless waived. */
   languageGaps: z.array(paperLanguageGapSchema),
+  /** Who offered it past those gaps, and when; null when nobody had to. */
+  languageWaiver: z.object({ by: z.string(), at: z.string() }).nullable(),
 });
 export type TestDetail = z.infer<typeof testDetailSchema>;
 
@@ -589,6 +591,8 @@ export const saveOfferingSchema = z.object({
     z.object({ programCode: z.string().trim().min(1), opensAt: z.iso.datetime() }),
   ),
   offered: z.boolean(),
+  /** Offers it though questions lack a language the config is sat in; the admin who sent it is recorded. */
+  waiveLanguageGaps: z.boolean().optional(),
   /** The test's version when the step was opened; a save made from an older one is refused. */
   expectedVersion: z.number().int(),
 });

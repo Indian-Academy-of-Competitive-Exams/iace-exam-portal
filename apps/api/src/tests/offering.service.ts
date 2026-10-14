@@ -265,7 +265,7 @@ export class OfferingService {
   async saveOffering(
     testId: string,
     body: SaveOfferingBody,
-    isSuperAdmin: boolean,
+    offerer: { adminId: string; isSuperAdmin: boolean },
     now: Date = new Date(),
   ): Promise<TestOffering> {
     const held = await this.prisma.$transaction(async (tx) => {
@@ -287,7 +287,10 @@ export class OfferingService {
       );
 
       if (body.offered && test.status !== TEST_STATUS.ACTIVE) {
-        await this.finalizer.offerWithin(tx, test.id, isSuperAdmin);
+        await this.finalizer.offerWithin(tx, test.id, {
+          isSuperAdmin: offerer.isSuperAdmin,
+          waivedById: body.waiveLanguageGaps ? offerer.adminId : null,
+        });
       }
       if (!body.offered && test.status === TEST_STATUS.ACTIVE) {
         await tx.test.update({ where: { id: test.id }, data: { status: TEST_STATUS.INACTIVE } });

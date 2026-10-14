@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AppException,
+  instituteDateTimeLabel,
+  languageGapSays,
   OPENING_HAS_PASSED,
   owesAPaper,
   programOpeningField,
@@ -240,7 +242,8 @@ function OfferSection({
   held,
   onEdit,
 }: Readonly<{ detail: TestDetail; saved: OfferDraft; held: OfferDraft; onEdit: EditOffer }>) {
-  const ready = !owesAPaper(detail);
+  const gaps = detail.finalizedAt === null ? detail.languageGaps : [];
+  const ready = !owesAPaper(detail) && (gaps.length === 0 || held.waiveLanguageGaps);
   const isSuperAdmin = useAuth().identity?.isSuperAdmin ?? false;
 
   return (
@@ -249,6 +252,28 @@ function OfferSection({
         /* ui-copy-ok: rule */
         <Alert variant={isSuperAdmin ? 'warning' : 'info'}>
           {isSuperAdmin ? READING_SKIPPED : READING_RULE}
+        </Alert>
+      ) : null}
+      {gaps.length > 0 ? (
+        <>
+          <Alert variant="warning">{gaps.map(languageGapSays).join(' ')}</Alert>
+          <Checkbox
+            id="test-waive-languages"
+            checked={held.waiveLanguageGaps}
+            onChange={(event) =>
+              onEdit({
+                waiveLanguageGaps: event.target.checked,
+                ...(event.target.checked ? {} : { offered: saved.offered }),
+              })
+            }
+            label="Offer without the missing languages"
+            /* ui-copy-ok: consequence */ hint="Your name is recorded on this test."
+          />
+        </>
+      ) : null}
+      {detail.languageWaiver ? (
+        <Alert variant="warning">
+          {`Offered with questions missing a language. Waived by ${detail.languageWaiver.by} on ${instituteDateTimeLabel(detail.languageWaiver.at)}.`}
         </Alert>
       ) : null}
       <Checkbox
@@ -313,6 +338,9 @@ function changeLines(saved: OfferDraft, held: OfferDraft, changes: OfferChanges)
   }
   if (changes.offering) {
     lines.push(`Offers it to every student reached through ${held.series.name}.`);
+  }
+  if (changes.offering && held.waiveLanguageGaps) {
+    lines.push('Offers it although questions lack a language, and records your name against it.');
   }
 
   return lines;

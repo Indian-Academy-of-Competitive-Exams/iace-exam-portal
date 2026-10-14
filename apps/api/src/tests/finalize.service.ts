@@ -36,6 +36,12 @@ type PaperRowRef = Prisma.PaperQuestionGetPayload<{ select: typeof PAPER_REF_SEL
 
 type ReadingClient = Pick<Prisma.TransactionClient, 'questionAssignment' | 'paperQuestion'>;
 
+/** Who is offering: a super admin skips the reading, and a named waiver lets missing languages through. */
+export interface Offerer {
+  isSuperAdmin: boolean;
+  waivedById?: string | null;
+}
+
 /** Offers a test: the paper rows already exist, so this freezes them rather than writing them. */
 @Injectable()
 export class FinalizeService {
@@ -43,7 +49,7 @@ export class FinalizeService {
   async offerWithin(
     tx: Prisma.TransactionClient,
     testId: string,
-    isSuperAdmin: boolean,
+    { isSuperAdmin, waivedById = null }: Offerer,
   ): Promise<void> {
     const test = await tx.test.findUnique({ where: { id: testId }, select: OFFER_SELECT });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
@@ -62,12 +68,17 @@ export class FinalizeService {
       await this.assertAssignmentsRead(tx, test.id);
     }
     this.assertPaperIsWhole(sections, await this.paperOf(tx, test));
-    await this.assertPaperHasItsLanguages(tx, test);
+    const waived = await this.languageGapsWaived(tx, test, waivedById);
     const finalizedAt = new Date();
     // The status rides the SAME write, so the two can never land apart.
     await tx.test.update({
       where: { id: test.id },
-      data: { finalizedAt, status: TEST_STATUS.ACTIVE, version: { increment: 1 } },
+      data: {
+        finalizedAt,
+        status: TEST_STATUS.ACTIVE,
+        version: { increment: 1 },
+        ...(waived ? { languageWaivedById: waivedById, languageWaivedAt: finalizedAt } : {}),
+      },
     });
   }
 
@@ -105,18 +116,20 @@ export class FinalizeService {
     });
   }
 
-  /** Every question must carry every language the config is sat in, or a candidate in one of them sees no text. */
-  private async assertPaperHasItsLanguages(
+  /** Every question must carry every language the config is sat in, unless the offering admin waives it by name; true when they did. */
+  private async languageGapsWaived(
     tx: Prisma.TransactionClient,
     test: OfferRow,
-  ): Promise<void> {
+    waivedById: string | null,
+  ): Promise<boolean> {
     const config = await tx.baseConfig.findUniqueOrThrow({
       where: { id: test.baseConfigId },
       select: { languages: true },
     });
     const issues = (await paperLanguageGaps(tx, test.id, config.languages)).map(languageGapSays);
     const [first] = issues;
-    if (first === undefined) return;
+    if (first === undefined) return false;
+    if (waivedById) return true;
     throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
       fieldErrors: { [FORM_LEVEL_FIELD]: issues },
     });

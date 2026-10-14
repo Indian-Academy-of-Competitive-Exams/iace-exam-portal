@@ -18,6 +18,8 @@ export interface OfferDraft {
   series: OfferSeries;
   schedule: ScheduleDraft;
   offered: boolean;
+  /** Offer it though questions lack a language the config is sat in; the server records who did. */
+  waiveLanguageGaps: boolean;
   /** The test's version when this was read, carried into the save so a stale draft is refused. */
   version: number;
 }
@@ -38,6 +40,7 @@ export const savedOffer = (detail: OfferSource): OfferDraft => ({
   series: { id: detail.testSeriesId, name: detail.testSeriesName },
   schedule: savedSchedule(detail),
   offered: detail.status === TEST_STATUS.ACTIVE,
+  waiveLanguageGaps: false,
   version: detail.version,
 });
 
@@ -92,6 +95,7 @@ export const offeringBodyOf = (held: OfferDraft): SaveOfferingInput => ({
     .filter((row) => row.opensAt !== '')
     .map((row) => ({ programCode: row.programCode, opensAt: instantOf(row.opensAt) })),
   offered: held.offered,
+  ...(held.waiveLanguageGaps ? { waiveLanguageGaps: true } : {}),
   expectedVersion: held.version,
 });
 
