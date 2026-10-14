@@ -6,6 +6,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
+import sonarjs from 'eslint-plugin-sonarjs';
 import { confirmDestructive } from './eslint-rules/confirm-destructive.js';
 import { noNarration } from './eslint-rules/no-narration.js';
 import { noHardcodedRoute, noManualFocus } from './eslint-rules/react-conventions.js';
@@ -22,6 +23,7 @@ export default defineConfig([
       globals: { ...globals.browser },
     },
     plugins: {
+      sonarjs,
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
       '@iace': {
@@ -50,6 +52,8 @@ export default defineConfig([
         { paths: [{ name: 'axios', message: 'Use the typed client from @iace/contracts.' }] },
       ],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // The same limit the Sonar gate holds (S3776), checked on every commit instead of on request.
+      'sonarjs/cognitive-complexity': ['error', 15],
       // Locked, not inherited: recommended only WARNS on `any`, and a warning gets scrolled past.
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'warn',

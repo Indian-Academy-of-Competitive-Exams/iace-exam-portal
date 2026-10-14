@@ -356,29 +356,39 @@ function causesOf(rows: readonly PlannedRow[], catalog: TaxonomyCatalog): Cause[
     if (row.action !== 'skip') continue;
     const said = new Set<string>();
     for (const issue of row.issues) {
-      const missing =
-        row.missing && MISSING_CODES[row.missing.kind].includes(issue.code) ? row.missing : null;
-      // A missing value is one cause however the sheet cased it: one choice fixes every spelling.
-      const key = missing
-        ? [missing.kind, missing.subjectId ?? '', lookupName(missing.value)].join('|')
-        : issue.message;
+      const missing = missingBehind(row, issue);
+      const key = missing ? missingKey(missing) : issue.message;
       if (said.has(key)) continue;
       said.add(key);
       const held = causes.get(key);
-      if (held) {
-        held.count += 1;
-        continue;
-      }
-      causes.set(key, {
-        message: issue.message,
-        count: 1,
-        ...(missing ? { fix: { ...missing, suggestions: suggestionsFor(missing, catalog) } } : {}),
-      });
+      if (held) held.count += 1;
+      else causes.set(key, newCause(issue, missing, catalog));
     }
   }
   return [...causes.values()]
     .filter((cause) => cause.count > 1 || cause.fix)
     .sort((a, b) => b.count - a.count);
+}
+
+function missingBehind(row: PlannedRow, issue: ValidationIssue): MissingValue | null {
+  return row.missing && MISSING_CODES[row.missing.kind].includes(issue.code) ? row.missing : null;
+}
+
+/** A missing value is one cause however the sheet cased it: one choice fixes every spelling. */
+const missingKey = (missing: MissingValue): string =>
+  [missing.kind, missing.subjectId ?? '', lookupName(missing.value)].join('|');
+
+function newCause(
+  issue: ValidationIssue,
+  missing: MissingValue | null,
+  catalog: TaxonomyCatalog,
+): Cause {
+  if (!missing) return { message: issue.message, count: 1 };
+  return {
+    message: issue.message,
+    count: 1,
+    fix: { ...missing, suggestions: suggestionsFor(missing, catalog) },
+  };
 }
 
 /** The bank's own values closest to the one the sheet names, by the words they share; best three. */
@@ -462,10 +472,7 @@ function planRow(
     if (taken) issues.push(taken);
   }
 
-  const outside = scope ? outsideSection(draft, scope) : null;
-  if (outside) issues.push(outside);
-  const wrongKind = scope ? wrongKindFor(draft, scope) : null;
-  if (wrongKind) issues.push(wrongKind);
+  if (scope) issues.push(...sectionRefusals(draft, scope));
 
   const reported = dedupeIssues(issues);
 
@@ -589,6 +596,12 @@ interface RowJudgement {
   /** Takes one of the section's places for a row about to be written; the issue when none is left. */
   claimRoom?: () => ValidationIssue | null;
   assignmentId?: string | null;
+}
+
+function sectionRefusals(draft: QuestionDraft, scope: ImportScope): ValidationIssue[] {
+  return [outsideSection(draft, scope), wrongKindFor(draft, scope)].filter(
+    (issue) => issue !== null,
+  );
 }
 
 /** A row filed under a subject the section it is going into does not take. */

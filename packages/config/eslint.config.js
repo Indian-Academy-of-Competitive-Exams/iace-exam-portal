@@ -5,6 +5,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
+import sonarjs from 'eslint-plugin-sonarjs';
 
 export default defineConfig([
   { ignores: ['dist/**', 'node_modules/**', '.turbo/**', 'coverage/**'] },
@@ -16,6 +17,7 @@ export default defineConfig([
       sourceType: 'module',
       globals: { ...globals.node },
     },
+    plugins: { sonarjs },
     rules: {
       // Locked, not inherited: recommended only WARNS on `any`, and a warning gets scrolled past.
       '@typescript-eslint/no-explicit-any': 'error',
@@ -30,6 +32,8 @@ export default defineConfig([
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // The same limit the Sonar gate holds (S3776), checked on every commit instead of on request.
+      'sonarjs/cognitive-complexity': ['error', 15],
     },
   },
   prettier,
