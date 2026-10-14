@@ -17,7 +17,7 @@ import { LANGUAGE_MODE, type ExamSection, type SolutionReport } from '@iace/cont
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { solutionsQuery } from '../../lib/queries';
-import { ChipRow, type ChipOption } from '../ui/chip-row';
+import { Picker, type PickerItem } from '../ui/picker';
 import { Alert } from '../ui/alert';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -112,9 +112,9 @@ function Paper({
     <View className="flex-1">
       <View className="gap-3 px-5 py-3">
         {solutions.sections.length > 1 ? (
-          <ChipRow
-            scroll
-            options={sectionOptions(solutions.sections)}
+          <Picker
+            placeholder="Section"
+            items={sectionOptions(solutions.sections)}
             value={sectionId}
             onChange={onSection}
           />
@@ -185,5 +185,5 @@ function Paper({
   );
 }
 
-const sectionOptions = (sections: readonly ExamSection[]): ChipOption[] =>
+const sectionOptions = (sections: readonly ExamSection[]): PickerItem[] =>
   sections.map((section) => ({ value: section.id, label: section.name }));

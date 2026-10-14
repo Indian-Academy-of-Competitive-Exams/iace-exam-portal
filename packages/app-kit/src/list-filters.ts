@@ -148,7 +148,7 @@ export function testsFilters(series: readonly StudentCatalogSeries[]): FilterSpe
     },
     { key: 'course', kind: 'choice', label: 'Exam', primary: true, items: courseItems(series) },
     { key: 'state', kind: 'choice', label: 'State', items: TEST_STATE_ITEMS },
-    { key: 'series', kind: 'choice', label: 'Series', items: seriesItems(series) },
+    { key: 'series', kind: 'multi', label: 'Series', items: seriesItems(series) },
   ];
 }
 
@@ -171,12 +171,9 @@ export function savedFilters(facets: SavedFacets | undefined): FilterSpec[] {
   ];
 }
 
-/** Only the series this student reaches; a filter offering one row is a filter offering nothing. */
+/** Only the series this student reaches; choosing none of them means all of them. */
 export function seriesItems(series: readonly StudentCatalogSeries[]): FilterItem[] {
-  return [
-    { value: ANY_CHOICE, label: 'Any series' },
-    ...series.map((row) => ({ value: row.id, label: row.name })),
-  ];
+  return series.map((row) => ({ value: row.id, label: row.name }));
 }
 
 /** Only the courses this student actually reaches; a filter offering nothing is noise. */

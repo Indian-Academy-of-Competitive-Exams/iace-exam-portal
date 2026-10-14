@@ -16,7 +16,7 @@ import {
   type DownloadKind,
 } from '@iace/app-kit';
 import { Button } from '../../src/components/ui/button';
-import { ChipRow } from '../../src/components/ui/chip-row';
+import { Picker } from '../../src/components/ui/picker';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
 import { Skeleton } from '../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../src/components/ui/stat-tile';
@@ -56,10 +56,10 @@ export default function DownloadsScreen() {
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-6 px-5 py-6">
       <Text variant="title">Downloads</Text>
 
-      <ChipRow
+      <Picker
+        placeholder="Choose a report"
         label="Report"
-        scroll
-        options={KIND_OPTIONS}
+        items={KIND_OPTIONS}
         value={kind}
         // A week is not a month and neither is a sitting, so a new report lets go of the last one's.
         onChange={(next) => {
@@ -68,10 +68,10 @@ export default function DownloadsScreen() {
         }}
       />
       {choices.length > 0 ? (
-        <ChipRow
+        <Picker
+          placeholder="Choose one"
           label={DOWNLOAD_CHOICE_LABELS[kind]}
-          scroll
-          options={choices}
+          items={choices}
           value={chosen}
           onChange={setChosen}
         />

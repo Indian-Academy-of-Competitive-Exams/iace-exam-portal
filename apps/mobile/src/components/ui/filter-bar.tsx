@@ -15,7 +15,7 @@ import { asSet, asText, summaryOf, type FilterSpec, type FilterState } from '../
 import { useTokenColor } from '../../lib/use-token-color';
 import { dayOf, valueOfDay } from '../../lib/picker-day';
 import { Button } from './button';
-import { Chip, ChipRow } from './chip-row';
+import { MultiPicker, Picker } from './picker';
 import Check from 'lucide-react-native/icons/check';
 import FunnelX from 'lucide-react-native/icons/funnel-x';
 import X from 'lucide-react-native/icons/x';
@@ -165,31 +165,24 @@ function FilterControl({
   const items = filter.items ?? [];
 
   if (filter.kind === 'multi') {
-    const held = asSet(state.values[filter.key]);
-
     return (
-      <View className="gap-1.5">
-        <Text variant="metaStrong">{filter.label}</Text>
-        <View className="flex-row flex-wrap gap-2">
-          {items.map((item) => (
-            <Chip
-              key={item.value}
-              label={item.label}
-              selected={held.includes(item.value)}
-              onPress={() => state.setFilter(filter.key, toggled(held, item.value))}
-            />
-          ))}
-        </View>
-      </View>
+      <MultiPicker
+        label={filter.label}
+        items={items}
+        value={asSet(state.values[filter.key])}
+        onChange={(next) => state.setFilter(filter.key, next)}
+        placeholder={filter.placeholder ?? `Any ${filter.label.toLowerCase()}`}
+      />
     );
   }
 
   if (filter.kind === 'choice') {
     return (
-      <ChipRow
+      <Picker
         label={filter.label}
-        options={items}
+        items={items}
         value={asText(state.values[filter.key])}
+        placeholder={`Any ${filter.label.toLowerCase()}`}
         onChange={(next) => {
           state.setFilter(filter.key, next);
           onChosen?.();
@@ -245,7 +238,3 @@ function FilterDate({ filter, state }: Readonly<{ filter: FilterSpec; state: Fil
     </View>
   );
 }
-
-/** Choosing nothing already means every one of them, so the last one off is an empty set, not none. */
-const toggled = (held: readonly string[], value: string): string[] =>
-  held.includes(value) ? held.filter((one) => one !== value) : [...held, value];

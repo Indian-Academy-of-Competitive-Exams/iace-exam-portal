@@ -33,7 +33,7 @@ import { overviewQuery, performanceQuery } from '../../lib/queries';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Hero, HeroFigure } from '../ui/hero';
-import { ChipRow, type ChipOption } from '../ui/chip-row';
+import { Picker, type PickerItem } from '../ui/picker';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { RefreshScroll } from '../ui/refresh-scroll';
@@ -100,10 +100,10 @@ function Body({
       </StatTileRow>
 
       {scopes.length > 1 ? (
-        <ChipRow
-          scroll
+        <Picker
+          placeholder="Every scope"
           label="Scope"
-          options={scopeOptions(scopes)}
+          items={scopeOptions(scopes)}
           value={scope}
           onChange={setScope}
         />
@@ -222,7 +222,7 @@ function Sittings({ sittings }: Readonly<{ sittings: readonly PerformancePoint[]
   );
 }
 
-const scopeOptions = (scopes: readonly TestScope[]): ChipOption[] => [
+const scopeOptions = (scopes: readonly TestScope[]): PickerItem[] => [
   { value: EVERY_SCOPE, label: 'Every scope' },
   ...scopes.map((scope) => ({ value: scope, label: TEST_SCOPE_LABELS[scope] })),
 ];

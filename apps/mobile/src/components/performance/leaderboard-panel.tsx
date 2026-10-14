@@ -8,7 +8,7 @@ import { api } from '../../lib/api';
 import { leaderboardQueryKey } from '../../lib/constants';
 import { performanceQuery } from '../../lib/queries';
 import { Alert } from '../ui/alert';
-import { ChipRow } from '../ui/chip-row';
+import { Picker } from '../ui/picker';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { RefreshScroll } from '../ui/refresh-scroll';
 import { Skeleton } from '../ui/skeleton';
@@ -40,10 +40,10 @@ export function LeaderboardPanel() {
   return (
     <RefreshScroll refreshing={pulled.isRefetching} onRefresh={() => void pulled.refetch()}>
       {sat.length > 0 ? (
-        <ChipRow
-          scroll
+        <Picker
+          placeholder="Choose a test"
           label="Test"
-          options={sat.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED }))}
+          items={sat.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED }))}
           value={paper}
           onChange={setTestId}
         />

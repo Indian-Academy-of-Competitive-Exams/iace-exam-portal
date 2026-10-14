@@ -9,6 +9,7 @@ import {
   ANY_CHOICE,
   EMPTINESS,
   SHUT_SAYS,
+  asSet,
   asText,
   emptyReason,
   everySitting,
@@ -52,10 +53,10 @@ export function TestsPage() {
 
   const now = new Date();
   const reaches = catalog.data?.series ?? [];
-  const chosenSeries = asText(filters.values.series) || ANY_CHOICE;
+  const chosenSeries = asSet(filters.values.series);
   const series = reaches
     .filter((row) => course === ANY_CHOICE || row.examStage?.course === course)
-    .filter((row) => chosenSeries === ANY_CHOICE || row.id === chosenSeries);
+    .filter((row) => chosenSeries.length === 0 || chosenSeries.includes(row.id));
   const rows = inState(
     matching(sittablesOf(series), asText(filters.values.q)),
     asText(filters.values.state) || ANY_CHOICE,

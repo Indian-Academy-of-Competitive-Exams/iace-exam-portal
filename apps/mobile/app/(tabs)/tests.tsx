@@ -24,7 +24,13 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-sta
 import { Skeleton } from '../../src/components/ui/skeleton';
 import { FilterSearch, FilterSummary, FilterTrigger } from '../../src/components/ui/filter-bar';
 import { SeriesShelf } from '../../src/components/tests/series-shelf';
-import { asText, useFilterState, type FilterSpec, type FilterState } from '../../src/lib/filters';
+import {
+  asSet,
+  asText,
+  useFilterState,
+  type FilterSpec,
+  type FilterState,
+} from '../../src/lib/filters';
 import { TourTrigger, usePageTour, useTourTarget } from '../../src/lib/page-tour';
 import { TESTS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../src/lib/tours';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
@@ -50,12 +56,12 @@ export default function TestsScreen() {
   const q = asText(state.values.q);
   const course = asText(state.values.course);
   const bucket = asText(state.values.state);
-  const seriesId = asText(state.values.series);
+  const seriesIds = asSet(state.values.series);
 
   const now = new Date();
   const filteredSeries = reaches
     .filter((row) => course === ANY || row.examStage?.course === course)
-    .filter((row) => seriesId === ANY || row.id === seriesId);
+    .filter((row) => seriesIds.length === 0 || seriesIds.includes(row.id));
   const rows = inState(matching(sittablesOf(filteredSeries), q), bucket);
   const emptiness = emptyReason(reaches, rows.length);
   const results = resultsByTest(everySitting(trend.data));
