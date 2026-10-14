@@ -228,6 +228,7 @@
   --success-ink: #166534;
   --warning: #f59e0b;
   --warning-foreground: #1f2937;
+  --warning-solid: #b45309;
   --warning-subtle: #fef3c7;
   --warning-ink: #92400e;
   --info: #2563eb;
@@ -448,6 +449,7 @@
   --success-ink: #4ade80;
   --warning: #f59e0b;
   --warning-foreground: #1f2937;
+  --warning-solid: #b45309;
   --warning-subtle: #3a2a08;
   --warning-ink: #fbbf24;
   --info: #3b82f6;

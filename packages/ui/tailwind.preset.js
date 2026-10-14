@@ -84,6 +84,7 @@ module.exports = {
           foreground: token('--warning-foreground'),
           subtle: token('--warning-subtle'),
           ink: token('--warning-ink'),
+          solid: token('--warning-solid'),
         },
         info: {
           DEFAULT: token('--info'),
