@@ -5,23 +5,15 @@ import {
   AppException,
   ErrorCodes,
   FEATURE_KEYS,
-  PAPER_SOURCES,
   PERMISSION_LEVELS,
-  REVIEW_STATES,
   SECTION_SEATS,
   can,
-  type AdminAuthority,
   type Assignment,
-  type AssignmentRole,
-  type DifficultyLevel,
-  type LocalizedContent,
-  type PaperSource,
   type QuestionDetail,
   type QuestionDraft,
   type QuestionImportPlan,
   type QuestionImportResult,
   type QuestionOnOtherTest,
-  type QuestionReview,
   type QuestionTime,
   type SectionQuestion,
   type SectionSeat,
@@ -29,11 +21,8 @@ import {
   type SendBackBody,
   type WorkTimeTotal,
   type TypingPresetKey,
-  SECTION_QUESTION_TYPES,
   sectionAnswerKindOf,
-  type SectionAnswerKind,
   sectionLanguagesFor,
-  type LanguageCode,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
@@ -45,123 +34,38 @@ import {
   jobOpen,
   reopenReadingIfUnchecked,
 } from '../assignments';
-import { stemPreviewOf } from './question-core';
 import { QuestionImportService } from './question-import.service';
-import { reachableTest } from './question-query';
 import { QuestionsService } from './questions.service';
-
-/** Who is asking: the controller knows their grants, this service knows the section. */
-export interface SectionViewer extends AdminAuthority {
-  id: string;
-}
-
-interface Pair {
-  testId: string;
-  baseConfigSectionId: string;
-}
-
-/** Everything a rule about the section turns on, read once per request. */
-interface Context {
-  pair: Pair;
-  viewer: SectionViewer;
-  test: {
-    title: string | null;
-    paperSource: PaperSource;
-    finalizedAt: Date | null;
-    baseConfig: { languages: LanguageCode[] };
-  };
-  section: {
-    name: string;
-    questionCount: number;
-    subjectId: string | null;
-    typingPreset: string | null;
-    descriptive: boolean;
-    languages: LanguageCode[];
-  };
-  rows: Assignment[];
-  typist: Assignment | null;
-  reader: Assignment | null;
-  /** The viewer's own row: the one they hold now, else the last they held. */
-  mine: Assignment | null;
-  seat: SectionSeat;
-  ownerWrites: boolean;
-}
-
-interface ScopedQuestion {
-  id: string;
-  order: number | null;
-  typed: boolean;
-  createdById: string | null;
-  difficulty: DifficultyLevel;
-  preview: string;
-  review: QuestionReview;
-}
-
-const NOT_YOURS = 'No such section';
-const OFFERED_MESSAGE = 'This test has been offered, so its questions no longer change here.';
-const NOT_EDITABLE_MESSAGE = 'This question is not yours to change at this point in the section.';
-const NOT_DELETABLE_MESSAGE =
-  'Only a question you typed for this section, and may still change, can be deleted.';
-const READERS_ONLY_MESSAGE = "Only this section's proof-reader reviews its questions.";
-const NOT_HANDED_MESSAGE = 'This section has not reached you yet.';
-const RELEASED_MESSAGE = 'You have released this section, so its review is closed.';
-const WITH_TYPIST_MESSAGE = 'This question is with the typist until they mark it fixed.';
-const NO_TYPIST_MESSAGE = 'This section has no typist to send a question back to.';
-const NOT_SENT_BACK_MESSAGE = 'This question was not sent back to you.';
-const TYPISTS_ONLY_MESSAGE = "Only this section's typist marks a question fixed.";
-const WRONG_KIND_MESSAGES: Readonly<Record<SectionAnswerKind, string>> = {
-  CHOICE: 'A typing passage or a descriptive question belongs in a section of its own kind.',
-  TYPING: 'This section is a typing test, so it takes a typing passage.',
-  WRITING: 'This section is descriptive, so it takes a descriptive question.',
-};
-const TYPING_ONLY_MESSAGE = "Only this section's typist does that.";
-const NO_LONGER_TYPING_MESSAGE =
-  'This section is no longer yours, so nothing new is typed into it.';
-const NOTHING_TO_TYPE_MESSAGE =
-  'This test is picked from the bank, so its sections are not typed. Fix what is sent back to you.';
-const SEATS_ONLY_MESSAGE = "Only this section's typist or proof-reader has time counted on it.";
-const SECTION_HANDED_OVER_MESSAGE =
-  'You have marked this section done. New questions go to the bank, not this paper.';
-
-const UNCHECKED_REVIEW: QuestionReview = {
-  state: REVIEW_STATES.UNCHECKED,
-  reason: null,
-  note: null,
-  sentBackAt: null,
-  fixedAt: null,
-  checkedAt: null,
-};
-
-type ReviewRow = Prisma.QuestionReviewGetPayload<object>;
-
-const isOpenSendBack = (row: ReviewRow | null | undefined): boolean =>
-  Boolean(row?.sentBackAt && !row.fixedAt);
-
-function reviewOf(row: ReviewRow | undefined): QuestionReview {
-  if (!row) return UNCHECKED_REVIEW;
-  let state: QuestionReview['state'] = REVIEW_STATES.UNCHECKED;
-  if (isOpenSendBack(row)) state = REVIEW_STATES.SENT_BACK;
-  else if (row.checkedAt) state = REVIEW_STATES.CHECKED;
-  else if (row.fixedAt) state = REVIEW_STATES.FIXED;
-  return {
-    state,
-    reason: row.reason,
-    note: row.note,
-    sentBackAt: row.sentBackAt?.toISOString() ?? null,
-    fixedAt: row.fixedAt?.toISOString() ?? null,
-    checkedAt: row.checkedAt?.toISOString() ?? null,
-  };
-}
-
-/** A section is answered, typed or written, and a typist writes only the kind its paper can draw. */
-function assertTypeFits(section: Context['section'], draft: QuestionDraft): void {
-  const kind = sectionAnswerKindOf(section);
-  if (SECTION_QUESTION_TYPES[kind].includes(draft.type)) return;
-  const message = WRONG_KIND_MESSAGES[kind];
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-    fieldErrors: { type: [message] },
-  });
-}
+import {
+  SectionViewer,
+  type Pair,
+  type Context,
+  type ScopedQuestion,
+  NOT_YOURS,
+  OFFERED_MESSAGE,
+  NOT_EDITABLE_MESSAGE,
+  NOT_DELETABLE_MESSAGE,
+  READERS_ONLY_MESSAGE,
+  NOT_HANDED_MESSAGE,
+  RELEASED_MESSAGE,
+  WITH_TYPIST_MESSAGE,
+  NO_TYPIST_MESSAGE,
+  NOT_SENT_BACK_MESSAGE,
+  TYPISTS_ONLY_MESSAGE,
+  SEATS_ONLY_MESSAGE,
+  isOpenSendBack,
+  assertTypeFits,
+  editable,
+  deletable,
+  reviewRow,
+  seesEverySeat,
+  noTime,
+  actingAs,
+  typingRow,
+  heldNow,
+} from './section-rules';
+import { scopedQuestions } from './section-scoped';
+import { otherTestsOf } from './section-other-tests';
 
 /** One section of one test as whoever holds it works on it — the same facts for all, the rules per seat. */
 @Injectable()
@@ -182,7 +86,7 @@ export class SectionWorkService {
   private async workOf(context: Context): Promise<SectionWork> {
     const { pair } = context;
     const [scoped, editingBy, canRelease, times, sitting] = await Promise.all([
-      this.scoped(context),
+      scopedQuestions(this.prisma, context),
       sectionEditingBy(this.redis, this.prisma, pair),
       this.canRelease(context),
       this.timesOf(context),
@@ -217,8 +121,8 @@ export class SectionWorkService {
         order: question.order,
         typed: question.typed,
         review: question.review,
-        editable: this.editable(context, question),
-        deletable: this.deletable(context, question),
+        editable: editable(context, question),
+        deletable: deletable(context, question),
         time: times.get(question.id) ?? noTime(seesEverySeat(context)),
       })),
     };
@@ -348,7 +252,7 @@ export class SectionWorkService {
     if (context.test.finalizedAt && !viewer.isSuperAdmin) {
       throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
     }
-    if (!this.editable(context, question)) {
+    if (!editable(context, question)) {
       throw new AppException(ErrorCodes.FORBIDDEN, NOT_EDITABLE_MESSAGE);
     }
     assertTypeFits(context.section, draft);
@@ -379,14 +283,13 @@ export class SectionWorkService {
   async remove(pair: Pair, questionId: string, viewer: SectionViewer): Promise<void> {
     const context = await this.load(pair, viewer);
     const question = await this.requireScoped(context, questionId);
-    if (!this.deletable(context, question)) {
+    if (!deletable(context, question)) {
       throw new AppException(ErrorCodes.FORBIDDEN, NOT_DELETABLE_MESSAGE);
     }
     await takeSectionEditLock(this.redis, this.prisma, pair, viewer);
     await this.questions.remove(questionId);
   }
 
-  /** Which other tests hold this question, asked before the edit rather than reported after it. */
   async otherTests(
     pair: Pair,
     questionId: string,
@@ -394,42 +297,7 @@ export class SectionWorkService {
   ): Promise<QuestionOnOtherTest[]> {
     const context = await this.load(pair, viewer);
     await this.requireScoped(context, questionId);
-
-    const rows = await this.prisma.paperQuestion.findMany({
-      where: { questionId, testId: { not: pair.testId } },
-      select: {
-        baseConfigSection: { select: { name: true } },
-        test: {
-          select: {
-            id: true,
-            title: true,
-            opensAt: true,
-            assignments: {
-              where: { replacedAt: null, role: ASSIGNMENT_ROLES.PROOFREADER },
-              select: { finalizedAt: true },
-            },
-          },
-        },
-      },
-      orderBy: { test: { opensAt: 'asc' } },
-    });
-    if (rows.length === 0) return [];
-
-    // The same predicate the version rule turns on, so the warning and the rewrite cannot disagree.
-    const open = await this.prisma.test.findMany({
-      where: { id: { in: rows.map((row) => row.test.id) }, ...reachableTest(new Date()) },
-      select: { id: true },
-    });
-    const opened = new Set(open.map((row) => row.id));
-
-    return rows.map((row) => ({
-      testId: row.test.id,
-      testTitle: row.test.title,
-      sectionName: row.baseConfigSection.name,
-      underReview: row.test.assignments.some((each) => each.finalizedAt === null),
-      isOpen: opened.has(row.test.id),
-      opensAt: row.test.opensAt?.toISOString() ?? null,
-    }));
+    return otherTestsOf(this.prisma, pair.testId, questionId);
   }
 
   /** The reader's tick: looked at, and passed. */
@@ -590,100 +458,10 @@ export class SectionWorkService {
     };
   }
 
-  /** The paper in its order, then what was typed for it and not chosen; a reader sees the paper once it reaches them. */
-  private async scoped(context: Context): Promise<ScopedQuestion[]> {
-    const { pair } = context;
-    const paper = await this.prisma.paperQuestion.findMany({
-      where: pair,
-      select: { questionId: true, order: true },
-      orderBy: { order: 'asc' },
-    });
-    if (context.seat === SECTION_SEATS.READER && !context.mine?.handedAt) return [];
-
-    const onPaper = paper.map((row) => row.questionId);
-    const typed =
-      context.seat === SECTION_SEATS.READER
-        ? []
-        : await this.prisma.question.findMany({
-            where: {
-              assignment: { ...pair, role: ASSIGNMENT_ROLES.TYPIST },
-              id: { notIn: onPaper },
-            },
-            select: { id: true },
-            orderBy: { createdAt: 'asc' },
-          });
-    const ids = [...onPaper, ...typed.map((row) => row.id)];
-    if (ids.length === 0) return [];
-
-    const [questions, reviews] = await Promise.all([
-      this.prisma.question.findMany({
-        where: { id: { in: ids } },
-        select: {
-          id: true,
-          difficulty: true,
-          createdById: true,
-          assignment: { select: { testId: true, baseConfigSectionId: true, role: true } },
-          currentVersion: { select: { content: true } },
-        },
-      }),
-      this.prisma.questionReview.findMany({
-        where: { testId: pair.testId, questionId: { in: ids } },
-      }),
-    ]);
-    const byId = new Map(questions.map((question) => [question.id, question]));
-    const reviewById = new Map(reviews.map((review) => [review.questionId, review]));
-    const orderById = new Map(paper.map((row) => [row.questionId, row.order]));
-
-    return ids.flatMap((id) => {
-      const question = byId.get(id);
-      if (!question) return [];
-      const written = question.assignment;
-      return [
-        {
-          id,
-          order: orderById.get(id) ?? null,
-          typed:
-            written?.role === ASSIGNMENT_ROLES.TYPIST &&
-            written.testId === pair.testId &&
-            written.baseConfigSectionId === pair.baseConfigSectionId,
-          createdById: question.createdById,
-          difficulty: question.difficulty,
-          preview: stemPreviewOf(
-            (question.currentVersion?.content as LocalizedContent | undefined) ?? {},
-          ),
-          review: reviewOf(reviewById.get(id)),
-        },
-      ];
-    });
-  }
-
-  /** The rule each seat works under; a test owner's is the section being back with them. */
-  private editable(context: Context, question: ScopedQuestion): boolean {
-    if (context.test.finalizedAt) return context.viewer.isSuperAdmin;
-    if (context.viewer.isSuperAdmin) return true;
-
-    const own = typingOrHeld(context);
-    const sentBack = question.review.state === REVIEW_STATES.SENT_BACK;
-    if (own?.role === ASSIGNMENT_ROLES.TYPIST) {
-      if (sentBack) return true;
-      const typing = context.test.paperSource === PAPER_SOURCES.FRAMED && !own.finalizedAt;
-      if (typing && question.typed) return true;
-    }
-    if (own?.role === ASSIGNMENT_ROLES.PROOFREADER) {
-      if (own.handedAt && !own.finalizedAt && question.order !== null && !sentBack) return true;
-    }
-    return context.ownerWrites && withOwner(context);
-  }
-
-  /** A draft typed here by the viewer, off the paper, that they may still change; a paper row is never deleted. */
-  private deletable(context: Context, question: ScopedQuestion): boolean {
-    const { viewer } = context;
-    const own = viewer.isSuperAdmin || question.createdById === viewer.id;
-    return question.typed && question.order === null && own && this.editable(context, question);
-  }
-
   private async requireScoped(context: Context, questionId: string): Promise<ScopedQuestion> {
-    const found = (await this.scoped(context)).find((question) => question.id === questionId);
+    const found = (await scopedQuestions(this.prisma, context)).find(
+      (question) => question.id === questionId,
+    );
     if (!found) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
     return found;
   }
@@ -706,57 +484,4 @@ export class SectionWorkService {
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
   }
-}
-
-const reviewRow = (tx: Prisma.TransactionClient, testId: string, questionId: string) =>
-  tx.questionReview.findUnique({ where: { testId_questionId: { testId, questionId } } });
-
-/** The owner's seat and a super admin read every seat's time; a typist and a reader read their own. */
-const seesEverySeat = (context: Context): boolean =>
-  context.seat === SECTION_SEATS.OWNER || context.viewer.isSuperAdmin === true;
-
-const noTime = (everySeat: boolean): QuestionTime => ({
-  own: 0,
-  typist: everySeat ? 0 : null,
-  reader: everySeat ? 0 : null,
-});
-
-/** For a super admin whoever holds the role now, a seat they once left included; else the viewer's own row in it. */
-function actingAs(context: Context, role: AssignmentRole): Assignment {
-  const holder = role === ASSIGNMENT_ROLES.TYPIST ? context.typist : context.reader;
-  if (holder && context.viewer.isSuperAdmin) return holder;
-  if (context.mine?.role === role) return context.mine;
-  const only = role === ASSIGNMENT_ROLES.TYPIST ? TYPING_ONLY_MESSAGE : READERS_ONLY_MESSAGE;
-  throw new AppException(ErrorCodes.FORBIDDEN, only);
-}
-
-/** A typing job still open: held, on a typed paper not yet offered, and not yet done. */
-function typingRow(context: Context): Assignment {
-  const row = actingAs(context, ASSIGNMENT_ROLES.TYPIST);
-  if (row.replacedAt) throw new AppException(ErrorCodes.FORBIDDEN, NO_LONGER_TYPING_MESSAGE);
-  if (context.test.paperSource !== PAPER_SOURCES.FRAMED) {
-    throw new AppException(ErrorCodes.CONFLICT, NOTHING_TO_TYPE_MESSAGE);
-  }
-  if (context.test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, OFFERED_MESSAGE);
-  if (row.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, SECTION_HANDED_OVER_MESSAGE);
-  return row;
-}
-
-/** The row the viewer holds right now; a replaced one only reads. */
-const heldNow = (context: Context): Assignment | null =>
-  context.mine?.replacedAt === null ? context.mine : null;
-
-/** The row held now, or the section's last typist row when nobody took the seat after it: those drafts are nobody else's. */
-function typingOrHeld(context: Context): Assignment | null {
-  const held = heldNow(context);
-  if (held || context.typist) return held;
-  const last = context.rows.findLast((row) => row.role === ASSIGNMENT_ROLES.TYPIST);
-  return last && last.id === context.mine?.id ? last : null;
-}
-
-/** Picked and not yet handed on, or released by its reader: then the section is back with its owner. */
-function withOwner(context: Context): boolean {
-  const { reader } = context;
-  if (reader?.finalizedAt) return true;
-  return context.test.paperSource === PAPER_SOURCES.PICKED && !reader?.handedAt;
 }

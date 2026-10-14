@@ -37,7 +37,8 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { AssignmentsService } from '../src/assignments/assignments.service';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import { QuestionsService } from '../src/questions/questions.service';
-import { SectionWorkService, type SectionViewer } from '../src/questions/section-work.service';
+import { SectionWorkService } from '../src/questions/section-work.service';
+import type { SectionViewer } from '../src/questions/section-rules';
 import { FakeEventBus, FakeRedis, FakeStorage } from '../test/support/fakes';
 import {
   BANK,
