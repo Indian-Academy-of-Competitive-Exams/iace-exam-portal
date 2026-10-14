@@ -325,6 +325,7 @@ function TestExit({ row, small }: Readonly<{ row: Sittable; small?: boolean }>) 
       testId={row.test.id}
       resume={row.test.liveAttemptId}
       size={small ? 'sm' : 'default'}
+      variant={row.action === 'RESUME' ? 'warning' : 'default'}
     >
       {row.action === 'RESUME' ? 'Resume' : 'Start test'}
     </StartSitting>
