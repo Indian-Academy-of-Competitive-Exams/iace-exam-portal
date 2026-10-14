@@ -25,9 +25,11 @@ import {
   questionDraftSchema,
   questionImportCommitSchema,
   questionImportLeaveOutSchema,
+  questionImportRemapSchema,
   type QuestionDraft,
   type QuestionImportCommitBody,
   type QuestionImportLeaveOut,
+  type QuestionImportRemap,
   type QuestionImportDraft,
   type QuestionImportPlan,
   type QuestionImportResult,
@@ -119,6 +121,29 @@ export class QuestionImportController {
     @Body(new ZodBody(questionImportLeaveOutSchema)) body: QuestionImportLeaveOut,
   ): Promise<QuestionImportPlan> {
     return this.imports.leaveOutRow(importLogId, line, body.leftOut, user.id);
+  }
+
+  /** A sheet value the bank lacks read as one it holds, for every row of the run. Writes no question. */
+  @RequiresAnyFeature(RUN_KEYS, PERMISSION_LEVELS.READ)
+  @Post(':importLogId/remap')
+  @HttpCode(HttpStatus.OK)
+  remap(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('importLogId') importLogId: string,
+    @Body(new ZodBody(questionImportRemapSchema)) body: QuestionImportRemap,
+  ): Promise<QuestionImportPlan> {
+    return this.imports.remap(importLogId, body, user.id);
+  }
+
+  /** The run judged again, after the bank gained a subject or topic it was waiting on. */
+  @RequiresAnyFeature(RUN_KEYS, PERMISSION_LEVELS.READ)
+  @Post(':importLogId/rejudge')
+  @HttpCode(HttpStatus.OK)
+  rejudge(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('importLogId') importLogId: string,
+  ): Promise<QuestionImportPlan> {
+    return this.imports.rejudge(importLogId, user.id);
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)

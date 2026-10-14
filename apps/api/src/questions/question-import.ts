@@ -12,6 +12,10 @@ import {
   SECTION_IMPORT_MAX_ROWS,
   fileDuplicateOf,
   QUESTION_IMPORT_TAG,
+  IMPORT_FIX_KINDS,
+  DIFFICULTY_LABELS,
+  DIFFICULTY_LEVELS,
+  canonicalName,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
   TAG_SEPARATOR,
@@ -22,6 +26,8 @@ import {
   tagSchema,
   toleranceSchema,
   type AnswerMode,
+  type ImportFix,
+  type ImportFixKind,
   type ImportWarning,
   type LocalizedText,
   type QuestionDraft,
@@ -64,7 +70,18 @@ export interface PlannedRow extends QuestionImportRow {
   editable: QuestionDraft;
   /** A whole-test row's typist, whose draft it becomes; null everywhere else. */
   assignmentId: string | null;
+  /** The sheet value the bank does not hold, when that is what keeps the row out. */
+  missing: MissingValue | null;
 }
+
+/** A subject, topic or difficulty the sheet names that the bank does not hold. */
+type MissingValue = Omit<ImportFix, 'suggestions'>;
+
+const MISSING_CODES: Readonly<Record<ImportFixKind, readonly string[]>> = {
+  [IMPORT_FIX_KINDS.SUBJECT]: [CODE.SUBJECT_UNKNOWN],
+  [IMPORT_FIX_KINDS.TOPIC]: [CODE.TOPIC_UNKNOWN, CODE.TOPIC_NOT_IN_SUBJECT],
+  [IMPORT_FIX_KINDS.DIFFICULTY]: [CODE.DIFFICULTY_INVALID],
+};
 
 /** The one section a sheet is imported into, and the subject it takes. */
 export interface ImportScope {
@@ -238,7 +255,7 @@ export function planQuestionImport(
 
   return {
     rows,
-    causes: causesOf(rows),
+    causes: causesOf(rows, catalog),
     summary: {
       total: rows.length,
       willCreate: rows.filter((row) => row.action === 'create').length,
@@ -330,19 +347,93 @@ function placeRow(
   };
 }
 
-/** Each reason held against more than one row, once, with its count; most first. */
-function causesOf(rows: readonly PlannedRow[]): { message: string; count: number }[] {
-  const counts = new Map<string, number>();
+type Cause = NonNullable<QuestionImportPlan['causes']>[number];
+
+/** Each reason held against more than one row, or naming a value that can be fixed, once with its count; most first. */
+function causesOf(rows: readonly PlannedRow[], catalog: TaxonomyCatalog): Cause[] {
+  const causes = new Map<string, Cause>();
   for (const row of rows) {
     if (row.action !== 'skip') continue;
-    for (const message of new Set(row.issues.map((issue) => issue.message))) {
-      counts.set(message, (counts.get(message) ?? 0) + 1);
+    const said = new Set<string>();
+    for (const issue of row.issues) {
+      const missing =
+        row.missing && MISSING_CODES[row.missing.kind].includes(issue.code) ? row.missing : null;
+      // A missing value is one cause however the sheet cased it: one choice fixes every spelling.
+      const key = missing
+        ? [missing.kind, missing.subjectId ?? '', lookupName(missing.value)].join('|')
+        : issue.message;
+      if (said.has(key)) continue;
+      said.add(key);
+      const held = causes.get(key);
+      if (held) {
+        held.count += 1;
+        continue;
+      }
+      causes.set(key, {
+        message: issue.message,
+        count: 1,
+        ...(missing ? { fix: { ...missing, suggestions: suggestionsFor(missing, catalog) } } : {}),
+      });
     }
   }
-  return [...counts]
-    .filter(([, count]) => count > 1)
-    .map(([message, count]) => ({ message, count }))
+  return [...causes.values()]
+    .filter((cause) => cause.count > 1 || cause.fix)
     .sort((a, b) => b.count - a.count);
+}
+
+/** The bank's own values closest to the one the sheet names, by the words they share; best three. */
+function suggestionsFor(missing: MissingValue, catalog: TaxonomyCatalog): ImportFix['suggestions'] {
+  if (missing.kind === IMPORT_FIX_KINDS.DIFFICULTY) {
+    return DIFFICULTY_LEVELS.map((level) => ({ value: level, label: DIFFICULTY_LABELS[level] }));
+  }
+  const choices =
+    missing.kind === IMPORT_FIX_KINDS.SUBJECT
+      ? catalog.subjects.map((subject) => ({ value: subject.id, label: subject.name }))
+      : (catalog.subjects
+          .find((subject) => subject.id === missing.subjectId)
+          ?.topics.map((topic) => ({ value: topic.id, label: topic.name })) ?? []);
+  const wanted = new Set(wordsOf(missing.value));
+  return choices
+    .map((choice) => ({
+      choice,
+      shared: wordsOf(choice.label).filter((word) => wanted.has(word)).length,
+    }))
+    .filter(({ shared }) => shared > 0)
+    .sort((a, b) => b.shared - a.shared || a.choice.label.localeCompare(b.choice.label))
+    .slice(0, SUGGESTIONS_MAX)
+    .map(({ choice }) => choice);
+}
+
+const SUGGESTIONS_MAX = 3;
+
+/** Words worth matching on: "AND", "OF" and "THE" would pair every long name with every other. */
+const FILLER_WORDS: ReadonlySet<string> = new Set(['AND', 'OF', 'THE', 'IN', 'FOR']);
+
+const wordsOf = (value: string): string[] =>
+  canonicalName(value)
+    .split(/[^A-Z0-9]+/)
+    .filter((word) => word.length > 1 && !FILLER_WORDS.has(word));
+
+/** What keeps a row out when it is a value the bank does not hold, read off the sheet as written. */
+function missingOf(
+  row: CsvRow,
+  edited: boolean,
+  names: { subject: string; topic: string },
+  subjectId: string,
+  issues: readonly ValidationIssue[],
+): MissingValue | null {
+  if (edited) return null;
+  const codes = new Set(issues.map((issue) => issue.code));
+  if (codes.has(CODE.SUBJECT_UNKNOWN))
+    return { kind: IMPORT_FIX_KINDS.SUBJECT, value: names.subject };
+  if (codes.has(CODE.TOPIC_UNKNOWN) || codes.has(CODE.TOPIC_NOT_IN_SUBJECT)) {
+    return { kind: IMPORT_FIX_KINDS.TOPIC, value: names.topic, subjectId };
+  }
+  const difficulty = cellOf(row, 'difficulty');
+  if (codes.has(CODE.DIFFICULTY_INVALID) && !blank(difficulty)) {
+    return { kind: IMPORT_FIX_KINDS.DIFFICULTY, value: difficulty };
+  }
+  return null;
 }
 
 function planRow(
@@ -407,6 +498,7 @@ function planRow(
     pictures: content.pictures,
     editable: draft,
     assignmentId: assignmentId ?? null,
+    missing: missingOf(row, edit !== undefined, names, draft.subjectId, reported),
     edited: edit !== undefined,
     ...(sectionName === undefined ? {} : { sectionName }),
   };
@@ -577,7 +669,7 @@ function buildDraft(
     type,
     subjectId: ids.subjectId ?? '',
     topicId: ids.topicId,
-    difficulty: readDifficulty(row, issues),
+    difficulty: readDifficulty(row, catalog, issues),
     questionCode: readCode(row, issues),
     stem: localized('stem', content.html),
     passage: localized('passage', content.html),
@@ -633,10 +725,16 @@ function resolveTaxonomy(
   return { subjectId, topicId };
 }
 
-function readDifficulty(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['difficulty'] {
+function readDifficulty(
+  row: CsvRow,
+  catalog: TaxonomyCatalog,
+  issues: ValidationIssue[],
+): QuestionDraft['difficulty'] {
   const raw = cellOf(row, 'difficulty');
   const parsed = difficultyLevelSchema.safeParse(raw.toUpperCase());
   if (parsed.success) return parsed.data;
+  const chosen = catalog.difficultyAliases?.get(canonicalName(raw));
+  if (chosen) return chosen;
 
   issues.push({
     code: CODE.DIFFICULTY_INVALID,
@@ -827,6 +925,7 @@ export function withoutDrafts(
         pictures: _pictures,
         editable: _editable,
         assignmentId: _assignmentId,
+        missing: _missing,
         ...row
       }) => row,
     ),

@@ -7,6 +7,7 @@ import {
   AppException,
   AUDIT_ACTION,
   ErrorCodes,
+  IMPORT_FIX_KINDS,
   IMPORT_LOG_STATUS,
   IMPORT_TARGET_BANK,
   PAPER_SOURCES,
@@ -16,7 +17,10 @@ import {
   type QuestionDraft,
   type QuestionImportDraft,
   type QuestionImportPlan,
+  type QuestionImportRemap,
   type QuestionImportResult,
+  type DifficultyLevel,
+  difficultyLevelSchema,
   sectionAnswerKindOf,
 } from '@iace/contracts';
 import {
@@ -48,7 +52,12 @@ import {
 import { buildQuestionTemplate } from './question-workbook';
 import { IMMUTABLE_CACHE_CONTROL, applyImageUrls, stripImageSrc } from './question-images';
 import { rewriteDraftHtml } from './question-content';
-import { loadTaxonomyCatalog, lookupName } from './taxonomy-context';
+import {
+  loadTaxonomyCatalog,
+  lookupName,
+  topicKey,
+  type TaxonomyCatalog,
+} from './taxonomy-context';
 
 const UPLOAD_GONE = 'That upload is no longer available';
 const ALREADY_IMPORTED = 'That file has already been imported';
@@ -152,7 +161,7 @@ export class QuestionImportService {
       throw formRefusal(ErrorCodes.CONFLICT, PREVIEWED_ELSEWHERE);
     }
     if (into.test) await this.openSectionsOf(into.test.testId);
-    const planning = await this.plan(file, await this.overlayOf(log.id), log.target);
+    const planning = await this.plan(file, await this.overlayOf(log.id), log.target, log.remaps);
     const creatable = planning.rows.filter(
       (row): row is PlannedRow & { draft: NonNullable<PlannedRow['draft']> } =>
         row.action === 'create' && row.draft !== null,
@@ -253,7 +262,7 @@ export class QuestionImportService {
   /** Every row's question as the review window opens it, pictures given urls it can draw. */
   async drafts(importLogId: string, actorId: string): Promise<QuestionImportDraft[]> {
     const { log, file } = await this.openRun(importLogId, actorId);
-    const planning = await this.plan(file, await this.overlayOf(log.id), log.target);
+    const planning = await this.plan(file, await this.overlayOf(log.id), log.target, log.remaps);
     return planning.rows.map((row) => ({ line: row.line, draft: this.drawable(row.editable) }));
   }
 
@@ -298,8 +307,65 @@ export class QuestionImportService {
       update: change,
     });
 
-    const planning = await this.planTable(table, await this.overlayOf(log.id), log.target);
+    const planning = await this.planTable(
+      table,
+      await this.overlayOf(log.id),
+      log.target,
+      log.remaps,
+    );
     return withoutDrafts(planning, log.id);
+  }
+
+  /** The run judged again as the bank stands now, as after a subject or topic was added for it. */
+  async rejudge(importLogId: string, actorId: string): Promise<QuestionImportPlan> {
+    const { log, file } = await this.openRun(importLogId, actorId);
+    const planning = await this.plan(file, await this.overlayOf(log.id), log.target, log.remaps);
+    return withoutDrafts(planning, log.id);
+  }
+
+  /** Every row of the run whose sheet has `from` reads `to`: held on the run, never on the sheet or the bank. */
+  async remap(
+    importLogId: string,
+    change: QuestionImportRemap,
+    actorId: string,
+  ): Promise<QuestionImportPlan> {
+    const { log, file } = await this.openRun(importLogId, actorId);
+    await this.assertRemapTarget(change);
+    const remaps = remapsOf(log.remaps);
+    const from = lookupName(change.from);
+    if (change.kind === IMPORT_FIX_KINDS.SUBJECT) remaps.subject[from] = change.to;
+    if (change.kind === IMPORT_FIX_KINDS.TOPIC) {
+      remaps.topic[topicKey(change.subjectId ?? '', from)] = change.to;
+    }
+    if (change.kind === IMPORT_FIX_KINDS.DIFFICULTY) {
+      remaps.difficulty[from] = difficultyLevelSchema.parse(change.to);
+    }
+    const stored = remaps as unknown as Prisma.InputJsonValue;
+    await this.prisma.importLog.update({ where: { id: log.id }, data: { remaps: stored } });
+
+    const planning = await this.plan(
+      file,
+      await this.overlayOf(log.id),
+      log.target,
+      remaps as unknown as Prisma.JsonValue,
+    );
+    return withoutDrafts(planning, log.id);
+  }
+
+  /** A run may only be pointed at a subject or topic that is really there, the topic under its subject. */
+  private async assertRemapTarget(change: QuestionImportRemap): Promise<void> {
+    const refused = (message: string) => formRefusal(ErrorCodes.VALIDATION_ERROR, message);
+    if (change.kind === IMPORT_FIX_KINDS.DIFFICULTY) {
+      if (!difficultyLevelSchema.safeParse(change.to).success) throw refused('Choose a difficulty');
+      return;
+    }
+    const found =
+      change.kind === IMPORT_FIX_KINDS.SUBJECT
+        ? await this.prisma.subject.count({ where: { id: change.to } })
+        : await this.prisma.topic.count({
+            where: { id: change.to, subjectId: change.subjectId ?? '' },
+          });
+    if (found === 0) throw refused('That is not in the bank any more');
   }
 
   /** A previewed, uncommitted run, and only for the admin who previewed it — a super admin included. */
@@ -346,19 +412,22 @@ export class QuestionImportService {
     file: Buffer,
     overlay?: RowOverlay,
     target?: string | null,
+    remaps?: Prisma.JsonValue,
   ): Promise<QuestionImportPlanning> {
-    return this.planTable(await readQuestionTable(file), overlay, target);
+    return this.planTable(await readQuestionTable(file), overlay, target, remaps);
   }
 
   private async planTable(
     table: CsvTable,
     overlay?: RowOverlay,
     target?: string | null,
+    remaps?: Prisma.JsonValue,
   ): Promise<QuestionImportPlanning> {
-    const [catalog, scope] = await Promise.all([
+    const [loaded, scope] = await Promise.all([
       loadTaxonomyCatalog(this.prisma),
       this.scopeOf(target ?? null),
     ]);
+    const catalog = withRemaps(loaded, remapsOf(remaps ?? null));
     const { drafts, leftOut } = overlay ?? {};
 
     // Planned twice: the first pass only harvests the keys the bank is then asked about.
@@ -567,4 +636,34 @@ function targetOf(into: ImportInto | undefined): string {
   if (!into) return IMPORT_TARGET_BANK;
   if (isWholeTest(into)) return `${IMPORT_TARGET_TEST}${into.testId}`;
   return `${into.testId}/${into.baseConfigSectionId}`;
+}
+
+/** A run's readings of sheet values the bank lacks, each keyed by the value as `lookupName` folds it. */
+interface RunRemaps {
+  subject: Record<string, string>;
+  /** Keyed by `topicKey(subjectId, name)`, as the catalog keys its own. */
+  topic: Record<string, string>;
+  difficulty: Record<string, DifficultyLevel>;
+}
+
+function remapsOf(stored: Prisma.JsonValue | null): RunRemaps {
+  const held = (stored ?? {}) as Partial<RunRemaps>;
+  return {
+    subject: { ...held.subject },
+    topic: { ...held.topic },
+    difficulty: { ...held.difficulty },
+  };
+}
+
+/** The bank's taxonomy with this run's readings laid over it, so a mapped name resolves like a real one. */
+function withRemaps(catalog: TaxonomyCatalog, remaps: RunRemaps): TaxonomyCatalog {
+  return {
+    ...catalog,
+    subjectIdByName: new Map([...catalog.subjectIdByName, ...Object.entries(remaps.subject)]),
+    topicIdBySubjectAndName: new Map([
+      ...catalog.topicIdBySubjectAndName,
+      ...Object.entries(remaps.topic),
+    ]),
+    difficultyAliases: new Map(Object.entries(remaps.difficulty)),
+  };
 }

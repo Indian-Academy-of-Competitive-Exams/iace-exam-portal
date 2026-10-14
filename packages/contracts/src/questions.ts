@@ -817,6 +817,35 @@ const questionImportSummarySchema = z.object({
   leftOut: z.number().int(),
 });
 
+/** A sheet value the bank does not hold, and what a reason in the preview can do about it. */
+export const IMPORT_FIX_KINDS = {
+  SUBJECT: 'SUBJECT',
+  TOPIC: 'TOPIC',
+  DIFFICULTY: 'DIFFICULTY',
+} as const;
+const importFixKindSchema = z.enum(IMPORT_FIX_KINDS);
+export type ImportFixKind = z.infer<typeof importFixKindSchema>;
+
+const importFixSchema = z.object({
+  kind: importFixKindSchema,
+  /** The value as the sheet has it. */
+  value: z.string(),
+  /** A topic's subject: a chosen or created topic goes under it. */
+  subjectId: z.string().nullish(),
+  /** The closest values the bank does hold, best first: an id for a subject or topic, else the value. */
+  suggestions: z.array(z.object({ value: z.string(), label: z.string() })),
+});
+export type ImportFix = z.infer<typeof importFixSchema>;
+
+/** Every row whose sheet has `from` for this attribute reads `to` instead, held on the run, never on the sheet. */
+export const questionImportRemapSchema = z.object({
+  kind: importFixKindSchema,
+  from: z.string().min(1),
+  to: z.string().min(1),
+  subjectId: z.string().nullish(),
+});
+export type QuestionImportRemap = z.infer<typeof questionImportRemapSchema>;
+
 export const questionImportPlanSchema = importPlanSchema(
   questionImportRowSchema,
   questionImportSummarySchema,
@@ -824,7 +853,11 @@ export const questionImportPlanSchema = importPlanSchema(
   /** The run this preview opened. Commit names it rather than re-uploading the file. */
   importLogId: z.string(),
   /** Each reason a row is not imported, once, with how many rows it holds back; most first. */
-  causes: z.array(z.object({ message: z.string(), count: z.number().int() })).optional(),
+  causes: z
+    .array(
+      z.object({ message: z.string(), count: z.number().int(), fix: importFixSchema.optional() }),
+    )
+    .optional(),
 });
 export type QuestionImportPlan = z.infer<typeof questionImportPlanSchema>;
 
@@ -931,4 +964,8 @@ export const QUESTION_IMPORT_ROUTES = {
   row: (importLogId: string, line: number) => `/imports/questions/${importLogId}/rows/${line}`,
   leaveOut: (importLogId: string, line: number) =>
     `/imports/questions/${importLogId}/rows/${line}/left-out`,
+  /** One missing value read as another, on every row of the run that has it. */
+  remap: (importLogId: string) => `/imports/questions/${importLogId}/remap`,
+  /** The run judged again as the bank stands now — after a subject or topic was added. */
+  rejudge: (importLogId: string) => `/imports/questions/${importLogId}/rejudge`,
 } as const;

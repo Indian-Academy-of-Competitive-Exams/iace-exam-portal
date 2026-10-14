@@ -16,6 +16,7 @@ import { AuditService } from '../src/audit/audit.service';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import { FakeStorage } from '../test/support/fakes';
 import {
+  BANK,
   makeCatalog,
   makeQuestionBank,
   makeSection,
@@ -35,22 +36,26 @@ after(() => prisma.$disconnect());
 const COLUMNS = [QUESTION_IMPORT_SECTION_COLUMN, ...QUESTION_IMPORT_COLUMNS];
 
 /** A whole-test sheet as CSV: each row names its section and asks a question nobody else asks. */
-function sheetOf(...rows: { section: string; stem: string }[]): Buffer {
+function sheetOf(
+  ...rows: { section: string; stem: string; subject?: string; difficulty?: string }[]
+): Buffer {
   const cells = (pick: (column: (typeof COLUMNS)[number]) => string) => COLUMNS.map(pick).join(',');
-  const lines = rows.map(({ section, stem }) => {
-    const row: Partial<Record<QuestionImportColumnKey | 'section', string>> = {
-      section,
-      subject: 'Quantitative Aptitude',
-      difficulty: 'medium',
-      stem_en: stem,
-      option1_en: '25',
-      option2_en: '45',
-      option3_en: '35',
-      option4_en: '40',
-      correct_option: '2',
-    };
-    return cells((column) => row[column.key] ?? '');
-  });
+  const lines = rows.map(
+    ({ section, stem, subject = 'Quantitative Aptitude', difficulty = 'medium' }) => {
+      const row: Partial<Record<QuestionImportColumnKey | 'section', string>> = {
+        section,
+        subject,
+        difficulty,
+        stem_en: stem,
+        option1_en: '25',
+        option2_en: '45',
+        option3_en: '35',
+        option4_en: '40',
+        correct_option: '2',
+      };
+      return cells((column) => row[column.key] ?? '');
+    },
+  );
   return Buffer.from([cells((column) => column.header), ...lines].join('\n'));
 }
 
@@ -138,6 +143,67 @@ describe('QuestionImportService — a whole typed test in one sheet', () => {
     await assert.rejects(
       () => run(sheetOf(...asked('Quant', 1))),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT,
+    );
+  });
+});
+
+describe('QuestionImportService — a sheet value the bank lacks, fixed from the preview', () => {
+  /** THE failure this prevents: a whole sheet skipped for one name, with re-uploading the only way out. */
+  it('reads a missing subject and difficulty as ones the bank holds, for the run alone', async () => {
+    const { imports, into } = await aTest();
+    const plan = await imports.preview(
+      sheetOf({
+        section: 'Quant',
+        stem: 'What is 7% of 9731?',
+        subject: 'Quant Aptitude',
+        difficulty: 'B',
+      }),
+      OWNER,
+      into,
+    );
+    assert.equal(plan.rows[0]?.action, 'skip');
+
+    await imports.remap(
+      plan.importLogId,
+      { kind: 'SUBJECT', from: 'quant aptitude', to: BANK.QUANT },
+      OWNER,
+    );
+    const judged = await imports.remap(
+      plan.importLogId,
+      { kind: 'DIFFICULTY', from: 'B', to: 'HIGH' },
+      OWNER,
+    );
+
+    assert.equal(judged.rows[0]?.action, 'create');
+    await imports.commit(plan.importLogId, { actorId: OWNER, test: into });
+    const written = await prisma.question.findFirstOrThrow({
+      where: { stemHash: { not: null } },
+      orderBy: { createdAt: 'desc' },
+    });
+    assert.deepEqual([written.subjectId, written.difficulty], [BANK.QUANT, 'HIGH']);
+    assert.equal(await prisma.subject.count({ where: { name: 'QUANT APTITUDE' } }), 0);
+  });
+
+  it('takes a subject added to the bank on the next judgement, without a new upload', async () => {
+    const { imports, into } = await aTest();
+    const plan = await imports.preview(
+      sheetOf({ section: 'Quant', stem: 'What is 8% of 9731?', subject: 'Numerical Ability' }),
+      OWNER,
+      into,
+    );
+    await prisma.subject.create({ data: { name: 'NUMERICAL ABILITY' } });
+
+    assert.equal((await imports.rejudge(plan.importLogId, OWNER)).rows[0]?.action, 'create');
+  });
+
+  it('refuses to point a run at a subject that is not there', async () => {
+    const { imports, into } = await aTest();
+    const plan = await imports.preview(sheetOf(...asked('Quant', 1)), OWNER, into);
+
+    await assert.rejects(
+      () =>
+        imports.remap(plan.importLogId, { kind: 'SUBJECT', from: 'X', to: randomUUID() }, OWNER),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.VALIDATION_ERROR,
     );
   });
 });

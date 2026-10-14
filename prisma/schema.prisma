@@ -1042,6 +1042,8 @@ model ImportLog {
   fileS3Key  String?
   // Where a question run may be imported: 'bank', or 'testId/baseConfigSectionId'; null before runs kept it.
   target     String?
+  // A question run's missing sheet values read as values the bank holds: { subject, topic, difficulty } maps.
+  remaps     Json?
   total      Int          @default(0)
   created    Int          @default(0)
   updated    Int          @default(0)

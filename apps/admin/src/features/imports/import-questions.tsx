@@ -40,6 +40,7 @@ import { api } from '../../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES, sectionWorkQueryKey } from '../../lib/constants';
 import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../../lib/tours';
 import { useErrorRows } from './use-error-rows';
+import { ImportCauses } from './import-causes';
 import { ImportWorkspace } from '../authoring/import-workspace';
 
 /** Where the sheet lands: one section's typist, a whole typed test (no section), or the bank (null). */
@@ -109,20 +110,6 @@ function BlurryNotice({ count }: Readonly<{ count: number }>) {
   return (
     <Alert variant="warning">
       {String.raw`${count} ${count === 1 ? 'picture looks' : 'pictures look'} like a formula saved at text size. They import, but read blurry: type each as \( … \) in the sheet to make it a real equation.`}
-    </Alert>
-  );
-}
-
-/** One line per reason that holds back several rows, so fifty rows of one mistake read as one. */
-function CausesNotice({ causes }: Readonly<{ causes: QuestionImportPlan['causes'] }>) {
-  if (!causes?.length) return null;
-  return (
-    <Alert variant="warning">
-      <ul className="flex flex-col gap-1">
-        {causes.map((cause) => (
-          <li key={cause.message}>{`${cause.message} — ${plural(cause.count, 'row')}`}</li>
-        ))}
-      </ul>
     </Alert>
   );
 }
@@ -330,7 +317,11 @@ export function ImportQuestionsPage() {
       stats={plan ? statsOf(plan, repeated) : undefined}
     >
       <BlurryNotice count={blurry} />
-      <CausesNotice causes={plan?.causes} />
+      <ImportCauses
+        plan={plan}
+        run={plan && !intake.result && plan.importLogId ? plan.importLogId : null}
+        onPlan={(judged) => intake.stage(intake.file, judged)}
+      />
 
       <Table>
         <thead>

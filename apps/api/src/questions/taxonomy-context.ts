@@ -1,3 +1,4 @@
+import { type DifficultyLevel } from '@iace/contracts';
 import { canonicalName } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { emptyTaxonomy, type TaxonomyContext } from './question-core';
@@ -55,6 +56,8 @@ export interface TaxonomyCatalog {
   subjectIdByName: Map<string, string>;
   /** Keyed by subject, because a topic name is only unique within one. */
   topicIdBySubjectAndName: Map<string, string>;
+  /** A run's own readings of a difficulty the sheet wrote some other way, by canonical value. */
+  difficultyAliases?: ReadonlyMap<string, DifficultyLevel>;
 }
 
 export const topicKey = (subjectId: string, name: string) => `${subjectId}/${name}`;

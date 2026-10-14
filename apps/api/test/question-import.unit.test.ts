@@ -243,6 +243,47 @@ describe('a sheet imported into a whole typed test', () => {
   });
 });
 
+describe('a missing sheet value, and what can be done about it', () => {
+  /** THE failure this prevents: thirty rows skipped for one subject name, with nothing to do but re-upload. */
+  it('names a subject the bank lacks once, with the closest subjects it does hold', () => {
+    const planning = plan([
+      { ...MCQ_ROW, subject: 'Aptitude Quant', stem_en: 'What is 1% of 9731?' },
+      { ...MCQ_ROW, subject: 'aptitude quant', stem_en: 'What is 2% of 9731?' },
+    ]);
+
+    assert.deepEqual(planning.causes, [
+      {
+        message: 'There is no subject called "Aptitude Quant"',
+        count: 2,
+        fix: {
+          kind: 'SUBJECT',
+          value: 'Aptitude Quant',
+          suggestions: [{ value: SUBJECT, label: 'QUANTITATIVE APTITUDE' }],
+        },
+      },
+    ]);
+  });
+
+  it('offers every difficulty for one the sheet wrote some other way, and reads it once chosen', () => {
+    const skipped = plan([{ ...MCQ_ROW, difficulty: 'B' }]);
+    assert.deepEqual(
+      skipped.causes?.[0]?.fix?.suggestions.map((choice) => choice.value),
+      ['LOW', 'MEDIUM', 'HIGH'],
+    );
+
+    const chosen = planQuestionImport(
+      table({ ...MCQ_ROW, difficulty: 'B' }),
+      {
+        ...catalog(),
+        difficultyAliases: new Map([['B', 'HIGH']]),
+      },
+      noDedup(),
+    );
+    assert.equal(chosen.rows[0]?.action, 'create');
+    assert.equal(chosen.rows[0]?.draft?.difficulty, 'HIGH');
+  });
+});
+
 describe('the question sheet', () => {
   it('plans a complete row as a create', () => {
     const result = plan([MCQ_ROW]);

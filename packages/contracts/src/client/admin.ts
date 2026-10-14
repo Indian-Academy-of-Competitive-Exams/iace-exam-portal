@@ -233,6 +233,7 @@ import {
   type QuestionDraftInput,
   type QuestionImportDraft,
   type QuestionImportLeaveOut,
+  type QuestionImportRemap,
   type QuestionImportPlan,
   type QuestionImportResult,
   type QuestionAvailability,
@@ -1075,6 +1076,15 @@ export function adminClient(core: ApiCore) {
           questionImportPlanSchema,
           body,
         ),
+
+      remapQuestionRun: (
+        importLogId: string,
+        body: QuestionImportRemap,
+      ): Promise<QuestionImportPlan> =>
+        write('POST', QUESTION_IMPORT_ROUTES.remap(importLogId), questionImportPlanSchema, body),
+
+      rejudgeQuestionRun: (importLogId: string): Promise<QuestionImportPlan> =>
+        write('POST', QUESTION_IMPORT_ROUTES.rejudge(importLogId), questionImportPlanSchema),
     },
 
     /** The landing screen. One payload, carrying only the bands the caller may see. */

@@ -661,6 +661,11 @@ letter-based answer key are why real uploads were rejected wholesale.
   claim a test it is not on — so extras go through the bank's own import. A picked test does not take
   one (import into the bank, then pick); an offered test takes nothing. The preview collapses a
   reason held against several rows into one line with its count.
+- **A sheet value the bank lacks is fixed from the preview, not by re-uploading.** A subject, topic or
+  difficulty nobody recognises is one reason with its count and the closest values the bank holds
+  (by shared words). Choosing one reads every row that has it as that value — held on the run
+  (`ImportLog.remaps`), never on the sheet or the bank. Whoever holds QUESTION_MANAGEMENT write may
+  instead create the subject or topic, and the run is judged again at once.
 - **A row repeating an earlier line of the same file is told apart from one already in the bank.**
   Both are skipped as duplicates, but `duplicateOf` names the line for the first and a question id
   for the second (`repeatedLineOf`), and the preview says which.
