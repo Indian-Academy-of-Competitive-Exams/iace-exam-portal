@@ -113,12 +113,14 @@ export class FcmSender {
 const sendUrl = (projectId: string) =>
   `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
 
-/** The browser's payload rule kept: a title and a way in, never a body — a lock screen renders it. */
+/** The browser's payload rule kept: a title, the bell's one fixed line, and a way in — never a score. */
 export function messageFor(token: string, payload: PushPayload): object {
   return {
     message: {
       token,
-      notification: { title: payload.title },
+      notification: payload.body
+        ? { title: payload.title, body: payload.body }
+        : { title: payload.title },
       data: { url: payload.url, notificationId: payload.notificationId },
       android: { ttl: `${TTL_SEC}s`, priority: 'HIGH' },
       apns: { headers: { 'apns-expiration': String(Math.floor(Date.now() / 1000) + TTL_SEC) } },

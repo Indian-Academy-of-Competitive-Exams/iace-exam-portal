@@ -56,6 +56,7 @@ self.addEventListener('push', (event) => {
       self.registration.showNotification(message.title, {
         icon: '/icon-192.png',
         badge: '/icon-192.png',
+        body: message.body,
         tag: message.notificationId,
         data: { url: message.url },
       }),
@@ -116,6 +117,7 @@ function readPush(data) {
     const payload = data.json();
     return {
       title: typeof payload.title === 'string' ? payload.title : fallback.title,
+      body: typeof payload.body === 'string' ? payload.body : undefined,
       url: typeof payload.url === 'string' ? payload.url : fallback.url,
       notificationId:
         typeof payload.notificationId === 'string' ? payload.notificationId : undefined,

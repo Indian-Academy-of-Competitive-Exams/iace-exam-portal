@@ -41,6 +41,7 @@ interface Claimed {
   id: string;
   studentId: string | null;
   title: string;
+  body: string | null;
   actBy: Date | null;
   paidChannels: PaidChannel[] | null;
 }
@@ -105,6 +106,7 @@ export class NotificationsProcessor extends ReportingWorkerHost {
                 notificationId: row.id,
                 studentId: row.studentId,
                 title: row.title,
+                body: row.body,
               },
             ],
       ),
@@ -124,8 +126,8 @@ export class NotificationsProcessor extends ReportingWorkerHost {
             AND ("nextPushAt" IS NULL OR "nextPushAt" <= now())
             ORDER BY "createdAt" LIMIT ${RELAY_BATCH}
             FOR UPDATE SKIP LOCKED)
-          RETURNING "id", "studentId", "title", "actBy", "announcementId")
-        SELECT c."id", c."studentId", c."title", c."actBy",
+          RETURNING "id", "studentId", "title", "body", "actBy", "announcementId")
+        SELECT c."id", c."studentId", c."title", c."body", c."actBy",
           a."paidChannels"::text[] AS "paidChannels"
         FROM claimed c LEFT JOIN "Announcement" a ON a."id" = c."announcementId"`;
 

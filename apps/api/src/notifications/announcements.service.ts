@@ -134,7 +134,11 @@ export class AnnouncementsService {
           ...ids.map((studentId) => this.intentFor(studentId, sent)),
         );
       } else {
-        await this.push.broadcast(ids, { broadcastId: sent.id, title: sent.title });
+        await this.push.broadcast(ids, {
+          broadcastId: sent.id,
+          title: sent.title,
+          body: sent.body,
+        });
       }
       after = ids.at(-1);
     }

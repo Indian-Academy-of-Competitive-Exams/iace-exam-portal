@@ -15,6 +15,7 @@ const CHUNK = 1000;
 
 /** What the bell and the push call a test with no title yet. */
 export const OPENED_TITLE = 'A new test is open';
+export const OPENED_LINE = 'It is open now. Tap to see it in your tests.';
 
 /** A sweep speaks about a handful of tests, never a backlog — the watermark keeps it that way. */
 const TESTS_PER_SWEEP = 20;
@@ -69,7 +70,7 @@ export class TestOpeningService {
     // Stamped first: a crash before the push costs the push, never a second one.
     await this.prisma.test.update({ where: { id: test.id }, data: { announcedAt: now } });
     const recipients = await this.access.studentsReaching(test.testSeriesId);
-    const message = { broadcastId: test.id, title: test.title ?? OPENED_TITLE };
+    const message = { broadcastId: test.id, title: test.title ?? OPENED_TITLE, body: OPENED_LINE };
     for (const batch of chunked(recipients)) await this.push.broadcast(batch, message);
   }
 }

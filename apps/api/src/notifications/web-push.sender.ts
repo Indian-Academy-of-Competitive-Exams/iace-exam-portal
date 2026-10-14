@@ -15,11 +15,23 @@ export interface PushTarget {
   auth: string;
 }
 
-/** A title and a link the app resolves. Never a body: a push must carry no score and no answer. */
+/** A title, one line of the bell's fixed copy, and a link the app resolves; never a score or an answer. */
 export interface PushPayload {
   title: string;
+  /** One line under the title; the bell's own fixed copy, which never names a score. */
+  body?: string;
   url: string;
   notificationId: string;
+}
+
+/** Past this a lock screen shows an ellipsis anyway; two lines on a phone, collapsed. */
+const PUSH_LINE_MAX = 140;
+
+/** The notification's text as one push line, or nothing when it has none. */
+export function pushLine(text: string | null | undefined): string | undefined {
+  const line = text?.replace(/\s+/g, ' ').trim();
+  if (!line) return undefined;
+  return line.length > PUSH_LINE_MAX ? `${line.slice(0, PUSH_LINE_MAX - 1).trimEnd()}…` : line;
 }
 
 /** GONE is the endpoint telling us it is dead, which is the one outcome that deletes a row. */

@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { TEST_STATUS, type TestStatus } from '@iace/contracts';
 import { type BroadcastPush } from '../src/notifications/push.service';
-import { OPENED_TITLE, TestOpeningService } from '../src/notifications/test-opening.service';
+import {
+  OPENED_TITLE,
+  TestOpeningService,
+  OPENED_LINE,
+} from '../src/notifications/test-opening.service';
 import { makeCatalog, makeStudent, makeTest, resetDatabase, testPrisma } from './support/database';
 
 /** A test opens by the CLOCK, so the sweep is the producer and `announcedAt` is what bounds it. */
@@ -52,7 +56,10 @@ describe('Telling a cohort a test has opened', () => {
     assert.equal(await service.sweep(NOW), 1);
 
     assert.deepEqual(pushed, [
-      { studentIds: cohort, message: { broadcastId: test.id, title: 'Mock 4' } },
+      {
+        studentIds: cohort,
+        message: { broadcastId: test.id, title: 'Mock 4', body: OPENED_LINE },
+      },
     ]);
     assert.equal(await prisma.notification.count(), 0);
   });

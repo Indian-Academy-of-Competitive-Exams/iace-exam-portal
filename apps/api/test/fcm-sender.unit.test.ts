@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { messageFor, outcomeOf } from '../src/notifications/fcm.sender';
-import { PUSH_OUTCOMES } from '../src/notifications/web-push.sender';
+import { PUSH_OUTCOMES, pushLine } from '../src/notifications/web-push.sender';
 
 const PAYLOAD = { title: 'Your result is ready', url: '/notifications', notificationId: 'ntf_1' };
 
@@ -18,6 +18,15 @@ describe('The message FCM is sent', () => {
     assert.equal(message.token, 'fcm-one');
     assert.deepEqual(message.notification, { title: 'Your result is ready' });
     assert.deepEqual(message.data, { url: '/notifications', notificationId: 'ntf_1' });
+  });
+
+  it('carries the bell line under the title when there is one', () => {
+    const line = 'Open the test to see your score, rank and answers.';
+    const { message } = messageFor('fcm-one', { ...PAYLOAD, body: line }) as {
+      message: { notification: object };
+    };
+
+    assert.deepEqual(message.notification, { title: 'Your result is ready', body: line });
   });
 
   /** Six hours: long enough to reach a phone that is asleep, short enough not to land stale. */
@@ -49,5 +58,21 @@ describe('What FCM answered', () => {
   /** A body that is not JSON is a proxy answering, not FCM — which is not the token's fault. */
   it('keeps the device when the answer cannot be read at all', () => {
     assert.equal(outcomeOf(400, '<html>Bad Request</html>'), PUSH_OUTCOMES.FAILED);
+  });
+});
+
+describe('pushLine', () => {
+  it('folds the text onto one line and keeps a short one whole', () => {
+    assert.equal(pushLine('  Added:\n SSC CGL. '), 'Added: SSC CGL.');
+  });
+
+  it('cuts a long announcement to what two lines can show', () => {
+    const line = pushLine('word '.repeat(60));
+    assert.ok(line && line.length <= 140 && line.endsWith('…'));
+  });
+
+  it('sends no line for a notification that has none', () => {
+    assert.equal(pushLine(null), undefined);
+    assert.equal(pushLine('   '), undefined);
   });
 });

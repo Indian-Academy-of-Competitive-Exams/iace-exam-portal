@@ -17,20 +17,22 @@ import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { AppConfigService } from '../config/app-config.service';
 import { FcmSender } from './fcm.sender';
-import { PUSH_OUTCOMES, WebPushSender, type PushOutcome } from './web-push.sender';
+import { PUSH_OUTCOMES, WebPushSender, pushLine, type PushOutcome } from './web-push.sender';
 import { MS_PER_MINUTE } from '../common/time/units';
 
-/** A broadcast's push: its title, and the id the bell lists it under. */
+/** A broadcast's push: its title, its line, and the id the bell lists it under. */
 export interface BroadcastPush {
   broadcastId: string;
   title: string;
+  body?: string | null;
 }
 
-/** What one push is sent from. The title only — the body may name marks, and a push must not. */
+/** What one push is sent from: the bell row's title and its fixed copy, which names no marks. */
 export interface PushDelivery {
   notificationId: string;
   studentId: string;
   title: string;
+  body?: string | null;
 }
 
 @Injectable()
@@ -111,6 +113,7 @@ export class PushService {
       const { browsers, phones } = await this.targetsOf(studentIds);
       const payload = {
         title: message.title,
+        ...lineOf(message.body),
         url: NOTIFICATION_INBOX_PATH,
         notificationId: message.broadcastId,
       };
@@ -235,6 +238,7 @@ export class PushService {
   private async push(input: PushDelivery, reach: Reach, outcome: PageOutcome): Promise<void> {
     const payload = {
       title: input.title,
+      ...lineOf(input.body),
       url: NOTIFICATION_INBOX_PATH,
       notificationId: input.notificationId,
     };
@@ -428,4 +432,10 @@ function ledgerRow(
     attempts,
     lastError: `Nothing accepted the push (${results.length} tried)`,
   };
+}
+
+/** No key at all when there is no line, so a title-only push stays exactly that. */
+function lineOf(text: string | null | undefined): { body?: string } {
+  const body = pushLine(text);
+  return body ? { body } : {};
 }
