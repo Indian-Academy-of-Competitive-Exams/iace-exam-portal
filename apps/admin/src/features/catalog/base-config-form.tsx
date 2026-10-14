@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm, useWatch, type Path, type UseFormReturn } from 'react-hook-form';
@@ -93,6 +93,7 @@ import { useAuth } from '../../providers/auth';
 import { ExamStagePicker } from '../../components/exam-picker';
 import { SubjectPicker } from '../../components/taxonomy-picker';
 import { sectionsAfterSessionRemoved, sectionsInSession } from './base-config-sessions';
+import { useSubjectLanguage } from '../authoring/subject-languages';
 
 // One stage blueprint; totalQuestions/totalMarks are never typed — the server sums them, and configTotalsOf mirrors that while editing.
 
@@ -1008,6 +1009,15 @@ function SectionCard({
   const isTyping = typingPreset !== '';
   const descriptive = useWatch({ control: form.control, name: `sections.${index}.descriptive` });
   const paperLanguages = useWatch({ control: form.control, name: 'languages' }) ?? [];
+  const language = useWatch({ control: form.control, name: `sections.${index}.language` });
+  const tested = useSubjectLanguage(subjectId || undefined);
+  const testedCode = tested ? (tested.toUpperCase() as LanguageCode) : '';
+  // A section of a language subject is sat in that language alone, so choosing the subject sets it.
+  useEffect(() => {
+    if (testedCode && language !== testedCode) {
+      form.setValue(`sections.${index}.language`, testedCode, { shouldDirty: true });
+    }
+  }, [form, index, language, testedCode]);
 
   // A typing test is one unmarked passage on its standard's clock, so choosing one fills all four.
   const chooseTyping = (key: string) => {

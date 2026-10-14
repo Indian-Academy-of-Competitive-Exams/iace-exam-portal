@@ -21,7 +21,9 @@ import { DOMAIN_EVENTS } from '../src/common/events';
 import { FakeEventBus, FakeRedis } from '../test/support/fakes';
 import {
   makeAdmin,
+  makeCatalog,
   makePaper,
+  makeSection,
   makeStage,
   resetDatabase,
   testPrisma,
@@ -658,6 +660,34 @@ describe('BaseConfigsService — a config a test is built on', () => {
     await assert.rejects(
       () => service.update(configId, { sections: posted(['TE']) }),
       /English can only be in the paper's own languages/,
+    );
+  });
+
+  /** THE failure this prevents: a Hindi Comprehension section an English-medium candidate is shown blank. */
+  it('sits a section of a language subject in that language alone', async () => {
+    const catalog = await makeCatalog(prisma);
+    await makeSection(prisma, catalog, { name: 'Hindi' });
+    const configId = catalog.baseConfigId;
+    const hindi = await prisma.subject.create({
+      data: { name: 'HINDI COMPREHENSION', language: 'HI' },
+    });
+    await prisma.baseConfig.update({ where: { id: configId }, data: { languages: ['EN', 'HI'] } });
+    const [stored] = await prisma.baseConfigSection.findMany({ where: { baseConfigId: configId } });
+    const posted = (languages: ('EN' | 'HI')[]) => [
+      {
+        name: stored?.name ?? 'Hindi',
+        order: 0,
+        subjectId: hindi.id,
+        questionCount: stored?.questionCount ?? 1,
+        marksPerQuestion: Number(stored?.marksPerQuestion ?? 1),
+        negativeMarks: Number(stored?.negativeMarks ?? 0),
+        languages,
+      },
+    ];
+
+    await assert.rejects(
+      () => service.update(configId, { sections: posted([]) }),
+      /tests a language, so it is sat in that language alone/,
     );
   });
 

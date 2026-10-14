@@ -1,7 +1,6 @@
 import {
   LANGUAGE_LABELS,
   ANSWER_MODE,
-  DEFAULT_LANGUAGE,
   FORMULA_PICTURE_MAX_HEIGHT,
   LANGUAGE_ORDER,
   MCQ_OPTION_MAX,
@@ -16,6 +15,7 @@ import {
   DIFFICULTY_LABELS,
   DIFFICULTY_LEVELS,
   canonicalName,
+  leadLanguageIn,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
   TAG_SEPARATOR,
@@ -452,7 +452,7 @@ function planRow(
   issues.push(...validateQuestion(draft, catalog.context));
 
   const languages = languagesIn(draft.stem);
-  const stemHash = languages.includes(DEFAULT_LANGUAGE) ? computeStemHash(draft) : null;
+  const stemHash = languages.length > 0 ? computeStemHash(draft) : null;
   const duplicateOf = stemHash ? duplicateFor(stemHash, dedup, lineByHash) : null;
 
   // Only a row that would be written can clash: a row that is already in the bank is carrying the code it was imported with, and re-uploading last week's sheet must not turn every coded row into an error.
@@ -485,7 +485,7 @@ function planRow(
   return {
     line: row.line,
     action,
-    stemPreview: preview(draft.stem[DEFAULT_LANGUAGE] ?? ''),
+    stemPreview: preview(draft.stem[leadLanguageIn(draft.stem)] ?? ''),
     subjectName: names.subject || null,
     topicName: names.topic || null,
     languages,

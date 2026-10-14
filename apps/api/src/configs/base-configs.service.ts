@@ -136,7 +136,11 @@ export class BaseConfigsService {
     const timerTemplate = input.timerTemplate ?? TIMER_TEMPLATE.COMPOSITE_FREE;
     const modules = input.modules ?? [];
     this.assertShape(timerTemplate, input.sections, modules, input.durationSec);
-    assertSectionLanguages(input.languages ?? [], input.sections);
+    assertSectionLanguages(
+      input.languages ?? [],
+      input.sections,
+      await this.subjectLanguagesOf(input.sections),
+    );
     this.assertRenderMode(
       input.examTemplate ?? EXAM_TEMPLATE.DEFAULT,
       input.defaultTestUi ?? TEST_UI.CBT,
@@ -200,9 +204,11 @@ export class BaseConfigsService {
       modules ?? config.modules,
       input.durationSec ?? config.durationSec,
     );
+    const judged = sections ?? config.sections.map(toSectionDraft);
     assertSectionLanguages(
       input.languages ?? (config.languages as LanguageCode[]),
-      sections ?? config.sections.map(toSectionDraft),
+      judged,
+      await this.subjectLanguagesOf(judged),
     );
     this.assertRenderMode(
       input.examTemplate ?? (config.examTemplate as ExamTemplate),
@@ -388,6 +394,19 @@ export class BaseConfigsService {
     });
   }
 
+  /** The languages the sections' subjects are, for a subject that is one. */
+  private async subjectLanguagesOf(
+    sections: readonly BaseConfigSectionDraft[],
+  ): Promise<Map<string, LanguageCode>> {
+    const ids = sections.flatMap((section) => (section.subjectId ? [section.subjectId] : []));
+    if (ids.length === 0) return new Map();
+    const subjects = await this.prisma.subject.findMany({
+      where: { id: { in: ids }, language: { not: null } },
+      select: { id: true, language: true },
+    });
+    return new Map(subjects.flatMap((row) => (row.language ? [[row.id, row.language]] : [])));
+  }
+
   private assertShape(
     timerTemplate: TimerTemplate,
     sections: readonly BaseConfigSectionDraft[],
@@ -476,12 +495,20 @@ async function writeChildren(
 function assertSectionLanguages(
   paper: readonly LanguageCode[],
   sections: readonly BaseConfigSectionDraft[],
+  subjectLanguages: ReadonlyMap<string, LanguageCode>,
 ): void {
-  const issues = sections.flatMap((section) =>
-    (section.languages ?? []).some((language) => !paper.includes(language))
-      ? [`${section.name} can only be in the paper's own languages.`]
-      : [],
-  );
+  const issues = sections.flatMap((section) => {
+    const own = section.languages ?? [];
+    if (own.some((language) => !paper.includes(language))) {
+      return [`${section.name} can only be in the paper's own languages.`];
+    }
+    // A language subject's questions are written in it alone, so its section can be sat in nothing else.
+    const tested = section.subjectId ? subjectLanguages.get(section.subjectId) : undefined;
+    if (tested && (own.length !== 1 || own[0] !== tested)) {
+      return [`${section.name} tests a language, so it is sat in that language alone.`];
+    }
+    return [];
+  });
   const [first] = issues;
   if (first === undefined) return;
   throw new AppException(ErrorCodes.VALIDATION_ERROR, first, { fieldErrors: { sections: issues } });

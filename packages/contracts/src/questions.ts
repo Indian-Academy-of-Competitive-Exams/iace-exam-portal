@@ -3,7 +3,7 @@ import { csvIdQuery, csvQuery, matchModeQuery, searchQuery } from './common';
 import { blankIsAbsent, dateOnlySchema } from './students';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
-import { type LanguageCode } from './exams';
+import { languageCodeSchema, type LanguageCode } from './exams';
 import { importPlanSchema } from './imports';
 
 // ============================================================================
@@ -238,6 +238,8 @@ const subjectRefSchema = taxonomyRefSchema;
 
 export const subjectSchema = subjectRefSchema.extend({
   code: z.string().nullable(),
+  /** Set when the subject IS a language (Hindi Comprehension): its questions are written in it alone. */
+  language: languageCodeSchema.nullable(),
   topicCount: z.number().int(),
   questionCount: z.number().int(),
 });
@@ -257,6 +259,8 @@ export type Topic = z.infer<typeof topicSchema>;
 export const createSubjectSchema = z.object({
   name: subjectNameSchema,
   code: blankIsAbsent(subjectCodeSchema),
+  /** Chosen once, at creation: its questions are written to it, so it never changes after. */
+  language: languageCodeSchema.nullish(),
 });
 export type CreateSubjectInput = z.input<typeof createSubjectSchema>;
 export type CreateSubjectBody = z.infer<typeof createSubjectSchema>;
@@ -475,6 +479,10 @@ export const QUESTION_VALIDATION_CODE = {
   SUBJECT_OUTSIDE_SECTION: 'SUBJECT_OUTSIDE_SECTION',
   /** The same, by kind: a typing section takes typing passages, and no other section takes one. */
   TYPE_OUTSIDE_SECTION: 'TYPE_OUTSIDE_SECTION',
+  /** A question of a language subject (Hindi Comprehension) with no text in that language. */
+  SUBJECT_LANGUAGE_REQUIRED: 'SUBJECT_LANGUAGE_REQUIRED',
+  /** A question of a language subject carrying any other language: it tests that language alone. */
+  LANGUAGE_OUTSIDE_SUBJECT: 'LANGUAGE_OUTSIDE_SUBJECT',
   /** A whole-test sheet's row naming no section of the test, or one that is not there. */
   SECTION_UNKNOWN: 'SECTION_UNKNOWN',
   /** A whole-test sheet's row for a section with no typist to hold it, or one already done. */

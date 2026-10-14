@@ -29,7 +29,8 @@ import {
 
 /** What the draft's ids must resolve against. Read once per request, per file, or per screen. */
 export interface TaxonomyContext {
-  subjects: Map<string, { id: string; name: string }>;
+  /** `language` is set on a subject that IS a language: its questions are written in that alone. */
+  subjects: Map<string, { id: string; name: string; language?: QuestionLanguage | null }>;
   topics: Map<string, { id: string; name: string; subjectId: string }>;
 }
 
@@ -76,7 +77,7 @@ const optionField = (position: number, language: QuestionLanguage) => ({
 /** What each type answers with, and so what the draft must and must not carry. */
 const ANSWER_CHECKS: Record<
   QuestionType,
-  (draft: QuestionDraft, issues: ValidationIssue[]) => void
+  (draft: QuestionDraft, issues: ValidationIssue[], lead: QuestionLanguage) => void
 > = {
   SINGLE_MCQ: checkOptions,
   TEXT_FIELD: checkTypedAnswer,
@@ -91,11 +92,15 @@ export function validateQuestion(
   mathError?: MathChecker,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const subject = taxonomy.subjects.get(draft.subjectId);
+  const lead = subject?.language ?? DEFAULT_LANGUAGE;
+  // A language subject's question is judged in that language alone, once anything else is named.
+  const judged = subject?.language ? inLanguageAlone(draft, subject, issues) : draft;
 
-  checkLanguages(draft, issues);
-  checkStems(draft, issues);
-  ANSWER_CHECKS[draft.type](draft, issues);
-  checkTaxonomy(draft, taxonomy, issues);
+  checkLanguages(judged, issues);
+  checkStems(judged, issues, subject?.language ? subject : null);
+  ANSWER_CHECKS[judged.type](judged, issues, lead);
+  checkTaxonomy(judged, taxonomy, issues);
   if (mathError) checkMath(draft, issues, mathError);
 
   return issues;
@@ -142,6 +147,42 @@ export function firstMathFailure(
   return null;
 }
 
+/** A Hindi Comprehension question in English is refused by name, then judged as if only its Hindi were there. */
+function inLanguageAlone(
+  draft: QuestionDraft,
+  subject: { name: string; language?: QuestionLanguage | null },
+  issues: ValidationIssue[],
+): QuestionDraft {
+  const language = subject.language ?? DEFAULT_LANGUAGE;
+  const only = <T extends Partial<Record<string, unknown>>>(text: T | undefined): T | undefined =>
+    text === undefined ? undefined : ({ [language]: text[language] } as T);
+  const foreign = [
+    ...Object.entries(draft.stem),
+    ...Object.entries(draft.passage ?? {}),
+    ...Object.entries(draft.solution ?? {}),
+    ...Object.entries(draft.answerKey?.answers ?? {}),
+    ...draft.options.flatMap((option) => Object.entries(option.text)),
+  ].some(([key, text]) => key !== language && !blank(text as string | undefined));
+  if (foreign) {
+    issues.push({
+      code: CODE.LANGUAGE_OUTSIDE_SUBJECT,
+      message: `${subject.name} is written in ${LANGUAGE_LABELS[language]} alone`,
+      field: 'subjectId',
+      column: 'subject',
+    });
+  }
+  return {
+    ...draft,
+    stem: only(draft.stem) ?? {},
+    passage: only(draft.passage),
+    solution: only(draft.solution),
+    options: draft.options.map((option) => ({ ...option, text: only(option.text) ?? {} })),
+    answerKey: draft.answerKey
+      ? { ...draft.answerKey, answers: only(draft.answerKey.answers) ?? {} }
+      : draft.answerKey,
+  };
+}
+
 /** A key outside the supported set would be stored as JSON nothing renders. */
 function checkLanguages(draft: QuestionDraft, issues: ValidationIssue[]): void {
   const supported = new Set<string>(LANGUAGE_ORDER);
@@ -163,8 +204,19 @@ function checkLanguages(draft: QuestionDraft, issues: ValidationIssue[]): void {
   }
 }
 
-function checkStems(draft: QuestionDraft, issues: ValidationIssue[]): void {
-  if (blank(draft.stem[DEFAULT_LANGUAGE])) {
+function checkStems(
+  draft: QuestionDraft,
+  issues: ValidationIssue[],
+  languageSubject: { name: string; language?: QuestionLanguage | null } | null,
+): void {
+  const lead = languageSubject?.language;
+  if (lead && blank(draft.stem[lead])) {
+    issues.push({
+      code: CODE.SUBJECT_LANGUAGE_REQUIRED,
+      message: `A ${languageSubject.name} question needs its ${LANGUAGE_LABELS[lead]} question text`,
+      ...stemField(lead),
+    });
+  } else if (!lead && blank(draft.stem[DEFAULT_LANGUAGE])) {
     issues.push({
       code: CODE.ENGLISH_STEM_REQUIRED,
       message: 'Every question needs its English question text',
@@ -193,7 +245,11 @@ function checkStems(draft: QuestionDraft, issues: ValidationIssue[]): void {
   }
 }
 
-function checkOptions(draft: QuestionDraft, issues: ValidationIssue[]): void {
+function checkOptions(
+  draft: QuestionDraft,
+  issues: ValidationIssue[],
+  lead: QuestionLanguage,
+): void {
   if (draft.answerKey) {
     issues.push({
       code: CODE.ANSWER_NOT_ALLOWED,
@@ -225,10 +281,10 @@ function checkOptions(draft: QuestionDraft, issues: ValidationIssue[]): void {
     }
   }
 
-  const englishTexts = draft.options
-    .map((option) => foldForCompare(option.text[DEFAULT_LANGUAGE]))
+  const leadTexts = draft.options
+    .map((option) => foldForCompare(option.text[lead]))
     .filter((text) => text !== '');
-  if (new Set(englishTexts).size !== englishTexts.length) {
+  if (new Set(leadTexts).size !== leadTexts.length) {
     issues.push({
       code: CODE.OPTION_TEXT_DUPLICATE,
       message: 'Two options say the same thing',
@@ -266,7 +322,11 @@ function checkOptions(draft: QuestionDraft, issues: ValidationIssue[]): void {
   }
 }
 
-function checkTypedAnswer(draft: QuestionDraft, issues: ValidationIssue[]): void {
+function checkTypedAnswer(
+  draft: QuestionDraft,
+  issues: ValidationIssue[],
+  lead: QuestionLanguage,
+): void {
   if (draft.options.length > 0) {
     issues.push({
       code: CODE.OPTIONS_NOT_ALLOWED,
@@ -277,10 +337,10 @@ function checkTypedAnswer(draft: QuestionDraft, issues: ValidationIssue[]): void
   }
 
   const answerKey = draft.answerKey;
-  if (!answerKey || blank(answerKey.answers[DEFAULT_LANGUAGE])) {
+  if (!answerKey || blank(answerKey.answers[lead])) {
     issues.push({
       code: CODE.ANSWER_REQUIRED,
-      message: 'A typed-answer question needs its English answer',
+      message: `A typed-answer question needs its ${LANGUAGE_LABELS[lead]} answer`,
       field: 'answerKey.answers.en',
       column: 'answer_en',
     });
@@ -322,7 +382,11 @@ function checkTypedAnswer(draft: QuestionDraft, issues: ValidationIssue[]): void
 }
 
 /** Held to what a keyboard can produce: the candidate is marked on every word of it. */
-function checkTypingPassage(draft: QuestionDraft, issues: ValidationIssue[]): void {
+function checkTypingPassage(
+  draft: QuestionDraft,
+  issues: ValidationIssue[],
+  lead: QuestionLanguage,
+): void {
   if (draft.options.length > 0) {
     issues.push({
       code: CODE.OPTIONS_NOT_ALLOWED,
@@ -340,12 +404,12 @@ function checkTypingPassage(draft: QuestionDraft, issues: ValidationIssue[]): vo
     });
   }
 
-  const stem = draft.stem[DEFAULT_LANGUAGE] ?? '';
+  const stem = draft.stem[lead] ?? '';
   if (imageKeysIn(stem).length > 0 || latexIn(stem).length > 0) {
     issues.push({
       code: CODE.TYPING_PASSAGE_NOT_PLAIN,
       message: 'A typing passage is text only: no picture and no formula',
-      ...stemField(DEFAULT_LANGUAGE),
+      ...stemField(lead),
     });
   }
 
@@ -354,14 +418,14 @@ function checkTypingPassage(draft: QuestionDraft, issues: ValidationIssue[]): vo
     issues.push({
       code: CODE.TYPING_PASSAGE_TOO_LONG,
       message: `A typing passage holds at most ${TYPING_PASSAGE_MAX_KEY_DEPRESSIONS} key depressions; this has ${keyDepressions}`,
-      ...stemField(DEFAULT_LANGUAGE),
+      ...stemField(lead),
     });
   }
   if (keyDepressions > 0 && keyDepressions < TYPING_PASSAGE_MIN_KEY_DEPRESSIONS) {
     issues.push({
       code: CODE.TYPING_PASSAGE_TOO_SHORT,
       message: `A typing passage needs at least ${TYPING_PASSAGE_MIN_KEY_DEPRESSIONS} key depressions; this has ${keyDepressions}`,
-      ...stemField(DEFAULT_LANGUAGE),
+      ...stemField(lead),
     });
   }
 }
@@ -432,26 +496,33 @@ function checkTaxonomy(
   }
 }
 
-/** Two questions in one string: the stem, the options as a SET, and the correct one's text. */
+/** The language a question leads with: English where it has it, else the one it is written in. */
+export function leadLanguageIn(stem: Partial<Record<QuestionLanguage, string>>): QuestionLanguage {
+  if (!blank(stem[DEFAULT_LANGUAGE])) return DEFAULT_LANGUAGE;
+  return LANGUAGE_ORDER.find((language) => !blank(stem[language])) ?? DEFAULT_LANGUAGE;
+}
+
+/** Two questions in one string: the stem, the options as a SET, and the correct one's text, in its lead language. */
 export function canonicalStemKey(draft: QuestionIdentity): string {
-  const asked = canonicalAskedKey(draft);
-  const passage = foldForCompare(draft.passage?.[DEFAULT_LANGUAGE]);
+  const lead = leadLanguageIn(draft.stem);
+  const asked = canonicalAskedKey(draft, lead);
+  const passage = foldForCompare(draft.passage?.[lead]);
   // Appended only when there is one, so a question without a passage keeps the hash it already has.
   return passage === '' ? asked : [asked, passage].join('||');
 }
 
-function canonicalAskedKey(draft: QuestionIdentity): string {
-  const stem = foldForCompare(draft.stem[DEFAULT_LANGUAGE]);
+function canonicalAskedKey(draft: QuestionIdentity, lead: QuestionLanguage): string {
+  const stem = foldForCompare(draft.stem[lead]);
 
   if (draft.type === QUESTION_TYPE.TEXT_FIELD) {
-    return [stem, '', foldForCompare(draft.answerKey?.answers[DEFAULT_LANGUAGE])].join('||');
+    return [stem, '', foldForCompare(draft.answerKey?.answers[lead])].join('||');
   }
 
   const options = draft.options
-    .map((option) => foldForCompare(option.text[DEFAULT_LANGUAGE]))
+    .map((option) => foldForCompare(option.text[lead]))
     .filter((text) => text !== '')
     .sort((a, b) => a.localeCompare(b));
   const correct = draft.options.find((option) => option.isCorrect);
 
-  return [stem, options.join('|'), foldForCompare(correct?.text[DEFAULT_LANGUAGE])].join('||');
+  return [stem, options.join('|'), foldForCompare(correct?.text[lead])].join('||');
 }

@@ -433,3 +433,57 @@ describe('validateQuestion — a typing passage', () => {
     assert.deepEqual(codes(passage({ stem: { en: formula } })), [CODE.TYPING_PASSAGE_NOT_PLAIN]);
   });
 });
+
+describe('validateQuestion — a subject that is a language', () => {
+  const HINDI = 'sub_hindi';
+  const hindiTaxonomy = (): TaxonomyContext => ({
+    subjects: new Map([[HINDI, { id: HINDI, name: 'HINDI COMPREHENSION', language: 'hi' }]]),
+    topics: new Map(),
+  });
+  const hindiOption = (position: number, text: string, isCorrect = false) => ({
+    position,
+    text: { hi: `<p>${text}</p>` },
+    isCorrect,
+  });
+  const inHindi = (over: Partial<QuestionDraft> = {}): QuestionDraft =>
+    sound({
+      subjectId: HINDI,
+      topicId: null,
+      stem: { hi: '<p>संज्ञा किसे कहते हैं?</p>' },
+      options: [
+        hindiOption(1, 'नाम', true),
+        hindiOption(2, 'काम'),
+        hindiOption(3, 'गुण'),
+        hindiOption(4, 'भाव'),
+      ],
+      ...over,
+    });
+  const hindiCodes = (draft: QuestionDraft) =>
+    validateQuestion(draft, hindiTaxonomy()).map((issue) => issue.code);
+
+  /** THE failure this prevents: a Hindi Comprehension question refused for having no English. */
+  it('takes a question written in its language alone', () => {
+    assert.deepEqual(hindiCodes(inHindi()), []);
+  });
+
+  it('requires its language in place of English', () => {
+    assert.deepEqual(
+      hindiCodes(inHindi({ stem: { en: '<p>What is a noun?</p>' }, options: sound().options })),
+      [CODE.LANGUAGE_OUTSIDE_SUBJECT, CODE.SUBJECT_LANGUAGE_REQUIRED],
+    );
+  });
+
+  /** THE failure this prevents: an English version of a question that tests Hindi. */
+  it('refuses any other language beside it', () => {
+    assert.deepEqual(hindiCodes(inHindi({ stem: { hi: '<p>संज्ञा?</p>', en: '<p>Noun?</p>' } })), [
+      CODE.LANGUAGE_OUTSIDE_SUBJECT,
+    ]);
+  });
+
+  it('keys a duplicate on the language it is written in', () => {
+    assert.notEqual(
+      canonicalStemKey(inHindi()),
+      canonicalStemKey(inHindi({ stem: { hi: '<p>क्रिया?</p>' } })),
+    );
+  });
+});

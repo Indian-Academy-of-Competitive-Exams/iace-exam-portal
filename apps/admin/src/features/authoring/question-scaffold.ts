@@ -27,6 +27,7 @@ import { optionalNumber } from '@iace/app-kit';
 import { INDIC_SCRIPTS, type IndicScript } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { REGION_KIND } from '@iace/ui/scaffold-region';
+import { subjectLanguageOf } from './subject-languages';
 
 /** The box read as slots, never as text between delimiters, into the draft the sheet also builds. */
 
@@ -481,7 +482,13 @@ export function headerOfDraft(draft: QuestionDraft): AuthoringHeader {
 /** Enough taxonomy to run the rules here; the picker cannot offer a topic outside the subject. */
 export function taxonomyFor(header: AuthoringHeader): TaxonomyContext {
   const taxonomy = emptyTaxonomy();
-  if (header.subjectId) taxonomy.subjects.set(header.subjectId, { id: header.subjectId, name: '' });
+  if (header.subjectId) {
+    taxonomy.subjects.set(header.subjectId, {
+      id: header.subjectId,
+      name: 'This subject',
+      language: subjectLanguageOf(header.subjectId),
+    });
+  }
   if (header.topicId) {
     taxonomy.topics.set(header.topicId, {
       id: header.topicId,

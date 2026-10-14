@@ -1,4 +1,9 @@
-import { type DifficultyLevel } from '@iace/contracts';
+import {
+  contentLanguageOf,
+  type DifficultyLevel,
+  type LanguageCode,
+  type QuestionLanguage,
+} from '@iace/contracts';
 import { canonicalName } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { emptyTaxonomy, type TaxonomyContext } from './question-core';
@@ -21,7 +26,7 @@ export async function taxonomyForIds(
     ids.subjectIds.length > 0
       ? prisma.subject.findMany({
           where: { id: { in: ids.subjectIds } },
-          select: { id: true, name: true },
+          select: { id: true, name: true, language: true },
         })
       : [],
     ids.topicIds.length > 0
@@ -32,7 +37,12 @@ export async function taxonomyForIds(
       : [],
   ]);
 
-  for (const subject of subjects) taxonomy.subjects.set(subject.id, subject);
+  for (const subject of subjects) {
+    taxonomy.subjects.set(subject.id, {
+      ...subject,
+      language: languageOfSubject(subject.language),
+    });
+  }
   for (const topic of topics) taxonomy.topics.set(topic.id, topic);
 
   return taxonomy;
@@ -68,6 +78,7 @@ export async function loadTaxonomyCatalog(prisma: PrismaService): Promise<Taxono
     select: {
       id: true,
       name: true,
+      language: true,
       topics: { orderBy: { name: 'asc' }, select: { id: true, name: true } },
     },
   });
@@ -77,7 +88,11 @@ export async function loadTaxonomyCatalog(prisma: PrismaService): Promise<Taxono
   const topicIdBySubjectAndName = new Map<string, string>();
 
   for (const subject of subjects) {
-    context.subjects.set(subject.id, { id: subject.id, name: subject.name });
+    context.subjects.set(subject.id, {
+      id: subject.id,
+      name: subject.name,
+      language: languageOfSubject(subject.language),
+    });
     subjectIdByName.set(subject.name, subject.id);
 
     for (const topic of subject.topics) {
@@ -100,3 +115,7 @@ export async function loadTaxonomyCatalog(prisma: PrismaService): Promise<Taxono
 
 /** A name from a sheet, in the form the tables store. Normalised, never rejected. */
 export const lookupName = (value: string): string => canonicalName(value);
+
+/** A language subject's code as the content keys it ("HI" is written under "hi"). */
+const languageOfSubject = (language: LanguageCode | null): QuestionLanguage | null =>
+  language === null ? null : contentLanguageOf(language);

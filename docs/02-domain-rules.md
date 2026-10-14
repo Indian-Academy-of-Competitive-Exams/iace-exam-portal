@@ -317,6 +317,12 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   it nothing in the paper's other languages. Empty means the paper's languages. It is not the
   paper's shape, so it changes in place on a configuration a test is built on (a locked one still
   clones).
+- **A subject can be a language** (`Subject.language`, chosen once, at creation): Hindi
+  Comprehension is Hindi. Its questions are written in that language alone — required in place of
+  English, and any other language beside it is refused — and every rule that reads a question's
+  first language (the duplicate key, the preview, a typed answer, a typing passage) reads that one.
+  A section of such a subject is sat in that language alone; the configuration refuses it otherwise,
+  and the editor sets it when the subject is chosen.
 - **A language an offer was waived past is not offered.** The offer records which languages its
   waiver let through short (`Test.languagesSkipped`), and the brief, the shared paper and the start
   leave them out of what a candidate may pick — never every language.

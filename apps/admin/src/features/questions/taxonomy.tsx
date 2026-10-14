@@ -7,8 +7,10 @@ import { ListTree, Pencil, Plus, Trash2 } from 'lucide-react';
 import { type ZodType } from 'zod';
 import {
   FEATURE_KEYS,
+  LANGUAGE_CODES,
   PERMISSION_LEVELS,
   createSubjectSchema,
+  languageCodeSchema,
   createTopicSchema,
   updateSubjectSchema,
   updateTopicSchema,
@@ -22,8 +24,10 @@ import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen, usePageTour } from '@iace/app-kit/browser';
 import {
   Button,
+  Combobox,
   ConfirmDialog,
   DropdownMenuItem,
+  Field,
   FormDialog,
   FormField,
   Input,
@@ -37,7 +41,7 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../../lib/constants';
+import { LANGUAGE_CODE_LABELS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../../lib/constants';
 import { TAXONOMY_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useAuth } from '../../providers/auth';
 import { SubjectMultiPicker, SubjectPicker } from '../../components/taxonomy-picker';
@@ -393,11 +397,17 @@ function NewSubjectDialog({
     resolver: zodResolver(createSubjectSchema),
     defaultValues: { name: '', code: '' },
   });
+  // Kept beside the form: "Not a language" is no value at all, which the schema's enum would refuse.
+  const [language, setLanguage] = useState('');
 
   const create = useMutation({
     meta: { success: 'Subject added.', fields: SUBJECT_FIELDS },
     mutationFn: (input: CreateSubjectInput) =>
-      api.admin.taxonomy.createSubject({ name: input.name, code: input.code || undefined }),
+      api.admin.taxonomy.createSubject({
+        name: input.name,
+        code: input.code || undefined,
+        language: languageCodeSchema.safeParse(language).data ?? null,
+      }),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, SUBJECT_FIELDS),
   });
@@ -418,6 +428,24 @@ function NewSubjectDialog({
       <FormField form={form} name="code" label="Code" /* ui-copy-ok: rule */ hint="Optional">
         {(field) => <Input {...field} placeholder="QA" />}
       </FormField>
+      <Field
+        htmlFor="subject-language"
+        label="Language"
+        /* ui-copy-ok: rule */ hint="Its questions are written in this language alone. Cannot change later."
+      >
+        {(control) => (
+          <Combobox
+            id={control.id}
+            value={language}
+            onChange={setLanguage}
+            clearable={false}
+            items={[
+              { value: '', label: 'Not a language' },
+              ...LANGUAGE_CODES.map((code) => ({ value: code, label: LANGUAGE_CODE_LABELS[code] })),
+            ]}
+          />
+        )}
+      </Field>
     </FormDialog>
   );
 }

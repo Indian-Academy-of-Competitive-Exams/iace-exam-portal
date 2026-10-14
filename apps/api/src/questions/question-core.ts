@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import {
   ANSWER_MODE,
-  DEFAULT_LANGUAGE,
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
   QUESTION_STATUS,
@@ -28,6 +27,7 @@ import {
   SECTION_ANSWER_KIND,
   SECTION_QUESTION_TYPES,
   type SectionAnswerKind,
+  leadLanguageIn,
 } from '@iace/contracts';
 import { stripImageSrc } from './question-images';
 import { mathErrorIn } from './question-math';
@@ -144,7 +144,7 @@ const asStoredText = (text: LocalizedText, languages: readonly QuestionLanguage[
 function asStored(draft: QuestionDraft): QuestionDraft {
   return {
     ...draft,
-    stem: asStoredText(draft.stem, [DEFAULT_LANGUAGE]),
+    stem: asStoredText(draft.stem, [leadLanguageIn(draft.stem)]),
     options: draft.options.map((option) => ({
       ...option,
       text: asStoredText(option.text, LANGUAGE_ORDER),
@@ -152,10 +152,11 @@ function asStored(draft: QuestionDraft): QuestionDraft {
   };
 }
 
-/** Blanked like the English one, a translated stem would only drop its language, so it is refused by name. */
+/** Blanked like the lead one, a translated stem would only drop its language, so it is refused by name. */
 function emptiedTranslations(draft: QuestionDraft): ValidationIssue[] {
+  const lead = leadLanguageIn(draft.stem);
   return LANGUAGE_ORDER.filter(
-    (language) => language !== DEFAULT_LANGUAGE && emptiedByStoring(draft.stem[language]),
+    (language) => language !== lead && emptiedByStoring(draft.stem[language]),
   ).map((language) => ({
     code: QUESTION_VALIDATION_CODE.TRANSLATION_WITHOUT_STEM,
     message: `The ${LANGUAGE_LABELS[language]} question text holds nothing that can be stored`,
@@ -181,27 +182,36 @@ export interface StoredQuestion {
 
 /** Through the html the editor would load and post back, so a rehash equals the next edit's hash. */
 export function storedStemHash(stored: StoredQuestion): string {
-  const english = (rich: LocalizedRich | undefined): LocalizedText => ({
-    [DEFAULT_LANGUAGE]: plainTextOf(rich?.[DEFAULT_LANGUAGE]),
+  const lead = leadOfContent(stored.content);
+  const inLead = (rich: LocalizedRich | undefined): LocalizedText => ({
+    [lead]: plainTextOf(rich?.[lead]),
   });
   const key = canonicalStemKey({
     type: stored.type,
-    stem: { [DEFAULT_LANGUAGE]: plainTextOf(stored.content[DEFAULT_LANGUAGE]?.stem) },
-    passage: { [DEFAULT_LANGUAGE]: plainTextOf(stored.content[DEFAULT_LANGUAGE]?.passage) },
+    stem: { [lead]: plainTextOf(stored.content[lead]?.stem) },
+    passage: { [lead]: plainTextOf(stored.content[lead]?.passage) },
     options: stored.options.map((option) => ({
       position: option.position,
       isCorrect: option.isCorrect,
-      text: english(option.text),
+      text: inLead(option.text),
     })),
     answerKey: stored.answerKey,
   });
   return createHash('sha256').update(key).digest('hex');
 }
 
-/** The English stem, shortened — what a list row and an import preview show. */
+/** The language stored content leads with: English where it has a stem, else the one it is written in. */
+function leadOfContent(content: LocalizedContent): QuestionLanguage {
+  const stems = Object.fromEntries(
+    LANGUAGE_ORDER.map((language) => [language, plainTextOf(content[language]?.stem)]),
+  );
+  return leadLanguageIn(stems);
+}
+
+/** The lead stem, shortened — what a list row and an import preview show. */
 export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
   // Stripped BEFORE slicing: cutting html at 140 characters can land inside a tag.
-  const stem = previewTextOf(plainTextOf(content[DEFAULT_LANGUAGE]?.stem));
+  const stem = previewTextOf(plainTextOf(content[leadOfContent(content)]?.stem));
   return stem.length > limit ? `${stem.slice(0, limit - 1)}…` : stem;
 }
 

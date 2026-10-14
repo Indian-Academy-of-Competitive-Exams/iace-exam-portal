@@ -442,9 +442,11 @@ model BaseConfigSection {
 // ============================================================================
 
 model Subject {
-  id   String  @id @default(uuid(7)) @db.Uuid
-  name String  @unique
-  code String? @unique
+  id       String             @id @default(uuid(7)) @db.Uuid
+  name     String             @unique
+  code     String?            @unique
+  // Set, the subject IS this language (Hindi Comprehension): its questions are written in it alone.
+  language SupportedLanguage?
 
   topics       Topic[]
   questions    Question[]

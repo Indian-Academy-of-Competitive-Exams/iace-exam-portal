@@ -15,6 +15,7 @@ import { api } from '../../lib/api';
 import { authoringDuplicateQueryKey } from '../../lib/constants';
 import { checksFor } from './authoring-checks';
 import { taxonomyFor, type AuthoringHeader, type AuthoringState } from './question-scaffold';
+import { useSubjectLanguage } from './subject-languages';
 
 const PREVIEW_DEBOUNCE_MS = 600;
 
@@ -63,11 +64,13 @@ export const issuesOf = (draft: QuestionDraft | null, header: AuthoringHeader | 
 /** Judged once at first sight, then debounced: a strict KaTeX render of every formula is not a per-keystroke cost. */
 export function useIssues(draft: QuestionDraft | null, header: AuthoringHeader | undefined) {
   const [issues, setIssues] = useState(() => issuesOf(draft, header));
+  // Judged again once the subject's language arrives: it decides which language is required.
+  const language = useSubjectLanguage(header?.subjectId);
 
   useEffect(() => {
     const timer = setTimeout(() => setIssues(issuesOf(draft, header)), PREVIEW_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [draft, header]);
+  }, [draft, header, language]);
 
   return issues;
 }
@@ -82,12 +85,18 @@ export function useChecked(
   expected?: readonly LanguageCode[],
 ) {
   const issues = useIssues(draft, header);
+  const subjectLanguage = useSubjectLanguage(header.subjectId);
 
   const checks = useMemo(() => {
-    const asked = expected ? new Set(expected.map(contentLanguageOf)) : null;
+    // A language subject's question is written in that alone; otherwise its section's, else every one.
+    const asked = subjectLanguage
+      ? new Set([subjectLanguage])
+      : expected
+        ? new Set(expected.map(contentLanguageOf))
+        : null;
     const missing = LANGUAGE_ORDER.filter(
       (code) =>
-        code !== DEFAULT_LANGUAGE &&
+        code !== (subjectLanguage ?? DEFAULT_LANGUAGE) &&
         (asked?.has(code) ?? true) &&
         !hasText(state.content[code].stem),
     );
@@ -97,7 +106,7 @@ export function useChecked(
       missing.map((code) => LANGUAGE_LABELS[code]),
       duplicate,
     );
-  }, [state, issues, duplicate, expected]);
+  }, [state, issues, duplicate, expected, subjectLanguage]);
 
   return { issues, checks };
 }

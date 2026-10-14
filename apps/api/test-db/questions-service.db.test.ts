@@ -303,6 +303,36 @@ describe('QuestionsService.create', () => {
   });
 });
 
+describe('QuestionsService.create — a subject that is a language', () => {
+  const inHindi = (subjectId: string, over: Partial<QuestionDraftInput> = {}) =>
+    draft({
+      subjectId,
+      topicId: null,
+      stem: { hi: 'संज्ञा किसे कहते हैं?' },
+      options: ['नाम', 'काम', 'गुण', 'भाव'].map((text, index) => ({
+        position: index + 1,
+        isCorrect: index === 0,
+        text: { hi: text },
+      })),
+      ...over,
+    });
+
+  /** THE failure this prevents: a Hindi Comprehension question refused for having no English. */
+  it('saves a question in the subject’s language alone, keyed for duplicates, and refuses English beside it', async () => {
+    const { questions, taxonomy } = await build();
+    const hindi = await taxonomy.createSubject({ name: 'HINDI COMPREHENSION', language: 'HI' });
+
+    const created = await questions.create(inHindi(hindi.id), ADMIN);
+
+    assert.deepEqual(created.languages, ['hi']);
+    assert.ok((await questionRow(created.id)).stemHash);
+    await assert.rejects(
+      () => questions.create(inHindi(hindi.id, { stem: { hi: 'क्रिया?', en: 'Verb?' } }), ADMIN),
+      (error: unknown) => AppException.is(error) && /written in Hindi alone/.test(error.message),
+    );
+  });
+});
+
 describe('QuestionsService — retiring and status', () => {
   it('retires a question without deleting it, and puts it back into circulation', async () => {
     const { questions } = await build();

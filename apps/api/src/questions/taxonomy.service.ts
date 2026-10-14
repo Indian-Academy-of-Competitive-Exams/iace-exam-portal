@@ -24,7 +24,12 @@ const TOPIC_INCLUDE = {
   subject: { select: { id: true, name: true } },
 } as const satisfies Prisma.TopicInclude;
 
-const SUBJECT_SELECT = { id: true, name: true, code: true } as const satisfies Prisma.SubjectSelect;
+const SUBJECT_SELECT = {
+  id: true,
+  name: true,
+  code: true,
+  language: true,
+} as const satisfies Prisma.SubjectSelect;
 
 type SubjectRow = Prisma.SubjectGetPayload<{ select: typeof SUBJECT_SELECT }>;
 type TopicRow = Prisma.TopicGetPayload<{ include: typeof TOPIC_INCLUDE }>;
@@ -129,7 +134,7 @@ export class TaxonomyService {
 
     return toSubject(
       await this.prisma.subject.create({
-        data: { name: body.name, code: body.code ?? null },
+        data: { name: body.name, code: body.code ?? null, language: body.language ?? null },
         select: SUBJECT_SELECT,
       }),
       NOTHING_YET,
@@ -325,6 +330,7 @@ function toSubject(row: SubjectRow, counts: SubjectCounts): Subject {
     id: row.id,
     name: row.name,
     code: row.code,
+    language: row.language,
     topicCount: counts.topics,
     questionCount: counts.questions,
   };
