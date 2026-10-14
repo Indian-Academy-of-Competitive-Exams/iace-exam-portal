@@ -82,7 +82,8 @@ Setup, then paper, then offer. There is no certificate step.
   had already made impossible to balance. Replacing a row on a draft swaps it in place, keeping its
   position, and is judged as one more pick against the same cap.
 - Any question that is not ARCHIVED and carries a current version is drawable. A paper pins a
-  version, so there has to be one; nothing else gates the draw, because a paper is built before its
+  version, so there has to be one; beyond the section's answer kind and work still open under another test's assignment, nothing
+  gates the draw, because a paper is built before its
   questions are finished and what stops an unfinished one reaching students is the offer, which
   refuses while any assignment on the test is unfinalized.
 - **Where a test's questions come from is chosen once, by anyone, and then by nobody** — not a
@@ -286,9 +287,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   reopened, Save & Next stops wrapping from the last seat back to the first — a wrap is a move
   backwards — and **marking for review is gone**, because a flag asks for a second look the paper
   will never grant. Two of the five answer states are therefore unreachable, and every legend, tally
-  and summary column on such a paper shows three. This is a rule the SCREEN keeps, like the clock:
-  the engine holds it once so no skin can forget it, and the server takes answers the same way
-  either side of it.
+  and summary column on such a paper shows three. The SCREEN keeps it first, like the clock:
+  the engine holds it once so no skin can forget it, and the server enforces it too — a save
+  changing a seat behind the furthest one its section has reached is dropped (`withinReach`).
 - `Attempt.shuffleSeed` decides the order the student sees, of questions and of their options.
   Sections keep the config's order; questions shuffle within a section. **The order a seed produces
   must never change**: every past sitting's review is derived from it, so a new shuffle or PRNG
@@ -574,7 +575,7 @@ and needs no mapping at all.
 - **A topic must sit under the question's own subject.** The question carries both ids and no
   foreign key can relate them, so the check is a shared rule in
   `packages/contracts/src/question-rules.ts` — the same one for the editor and the importer.
-- **A typing passage is a question of type `TYPING`.** Its English stem is the passage; it has no
+- **A typing passage is a question of type `TYPING`.** Its lead-language stem (English, or the subject's own language) is the passage; it has no
   options, no answer key, no picture and no formula, and its length is bounded both ways — long
   enough for the shortest typing standard, and short enough that comparing it stays cheap. It is
   written in the same editor and held to the same checks as any question. No ordinary section may
@@ -630,14 +631,14 @@ letter-based answer key are why real uploads were rejected wholesale.
   picture they fill the gaps in order, otherwise they follow the text — an anchor carries no
   position within the cell, so a picture is never put in a gap it only might belong to. They are
   keyed by a hash of their bytes, so a re-upload still matches its own questions as duplicates, and
-  uploaded only on commit. The rejected-rows download cannot carry them, and says so on those rows.
+  stored at preview so the page can draw them. The rejected-rows download cannot carry them, and says so on those rows.
   A picture no taller than a line of text (`FORMULA_PICTURE_MAX_HEIGHT`) is a formula saved at
   screen resolution: the preview warns that it will read blurry and to retype it as `\( … \)`, but
   the row still imports.
 - **Nothing is created by an import.** A subject or topic matching nothing in the bank is reported
   against its line, never quietly invented; the dropdowns cascade, so the topics offered on a row are
   the ones under that row's subject.
-- English is required. Another language is all-or-nothing — a question written in one needs both its
+- English is required, except in a language subject, where its own language takes English's place. Another language is all-or-nothing — a question written in one needs both its
   stem and all of its options in it, because a half-translated paper cannot be sat in that language.
 - **Marks are not on the sheet.** What a question is worth is decided by the section of the test it
   is drawn into, not by the bank.

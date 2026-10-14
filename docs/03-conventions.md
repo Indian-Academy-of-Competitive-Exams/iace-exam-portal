@@ -164,7 +164,7 @@ erodes.
 | tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                      |
 | attempts      | `Attempt`, `AttemptSheet`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
 | audit         | `RowActionLog`, `ImportLog`                                                                                       |
-| notifications | `Notification`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`                          |
+| notifications | `Notification`, `BroadcastRead`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`         |
 | saved         | `SavedQuestion`                                                                                                   |
 | typing        | `TypingPractice`                                                                                                  |
 
@@ -257,7 +257,7 @@ Rule: any cross-module _reaction_ goes through this catalog as an event, not a d
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
 | **Core / admin** (one deployable)     | auth, admins, students, branches, access, events, imports, questions, configs, tests, audit, me, dashboard, notifications | admin traffic, modest  |
 | **Exam service** (autoscale)          | attempts — the sitting engine only                                                                                        | concurrent test-takers |
-| **Worker service(s)** (autoscale)     | scoring, rollups, import processing, drop/bonus recompute                                                                 | BullMQ queue depth     |
+| **Worker service(s)** (autoscale)     | scoring (and drop/bonus re-score), rollups, sweeps, exports, notification delivery                                        | BullMQ queue depth     |
 | **Shared libraries** (never services) | prisma, redis, queue, storage, common, config, contracts                                                                  | —                      |
 
 Today everything ships as core plus the worker. Attempts is the first extraction candidate: its

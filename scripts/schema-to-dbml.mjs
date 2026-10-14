@@ -22,7 +22,7 @@ const GROUPS = [
     ],
   ],
   ['Attempts', '#2563A8', ['Attempt', 'AttemptSheet']],
-  ['People & Identity', '#6D4AA8', ['Student', 'StudentProfile', 'Admin']],
+  ['People & Identity', '#6D4AA8', ['Student', 'StudentProfile', 'StudentMobileHistory', 'Admin']],
   ['Admin Permissions', '#8A4A8F', ['AdminFeaturePermission']],
   [
     'Access: Programs / Branches / Series',
@@ -43,6 +43,7 @@ const GROUPS = [
       'RowActionLog',
       'Notification',
       'Announcement',
+      'BroadcastRead',
       'NotificationDelivery',
       'PushSubscription',
       'PushDevice',

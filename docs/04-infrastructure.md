@@ -78,8 +78,8 @@ to agonise over — §13 says when each one moves.
 | Frontend, media, DNS, alarms |                                          | $3.40       |
 | **Total**                    |                                          | **$110.32** |
 
-**20 GB and not 30, because Box A does not build.** `build-api.yml` builds on CodeBuild
-(§14), so the box only ever pulls: OS and Docker ~4 GB, two or three image versions ~4 GB, volumes
+**20 GB and not 30, because Box A does not build.** `build-api.yml` builds on GitHub's arm64
+runner (§14), so the box only ever pulls: OS and Docker ~4 GB, two or three image versions ~4 GB, volumes
 and logs under 1 GB. Logs are not the driver anyone expects — six containers capped at 10 MB × 3
 is 180 MB — the **build** is, and one of those writes several GB of layers and BuildKit cache that
 grows every time unless pruned. If a box ever builds, prune after each one, or give it 30 GB. gp3
@@ -139,8 +139,8 @@ two zones** — nothing needs one today, and it will when Postgres moves. Every 
 one zone, so inter-AZ traffic is zero.
 
 **Box A — the API.** Public subnet, Elastic IP. Caddy terminates TLS and routes by path to the exam
-or the core container; the worker takes no HTTP at all. Security group: 80 and 443 from the world,
-22 from one address. One of these per environment.
+or the core container; the worker takes none but its own health and metrics. Security group: 80 and 443 from the world,
+and no inbound SSH — SSM opens a shell. One of these per environment.
 
 **Box B — Valkey.** One container per environment, different ports (§7). **Its security group
 accepts 6379 and 6380 from the API boxes' security group and from nothing else** — not from the
@@ -172,11 +172,11 @@ all three; unset means all of them, which is what local development runs. They r
 Compose on **Box A and nothing else** — Valkey and Postgres are on Box B (§2), so the whole box is
 the API's.
 
-| Service    | Weight, heap    | Count                       | Serves                                                                |
-| ---------- | --------------- | --------------------------- | --------------------------------------------------------------------- |
-| **exam**   | 2048, heap 1536 | scales with the box         | `AttemptsController`, `MeLeaderboardController`                       |
-| **core**   | 1536, heap 768  | scales with the box         | auth, `me`, saved, results, every `admin/*` route, imports            |
-| **worker** | 1024, heap 768  | **exactly one, never more** | no routes but health and metrics; all eight processors and schedulers |
+| Service    | Weight, heap    | Count                       | Serves                                                               |
+| ---------- | --------------- | --------------------------- | -------------------------------------------------------------------- |
+| **exam**   | 2048, heap 1536 | scales with the box         | `AttemptsController`, `MeLeaderboardController`                      |
+| **core**   | 1536, heap 768  | scales with the box         | auth, `me`, saved, results, every `admin/*` route, imports           |
+| **worker** | 1024, heap 768  | **exactly one, never more** | no routes but health and metrics; all nine processors and schedulers |
 
 **The worker is a singleton, and that is a constraint rather than a choice.** The flush runs every
 60 s and the sweep every 120 s, and `concurrency: 1` in `QUEUE_POLICY` is the _only_ thing stopping
@@ -580,7 +580,7 @@ credential-stuffing burst or a rate-limit storm was invisible in the error rate.
 set, so one observer counts every request exactly once. `RequestIdMiddleware` stamps `startedAt`
 before the guards, so the duration is honest on that path too.
 
-Failures never depend on the level. `AllExceptionsFilter` owns them — a 4xx as one line, a 5xx with
+Failures never depend on the level. `AllExceptionsFilter` owns them — a 4xx as one line at `debug`, so production drops it; a 5xx with
 its stack **and the request body**, which is the only record of what the caller actually sent, since
 the response deliberately carries none of it.
 
@@ -698,7 +698,7 @@ which is exactly why the same file behaves identically on a laptop and on a box.
 made the API read AWS to start would also make it unable to start when AWS is the thing that is
 broken.
 
-**Three files, and only one of them is real.**
+**Four files, and only two of them are real.**
 
 | File                  | Tracked                          | What it is                                                                                            |
 | --------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -708,7 +708,7 @@ broken.
 | `deploy/valkey/.env`  | **never**                        | Box B's, carrying `PRIVATE_IP` and a `requirepass` per process (§7)                                   |
 
 **Per-role values are deliberately not in the file.** `API_ROLE`, `UV_THREADPOOL_SIZE`,
-`NODE_OPTIONS`, `cpus` and `mem_limit` are set per service in `compose.yml`, because they differ by
+`NODE_OPTIONS`, `cpu_shares` and `mem_limit` are set per service in `compose.yml`, because they differ by
 role and the file cannot know which of the three containers is reading it. The file carries only
 what all three share.
 
@@ -961,10 +961,6 @@ Never during an event window, and never a migration that moves data without the 
   **Self-hosted runners are only safe once the repo is private**, because a fork's pull request
   can otherwise run code on your builder.
 
-- **The service worker never prunes its cache** (`iace-shell-v1` is a fixed name), so a student's
-  device keeps up to ~1.5 MB per deploy they load. The `activate` handler already drops every cache
-  whose name is not the current one — it never fires because the name never changes. Stamp the
-  build id into `sw.js` and it cleans itself up.
 - **Nobody has measured how many megabytes of images a real paper carries, and it is the only line
   that can move the invoice by an order of magnitude.** CloudFront's free tier is 1 TB, which
   across thirty 8,000-candidate events is **4.4 MB of images per sitting**. Above that it is

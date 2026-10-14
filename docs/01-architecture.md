@@ -138,7 +138,7 @@ flowchart TB
 
     CF[CloudFront CDN]
     API[NestJS API - stateless containers]
-    WK[BullMQ workers - scoring, flush, sweep, rollup, imports]
+    WK[BullMQ workers - scoring, flush, sweep, rollup, exports, notifications]
 
     subgraph Data
         PG[(PostgreSQL - RDS)]
@@ -163,7 +163,7 @@ flowchart TB
 
 The API holds no per-request state, so it runs 1→N identical containers behind one front door
 (Caddy, `04` §4). Everything hot during a live test is in Redis; everything durable is in Postgres.
-Scoring and bulk imports run off the request path in BullMQ workers, so a spike of thousands of
+Scoring and admin exports run off the request path in BullMQ workers, so a spike of thousands of
 submissions queues instead of blocking.
 
 ## 5. Live-test scaling — the make-or-break
@@ -227,21 +227,15 @@ scored sittings, ordered by marks, then time taken, then id. The partial index `
 serves a sitting's standing, an index-only count per sitting, and "N sat": on 200 tests of 5,000
 sittings, counting 20 of them is an index-only scan of about 8 ms, while a table holding only the
 tests asked is read whole. A test board reads its cohort through `Attempt_testId_status_idx`. The
-points boards have no index of their own — they scan every graded sitting in scope, which is why
-they are the first reads to cross a budget: `Attempt_testId_score_idx` was dropped as redundant
+only board is a test's, and `Attempt_testId_score_idx` was dropped as redundant
 against `Attempt_ranking_idx`, costing 6.5 MB per 105K sittings and an entry in every non-HOT
 update. A rank is counted each time it is read and saved nowhere, so it is always the standing now,
 and no count sits on the path that starts, saves or submits a sitting. **There is no regenerate step** — no batch that rebuilds results, and no
 state where a rank is stale until someone runs it.
 
-**What the counts cost, and what to do when a board outgrows its budget.** On 20 tests of 5,000
-graded sittings each: a standing 1.5 ms, a test board 5.7 ms, "N sat" 10.8 ms, a student with 50
-sittings 13.1 ms, the series board 128 ms against a budget of 150, and the all-time board 129 ms
-against 300. The points boards scan every graded sitting in their scope on each read and grow about
-1.3 ms per 1,000, so a series of ~40 full mocks crosses its budget first. When a board crosses,
-cache its ranked list per scope for 60 seconds, slice the podium and each reader's neighbourhood
-from it in Node, and count the reader's prior rank against that same cached list. Not a cache per
-reader: that still pays the full scan once for every student who opens the board.
+**A test board is held in process, then paged.** Its ranked cohort is kept per test, stamped with the
+`TestStat.computedAt` it was built under and in 8 slots, so a board that disagrees with the live
+standing is rebuilt rather than served. The podium is the top 3; the table under it is 20 a page.
 
 The result: a stateless API, Postgres taking a trickle of writes instead of a tidal wave, and one
 small Postgres plus one Redis plus a few API containers carrying the load.
