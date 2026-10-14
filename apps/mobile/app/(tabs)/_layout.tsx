@@ -5,10 +5,13 @@ import { type LucideIcon } from 'lucide-react-native';
 import { MOBILE_NAV_ITEMS } from '../../src/lib/nav';
 import { useTokenColor } from '../../src/lib/use-token-color';
 
+/** Above the navigator's 25, since the icon now stands alone; the title stays as its spoken name. */
+const TAB_ICON_SIZE = 28;
+
 /** A stable render-prop per icon, rather than a component defined inline on every render. */
 const renderTabIcon =
   (Icon: LucideIcon) =>
-  ({ color, size }: { color: ColorValue; size: number }) => <Icon color={color} size={size} />;
+  ({ color }: { color: ColorValue }) => <Icon color={color} size={TAB_ICON_SIZE} />;
 
 /** The tab you are on wears a pill; the bar draws that fill square, so the item clips it round. */
 const ITEM_STYLE = {
@@ -38,6 +41,7 @@ export default function TabLayout() {
         headerShown: false,
         // No header to hold the status bar's space, so the scene holds it: nothing draws under the notch.
         sceneStyle: { paddingTop: insets.top, backgroundColor: pageColor },
+        tabBarShowLabel: false,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: inactiveColor,
         tabBarActiveBackgroundColor: heldColor,
