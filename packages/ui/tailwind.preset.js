@@ -35,10 +35,7 @@ module.exports = {
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
-      colors: {
-        ...shared.colors,
-        warning: { ...shared.colors.warning, solid: token('--warning-solid') },
-      },
+      colors: shared.colors,
       spacing: shared.spacing,
       borderRadius: shared.borderRadius,
       boxShadow: {

@@ -221,6 +221,7 @@
   --destructive-hover: #9f1239;
   --destructive-active: #881337;
   --destructive-foreground: #ffffff;
+  --destructive-subtle: #ffe4e6;
 
   --success: #15803d;
   --success-foreground: #ffffff;
@@ -442,6 +443,7 @@
   --destructive-hover: #f43f5e;
   --destructive-active: #fb7189;
   --destructive-foreground: #ffffff;
+  --destructive-subtle: #2c0b13;
 
   --success: #16a34a;
   --success-foreground: #04140a;

@@ -31,8 +31,7 @@ const KIND_ICON: Readonly<Record<EmptyStateKind, LucideIcon>> = {
 const KIND_DISC: Readonly<Record<EmptyStateKind, string>> = {
   EMPTY: 'bg-[var(--empty-icon-bg)]',
   FILTERED: 'bg-[var(--empty-icon-bg)]',
-  // No `--destructive-subtle` token exists yet, so failure reads as a solid disc instead of a tint.
-  FAILURE: 'bg-destructive',
+  FAILURE: 'bg-destructive-subtle',
   REFUSED: 'bg-warning-subtle',
 };
 
@@ -40,7 +39,7 @@ const KIND_DISC: Readonly<Record<EmptyStateKind, string>> = {
 const KIND_GLYPH_TOKEN: Readonly<Record<EmptyStateKind, string>> = {
   EMPTY: '--empty-icon',
   FILTERED: '--empty-icon',
-  FAILURE: '--destructive-foreground',
+  FAILURE: '--destructive',
   REFUSED: '--warning-ink',
 };
 
@@ -75,7 +74,7 @@ export function EmptyState({
   const Icon = icon ?? KIND_ICON[kind];
   const glyphColor = useUnstableNativeVariable(KIND_GLYPH_TOKEN[kind]);
   const retry = onRetry ? (
-    <Button variant="ghost" size="sm" onPress={onRetry}>
+    <Button variant="outline" size="sm" onPress={onRetry}>
       Retry
     </Button>
   ) : null;

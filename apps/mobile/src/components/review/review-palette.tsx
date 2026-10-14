@@ -20,11 +20,7 @@ interface VerdictStyle {
 /** The three verdicts, their names and their colours — the only source of either. */
 export const VERDICT_STYLE: Readonly<Record<Verdict, VerdictStyle>> = {
   [VERDICT.RIGHT]: { label: 'Correct', fill: 'bg-success-subtle', ink: 'text-success-ink' },
-  [VERDICT.WRONG]: {
-    label: 'Incorrect',
-    fill: 'bg-destructive',
-    ink: 'text-destructive-foreground',
-  },
+  [VERDICT.WRONG]: { label: 'Incorrect', fill: 'bg-destructive-subtle', ink: 'text-destructive' },
   [VERDICT.LEFT]: { label: 'Unattempted', fill: 'bg-muted', ink: 'text-muted-foreground' },
 };
 

@@ -3,12 +3,11 @@ import { type ReactNode } from 'react';
 import { Text, View, type ViewProps } from 'react-native';
 import { cn } from '../../lib/cn';
 
-// No `--destructive-subtle` token exists, so danger reads as a solid fill rather than a tint.
 const VARIANTS = {
   info: { box: 'border-info bg-info-subtle', text: 'text-info-ink' },
   success: { box: 'border-success bg-success-subtle', text: 'text-success-ink' },
   warning: { box: 'border-warning bg-warning-subtle', text: 'text-warning-ink' },
-  danger: { box: 'border-destructive bg-destructive', text: 'text-destructive-foreground' },
+  danger: { box: 'border-destructive bg-destructive-subtle', text: 'text-destructive' },
 } as const;
 
 export interface AlertProps extends ViewProps {

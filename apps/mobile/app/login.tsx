@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -24,6 +25,7 @@ import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { useAuth } from '../src/providers/auth';
 import { Alert } from '../src/components/ui/alert';
+import { Brandmark } from '../src/components/ui/brandmark';
 import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
 import { PinField } from '../src/components/ui/pin-field';
@@ -47,9 +49,7 @@ export default function LoginScreen() {
       >
         <Card className="w-full max-w-[26rem] gap-6 p-6">
           <View className="items-center">
-            <Text className="rounded-md bg-primary px-4 py-1.5 text-2xl font-extrabold tracking-tight text-primary-foreground">
-              IACE
-            </Text>
+            <Brandmark />
           </View>
 
           {message ? <Alert variant="warning">{message}</Alert> : null}
@@ -104,6 +104,8 @@ function MobileStep({
         keyboardType="number-pad"
         autoComplete="tel"
         sanitize={typedMobile}
+        prefix="+91"
+        placeholder="98765 43210"
         autoFocus
       />
 
@@ -219,7 +221,7 @@ function BackButton({
   children,
 }: Readonly<{ onPress: () => void; disabled?: boolean; children: string }>) {
   return (
-    <Button variant="ghost" size="sm" disabled={disabled} onPress={onPress}>
+    <Button variant="ghost" size="sm" icon={ArrowLeft} disabled={disabled} onPress={onPress}>
       {children}
     </Button>
   );

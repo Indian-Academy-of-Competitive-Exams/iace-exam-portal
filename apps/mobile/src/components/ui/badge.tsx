@@ -8,8 +8,7 @@ const VARIANTS = {
   primary: { box: 'bg-primary-subtle', text: 'text-primary-ink' },
   success: { box: 'bg-success-subtle', text: 'text-success-ink' },
   warning: { box: 'bg-warning-subtle', text: 'text-warning-ink' },
-  // React Native has no colour functions, so crimson at 14% would need a token of its own.
-  danger: { box: 'bg-destructive', text: 'text-destructive-foreground' },
+  danger: { box: 'bg-destructive-subtle', text: 'text-destructive' },
   info: { box: 'bg-info-subtle', text: 'text-info-ink' },
 } as const;
 

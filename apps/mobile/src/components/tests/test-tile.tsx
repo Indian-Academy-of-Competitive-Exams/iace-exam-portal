@@ -1,5 +1,5 @@
-import { Pressable, View } from 'react-native';
-import { Link } from 'expo-router';
+import { Pressable } from 'react-native';
+import { Link, router } from 'expo-router';
 import {
   ATTEMPT_STATUS,
   TEST_BUCKET,
@@ -10,17 +10,43 @@ import {
 import { ordinal, shutReason, type Sittable, type TestResult } from '@iace/app-kit';
 import { Text } from '../ui/text';
 import { Alert } from '../ui/alert';
+import { Button } from '../ui/button';
 import { Card } from '../ui/card';
+import { useTokenColor } from '../../lib/use-token-color';
 import { cn } from '../../lib/cn';
 import { plural } from '../../lib/plural';
 import { DETAIL_ROUTES } from '../../lib/nav';
 
 /** The pill is read before anything else, so it carries the one fact a shelf is scanned for. */
 const STATES = {
-  DONE: { pill: 'bg-success-subtle', ink: 'text-success-ink', label: 'Done' },
-  LIVE: { pill: 'bg-primary-subtle', ink: 'text-primary-ink', label: 'Open now' },
-  RUNNING: { pill: 'bg-warning-subtle', ink: 'text-warning-ink', label: 'In progress' },
-  SHUT: { pill: 'bg-muted', ink: 'text-muted-foreground', label: 'Scheduled' },
+  DONE: {
+    pill: 'bg-success-subtle',
+    ink: 'text-success-ink',
+    label: 'Done',
+    wash: '--success-subtle',
+    alpha: 0.3,
+  },
+  LIVE: {
+    pill: 'bg-primary-subtle',
+    ink: 'text-primary-ink',
+    label: 'Open now',
+    wash: '--primary-subtle',
+    alpha: 0.3,
+  },
+  RUNNING: {
+    pill: 'bg-warning-subtle',
+    ink: 'text-warning-ink',
+    label: 'In progress',
+    wash: '--warning-subtle',
+    alpha: 0.3,
+  },
+  SHUT: {
+    pill: 'bg-muted',
+    ink: 'text-muted-foreground',
+    label: 'Scheduled',
+    wash: '--muted',
+    alpha: 0.4,
+  },
 } as const;
 
 export interface TestTileProps {
@@ -34,11 +60,16 @@ export interface TestTileProps {
 /** The whole card is the tap target — it opens the test, whatever state it is in. */
 export function TestTile({ row, now, result, fullWidth = false }: Readonly<TestTileProps>) {
   const state = STATES[stateOf(row)];
+  const wash = useTokenColor(state.wash);
+  const surface = useTokenColor('--surface');
 
   return (
     <Link href={DETAIL_ROUTES.TEST(row.test.id)} asChild>
       <Pressable>
-        <Card className={cn('gap-3 p-4', fullWidth ? 'w-full' : 'w-72 shrink-0')}>
+        <Card
+          className={cn('gap-3 p-4', fullWidth ? 'w-full' : 'w-72 shrink-0')}
+          style={washOf(wash, surface, state.alpha)}
+        >
           <Text
             className={cn(
               'self-start rounded-full px-2 py-0.5 text-xs font-semibold',
@@ -81,18 +112,24 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
 
   if (row.action) {
     return (
-      <View className="items-center rounded-md bg-primary px-3 py-2">
-        <Text className="text-sm font-medium text-primary-foreground">
-          {row.action === 'RESUME' ? 'Resume' : 'Start test'}
-        </Text>
-      </View>
+      <Button
+        size="sm"
+        variant={row.action === 'RESUME' ? 'warning' : 'default'}
+        onPress={() => router.push(DETAIL_ROUTES.TEST(row.test.id))}
+      >
+        {row.action === 'RESUME' ? 'Resume' : 'Start test'}
+      </Button>
     );
   }
 
   return (
-    <View className="items-center rounded-md border border-input px-3 py-2">
-      <Text variant="label">View details</Text>
-    </View>
+    <Button
+      size="sm"
+      variant="outline"
+      onPress={() => router.push(DETAIL_ROUTES.TEST(row.test.id))}
+    >
+      View details
+    </Button>
   );
 }
 
@@ -122,4 +159,15 @@ function whenLine(test: StudentCatalogTest, now: Date): string {
     return `Opens ${instituteDayLabel(test.opensAt)}`;
   }
   return 'Any time';
+}
+
+/** The web tile's top-down fade into the card colour, settled by 45%; no wash if a token is not a plain hex. */
+function washOf(wash: string | undefined, surface: string | undefined, alpha: number) {
+  if (!wash || !surface || !/^#[0-9a-f]{6}$/i.test(wash)) return undefined;
+  const a = Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return {
+    experimental_backgroundImage: `linear-gradient(to bottom, ${wash}${a}, ${surface} 45%)`,
+  };
 }

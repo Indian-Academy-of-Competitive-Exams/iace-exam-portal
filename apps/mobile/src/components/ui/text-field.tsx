@@ -16,6 +16,8 @@ export interface TextFieldProps<TValues extends FieldValues> extends Omit<
   hint?: string;
   /** Rewrites what the user typed, e.g. digits-only plus a length cap. */
   sanitize?: (raw: string) => string;
+  /** Fixed text before the input, e.g. a country code. */
+  prefix?: string;
 }
 
 /** A labelled TextInput bound to one react-hook-form field, its error below it. */
@@ -25,6 +27,7 @@ export function TextField<TValues extends FieldValues>({
   label,
   hint,
   sanitize,
+  prefix,
   className,
   ...inputProps
 }: Readonly<TextFieldProps<TValues>>) {
@@ -41,20 +44,24 @@ export function TextField<TValues extends FieldValues>({
         return (
           <View className="flex flex-col gap-1.5">
             <Text variant="label">{label}</Text>
-            <TextInput
-              {...inputProps}
-              value={typeof field.value === 'string' ? field.value : ''}
-              onBlur={field.onBlur}
-              onChangeText={(raw) => field.onChange(sanitize ? sanitize(raw) : raw)}
-              placeholderTextColor={
-                typeof placeholderColor === 'string' ? placeholderColor : undefined
-              }
+            <View
               className={cn(
-                'h-11 rounded-md border border-input bg-surface px-3 text-base text-foreground',
+                'h-11 flex-row items-center gap-2 rounded-md border border-input bg-surface px-3',
                 fieldState.error && 'border-destructive',
-                className,
               )}
-            />
+            >
+              {prefix ? <Text className="text-base text-muted-foreground">{prefix}</Text> : null}
+              <TextInput
+                {...inputProps}
+                value={typeof field.value === 'string' ? field.value : ''}
+                onBlur={field.onBlur}
+                onChangeText={(raw) => field.onChange(sanitize ? sanitize(raw) : raw)}
+                placeholderTextColor={
+                  typeof placeholderColor === 'string' ? placeholderColor : undefined
+                }
+                className={cn('h-full flex-1 text-base text-foreground', className)}
+              />
+            </View>
             {message ? (
               <Text
                 className={cn(

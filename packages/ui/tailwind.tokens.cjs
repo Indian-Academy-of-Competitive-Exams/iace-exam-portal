@@ -35,6 +35,7 @@ module.exports = (token) => ({
       DEFAULT: token('--destructive'),
       hover: token('--destructive-hover'),
       foreground: token('--destructive-foreground'),
+      subtle: token('--destructive-subtle'),
     },
     success: {
       DEFAULT: token('--success'),
@@ -45,6 +46,7 @@ module.exports = (token) => ({
     warning: {
       DEFAULT: token('--warning'),
       foreground: token('--warning-foreground'),
+      solid: token('--warning-solid'),
       subtle: token('--warning-subtle'),
       ink: token('--warning-ink'),
     },

@@ -80,6 +80,7 @@ export function ActiveDevices() {
         title={`Sign out ${signingOut?.deviceName ?? 'Unknown device'}?`}
         description="That device returns to the sign-in screen at its next request. Anything it has not saved stays on it until the student signs in there again."
         confirmLabel="Sign out"
+        destructive
         loading={signOutSession.isPending}
         onConfirm={() => signingOut && signOutSession.mutate(signingOut.id)}
         onCancel={() => setSigningOut(null)}
