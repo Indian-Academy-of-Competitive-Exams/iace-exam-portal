@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Alert, StatusBar, useColorScheme, View } from 'react-native';
 import { Stack, usePathname, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -82,7 +82,7 @@ function Navigation() {
   const headerColor = useTokenColor('--surface');
   const headerInk = useTokenColor('--foreground');
   const spinner = useTokenColor('--muted-foreground');
-  const statusBarStyle = useColorScheme() === 'dark' ? 'light' : 'dark';
+  const barStyle = useColorScheme() === 'dark' ? 'light-content' : 'dark-content';
   const pathname = usePathname();
   const router = useRouter();
 
@@ -134,32 +134,34 @@ function Navigation() {
   };
 
   return (
-    // Chevron only: iOS would otherwise label Back with the route group's name, "(tabs)".
-    <Stack
-      screenOptions={{ headerShown: false, headerBackButtonDisplayMode: 'minimal', statusBarStyle }}
-    >
-      <Stack.Protected guard={Boolean(identity)}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="series/[id]" options={page} />
-        <Stack.Screen name="test/[id]/index" options={page} />
-        <Stack.Screen name="test/[id]/instructions" options={page} />
-        {/* No swipe back out of a running paper; Android's Back is intercepted by the screen itself. */}
-        <Stack.Screen
-          name="exam/[testId]"
-          options={{ gestureEnabled: false }}
-          dangerouslySingular
-        />
-        <Stack.Screen
-          name="attempts/[attemptId]/submitted"
-          options={{ ...page, headerBackVisible: false, title: 'Handed in' }}
-        />
-        <Stack.Screen name="attempts/[attemptId]/report" options={{ ...page, title: 'Report' }} />
-        <Stack.Screen name="profile" options={{ ...page, title: 'Your details' }} />
-        <Stack.Screen name="notifications" options={{ ...page, title: 'Notifications' }} />
-      </Stack.Protected>
-      <Stack.Protected guard={!identity}>
-        <Stack.Screen name="login" />
-      </Stack.Protected>
-    </Stack>
+    <>
+      {/* Not the Stack's statusBarStyle: on iOS that needs UIViewControllerBasedStatusBarAppearance, which Expo Go cannot set. */}
+      <StatusBar barStyle={barStyle} />
+      {/* Chevron only: iOS would otherwise label Back with the route group's name, "(tabs)". */}
+      <Stack screenOptions={{ headerShown: false, headerBackButtonDisplayMode: 'minimal' }}>
+        <Stack.Protected guard={Boolean(identity)}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="series/[id]" options={page} />
+          <Stack.Screen name="test/[id]/index" options={page} />
+          <Stack.Screen name="test/[id]/instructions" options={page} />
+          {/* No swipe back out of a running paper; Android's Back is intercepted by the screen itself. */}
+          <Stack.Screen
+            name="exam/[testId]"
+            options={{ gestureEnabled: false }}
+            dangerouslySingular
+          />
+          <Stack.Screen
+            name="attempts/[attemptId]/submitted"
+            options={{ ...page, headerBackVisible: false, title: 'Handed in' }}
+          />
+          <Stack.Screen name="attempts/[attemptId]/report" options={{ ...page, title: 'Report' }} />
+          <Stack.Screen name="profile" options={{ ...page, title: 'Your details' }} />
+          <Stack.Screen name="notifications" options={{ ...page, title: 'Notifications' }} />
+        </Stack.Protected>
+        <Stack.Protected guard={!identity}>
+          <Stack.Screen name="login" />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }
