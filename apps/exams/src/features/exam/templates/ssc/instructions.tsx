@@ -262,6 +262,12 @@ export function SscGuide({
               </tr>
             </>
           )}
+          <tr>
+            <td>
+              <span className="sc-btn">Clear Response</span>
+            </td>
+            <td>Takes the answer off the question</td>
+          </tr>
         </tbody>
       </table>
 

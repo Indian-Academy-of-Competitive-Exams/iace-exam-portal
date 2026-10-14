@@ -29,7 +29,11 @@ import profileImage from '../railway/assets/profile.png';
 import { SscGuide, SscHeader, SscPhotoColumn } from './instructions';
 import { ANALYTICS_ORDER, STATE_CLASS, STATE_LABEL, answeredOf, summaryOf } from './states';
 import './ssc.css';
-import { isTypingQuestion, isWrittenQuestion } from '../../../typing/typing-figures';
+import {
+  answersByKeyboard,
+  isTypingQuestion,
+  isWrittenQuestion,
+} from '../../../typing/typing-figures';
 import { ExamTyping, ExamWriting } from '../shared/exam-typing';
 
 /** The original starts at its smallest and grows a tenth at a time to double. */
@@ -292,6 +296,14 @@ function SscBar({ view, onHandIn }: Readonly<{ view: ExamView; onHandIn: () => v
             </button>
           </>
         )}
+        <button
+          type="button"
+          className="sc-btn"
+          disabled={off || answersByKeyboard(view.question)}
+          onClick={view.clearResponse}
+        >
+          Clear Response
+        </button>
         <button type="button" className="sc-btn" disabled={off} onClick={view.nextQuestion}>
           Save &amp; Next
         </button>
