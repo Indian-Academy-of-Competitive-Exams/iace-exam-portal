@@ -201,20 +201,8 @@ export function AssignStep({
     earlierTypists: earlier(all, section.id, ASSIGNMENT_ROLES.TYPIST),
     earlierReaders: earlier(all, section.id, ASSIGNMENT_ROLES.PROOFREADER),
   });
-  const outstanding = all.some(
-    (row) =>
-      row.replacedAt === null &&
-      row.finalizedAt === null &&
-      (row.role === ASSIGNMENT_ROLES.PROOFREADER || detail.paperSource === PAPER_SOURCES.FRAMED),
-  );
   return (
     <FormSection title="Sections" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
-      {outstanding && !detail.finalizedAt ? (
-        <Alert variant="info">
-          A test cannot be offered until every section is released by its proof-reader.
-        </Alert>
-      ) : null}
-
       <DataTable
         columns={columns}
         rows={sections.map(rowOf)}

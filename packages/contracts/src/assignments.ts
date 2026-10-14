@@ -3,7 +3,14 @@ import { adminRoleSchema } from './admins';
 import { civilDate, csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { dateOnlySchema, todayISO } from './students';
-import { difficultyMixSchema, paperSourceSchema } from './tests';
+import {
+  difficultyMixSchema,
+  owesAPaper,
+  PAPER_SOURCES,
+  paperSourceSchema,
+  type PaperProgress,
+  type PaperSource,
+} from './tests';
 
 // ============================================================================
 // Authoring assignments. A section of a test's paper assigned to a typist and
@@ -348,3 +355,47 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
   /** Who a role can be given to — active admins already holding the feature key it needs. */
   assignable: '/admin/assignments/assignable',
 } as const;
+
+/** "1 section has" / "2 sections have", named after the colon as the server's refusal names them. */
+const sectionsSay = (names: readonly string[], one: string, many: string, what: string): string =>
+  `${names.length} section${names.length === 1 ? ` ${one}` : `s ${many}`} ${what}: ${names.join(', ')}`;
+
+/** What still keeps a paper from being offered, in the server's own words; null when nothing does. */
+export function paperBlockerOf(input: {
+  test: PaperProgress & { paperSource: PaperSource | null };
+  sections: readonly { id: string; name: string }[];
+  assignments: readonly Pick<
+    Assignment,
+    'baseConfigSectionId' | 'role' | 'finalizedAt' | 'replacedAt'
+  >[];
+  skipsReading: boolean;
+}): string | null {
+  const { test, sections, assignments, skipsReading } = input;
+  if (test.finalizedAt !== null) return null;
+  if (owesAPaper(test)) {
+    return `The paper holds ${test.paperQuestionCount} of ${test.totalQuestions} questions.`;
+  }
+  if (skipsReading) return null;
+
+  const current = assignments.filter((row) => row.replacedAt === null);
+  const read = new Set(
+    current
+      .filter((row) => row.role === ASSIGNMENT_ROLES.PROOFREADER)
+      .map((row) => row.baseConfigSectionId),
+  );
+  const unread = sections.filter((section) => !read.has(section.id)).map((row) => row.name);
+  if (unread.length > 0) return sectionsSay(unread, 'has', 'have', 'no proof-reader');
+
+  const owed = new Set(
+    current
+      .filter(
+        (row) =>
+          row.finalizedAt === null &&
+          (row.role === ASSIGNMENT_ROLES.PROOFREADER || test.paperSource === PAPER_SOURCES.FRAMED),
+      )
+      .map((row) => row.baseConfigSectionId),
+  );
+  const open = sections.filter((section) => owed.has(section.id)).map((row) => row.name);
+  if (open.length > 0) return sectionsSay(open, 'is', 'are', 'still being proof-read');
+  return null;
+}

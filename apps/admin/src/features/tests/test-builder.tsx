@@ -10,6 +10,8 @@ import {
   TEST_BUILDER_STEPS,
   testBuilderStepOf,
   owesAPaper,
+  paperBlockerOf,
+  scopedSections,
   type BaseConfigDetail,
   type TestBuilderStep,
   type TestDetail,
@@ -43,6 +45,7 @@ import {
   TEST_STATUS_LABELS,
   baseConfigQueryKey,
   seriesQueryKey,
+  testAssignmentsQueryKey,
   testQueryKey,
 } from '../../lib/constants';
 import { TEST_BUILDER_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
@@ -164,6 +167,7 @@ function TestBuilder({
     enabled: !existing && baseConfigId !== '',
   });
   const config = detail?.baseConfig ?? chosenConfig.data ?? null;
+  const paperBlocker = usePaperBlocker(detail, config);
 
   usePageTour({ id: TOUR_IDS.TEST_BUILDER, steps: TEST_BUILDER_TOUR, ready: config !== null });
 
@@ -249,7 +253,9 @@ function TestBuilder({
     value,
     label: TEST_BUILDER_STEP_LABELS[value],
     state: stateOf(value, step, done),
-    disabled: !existing && value !== TEST_BUILDER_STEP.SETUP,
+    disabled:
+      (!existing && value !== TEST_BUILDER_STEP.SETUP) ||
+      (value === TEST_BUILDER_STEP.OFFER && step !== value && paperBlocker !== null),
   }));
 
   const index = TEST_BUILDER_STEPS.indexOf(step);
@@ -261,12 +267,13 @@ function TestBuilder({
     <FormPanel
       onSubmit={(event) => {
         event.preventDefault();
-        if (next) open(next);
+        if (next && !(step === TEST_BUILDER_STEP.PAPER && paperBlocker !== null)) open(next);
       }}
       footer={
         <BuilderFooter
           previous={existing ? previous : null}
           next={next}
+          blocked={step === TEST_BUILDER_STEP.PAPER && paperBlocker !== null}
           saving={save.isPending}
           onOpen={open}
           onDone={finish}
@@ -304,6 +311,9 @@ function TestBuilder({
           </div>
 
           {banner ? <Alert variant="danger">{banner}</Alert> : null}
+          {step === TEST_BUILDER_STEP.PAPER && paperBlocker ? (
+            <Alert variant="info">{paperBlocker}</Alert>
+          ) : null}
         </>
       }
     >
@@ -344,6 +354,27 @@ function TestBuilder({
   );
 }
 
+/** What keeps the Paper step open, as the offer would refuse it; empty while the assignments load. */
+function usePaperBlocker(
+  detail: TestDetail | null,
+  config: BaseConfigDetail | null,
+): string | null {
+  const { identity } = useAuth();
+  const assignments = useQuery({
+    queryKey: testAssignmentsQueryKey(detail?.id ?? ''),
+    queryFn: () => api.admin.assignments.forTest(detail?.id ?? ''),
+    enabled: Boolean(detail?.id),
+  });
+  if (!detail || !config) return null;
+  if (!assignments.data) return detail.finalizedAt === null ? '' : null;
+  return paperBlockerOf({
+    test: detail,
+    sections: scopedSections(config.sections, detail.scope, detail.scopeRef),
+    assignments: assignments.data,
+    skipsReading: identity?.isSuperAdmin ?? false,
+  });
+}
+
 function metaOf(detail: TestDetail | null) {
   if (!detail) return undefined;
   const { exam, name } = detail.examStage;
@@ -353,12 +384,14 @@ function metaOf(detail: TestDetail | null) {
 function BuilderFooter({
   previous,
   next,
+  blocked,
   saving,
   onOpen,
   onDone,
 }: Readonly<{
   previous: TestBuilderStep | null;
   next: TestBuilderStep | null;
+  blocked: boolean;
   saving: boolean;
   onOpen: (target: TestBuilderStep) => void;
   onDone: (event: MouseEvent<HTMLAnchorElement>) => void;
@@ -376,7 +409,7 @@ function BuilderFooter({
       )}
 
       {next ? (
-        <Button type="button" loading={saving} onClick={() => onOpen(next)}>
+        <Button type="button" loading={saving} disabled={blocked} onClick={() => onOpen(next)}>
           Next
         </Button>
       ) : (

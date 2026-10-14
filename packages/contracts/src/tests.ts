@@ -390,7 +390,7 @@ const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
 export type TestBuilderStep = z.infer<typeof testBuilderStepSchema>;
 export const TEST_BUILDER_STEPS = testBuilderStepSchema.options;
 
-type PaperProgress = Pick<Test, 'finalizedAt' | 'paperQuestionCount' | 'totalQuestions'>;
+export type PaperProgress = Pick<Test, 'finalizedAt' | 'paperQuestionCount' | 'totalQuestions'>;
 
 /** A frozen paper is whole by definition; the stepper's tick, the Offer switch and the landing step all read this. */
 export function owesAPaper(test: PaperProgress): boolean {
