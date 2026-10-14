@@ -311,6 +311,15 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   sitting is a retake: marked, never ranked, and never in a cohort.
 - `SINGLE` serves the one language picked, narrowed to what the config actually offers; `DUAL` serves
   every language it offers and there is nothing to toggle.
+- **A section may be sat in a language of its own** (`BaseConfigSection.languages`, some of the
+  paper's): English Language in English, a Hindi paper's Hindi section in Hindi. It is served, shown
+  and reviewed in that language whatever the candidate picked, and the offer's language check owes
+  it nothing in the paper's other languages. Empty means the paper's languages. It is not the
+  paper's shape, so it changes in place on a configuration a test is built on (a locked one still
+  clones).
+- **A language an offer was waived past is not offered.** The offer records which languages its
+  waiver let through short (`Test.languagesSkipped`), and the brief, the shared paper and the start
+  leave them out of what a candidate may pick — never every language.
 - **Live state lives in Redis, and the key existing is what "this sitting is open" means.** Autosave
   batches what changed roughly every 25 seconds and the server merges it, answering with the
   revision and the clock rather than the sheet — the screen already holds what it just sent, and

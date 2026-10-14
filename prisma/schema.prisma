@@ -400,26 +400,28 @@ model BaseConfigModule {
 }
 
 model BaseConfigSection {
-  id                String    @id @default(uuid(7)) @db.Uuid
-  baseConfigId      String    @db.Uuid
-  moduleId          String?   @db.Uuid
+  id                String              @id @default(uuid(7)) @db.Uuid
+  baseConfigId      String              @db.Uuid
+  moduleId          String?             @db.Uuid
   name              String
   order             Int
-  subjectId         String?   @db.Uuid
+  subjectId         String?             @db.Uuid
   questionCount     Int
-  marksPerQuestion  Decimal   @db.Decimal(6, 2)
-  negativeMarks     Decimal   @db.Decimal(6, 2)
+  marksPerQuestion  Decimal             @db.Decimal(6, 2)
+  negativeMarks     Decimal             @db.Decimal(6, 2)
   durationSec       Int?
   perQuestionSec    Int?
-  mandatory         Boolean   @default(true)
-  meritOrQualifying MeritType @default(MERIT)
-  qualifyingCutoff  Decimal?  @db.Decimal(6, 2)
+  mandatory         Boolean             @default(true)
+  meritOrQualifying MeritType           @default(MERIT)
+  qualifyingCutoff  Decimal?            @db.Decimal(6, 2)
   // The exam-pattern workbook's own words ("Moderate-Difficult"). Reference only; no draw reads it.
   patternNote       String?
   // A TYPING_PRESETS key: set, the section is one TYPING question held to that standard.
   typingPreset      String?
   // Set, the section holds DESCRIPTIVE questions and nothing else, and charges no negative marks.
-  descriptive       Boolean   @default(false)
+  descriptive       Boolean             @default(false)
+  // Its own languages (English Language in English alone); empty, it is sat in the paper's.
+  languages         SupportedLanguage[] @default([])
 
   baseConfig     BaseConfig           @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
   module         BaseConfigModule?    @relation(fields: [baseConfigId, moduleId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
@@ -535,37 +537,39 @@ model QuestionVersion {
 // ============================================================================
 
 model Test {
-  id                 String       @id @default(uuid(7)) @db.Uuid
+  id                 String              @id @default(uuid(7)) @db.Uuid
   title              String?
-  baseConfigId       String       @db.Uuid
+  baseConfigId       String              @db.Uuid
   // Denormalised from BaseConfig so the composite FK below is always enforced.
-  examStageId        String       @db.Uuid
-  scope              TestScope    @default(FULL)
+  examStageId        String              @db.Uuid
+  scope              TestScope           @default(FULL)
   scopeRef           Json?
   questionPoolFilter Json?
   // Null until an admin declares it; chosen once and never moved, super admin included.
   paperSource        PaperSource?
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
-  examTemplate       ExamTemplate @default(DEFAULT)
-  status             TestStatus   @default(DRAFT)
+  examTemplate       ExamTemplate        @default(DEFAULT)
+  status             TestStatus          @default(DRAFT)
   // Moves with every paper edit, offer and Offer-step save; a save carrying an older one is refused.
-  version            Int          @default(0)
+  version            Int                 @default(0)
   // Bumped whenever a paper row's status moves; the cache key for a sat paper's scoring terms.
-  paperRevision      Int          @default(0)
+  paperRevision      Int                 @default(0)
   // Set by the first offer and never cleared: the paper is frozen iff this is set.
-  finalizedAt        DateTime?    @db.Timestamptz(3)
+  finalizedAt        DateTime?           @db.Timestamptz(3)
   // The admin who offered it while questions lacked a language its config is sat in, and when.
-  languageWaivedById String?      @db.Uuid
-  languageWaivedAt   DateTime?    @db.Timestamptz(3)
-  createdById        String?      @db.Uuid
-  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
-  testSeriesId       String       @db.Uuid
+  languageWaivedById String?             @db.Uuid
+  languageWaivedAt   DateTime?           @db.Timestamptz(3)
+  // The languages that waiver let through short, which a candidate is then not offered.
+  languagesSkipped   SupportedLanguage[] @default([])
+  createdById        String?             @db.Uuid
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  testSeriesId       String              @db.Uuid
   seriesOrder        Int?
   // A test opens and never shuts, and that instant is the whole of its timing.
-  opensAt            DateTime?    @db.Timestamptz(3)
+  opensAt            DateTime?           @db.Timestamptz(3)
   // When students were told it had opened. The sweep's watermark: set once, never read as a date.
-  announcedAt        DateTime?    @db.Timestamptz(3)
+  announcedAt        DateTime?           @db.Timestamptz(3)
 
   baseConfig        BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
   examStage         ExamStage            @relation(fields: [examStageId], references: [id])

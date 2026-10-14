@@ -19,6 +19,8 @@ import {
   type PrintablePaperQuery,
   type QuestionOption,
   languagesFor,
+  offeredLanguages,
+  sectionLanguagesFor,
   type TypingPresetKey,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -41,6 +43,7 @@ const PAPER_SELECT = {
       examTemplate: true,
       scope: true,
       scopeRef: true,
+      languagesSkipped: true,
       baseConfig: {
         select: {
           defaultTestUi: true,
@@ -61,6 +64,7 @@ const PAPER_SELECT = {
               durationSec: true,
               typingPreset: true,
               descriptive: true,
+              languages: true,
             },
             orderBy: { order: 'asc' },
           },
@@ -133,7 +137,7 @@ export class AttemptPaperService {
       ),
       totalQuestions: scopedQuestionCount(test.baseConfig.sections, test.scope, scopeRef),
       languageMode: test.baseConfig.languageMode,
-      languages: test.baseConfig.languages,
+      languages: offeredLanguages(test.baseConfig.languages, test.languagesSkipped),
       sections: covered.map((section) => ({
         id: section.id,
         name: section.name,
@@ -168,7 +172,11 @@ export class AttemptPaperService {
       ...(await this.shapeOf(
         test,
         testId,
-        languagesFor(config.languageMode, config.languages, picked),
+        languagesFor(
+          config.languageMode,
+          offeredLanguages(config.languages, test.languagesSkipped),
+          picked,
+        ),
       )),
       shuffleQuestions: config.shuffleQuestions,
       shuffleOptions: config.shuffleOptions,
@@ -291,6 +299,14 @@ export class AttemptPaperService {
   ): Promise<SharedPaper> {
     const config = test.baseConfig;
     const rows = held ?? (await this.papers.servedOf(testId));
+    const sections = scopedSections(config.sections, test.scope, scopeRefOf(test));
+    // English Language is shown in English whatever the sitting picked; the rest in the sitting's.
+    const sittingLanguagesOf = new Map(
+      sections.map((section) => [
+        section.id,
+        sectionLanguagesFor(section.languages as LanguageCode[], languages),
+      ]),
+    );
 
     return {
       languages: [...languages],
@@ -302,7 +318,7 @@ export class AttemptPaperService {
       calculatorEnabled: config.calculatorEnabled,
       shuffleQuestions: config.shuffleQuestions,
       shuffleOptions: config.shuffleOptions,
-      sections: scopedSections(config.sections, test.scope, scopeRefOf(test)).map((section) => ({
+      sections: sections.map((section) => ({
         id: section.id,
         name: section.name,
         order: section.order,
@@ -310,9 +326,15 @@ export class AttemptPaperService {
         durationSec: section.durationSec,
         typingPreset: section.typingPreset as TypingPresetKey | null,
         descriptive: section.descriptive,
+        languages: sittingLanguagesOf.get(section.id) ?? [...languages],
       })),
       questions: this.withImages(
-        rows.map((row, index) => toExamQuestion({ ...row, order: index + 1 }, languages)),
+        rows.map((row, index) =>
+          toExamQuestion(
+            { ...row, order: index + 1 },
+            sittingLanguagesOf.get(row.baseConfigSectionId) ?? languages,
+          ),
+        ),
       ),
     };
   }

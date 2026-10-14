@@ -11,6 +11,7 @@ import {
   scopedDurationSec,
   scopedQuestionCount,
   languagesFor,
+  offeredLanguages,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
@@ -161,7 +162,11 @@ export class AttemptsService {
           startedAt,
           endsAt: deadlineFrom(startedAt, sittingSeconds(test)),
           shuffleSeed: randomInt(SEED_CEILING),
-          languages: languagesFor(test.baseConfig.languageMode, test.baseConfig.languages, picked),
+          languages: languagesFor(
+            test.baseConfig.languageMode,
+            offeredLanguages(test.baseConfig.languages, test.languagesSkipped),
+            picked,
+          ),
         },
       });
 

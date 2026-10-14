@@ -82,3 +82,22 @@ export function languagesFor(
   const first = (picked ?? []).find((language) => offered.includes(language));
   return first === undefined ? offered.slice(0, 1) : [first];
 }
+
+/** A section of its own languages (English Language, in English) is sat in those, whatever the sitting picked. */
+export function sectionLanguagesFor(
+  own: readonly LanguageCode[],
+  sitting: readonly LanguageCode[],
+): LanguageCode[] {
+  if (own.length === 0) return [...sitting];
+  const shared = sitting.filter((language) => own.includes(language));
+  return shared.length > 0 ? shared : own.slice(0, 1);
+}
+
+/** What a candidate may pick: the paper's languages less those an offer waived, never none of them. */
+export function offeredLanguages(
+  paper: readonly LanguageCode[],
+  skipped: readonly LanguageCode[],
+): LanguageCode[] {
+  const kept = paper.filter((language) => !skipped.includes(language));
+  return kept.length > 0 ? kept : paper.slice(0, 1);
+}

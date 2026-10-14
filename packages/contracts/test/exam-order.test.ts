@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { displayOrder, seededRandom, servedQuestions, shuffle } from '../src/exam-order';
+import {
+  displayOrder,
+  offeredLanguages,
+  sectionLanguagesFor,
+  seededRandom,
+  servedQuestions,
+  shuffle,
+} from '../src/exam-order';
 import { type ExamQuestion } from '../src/attempts';
 
 const SEED = 987_654;
@@ -104,5 +111,25 @@ describe('the primitives underneath', () => {
 
   it('holds a single-section paper in place when nothing is shuffled', () => {
     assert.deepEqual(displayOrder(paper(), SEED, false), paper());
+  });
+});
+
+describe('sectionLanguagesFor', () => {
+  /** THE failure this prevents: an English Language section served in Hindi, with no text to show. */
+  it('sits a section in its own language whatever the sitting picked', () => {
+    assert.deepEqual(sectionLanguagesFor(['EN'], ['HI']), ['EN']);
+    assert.deepEqual(sectionLanguagesFor(['EN'], ['EN', 'HI']), ['EN']);
+  });
+
+  it('sits a section with no languages of its own in the sitting’s', () => {
+    assert.deepEqual(sectionLanguagesFor([], ['HI']), ['HI']);
+  });
+});
+
+describe('offeredLanguages', () => {
+  /** THE failure this prevents: a candidate picking Hindi on a paper offered without it. */
+  it('leaves out the languages an offer waived, but never every one', () => {
+    assert.deepEqual(offeredLanguages(['EN', 'HI'], ['HI']), ['EN']);
+    assert.deepEqual(offeredLanguages(['EN'], ['EN']), ['EN']);
   });
 });

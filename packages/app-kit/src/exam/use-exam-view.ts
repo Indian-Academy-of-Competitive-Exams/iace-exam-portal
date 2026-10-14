@@ -461,7 +461,9 @@ export function useExamView(
     () => ({
       title: title ?? 'Your test',
       watermark,
-      languages: paper.languages,
+      // A section of its own languages is shown in those; the server served it so.
+      languages:
+        paper.sections.find((section) => section.id === sectionId)?.languages ?? paper.languages,
       languageMode: paper.languageMode,
       testUi: paper.testUi,
 

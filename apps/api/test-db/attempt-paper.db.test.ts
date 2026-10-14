@@ -556,4 +556,35 @@ describe('AttemptPaperService — the paper held before a sitting exists', () =>
       LANGUAGE_CODE.HI.toLowerCase(),
     ]);
   });
+
+  /** THE failure this prevents: English Language served in Hindi to a Hindi-medium candidate, with no text. */
+  it('serves a section of its own language in that language, whatever the sitting picked', async () => {
+    const { paper: onPaper, student } = await sitting({ languageMode: LANGUAGE_MODE.SINGLE });
+    await offering(onPaper);
+    await prisma.baseConfigSection.updateMany({
+      where: { id: { in: onPaper.sectionIds } },
+      data: { languages: [LANGUAGE_CODE.EN] },
+    });
+
+    const shared = await service.testPaper(student, onPaper.testId, [LANGUAGE_CODE.HI]);
+
+    assert.deepEqual(shared.sections[0]?.languages, [LANGUAGE_CODE.EN]);
+    assert.deepEqual(Object.keys(shared.questions[0]?.content ?? {}), [
+      LANGUAGE_CODE.EN.toLowerCase(),
+    ]);
+  });
+
+  /** THE failure this prevents: a candidate picking a language the test was offered without. */
+  it('does not offer a language the offer waived', async () => {
+    const { paper: onPaper, student } = await sitting({ languageMode: LANGUAGE_MODE.SINGLE });
+    await offering(onPaper);
+    await prisma.test.update({
+      where: { id: onPaper.testId },
+      data: { languagesSkipped: [LANGUAGE_CODE.HI] },
+    });
+
+    const shared = await service.testPaper(student, onPaper.testId, [LANGUAGE_CODE.HI]);
+
+    assert.deepEqual(shared.languages, [LANGUAGE_CODE.EN]);
+  });
 });

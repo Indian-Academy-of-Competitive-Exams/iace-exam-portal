@@ -24,6 +24,7 @@ import {
   type TimerTemplate,
   type UpdateBaseConfigBody,
   type TypingPresetKey,
+  type LanguageCode,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -135,6 +136,7 @@ export class BaseConfigsService {
     const timerTemplate = input.timerTemplate ?? TIMER_TEMPLATE.COMPOSITE_FREE;
     const modules = input.modules ?? [];
     this.assertShape(timerTemplate, input.sections, modules, input.durationSec);
+    assertSectionLanguages(input.languages ?? [], input.sections);
     this.assertRenderMode(
       input.examTemplate ?? EXAM_TEMPLATE.DEFAULT,
       input.defaultTestUi ?? TEST_UI.CBT,
@@ -181,8 +183,12 @@ export class BaseConfigsService {
     // The editor posts the whole paper on every save, so only a paper that differs is rewritten.
     const posted =
       sections === undefined ? null : paperRowsOf(timerTemplate, sections, modules ?? []);
-    const rewritten =
-      posted !== null && paperKeyOf(posted) !== paperKeyOf(storedPaperRows(config)) ? posted : null;
+    const stored = storedPaperRows(config);
+    const changed = posted !== null && paperKeyOf(posted) !== paperKeyOf(stored);
+    // A section's languages are not its shape: they change in place, so a test built on the config keeps its sections.
+    const languagesOnly =
+      changed && paperKeyOf(withoutLanguages(posted)) === paperKeyOf(withoutLanguages(stored));
+    const rewritten = changed && !languagesOnly ? posted : null;
     // A test's paper rows, assignments, scope and draw spec all name these sections by id, and a rewrite mints new ones.
     if (rewritten && config._count.tests > 0) {
       throw formRefusal(ErrorCodes.CONFLICT, BUILT_ON_CONFIG_MESSAGE);
@@ -193,6 +199,10 @@ export class BaseConfigsService {
       sections ?? config.sections.map(toSectionDraft),
       modules ?? config.modules,
       input.durationSec ?? config.durationSec,
+    );
+    assertSectionLanguages(
+      input.languages ?? (config.languages as LanguageCode[]),
+      sections ?? config.sections.map(toSectionDraft),
     );
     this.assertRenderMode(
       input.examTemplate ?? (config.examTemplate as ExamTemplate),
@@ -221,6 +231,7 @@ export class BaseConfigsService {
         await tx.baseConfig.update({ where: { id }, data: { isDefault: input.isDefault } });
       }
 
+      if (languagesOnly && posted) await relanguage(tx, config, stored, posted);
       if (rewritten) {
         // Replaced wholesale: the editor holds the whole paper, and a section has no identity an edit could match on once its order or its subject changes.
         await tx.baseConfigSection.deleteMany({ where: { baseConfigId: id } });
@@ -308,6 +319,7 @@ export class BaseConfigsService {
             patternNote: section.patternNote,
             typingPreset: section.typingPreset,
             descriptive: section.descriptive,
+            languages: section.languages,
           },
         });
       }
@@ -460,6 +472,49 @@ async function writeChildren(
   }
 }
 
+/** A section's own languages are some of the paper's: English Language cannot be sat in a language the paper is not. */
+function assertSectionLanguages(
+  paper: readonly LanguageCode[],
+  sections: readonly BaseConfigSectionDraft[],
+): void {
+  const issues = sections.flatMap((section) =>
+    (section.languages ?? []).some((language) => !paper.includes(language))
+      ? [`${section.name} can only be in the paper's own languages.`]
+      : [],
+  );
+  const [first] = issues;
+  if (first === undefined) return;
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, first, { fieldErrors: { sections: issues } });
+}
+
+/** Each stored section takes the languages of the posted one at the same position; nothing else about it moves. */
+async function relanguage(
+  tx: Prisma.TransactionClient,
+  config: DetailRow,
+  stored: PaperRows,
+  posted: PaperRows,
+): Promise<void> {
+  // By position, as `paperKeyOf` compares them: the editor renumbers from zero whatever was stored.
+  const inPaperOrder = <Row extends PaperRows['sections'][number]>(rows: readonly Row[]) =>
+    rows
+      .map((row, index) => ({ row, index }))
+      .sort(
+        (a, b) => (a.row.moduleRank ?? -1) - (b.row.moduleRank ?? -1) || a.row.order - b.row.order,
+      );
+  const asked = inPaperOrder(posted.sections);
+  for (const [place, { index }] of inPaperOrder(stored.sections).entries()) {
+    const section = config.sections[index];
+    const languages = asked[place]?.row.languages;
+    if (!section || !languages) continue;
+    await tx.baseConfigSection.update({ where: { id: section.id }, data: { languages } });
+  }
+}
+
+const withoutLanguages = (paper: PaperRows): PaperRows => ({
+  ...paper,
+  sections: paper.sections.map(({ languages: _languages, ...row }) => ({ ...row, languages: [] })),
+});
+
 /** A form open since before somebody else's save would write its stale sections over theirs. */
 function assertScreenIsCurrent(config: DetailRow, expected: string | undefined): void {
   if (expected === undefined || expected === config.updatedAt.toISOString()) return;
@@ -485,6 +540,7 @@ interface PaperRows {
     patternNote: string | null;
     typingPreset: string | null;
     descriptive: boolean;
+    languages: LanguageCode[];
   }[];
 }
 
@@ -525,6 +581,8 @@ function paperRowsOf(
       patternNote: section.patternNote ?? null,
       typingPreset: section.typingPreset ?? null,
       descriptive: section.descriptive ?? false,
+      // Sorted, so the same set ticked in another order is not a change to the paper.
+      languages: [...(section.languages ?? [])].sort(),
     })),
   };
 }
@@ -564,6 +622,7 @@ function toSectionDraft(section: DetailRow['sections'][number]): BaseConfigSecti
     // Carried, or a save that changes only the timer would be judged as if no section were a typing test.
     typingPreset: section.typingPreset as TypingPresetKey | null,
     descriptive: section.descriptive,
+    languages: section.languages as LanguageCode[],
   };
 }
 
@@ -627,6 +686,7 @@ function toDetail(row: DetailRow, editingBy: EditLockHolder | null): BaseConfigD
       patternNote: section.patternNote,
       typingPreset: section.typingPreset as TypingPresetKey | null,
       descriptive: section.descriptive,
+      languages: section.languages as LanguageCode[],
     })),
   };
 }

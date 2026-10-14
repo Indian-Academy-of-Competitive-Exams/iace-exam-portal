@@ -613,6 +613,54 @@ describe('BaseConfigsService — a config a test is built on', () => {
     );
   });
 
+  /** THE failure this prevents: English Language made English-only, refused because a test is built on it. */
+  it('sets a section’s own language in place, keeping the sections a test is built on', async () => {
+    const paper = await makePaper(prisma, {
+      sections: ['English', 'Quant'],
+      questions: ['English'],
+    });
+    const configId = paper.catalog.baseConfigId;
+    await prisma.baseConfig.update({ where: { id: configId }, data: { languages: ['EN', 'HI'] } });
+    const stored = await prisma.baseConfigSection.findMany({
+      where: { baseConfigId: configId },
+      orderBy: { order: 'asc' },
+    });
+    const posted = (english: ('EN' | 'HI' | 'TE')[]) =>
+      stored.map((section, index) => ({
+        name: section.name,
+        order: index,
+        subjectId: section.subjectId,
+        questionCount: section.questionCount,
+        marksPerQuestion: Number(section.marksPerQuestion),
+        negativeMarks: Number(section.negativeMarks),
+        durationSec: section.durationSec,
+        perQuestionSec: section.perQuestionSec,
+        mandatory: section.mandatory,
+        meritOrQualifying: section.meritOrQualifying,
+        qualifyingCutoff: null,
+        languages: index === 0 ? english : [],
+      }));
+
+    await service.update(configId, { sections: posted(['EN']) });
+
+    const kept = await prisma.baseConfigSection.findMany({
+      where: { baseConfigId: configId },
+      orderBy: { order: 'asc' },
+      select: { id: true, languages: true },
+    });
+    assert.deepEqual(
+      kept.map((section) => [section.id, section.languages]),
+      [
+        [paper.sectionIds[0], ['EN']],
+        [paper.sectionIds[1], []],
+      ],
+    );
+    await assert.rejects(
+      () => service.update(configId, { sections: posted(['TE']) }),
+      /English can only be in the paper's own languages/,
+    );
+  });
+
   /** The failure this prevents: an offered test's brief still showing a duration its config no longer has. */
   it('tells the catalog about an edit to a config a test is built on', async () => {
     const { catalog } = await makePaper(prisma, { questions: [] });

@@ -114,6 +114,8 @@ interface SectionValues {
   typingPreset: string;
   /** Written answers: essays, letters, précis. */
   descriptive: boolean;
+  /** One language of the paper's that the section is sat in alone, or empty for all of them. */
+  language: string;
 }
 
 interface ModuleValues {
@@ -157,6 +159,7 @@ function emptySection(): SectionValues {
     qualifyingCutoff: '',
     typingPreset: '',
     descriptive: false,
+    language: '',
   };
 }
 
@@ -227,6 +230,7 @@ function valuesOf(detail: BaseConfigDetail | null): ConfigFormValues {
       qualifyingCutoff: section.qualifyingCutoff === null ? '' : String(section.qualifyingCutoff),
       typingPreset: section.typingPreset ?? '',
       descriptive: section.descriptive,
+      language: section.languages[0] ?? '',
     })),
   };
 }
@@ -252,6 +256,7 @@ function toSectionDraft(section: SectionValues, index: number): BaseConfigSectio
         : null,
     typingPreset: typingPresetKeySchema.safeParse(section.typingPreset).data ?? null,
     descriptive: section.descriptive,
+    languages: section.language ? [section.language as LanguageCode] : [],
   };
 }
 
@@ -1002,6 +1007,7 @@ function SectionCard({
   const typingPreset = useWatch({ control: form.control, name: `sections.${index}.typingPreset` });
   const isTyping = typingPreset !== '';
   const descriptive = useWatch({ control: form.control, name: `sections.${index}.descriptive` });
+  const paperLanguages = useWatch({ control: form.control, name: 'languages' }) ?? [];
 
   // A typing test is one unmarked passage on its standard's clock, so choosing one fills all four.
   const chooseTyping = (key: string) => {
@@ -1186,6 +1192,22 @@ function SectionCard({
               />
             )}
           </FormField>
+        ) : null}
+
+        {paperLanguages.length > 1 ? (
+          <FormCombobox
+            form={form}
+            name={`sections.${index}.language`}
+            label="Language"
+            /* ui-copy-ok: rule */ hint="English Language is sat in English, whatever a student picks"
+            items={[
+              { value: '', label: "The paper's languages" },
+              ...paperLanguages.map((code) => ({
+                value: code,
+                label: `${LANGUAGE_CODE_LABELS[code]} only`,
+              })),
+            ]}
+          />
         ) : null}
 
         {moduleNames.length > 0 ? (

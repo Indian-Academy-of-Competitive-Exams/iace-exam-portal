@@ -1,4 +1,4 @@
-/** Which questions on a paper lack a language its config is sat in; a candidate in that language would see no text. */
+/** Which questions on a paper lack a language their section is sat in; a section of its own languages owes no other. */
 import { Prisma } from '@prisma/client';
 import { contentLanguageOf, type LanguageCode, type PaperLanguageGap } from '@iace/contracts';
 
@@ -20,6 +20,7 @@ export async function paperLanguageGaps(
       WHERE pq."testId" = ${testId}::uuid
         AND pq."status" <> 'DROPPED'
         AND NOT jsonb_exists(v."content", ${contentLanguageOf(language)})
+        AND (cardinality(s."languages") = 0 OR ${language}::"SupportedLanguage" = ANY(s."languages"))
       GROUP BY s."name", s."order"
       ORDER BY s."order"`;
     gaps.push(...rows.map((row) => ({ ...row, language })));

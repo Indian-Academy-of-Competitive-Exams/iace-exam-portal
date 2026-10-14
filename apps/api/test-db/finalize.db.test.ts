@@ -364,6 +364,24 @@ describe('FinalizeService — what it refuses to offer', () => {
     assert.equal(test.status, TEST_STATUS.ACTIVE);
     assert.equal(test.languageWaivedById, admin.id);
     assert.deepEqual(test.languageWaivedAt, test.finalizedAt);
+    assert.deepEqual(test.languagesSkipped, ['HI']);
+  });
+
+  /** THE failure this prevents: English Language counted short of Hindi, and offered only past a waiver. */
+  it('owes a section of its own language nothing in the paper’s others', async () => {
+    const paper = await hindiAndEnglish();
+    await prisma.baseConfigSection.updateMany({
+      where: { id: { in: paper.sectionIds } },
+      data: { languages: ['EN'] },
+    });
+
+    await offerTest(prisma, paper.testId, true);
+
+    const test = await testRow(paper);
+    assert.deepEqual(
+      [test.status, test.languageWaivedById, test.languagesSkipped],
+      [TEST_STATUS.ACTIVE, null, []],
+    );
   });
 
   it('records no waiver on a paper that had nothing to waive', async () => {

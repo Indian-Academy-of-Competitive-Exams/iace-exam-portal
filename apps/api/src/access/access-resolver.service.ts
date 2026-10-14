@@ -52,6 +52,7 @@ const SHARED_SELECT = {
       examTemplate: true,
       scope: true,
       scopeRef: true,
+      languagesSkipped: true,
       examStage: {
         select: {
           id: true,

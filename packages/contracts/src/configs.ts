@@ -175,6 +175,8 @@ const baseConfigSectionSchema = z.object({
   typingPreset: typingPresetKeySchema.nullable(),
   /** Set, the section is written answers: essays, letters, précis. */
   descriptive: z.boolean(),
+  /** Its own languages, a subset of the paper's (English Language in English); empty, the paper's. */
+  languages: z.array(languageCodeSchema),
 });
 export type BaseConfigSection = z.infer<typeof baseConfigSectionSchema>;
 
@@ -277,6 +279,7 @@ const baseConfigSectionDraftSchema = z.object({
   patternNote: z.string().trim().max(PATTERN_NOTE_MAX).nullish(),
   typingPreset: typingPresetKeySchema.nullish(),
   descriptive: z.boolean().optional(),
+  languages: z.array(languageCodeSchema).optional(),
 });
 export type BaseConfigSectionDraft = z.infer<typeof baseConfigSectionDraftSchema>;
 

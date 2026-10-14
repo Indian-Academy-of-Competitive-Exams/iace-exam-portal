@@ -547,6 +547,8 @@ export const examSectionSchema = z.object({
   typingPreset: typingPresetKeySchema.nullish(),
   /** Set on a section of written answers, which wants a keyboard as a typing one does. */
   descriptive: z.boolean().nullish(),
+  /** What this sitting shows the section in: its own language where it has one, else the sitting's. */
+  languages: z.array(languageCodeSchema).optional(),
 });
 export type ExamSection = z.infer<typeof examSectionSchema>;
 

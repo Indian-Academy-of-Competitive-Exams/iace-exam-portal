@@ -9,6 +9,7 @@ import {
   languageGapSays,
   scopedSections,
   TEST_STATUS,
+  type LanguageCode,
 } from '@iace/contracts';
 import { uncheckedOn } from '../assignments';
 import { paperCompletenessIssues } from './test-rules';
@@ -68,7 +69,7 @@ export class FinalizeService {
       await this.assertAssignmentsRead(tx, test.id);
     }
     this.assertPaperIsWhole(sections, await this.paperOf(tx, test));
-    const waived = await this.languageGapsWaived(tx, test, waivedById);
+    const skipped = await this.languagesWaived(tx, test, waivedById);
     const finalizedAt = new Date();
     // The status rides the SAME write, so the two can never land apart.
     await tx.test.update({
@@ -77,7 +78,13 @@ export class FinalizeService {
         finalizedAt,
         status: TEST_STATUS.ACTIVE,
         version: { increment: 1 },
-        ...(waived ? { languageWaivedById: waivedById, languageWaivedAt: finalizedAt } : {}),
+        ...(skipped.length > 0
+          ? {
+              languageWaivedById: waivedById,
+              languageWaivedAt: finalizedAt,
+              languagesSkipped: skipped,
+            }
+          : {}),
       },
     });
   }
@@ -116,20 +123,21 @@ export class FinalizeService {
     });
   }
 
-  /** Every question must carry every language the config is sat in, unless the offering admin waives it by name; true when they did. */
-  private async languageGapsWaived(
+  /** Every question must carry every language its section is sat in, unless the offering admin waives it by name; the languages they waived, which candidates are then not offered. */
+  private async languagesWaived(
     tx: Prisma.TransactionClient,
     test: OfferRow,
     waivedById: string | null,
-  ): Promise<boolean> {
+  ): Promise<LanguageCode[]> {
     const config = await tx.baseConfig.findUniqueOrThrow({
       where: { id: test.baseConfigId },
       select: { languages: true },
     });
-    const issues = (await paperLanguageGaps(tx, test.id, config.languages)).map(languageGapSays);
+    const gaps = await paperLanguageGaps(tx, test.id, config.languages);
+    const issues = gaps.map(languageGapSays);
     const [first] = issues;
-    if (first === undefined) return false;
-    if (waivedById) return true;
+    if (first === undefined) return [];
+    if (waivedById) return [...new Set(gaps.map((gap) => gap.language))];
     throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
       fieldErrors: { [FORM_LEVEL_FIELD]: issues },
     });

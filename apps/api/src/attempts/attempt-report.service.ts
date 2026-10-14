@@ -9,6 +9,7 @@ import {
   ATTEMPT_STATUS,
   AppException,
   ErrorCodes,
+  sectionLanguagesFor,
   type LanguageCode,
   type LocalizedContent,
   type PerformancePoint,
@@ -75,6 +76,7 @@ const SOLUTION_SELECT = {
               questionCount: true,
               durationSec: true,
               typingPreset: true,
+              languages: true,
             },
             orderBy: { order: 'asc' },
           },
@@ -185,9 +187,18 @@ export class AttemptReportService {
 
     const config = attempt.test.baseConfig;
     const paper = await this.papers.solutionsOf(attempt.testId, attempt.test.paperRevision);
+    // English Language reviews in English whatever the sitting was sat in, as it was served.
+    const languagesOf = new Map(
+      config.sections.map((section) => [
+        section.id,
+        sectionLanguagesFor(section.languages as LanguageCode[], attempt.languages),
+      ]),
+    );
     // The same sequencer the paper was served through, so the option they remember as "C" is "C" here.
     const served = servedQuestions(
-      answeredRows(paper, attempt).map((row) => toSolutionQuestion(row, attempt.languages)),
+      answeredRows(paper, attempt).map((row) =>
+        toSolutionQuestion(row, languagesOf.get(row.baseConfigSectionId) ?? attempt.languages),
+      ),
       attempt.shuffleSeed,
       config.shuffleQuestions,
       config.shuffleOptions,
@@ -211,7 +222,7 @@ export class AttemptReportService {
       attemptId: attempt.id,
       testId: attempt.testId,
       testTitle: attempt.test.title,
-      languages: attempt.languages,
+      languages: (asked.sectionId ? languagesOf.get(asked.sectionId) : null) ?? attempt.languages,
       sections,
       sectionId: asked.sectionId,
       questions: asked.questions.map((row) => servedQuestion(row, urls)),
