@@ -4,11 +4,14 @@ import { paginationQuerySchema } from './envelope';
 import { baseConfigDetailSchema, examTemplateSchema, stageRefSchema } from './configs';
 import { displayNameSchema } from './naming';
 import {
+  contentLanguageOf,
   DIFFICULTY_LEVELS,
   difficultyLevelSchema,
+  LANGUAGE_LABELS,
   tagSchema,
   type DifficultyLevel,
 } from './questions';
+import { languageCodeSchema } from './exams';
 
 // ============================================================================
 // Tests and papers. A test is minimal: it inherits marks, duration, timing,
@@ -365,6 +368,20 @@ const testProgramUnlockSchema = z.object({
 export type TestProgramUnlock = z.infer<typeof testProgramUnlockSchema>;
 
 /** The test plus the blueprint it reads its shape from, so a screen renders both in one request. */
+/** One section's questions on the paper that lack a language the test is sat in. */
+export const paperLanguageGapSchema = z.object({
+  section: z.string(),
+  language: languageCodeSchema,
+  missing: z.number().int(),
+});
+export type PaperLanguageGap = z.infer<typeof paperLanguageGapSchema>;
+
+/** The offer's refusal for one gap, word for word, so the builder says what the server would. */
+export function languageGapSays({ section, language, missing }: PaperLanguageGap): string {
+  const label = LANGUAGE_LABELS[contentLanguageOf(language)];
+  return `${section} has ${missing} question${missing === 1 ? '' : 's'} with no ${label}.`;
+}
+
 export const testDetailSchema = testSchema.extend({
   baseConfig: baseConfigDetailSchema,
   /** Who is building it right now, so a second admin is warned before the work, not at the save. */
@@ -377,6 +394,8 @@ export const testDetailSchema = testSchema.extend({
   programUnlocks: z.array(testProgramUnlockSchema),
   /** Sent back as `expectedUpdatedAt`, so Setup or a draw-from saved from a stale screen is refused. */
   updatedAt: z.string(),
+  /** Questions on the paper missing a language the config lists; any one refuses the offer. */
+  languageGaps: z.array(paperLanguageGapSchema),
 });
 export type TestDetail = z.infer<typeof testDetailSchema>;
 

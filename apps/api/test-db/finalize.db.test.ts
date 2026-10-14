@@ -332,6 +332,25 @@ describe('FinalizeService — what it refuses to offer', () => {
     assert.equal((await configRow(paper)).locked, false);
   });
 
+  /** The failure this prevents: a Hindi-medium candidate shown a question that has no Hindi. */
+  it('refuses a paper whose questions lack a language the config is sat in, even for a super admin', async () => {
+    const paper = await draft();
+    await prisma.baseConfig.update({
+      where: { id: paper.catalog.baseConfigId },
+      data: { languages: ['EN', 'HI'] },
+    });
+
+    await assert.rejects(
+      () => offerTest(prisma, paper.testId, true),
+      /Reasoning has 3 questions with no Hindi/,
+    );
+    assert.equal(await statusOf(paper), TEST_STATUS.DRAFT);
+
+    await prisma.$executeRaw`UPDATE "QuestionVersion" SET "content" = "content" || jsonb_build_object('hi', "content"->'en')`;
+    await offerTest(prisma, paper.testId, true);
+    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
+  });
+
   it('refuses a test that does not exist', async () => {
     await assert.rejects(
       () => offerTest(prisma, uid()),

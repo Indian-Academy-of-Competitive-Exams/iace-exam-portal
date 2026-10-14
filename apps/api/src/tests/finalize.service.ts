@@ -6,11 +6,13 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   PAPER_SOURCES,
+  languageGapSays,
   scopedSections,
   TEST_STATUS,
 } from '@iace/contracts';
 import { uncheckedOn } from '../assignments';
 import { paperCompletenessIssues } from './test-rules';
+import { paperLanguageGaps } from './paper-languages';
 import { formRefusal } from '../common/form-refusal';
 import { scopeRefOf } from '../common/prisma-json';
 
@@ -60,6 +62,7 @@ export class FinalizeService {
       await this.assertAssignmentsRead(tx, test.id);
     }
     this.assertPaperIsWhole(sections, await this.paperOf(tx, test));
+    await this.assertPaperHasItsLanguages(tx, test);
     const finalizedAt = new Date();
     // The status rides the SAME write, so the two can never land apart.
     await tx.test.update({
@@ -97,6 +100,23 @@ export class FinalizeService {
     const [first] = issues;
     if (first === undefined) return;
 
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: issues },
+    });
+  }
+
+  /** Every question must carry every language the config is sat in, or a candidate in one of them sees no text. */
+  private async assertPaperHasItsLanguages(
+    tx: Prisma.TransactionClient,
+    test: OfferRow,
+  ): Promise<void> {
+    const config = await tx.baseConfig.findUniqueOrThrow({
+      where: { id: test.baseConfigId },
+      select: { languages: true },
+    });
+    const issues = (await paperLanguageGaps(tx, test.id, config.languages)).map(languageGapSays);
+    const [first] = issues;
+    if (first === undefined) return;
     throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
       fieldErrors: { [FORM_LEVEL_FIELD]: issues },
     });

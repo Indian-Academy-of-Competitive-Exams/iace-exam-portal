@@ -5,9 +5,11 @@ import { paginationQuerySchema } from './envelope';
 import { dateOnlySchema, todayISO } from './students';
 import {
   difficultyMixSchema,
+  languageGapSays,
   owesAPaper,
   PAPER_SOURCES,
   paperSourceSchema,
+  type PaperLanguageGap,
   type PaperProgress,
   type PaperSource,
 } from './tests';
@@ -364,7 +366,10 @@ function sectionsSay(names: readonly string[], one: string, many: string, what: 
 
 /** What still keeps a paper from being offered, in the server's own words; null when nothing does. */
 export function paperBlockerOf(input: {
-  test: PaperProgress & { paperSource: PaperSource | null };
+  test: PaperProgress & {
+    paperSource: PaperSource | null;
+    languageGaps: readonly PaperLanguageGap[];
+  };
   sections: readonly { id: string; name: string }[];
   assignments: readonly Pick<
     Assignment,
@@ -377,6 +382,8 @@ export function paperBlockerOf(input: {
   if (owesAPaper(test)) {
     return `The paper holds ${test.paperQuestionCount} of ${test.totalQuestions} questions.`;
   }
+  const [gap] = test.languageGaps;
+  if (gap) return languageGapSays(gap);
   if (skipsReading) return null;
 
   const current = assignments.filter((row) => row.replacedAt === null);

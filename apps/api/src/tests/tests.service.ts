@@ -12,6 +12,8 @@ import {
   type Paginated,
   type DrawSpec,
   type Test,
+  type LanguageCode,
+  type PaperLanguageGap,
   type TestDetail,
   type TestListQuery,
   type TestScopeRef,
@@ -39,6 +41,7 @@ import {
   testDeletionBlocker,
 } from './test-rules';
 import { beginDraftPaperEdit, beginPaperEdit, OFFERED_TEST_MESSAGE } from '../common/paper-edit';
+import { paperLanguageGaps } from './paper-languages';
 import { takeTestEditLock, testEditingBy, type Editor } from './edit-lock';
 import { EDIT_SUBJECTS, editedElsewhere } from '../common/edit-lock';
 import { formRefusal } from '../common/form-refusal';
@@ -189,12 +192,12 @@ export class TestsService {
       this.configs.detail(row.baseConfigId),
       testEditingBy(this.redis, this.prisma, id),
     ]);
-
     return {
       ...toTest(row, counts),
       ...toTestSchedule(row),
       baseConfig,
       editingBy,
+      languageGaps: await this.languageGapsOf(row, baseConfig.languages),
     };
   }
 
@@ -323,7 +326,16 @@ export class TestsService {
       ...toTestSchedule(updated),
       baseConfig: config,
       editingBy: await testEditingBy(this.redis, this.prisma, id),
+      languageGaps: await this.languageGapsOf(updated, config.languages),
     };
+  }
+
+  /** An offered paper was held to this at its offer and is frozen since, so it is not counted again. */
+  private async languageGapsOf(
+    test: { id: string; finalizedAt: Date | null },
+    languages: readonly LanguageCode[],
+  ): Promise<PaperLanguageGap[]> {
+    return test.finalizedAt ? [] : paperLanguageGaps(this.prisma, test.id, languages);
   }
 
   /** A row outside the new scope cannot be judged complete or offered, so a narrower scope drops it, and says how many. */
@@ -464,7 +476,9 @@ function toTest(row: TestRow, counts: TestCounts): Test {
 }
 
 /** The columns `TestDetail` adds over `Test`: the test's own schedule, read as stored. */
-function toTestSchedule(row: TestRow): Omit<TestDetail, keyof Test | 'baseConfig' | 'editingBy'> {
+function toTestSchedule(
+  row: TestRow,
+): Omit<TestDetail, keyof Test | 'baseConfig' | 'editingBy' | 'languageGaps'> {
   return {
     seriesOrder: row.seriesOrder,
     opensAt: row.opensAt?.toISOString() ?? null,
