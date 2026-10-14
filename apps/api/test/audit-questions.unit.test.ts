@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { QUESTION_STATUS, fieldDiff, type QuestionStatus } from '@iace/contracts';
-import { AUDITED_QUESTION_FIELDS } from '../src/questions/questions.service';
+import { AUDITED_QUESTION_FIELDS } from '../src/questions/question-audit';
 
 describe('the question audit diff', () => {
   it('covers the columns a question edit can change', () => {

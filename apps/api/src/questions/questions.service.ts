@@ -1,4 +1,3 @@
-import { createHash, randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
@@ -7,24 +6,16 @@ import {
   FORM_LEVEL_FIELD,
   QUESTION_STATUS,
   QUESTION_STATUSES,
-  fieldDiff,
-  plainTextOf,
-  previewTextOf,
-  type FieldDiff,
-  type LocalizedContent,
   type Paginated,
   type QuestionAvailability,
   type QuestionAvailabilityQuery,
   type QuestionDetail,
   type QuestionDraft,
   type QuestionExportQuery,
-  type QuestionLanguage,
   type QuestionStatus,
   type QuestionListQuery,
-  type QuestionOption,
   type QuestionSummary,
   type QuestionVersionSummary,
-  type RichContent,
   type ValidationIssue,
 } from '@iace/contracts';
 import { EDIT_SUBJECTS, editedElsewhere } from '../common/edit-lock';
@@ -43,80 +34,28 @@ import {
 import { mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
 import {
-  OPEN_ASSIGNMENT,
   SECTION_WORK_IN_PROGRESS,
   drawableFor,
   buildContent,
-  languagesIn,
-  stemPreviewOf,
   validateQuestion,
   type BuiltQuestion,
 } from './question-core';
-import { questionOrderBy, questionWhere, reachableTest } from './question-query';
+import { questionOrderBy, questionWhere } from './question-query';
 import { type AuthoringCount, type ExportedQuestion } from './question-export';
 import { taxonomyForIds } from './taxonomy-context';
 import { assertJobOpen, uncheckReworded } from '../assignments';
-import { answerKeyIn, optionsIn } from '../common/prisma-json';
-
-const QUESTION_INCLUDE = {
-  subject: { select: { id: true, name: true } },
-  topic: { select: { id: true, name: true } },
-  // The relation, not a second lookup: a page of questions names its authors in one round trip.
-  createdBy: { select: { id: true, fullName: true, email: true } },
-  // The assignment it was typed under, so a work record can name the test without a second query.
-  assignment: {
-    select: {
-      testId: true,
-      baseConfigSectionId: true,
-      // With the offer stamp and one open job: together they are `SECTION_WORK_IN_PROGRESS`, read off the row.
-      test: {
-        select: {
-          title: true,
-          finalizedAt: true,
-          assignments: { where: OPEN_ASSIGNMENT, take: 1, select: { id: true } },
-        },
-      },
-      baseConfigSection: { select: { name: true } },
-    },
-  },
-  currentVersion: true,
-  // One row each answers "in use"; a `_count` here grouped both whole tables on every page.
-  paperQuestions: { take: 1, select: { id: true } },
-  questionStats: { take: 1, select: { testId: true } },
-} as const satisfies Prisma.QuestionInclude;
-
-type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
-
-const QUESTION_EXPORT_SELECT = {
-  questionCode: true,
-  type: true,
-  difficulty: true,
-  status: true,
-  tags: true,
-  createdAt: true,
-  subject: { select: { name: true } },
-  topic: { select: { name: true } },
-  createdBy: { select: { fullName: true, email: true } },
-  currentVersion: { select: { content: true, options: true, answerKey: true } },
-} as const satisfies Prisma.QuestionSelect;
-
-type QuestionExportRow = Prisma.QuestionGetPayload<{ select: typeof QUESTION_EXPORT_SELECT }>;
-
-/** The one part of a row the content readers need, so a lean export row reads the same way. */
-type WithVersion = Pick<QuestionExportRow, 'currentVersion'>;
-
-/** The COLUMNS an edit can change. What the question says is flattened beside them, leaf by leaf. */
-export const AUDITED_QUESTION_FIELDS = [
-  'type',
-  'subject',
-  'topic',
-  'difficulty',
-  'questionCode',
-  'status',
-  'version',
-  'correctOptionPositions',
-  'answerKey',
-] as const;
+import { optionsIn } from '../common/prisma-json';
+import { questionDiff } from './question-audit';
+import { optionsWithIds, versionDataOf, versionFor } from './question-versions';
+import {
+  FIRST_VERSION,
+  QUESTION_EXPORT_SELECT,
+  QUESTION_INCLUDE,
+  toDetail,
+  toExported,
+  toSummary,
+  type QuestionRow,
+} from './question-rows';
 
 /** Which assignment a freshly created question was written for — ownership is the caller's job. */
 export interface WriteOptions {
@@ -364,7 +303,7 @@ export class QuestionsService {
 
     // Merged here, so what is compared below is exactly what would be written.
     const options = optionsWithIds(built, optionsIn(question.currentVersion?.options));
-    const version = await this.versionFor(tx, question, built, options, createdById);
+    const version = await versionFor(tx, question, built, options, createdById);
     // A reader's tick was on the old words, which no draft paper serves any more.
     if (version.reworded) await uncheckReworded(tx, id);
 
@@ -374,82 +313,6 @@ export class QuestionsService {
       include: QUESTION_INCLUDE,
     });
     return { before: question, after };
-  }
-
-  /** A save that says the same thing writes no version, and puts no new hand on the row. */
-  private async versionFor(
-    tx: Prisma.TransactionClient,
-    question: QuestionRow,
-    built: BuiltQuestion,
-    options: QuestionOption[],
-    createdById: string,
-  ): Promise<{ id: string; reworded: boolean }> {
-    const says = fingerprint(built.content, options, built.answerKey ?? null);
-    if (question.currentVersionId && says === contentHashOf(question)) {
-      return { id: question.currentVersionId, reworded: false };
-    }
-
-    const revisable = await this.revisableVersionId(tx, question);
-    const id = revisable
-      ? await this.revise(tx, revisable, built, options, createdById)
-      : await this.insertVersion(tx, question, built, options, createdById);
-    return { id, reworded: true };
-  }
-
-  /** Rewritable until a test students can already reach pins it — the paper must never move under them. */
-  private async revisableVersionId(
-    tx: Prisma.TransactionClient,
-    question: QuestionRow,
-  ): Promise<string | null> {
-    const questionVersionId = question.currentVersionId;
-    if (!questionVersionId) return null;
-
-    const reached = await tx.paperQuestion.count({
-      where: { questionId: question.id, questionVersionId, test: reachableTest(new Date()) },
-    });
-    return reached > 0 ? null : questionVersionId;
-  }
-
-  /** A version no reachable test pins yet stays this version, however often it is saved. */
-  private async revise(
-    tx: Prisma.TransactionClient,
-    versionId: string,
-    built: BuiltQuestion,
-    options: QuestionOption[],
-    createdById: string,
-  ): Promise<string> {
-    await tx.questionVersion.update({
-      where: { id: versionId },
-      data: {
-        content: built.content as Prisma.InputJsonValue,
-        options: options as unknown as Prisma.InputJsonValue,
-        answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-        // The words and the moment are now this admin's, not those of whoever opened the draft.
-        createdById,
-        createdAt: new Date(),
-      },
-    });
-    return versionId;
-  }
-
-  /** Nothing that pinned the old version moves, which is the entire reason versions exist. */
-  private async insertVersion(
-    tx: Prisma.TransactionClient,
-    question: QuestionRow,
-    built: BuiltQuestion,
-    options: QuestionOption[],
-    createdById: string,
-  ): Promise<string> {
-    const version = await tx.questionVersion.create({
-      data: versionDataOf(
-        question.id,
-        (question.currentVersion?.version ?? 0) + 1,
-        built,
-        options,
-        createdById,
-      ),
-    });
-    return version.id;
   }
 
   private async setStatus(id: string, status: QuestionStatus): Promise<QuestionDetail> {
@@ -641,11 +504,8 @@ export class QuestionsService {
   }
 }
 
-/** Every question starts at 1; `update` counts up from the current version. */
-const FIRST_VERSION = 1;
-
 /** One entry per field, so react-hook-form can put every problem on its own input. */
-export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[]> {
+function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[]> {
   const fieldErrors: Record<string, string[]> = {};
   for (const issue of issues) {
     const key = issue.field ?? FORM_LEVEL_FIELD;
@@ -667,193 +527,3 @@ const questionEditedElsewhere = () => editedElsewhere(EDIT_SUBJECTS.QUESTION, 's
 
 const refused = (message: string, note: string, field = 'status') =>
   new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { [field]: [note] } });
-
-/** An attempt stores the option id it was shown, so a position that had one keeps it. */
-function optionsWithIds(built: BuiltQuestion, previous: QuestionOption[]) {
-  return built.options.map((option) => ({
-    id: previous.find((old) => old.position === option.position)?.id ?? randomUUID(),
-    position: option.position,
-    isCorrect: option.isCorrect,
-    text: option.text,
-  }));
-}
-
-/** A version row from a built draft and the options its ids have already been merged into. */
-function versionDataOf(
-  questionId: string,
-  version: number,
-  built: BuiltQuestion,
-  options: QuestionOption[],
-  createdById: string,
-): Prisma.QuestionVersionUncheckedCreateInput {
-  return {
-    questionId,
-    version,
-    createdById,
-    content: built.content as Prisma.InputJsonValue,
-    options: options as unknown as Prisma.InputJsonValue,
-    answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-  };
-}
-
-/** The union of both sides, so a language or an option that went away still diffs to null. */
-function questionDiff(before: QuestionRow, after: QuestionRow): FieldDiff | null {
-  const from = auditFieldsOf(before);
-  const to = auditFieldsOf(after);
-  const fields = new Set([...AUDITED_QUESTION_FIELDS, ...Object.keys(from), ...Object.keys(to)]);
-  return fieldDiff(from, to, [...fields]);
-}
-
-/** `options`, kept only as the scoring key: the sorted positions of the ones marked correct. */
-function auditFieldsOf(row: QuestionRow): Record<string, unknown> {
-  return {
-    type: row.type,
-    subject: row.subject.name,
-    topic: row.topic?.name ?? null,
-    difficulty: row.difficulty,
-    questionCode: row.questionCode,
-    status: row.status,
-    version: row.currentVersion?.version ?? null,
-    answerKey: row.currentVersion?.answerKey ?? null,
-    correctOptionPositions: optionsIn(row.currentVersion?.options)
-      .filter((option) => option.isCorrect)
-      .map((option) => option.position)
-      .sort((a, b) => a - b),
-    ...contentLeavesOf(row),
-  };
-}
-
-/** The words, not the markup — a history a proof-reader reads must not be a wall of tags. */
-const readableText = (content: RichContent | undefined): string =>
-  previewTextOf(plainTextOf(content));
-
-/** `stem.EN`, `solution.HI`, `option.3.TE`: one key per thing somebody can actually retype. */
-function contentLeavesOf(row: QuestionRow): Record<string, string> {
-  const leaves: Record<string, string> = {};
-
-  for (const [language, field] of Object.entries(contentOf(row))) {
-    leaves[`stem.${language.toUpperCase()}`] = readableText(field?.stem);
-    if (field?.passage) {
-      leaves[`passage.${language.toUpperCase()}`] = readableText(field.passage);
-    }
-    if (field?.solution) {
-      leaves[`solution.${language.toUpperCase()}`] = readableText(field.solution);
-    }
-  }
-
-  for (const option of optionsIn(row.currentVersion?.options)) {
-    for (const [language, text] of Object.entries(option.text)) {
-      leaves[`option.${option.position}.${language.toUpperCase()}`] = readableText(text);
-    }
-  }
-
-  return leaves;
-}
-
-/** Short: it is read to spot a change, never to rebuild anything. */
-const CONTENT_HASH_CHARS = 16;
-
-/** jsonb returns keys in its own order, so a freshly built object and a stored one must be levelled. */
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value === null || typeof value !== 'object') return value;
-
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, nested]) => [key, canonical(nested)]),
-  );
-}
-
-/** Moves whenever what the question SAYS moves — which a draft's version number no longer does. */
-function fingerprint(content: unknown, options: unknown, answerKey: unknown): string {
-  return createHash('sha256')
-    .update(JSON.stringify(canonical([content, options, answerKey])))
-    .digest('hex')
-    .slice(0, CONTENT_HASH_CHARS);
-}
-
-function contentHashOf(row: QuestionRow): string | null {
-  const version = row.currentVersion;
-  return version ? fingerprint(version.content, version.options, version.answerKey) : null;
-}
-
-function toSummary(row: QuestionRow): QuestionSummary {
-  const content = contentOf(row);
-
-  return {
-    id: row.id,
-    questionCode: row.questionCode,
-    type: row.type,
-    difficulty: row.difficulty,
-    status: row.status,
-    subject: row.subject,
-    topic: row.topic,
-    stemPreview: stemPreviewOf(content),
-    languages: languagesInContent(content),
-    tags: row.tags,
-    author: row.createdBy
-      ? { id: row.createdBy.id, name: row.createdBy.fullName ?? row.createdBy.email }
-      : null,
-    inUse: isReferenced(row),
-    writtenFor: row.assignment
-      ? {
-          testId: row.assignment.testId,
-          testTitle: row.assignment.test.title,
-          baseConfigSectionId: row.assignment.baseConfigSectionId,
-          sectionName: row.assignment.baseConfigSection.name,
-          inProgress:
-            row.assignment.test.finalizedAt === null && row.assignment.test.assignments.length > 0,
-        }
-      : null,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
-
-/** What the lifecycle turns on, said once for the screen as well as for the rules. */
-function isReferenced(row: QuestionRow): boolean {
-  return row.paperQuestions.length + row.questionStats.length > 0;
-}
-
-function toDetail(row: QuestionRow): QuestionDetail {
-  return {
-    ...toSummary(row),
-    version: row.currentVersion?.version ?? FIRST_VERSION,
-    content: contentOf(row),
-    options: optionsIn(row.currentVersion?.options),
-    answerKey: answerKeyIn(row.currentVersion?.answerKey),
-    createdAt: row.createdAt.toISOString(),
-  };
-}
-
-function toExported(row: QuestionExportRow): ExportedQuestion {
-  return {
-    questionCode: row.questionCode,
-    type: row.type,
-    difficulty: row.difficulty,
-    status: row.status,
-    tags: row.tags,
-    subject: row.subject.name,
-    topic: row.topic?.name ?? null,
-    author: row.createdBy ? (row.createdBy.fullName ?? row.createdBy.email) : null,
-    createdAt: row.createdAt,
-    content: contentOf(row),
-    options: optionsIn(row.currentVersion?.options),
-    answerKey: answerKeyIn(row.currentVersion?.answerKey),
-  };
-}
-
-/** A question with no current version has nothing to show — an empty content map, not a crash. */
-function contentOf(row: WithVersion): LocalizedContent {
-  return (row.currentVersion?.content as LocalizedContent | undefined) ?? {};
-}
-
-/** Which languages the stored row really carries — the same rule `buildContent` applied. */
-function languagesInContent(content: LocalizedContent): QuestionLanguage[] {
-  const stems: Record<string, string> = {};
-  for (const [language, field] of Object.entries(content)) {
-    stems[language] = plainTextOf(field?.stem);
-  }
-  return languagesIn(stems);
-}
