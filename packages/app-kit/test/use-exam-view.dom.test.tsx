@@ -997,36 +997,33 @@ async function afterRefusedSave(t: TestContext, error: unknown) {
   return result;
 }
 
-test('a refused save raises the unsaved warning and leaves the sitting standing', async (t) => {
-  const result = await afterRefusedSave(
-    t,
-    new AppException(ErrorCodes.INTERNAL, 'nope', { httpStatus: 500 }),
-  );
+const REFUSED_SAVES = [
+  {
+    name: 'a refused save raises the unsaved warning and leaves the sitting standing',
+    error: new AppException(ErrorCodes.INTERNAL, 'nope', { httpStatus: 500 }),
+    flags: { hasUnsaved: true, takenOver: false, setAside: false },
+  },
+  {
+    name: 'a save refused because the sitting went elsewhere stands this tab down',
+    error: new AppException(ErrorCodes.SITTING_TAKEN_OVER, 'elsewhere', { httpStatus: 409 }),
+    flags: { takenOver: true, setAside: false },
+  },
+  {
+    name: 'a save refused because another test was opened sets this one aside',
+    error: new AppException(ErrorCodes.SITTING_SET_ASIDE, 'another test', { httpStatus: 409 }),
+    flags: { takenOver: true, setAside: true },
+  },
+];
 
-  assert.equal(result.current.hasUnsaved, true);
-  assert.equal(result.current.takenOver, false);
-  assert.equal(result.current.setAside, false);
-});
+for (const { name, error, flags } of REFUSED_SAVES) {
+  test(name, async (t) => {
+    const result = await afterRefusedSave(t, error);
 
-test('a save refused because the sitting went elsewhere stands this tab down', async (t) => {
-  const result = await afterRefusedSave(
-    t,
-    new AppException(ErrorCodes.SITTING_TAKEN_OVER, 'elsewhere', { httpStatus: 409 }),
-  );
-
-  assert.equal(result.current.takenOver, true);
-  assert.equal(result.current.setAside, false, 'this test went elsewhere; no other test took it');
-});
-
-test('a save refused because another test was opened sets this one aside', async (t) => {
-  const result = await afterRefusedSave(
-    t,
-    new AppException(ErrorCodes.SITTING_SET_ASIDE, 'another test', { httpStatus: 409 }),
-  );
-
-  assert.equal(result.current.takenOver, true);
-  assert.equal(result.current.setAside, true);
-});
+    for (const [flag, expected] of Object.entries(flags)) {
+      assert.equal(result.current[flag as keyof typeof flags], expected, flag);
+    }
+  });
+}
 
 test('asking to submit, cancelling, then confirming ends the sitting', async (t) => {
   let answer: (done: unknown) => void = () => {};

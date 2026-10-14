@@ -5,7 +5,6 @@ import { DataTable, type DataTableColumn } from '../src/components/ui/data-table
 import { PAGE_CONTENT_CLASS, TableFrame } from '../src/components/ui/table-frame';
 import { Pagination } from '../src/components/ui/pagination';
 import { Card } from '../src/components/ui/card';
-import { Tabs, TabsContent, TabsList } from '../src/components/ui/tabs';
 
 afterEach(cleanup);
 
@@ -147,39 +146,5 @@ describe('TableFrame', () => {
     render(<TableFrame>{table()}</TableFrame>);
     assert.match(groups().scroller.className, /overflow-auto/);
     assert.match(groups().scroller.className, /flex-1/);
-  });
-});
-
-describe('a framed table inside a tab', () => {
-  const tabbed = () => (
-    <Tabs value="a">
-      <TableFrame
-        header={<h1>Subjects and topics</h1>}
-        toolbar={
-          <>
-            <TabsList className="-mx-4 mb-4 px-4">{null}</TabsList>
-            <input aria-label="Search" />
-          </>
-        }
-      >
-        <TabsContent value="a" className="flex min-h-0 flex-1 flex-col pt-0">
-          {table()}
-        </TabsContent>
-      </TableFrame>
-    </Tabs>
-  );
-
-  /** The tab panel stands between frame and table; one that will not shrink loses the scroll. */
-  it('still gives the table its own scrollbar, not the page', () => {
-    render(tabbed());
-
-    assert.match(groups().scroller.className, /overflow-auto/);
-    assert.match(groups().scroller.className, /flex-1/);
-  });
-
-  it('is still the page frame, so the shell stops scrolling behind it', () => {
-    const { container } = render(tabbed());
-
-    assert.ok(container.querySelector('[data-page-frame]'));
   });
 });

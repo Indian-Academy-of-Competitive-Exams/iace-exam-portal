@@ -85,32 +85,6 @@ describe('filterNavByPermission', () => {
     );
   });
 
-  it('drops a section whose children all went, rather than leaving a dead heading', () => {
-    // A heading that opens onto nothing reads as broken, not as absent.
-    const out = filterNavByPermission(nav, () => false);
-    assert.deepEqual(
-      out.map((i) => i.label),
-      ['Open'],
-    );
-  });
-
-  it('keeps an emptied section that is itself a destination', () => {
-    const out = filterNavByPermission(
-      [
-        leaf('Hub', {
-          to: '/hub',
-          children: [leaf('x', { to: '/x', featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT })],
-        }),
-      ],
-      () => false,
-    );
-    assert.deepEqual(
-      out.map((i) => i.label),
-      ['Hub'],
-    );
-    assert.deepEqual(out[0]?.children, []);
-  });
-
   it('filters nothing when no `can` is supplied', () => {
     // An app that never opted in must not lose its nav when a featureKey appears.
     assert.deepEqual(

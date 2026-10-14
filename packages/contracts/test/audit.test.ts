@@ -198,66 +198,34 @@ describe('audit read contracts', () => {
     assert.equal(AUDIT_WINDOW_DAYS, 30);
   });
 
-  it('parses a valid import log summary', () => {
-    const row = {
-      id: 'imp_1',
-      feature: 'STUDENT',
-      source: 'SHEET',
-      target: null,
-      actorId: 'adm_1',
-      actorName: 'R Kumar',
-      total: 10,
-      created: 8,
-      updated: 1,
-      skipped: 1,
-      failed: 0,
-      status: IMPORT_LOG_STATUS.COMMITTED,
-      hasFile: true,
-      startedAt: new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
-    };
+  const importLog = {
+    id: 'imp_1',
+    feature: 'STUDENT',
+    source: 'SHEET',
+    target: null,
+    actorId: 'adm_1',
+    actorName: 'R Kumar',
+    total: 10,
+    created: 8,
+    updated: 1,
+    skipped: 1,
+    failed: 0,
+    status: IMPORT_LOG_STATUS.COMMITTED,
+    hasFile: true,
+    startedAt: new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
+  };
 
-    assert.equal(importLogSchema.safeParse(row).success, true);
+  it('parses a valid import log summary', () => {
+    assert.equal(importLogSchema.safeParse(importLog).success, true);
   });
 
   /** Regression guard: `status` was a bare string, so a fixture could assert `'DONE'` — a value nothing writes — and the parse would happily accept it. */
-  it('refuses a status outside IMPORT_LOG_STATUS', () => {
-    const row = {
-      id: 'imp_1',
-      feature: 'STUDENT',
-      source: 'SHEET',
-      actorId: null,
-      actorName: null,
-      total: 0,
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      failed: 0,
-      status: 'DONE',
-      startedAt: new Date().toISOString(),
-      finishedAt: null,
-    };
-
-    assert.equal(importLogSchema.safeParse(row).success, false);
-  });
-
-  it('refuses a source outside ImportSource, so a bad column value fails loudly', () => {
-    const row = {
-      id: 'imp_1',
-      feature: 'STUDENT',
-      source: 'NOT_A_REAL_SOURCE',
-      actorId: null,
-      actorName: null,
-      total: 0,
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      failed: 0,
-      status: IMPORT_LOG_STATUS.COMMITTED,
-      startedAt: new Date().toISOString(),
-      finishedAt: null,
-    };
-
-    assert.equal(importLogSchema.safeParse(row).success, false);
+  it('refuses a status or source outside their enums, so a bad column value fails loudly', () => {
+    assert.equal(importLogSchema.safeParse({ ...importLog, status: 'DONE' }).success, false);
+    assert.equal(
+      importLogSchema.safeParse({ ...importLog, source: 'NOT_A_REAL_SOURCE' }).success,
+      false,
+    );
   });
 });

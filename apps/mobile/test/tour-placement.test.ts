@@ -65,8 +65,9 @@ test('a target wider than the window is cut to it', () => {
   });
 });
 
-test('a target on screen is ringable', () => {
+test('a target on screen, or half on it, is ringable', () => {
   assert.equal(isRingable({ x: 20, y: 100, width: 240, height: 40 }, SCREEN), true);
+  assert.equal(isRingable({ x: 20, y: 780, width: 240, height: 60 }, SCREEN), true);
 });
 
 test('a target with no size is not ringable', () => {
@@ -77,10 +78,6 @@ test('a target with no size is not ringable', () => {
 test('a target below the fold or scrolled past is not ringable', () => {
   assert.equal(isRingable({ x: 20, y: 900, width: 240, height: 40 }, SCREEN), false);
   assert.equal(isRingable({ x: 20, y: -80, width: 240, height: 40 }, SCREEN), false);
-});
-
-test('a target half on screen is still ringable', () => {
-  assert.equal(isRingable({ x: 20, y: 780, width: 240, height: 60 }, SCREEN), true);
 });
 
 const ON_SCREEN = { x: 20, y: 100, width: 240, height: 40 };

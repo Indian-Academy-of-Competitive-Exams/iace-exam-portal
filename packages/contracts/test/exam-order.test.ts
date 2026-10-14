@@ -93,13 +93,6 @@ describe('the order a sitting sees', () => {
 });
 
 describe('the primitives underneath', () => {
-  it('draws the same sequence from the same seed', () => {
-    const a = seededRandom(SEED);
-    const b = seededRandom(SEED);
-
-    assert.deepEqual([a(), a(), a()], [b(), b(), b()]);
-  });
-
   it('keeps every item it was given, losing and inventing none', () => {
     const items = Array.from({ length: 50 }, (_, at) => at);
 

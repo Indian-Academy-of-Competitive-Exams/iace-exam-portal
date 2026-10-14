@@ -66,9 +66,14 @@ describe('seenTours', () => {
 });
 
 describe('useTourRun', () => {
-  it('opens on the first step of the run', () => {
+  const openedRun = (steps: readonly TourStep[] = STEPS) => {
     const { result } = renderHook(() => useTourRun());
-    act(() => result.current.open(STEPS));
+    act(() => result.current.open(steps));
+    return result;
+  };
+
+  it('opens on the first step of the run', () => {
+    const result = openedRun();
 
     assert.deepEqual(
       [result.current.step?.title, result.current.index, result.current.count],
@@ -83,16 +88,14 @@ describe('useTourRun', () => {
   });
 
   it('advances to the next step', () => {
-    const { result } = renderHook(() => useTourRun());
-    act(() => result.current.open(STEPS));
+    const result = openedRun();
     act(() => result.current.next());
 
     assert.deepEqual([result.current.step?.title, result.current.index], ['Begin', 1]);
   });
 
   it('closes rather than advancing past the last step', () => {
-    const { result } = renderHook(() => useTourRun());
-    act(() => result.current.open(STEPS));
+    const result = openedRun();
     act(() => result.current.next());
     act(() => result.current.next());
     assert.equal(result.current.isLast, true);
@@ -102,16 +105,14 @@ describe('useTourRun', () => {
   });
 
   it('stays on the first step when there is nowhere back to', () => {
-    const { result } = renderHook(() => useTourRun());
-    act(() => result.current.open(STEPS));
+    const result = openedRun();
     act(() => result.current.back());
 
     assert.deepEqual([result.current.step?.title, result.current.index], ['Your tests', 0]);
   });
 
   it('steps back', () => {
-    const { result } = renderHook(() => useTourRun());
-    act(() => result.current.open(STEPS));
+    const result = openedRun();
     act(() => result.current.next());
     act(() => result.current.back());
 
@@ -119,8 +120,7 @@ describe('useTourRun', () => {
   });
 
   it('closes on demand, and reopens at the start', () => {
-    const { result } = renderHook(() => useTourRun());
-    act(() => result.current.open(STEPS));
+    const result = openedRun();
     act(() => result.current.next());
     act(() => result.current.close());
     assert.equal(result.current.count, 0);
@@ -130,8 +130,7 @@ describe('useTourRun', () => {
   });
 
   it('is on its last step when a run holds only one', () => {
-    const { result } = renderHook(() => useTourRun());
-    act(() => result.current.open(STEPS.slice(0, 1)));
+    const result = openedRun(STEPS.slice(0, 1));
 
     assert.deepEqual([result.current.isLast, result.current.count], [true, 1]);
   });

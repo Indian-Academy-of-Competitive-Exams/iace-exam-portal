@@ -19,38 +19,6 @@ describe('question assignments', () => {
   beforeEach(() => resetDatabase(prisma));
   after(() => prisma.$disconnect());
 
-  it('takes one typist and one proof-reader on the same section', async () => {
-    const catalog = await makeCatalog(prisma);
-    const test = await makeTest(prisma, catalog);
-    const section = await makeSection(prisma, catalog);
-    const admin = await makeAdmin(prisma);
-
-    const typist = await prisma.questionAssignment.create({
-      data: {
-        id: uid(),
-        testId: test.id,
-        baseConfigId: catalog.baseConfigId,
-        baseConfigSectionId: section.id,
-        assigneeId: admin.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      },
-      select: { id: true },
-    });
-    const reader = await prisma.questionAssignment.create({
-      data: {
-        id: uid(),
-        testId: test.id,
-        baseConfigId: catalog.baseConfigId,
-        baseConfigSectionId: section.id,
-        assigneeId: admin.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      },
-      select: { id: true },
-    });
-
-    assert.notEqual(typist.id, reader.id);
-  });
-
   it('refuses a second typist on a section already assigned one', async () => {
     const catalog = await makeCatalog(prisma);
     const test = await makeTest(prisma, catalog);

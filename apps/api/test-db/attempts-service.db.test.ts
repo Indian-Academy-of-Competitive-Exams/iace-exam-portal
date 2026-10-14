@@ -376,18 +376,6 @@ describe('AttemptsService — resuming what is already running', () => {
 });
 
 describe('AttemptsService — a reclaim names its sitting', () => {
-  /** The failure this prevents: Continue here, after a hand-in elsewhere, opening a blank paper. */
-  it('refuses to resume a sitting already handed in, and starts no other', async () => {
-    const { service, student, paper } = await hall();
-    const handedIn = await sitPaper(prisma, { paper, studentId: student, chosen: [] });
-
-    await assert.rejects(
-      () => service.start(student, paper.testId, { resume: handedIn.id }),
-      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED,
-    );
-    assert.equal(await sittingsOf(paper), 1);
-  });
-
   /** The failure this prevents: a card's Resume, tapped after a hand-in elsewhere, opening a fresh paper. */
   it('refuses the sitting the catalog named for Resume once it is handed in, and starts no other', async () => {
     const { service, student, paper } = await hall();

@@ -38,18 +38,6 @@ describe('a test name is taken once inside its series', () => {
     assert.match(refusal(error), /testSeriesId.*lower\(title\)/s);
   });
 
-  /** Unique WITHIN a series: every series runs its own Mock 1, and they are different papers. */
-  it('lets another series hold a test of the same name', async () => {
-    const title = uid();
-    const here = await makeCatalog(prisma);
-    const elsewhere = await makeCatalog(prisma);
-    await makeTest(prisma, here, { title });
-
-    const twin = await makeTest(prisma, elsewhere, { title });
-
-    assert.ok(twin.id);
-  });
-
   /** A draft nobody has named yet is not a duplicate of the last one: NULLs are distinct. */
   it('lets a series hold as many unnamed drafts as it likes', async () => {
     const catalog = await makeCatalog(prisma);

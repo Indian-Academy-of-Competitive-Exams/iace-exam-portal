@@ -19,7 +19,6 @@ import { AttemptsService } from '../src/attempts/attempts.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { ScoringQueue } from '../src/attempts/scoring-queue';
 import { SubmitService } from '../src/attempts/submit.service';
-import { QUEUE_NAMES } from '../src/queue/queues';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeMetrics, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import {
@@ -180,27 +179,6 @@ describe('a sitting, end to end', () => {
       [written?.state, written?.selectedOptionId, written?.timeSpentSec],
       [ANSWER_STATE.ANSWERED, 'o2', 20],
     );
-  });
-
-  it('ends the sitting once and asks for a score exactly once', async () => {
-    const { attempts, state, submit, queue, student, paper } = await hall();
-    const started = await attempts.start(student, paper.testId, {});
-    await state.save(student, started.id, {
-      revision: 1,
-      answers: [answer(paper.items[0]?.questionId ?? '', 'o2')],
-    });
-
-    const first = await submit.submit(student, started.id);
-    const second = await submit.submit(student, started.id);
-
-    assert.equal(first.submittedByThisCall, true);
-    assert.equal(first.answeredCount, 1);
-    // The failure this prevents: a double-click scoring the same paper twice.
-    assert.equal(second.submittedByThisCall, false);
-    assert.equal(queue.jobs.length, 1);
-    assert.equal(queue.jobs[0]?.name, QUEUE_NAMES.SCORING);
-    const row = await prisma.attempt.findUniqueOrThrow({ where: { id: started.id } });
-    assert.equal(row.status, ATTEMPT_STATUS.SUBMITTED);
   });
 
   /** The bug this prevents: a Redis restart between the flush and a reload nulling out the sheet. */

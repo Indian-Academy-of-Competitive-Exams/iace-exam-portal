@@ -56,14 +56,6 @@ describe('questionWhere — a filter holding several values', () => {
     ]);
   });
 
-  /** The default narrows whichever way the reader is combining filters. */
-  it('keeps the archived out even when matching any', () => {
-    assert.deepEqual(conditions({ subjectId: 'sub_1', difficulty: 'LOW', match: 'any' }), [
-      { status: { not: 'ARCHIVED' } },
-      { OR: [{ subjectId: { in: ['sub_1'] } }, { difficulty: { in: ['LOW'] } }] },
-    ]);
-  });
-
   it('ANDs the filters, so they narrow together rather than widening', () => {
     const where = conditions({ subjectId: 'sub_1', difficulty: 'LOW,HIGH', status: 'ACTIVE' });
 

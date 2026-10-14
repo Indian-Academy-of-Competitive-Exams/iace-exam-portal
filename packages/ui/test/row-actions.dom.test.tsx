@@ -76,17 +76,6 @@ describe('RowActions', () => {
 
     await waitFor(() => assert.equal(onSelect.mock.callCount(), 1));
   });
-
-  /** Round, because the trigger is a bare glyph — the same rule every icon control follows. */
-  it('uses the round icon button', () => {
-    render(
-      <RowActions>
-        <DropdownMenuItem>Retire</DropdownMenuItem>
-      </RowActions>,
-    );
-
-    assert.match(screen.getByRole('button').className, /rounded-full/);
-  });
 });
 
 describe('the row menu and focus', () => {

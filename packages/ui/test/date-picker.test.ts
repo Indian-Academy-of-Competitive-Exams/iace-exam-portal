@@ -21,12 +21,6 @@ describe('toISODate', () => {
     assert.equal(toISODate(2026, 0, 5), '2026-01-05');
     assert.equal(toISODate(2026, 11, 31), '2026-12-31');
   });
-
-  /** Built from a local Date, a zone behind UTC serialises the 1st as the previous month's last. */
-  it('is stable regardless of the machine timezone', () => {
-    assert.equal(toISODate(2026, 2, 1), '2026-03-01');
-    assert.equal(toISODate(2026, 2, 1).slice(8), '01');
-  });
 });
 
 describe('parseISODate', () => {

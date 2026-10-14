@@ -127,6 +127,8 @@ test('a failed save loses nothing, and the next save carries all of it', async (
   act(() => result.current.answer('q2', { selectedOptionId: 'opt-2' }));
   await act(async () => void (await result.current.flush()));
   assert.equal(result.current.answers.q2?.selectedOptionId, 'opt-2', 'still on screen');
+  assert.equal(result.current.hasUnsaved, true, 'a failed save is visible to the student');
+  assert.equal(result.current.takenOver, false, 'an ordinary failure is not a takeover');
 
   online = true;
   assert.equal(await act(() => result.current.flush()), true);
@@ -221,23 +223,6 @@ test('takes the deadline a save answers with, so an extension needs no reload', 
   await act(async () => void (await result.current.flush()));
 
   assert.equal(result.current.clock?.endsAt, EXTENDED);
-});
-
-test('a failed flush requeues its changes and reports unsaved work', async (t) => {
-  const calls: unknown[] = [];
-  const deps = depsFor(apiThatFails(calls));
-  const { result, unmount } = renderHook(() => useAttemptState('attempt-1', deps));
-  t.after(unmount);
-
-  act(() => result.current.answer('q1', { selectedOptionId: 'opt-1' }));
-  await act(async () => void (await result.current.flush()));
-
-  assert.equal(calls.length, 1, 'the first flush was attempted');
-  assert.equal(result.current.hasUnsaved, true, 'a failed save is visible to the student');
-
-  await act(async () => void (await result.current.flush()));
-  assert.equal(calls.length, 2, 'the requeued change is sent again rather than dropped');
-  assert.equal(result.current.takenOver, false, 'an ordinary failure is not a takeover');
 });
 
 /** The failure this prevents: submit's await resolving as a no-op while the last batch still flies. */

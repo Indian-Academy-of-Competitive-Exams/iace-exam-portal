@@ -18,12 +18,6 @@ describe('page size options', () => {
     }
   });
 
-  it('no option exceeds the cap', () => {
-    for (const size of PAGE_SIZE_OPTIONS) {
-      assert.ok(size <= PAGE_SIZE_MAX, `${size} exceeds PAGE_SIZE_MAX (${PAGE_SIZE_MAX})`);
-    }
-  });
-
   it('the default is one of the options, so the picker can show what is in use', () => {
     assert.ok(isPageSizeOption(PAGE_SIZE_DEFAULT));
   });

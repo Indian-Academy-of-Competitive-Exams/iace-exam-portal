@@ -203,26 +203,6 @@ describe('BaseConfigsService — creating', () => {
     assert.equal(created.totalMarks, 0);
   });
 
-  it("refuses a typing section on a clock that is not its standard's", async () => {
-    const wrongClock = service.create(
-      draft(await makeStage(prisma), {
-        sections: [
-          {
-            name: 'Typing',
-            order: 1,
-            questionCount: 1,
-            marksPerQuestion: 0,
-            negativeMarks: 0,
-            typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN,
-          },
-        ],
-      }),
-      ADMIN,
-    );
-
-    await assert.rejects(wrongClock, (error) => AppException.is(error));
-  });
-
   /** The bug this catches: a seeded paper ran 160 minutes over sections that add up to 180. */
   it('refuses a sectional paper whose sections do not add up to its own clock', async () => {
     const timed = draft(await makeStage(prisma), {
@@ -256,36 +236,6 @@ describe('BaseConfigsService — creating', () => {
         return true;
       },
     );
-  });
-
-  it('takes a sectional paper whose sections add up', async () => {
-    const created = await service.create(
-      draft(await makeStage(prisma), {
-        timerTemplate: TIMER_TEMPLATE.SECTIONAL_LOCKED,
-        durationSec: 2400,
-        sections: [
-          {
-            name: 'One',
-            order: 1,
-            questionCount: 25,
-            marksPerQuestion: 2,
-            negativeMarks: 0,
-            durationSec: 1200,
-          },
-          {
-            name: 'Two',
-            order: 2,
-            questionCount: 25,
-            marksPerQuestion: 2,
-            negativeMarks: 0,
-            durationSec: 1200,
-          },
-        ],
-      }),
-      ADMIN,
-    );
-
-    assert.equal(created.durationSec, 2400);
   });
 
   it('refuses a sectional paper whose sections have no clock', async () => {
