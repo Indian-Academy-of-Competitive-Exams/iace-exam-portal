@@ -1,55 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, Info, Send, Trash2, Upload } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCheck, Info, Send } from 'lucide-react';
 import {
   AppException,
   DIFFICULTY_LEVEL,
   ErrorCodes,
-  FEATURE_KEYS,
-  PAPER_SOURCES,
-  PERMISSION_LEVELS,
   REVIEW_STATES,
   SECTION_SEATS,
-  SEND_BACK_REASONS,
-  clockText,
   instituteDayLabel,
-  type Assignment,
-  type FeatureKey,
-  type PermissionLevel,
-  type QuestionTime,
   type ReviewState,
   type SectionQuestion,
   type SectionWork,
-  type SendBackReason,
   SECTION_QUESTION_TYPES,
 } from '@iace/contracts';
 import {
   Badge,
   Button,
-  ConfirmDialog,
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   EmptyState,
   EMPTY_STATE_KINDS,
   LoadingState,
-  RadioGroup,
-  RadioGroupItem,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  Textarea,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   TruncatedText,
-  cn,
   type BadgeProps,
   toast,
 } from '@iace/ui';
@@ -57,32 +31,27 @@ import { api } from '../../lib/api';
 import {
   QUERY_KEYS,
   REVIEW_STATE_LABELS,
-  ROUTES,
-  SECTION_KEYS,
   SECTION_QUESTION_PARAM,
-  SEND_BACK_REASON_LABELS,
   sectionWorkHeldQueryKey,
   sectionWorkQueryKey,
 } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
-import { useDeleteQuestion } from './use-delete-question';
+import {} from './use-delete-question';
 import { SectionThreadButton } from '../../components/section-thread';
-import { OtherTestsNotice } from './cross-test-warning';
-import { NoticeChip } from './notice-chip';
+import {} from './cross-test-warning';
+import {} from './notice-chip';
 import { TypistDoneDialog } from './typist-done-dialog';
-import {
-  AuthoringWorkspace,
-  NEW_CARD,
-  type Held,
-  type WorkspaceCard,
-  type WorkspaceSource,
-} from './authoring-workspace';
+import { AuthoringWorkspace } from './authoring-workspace';
+import { NEW_CARD, type Held, type WorkspaceCard, type WorkspaceSource } from './workspace-types';
 import { headerOf, stateOf, toDraft } from './question-scaffold';
 import { FinalizeAssignmentDialog } from './finalize-assignment-dialog';
 import { useWorkClock } from './use-work-clock';
 import { DueStandingBadge } from '../../components/due-standing-badge';
 import { TimeSpent } from '../../components/time-spent';
-import { awaitsViewer, liveTotal, type WorkClock } from './work-clock';
+import { awaitsViewer, type WorkClock } from './work-clock';
+import { seatOf, type Seat } from './section-seat';
+import { OwnClock, SeatTimes, CardNotice, CardActions } from './section-question-card';
+import { ProgressPanel } from './section-progress-panel';
 
 const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
   [REVIEW_STATES.UNCHECKED]: 'neutral',
@@ -93,28 +62,6 @@ const REVIEW_BADGE: Record<ReviewState, BadgeProps['variant']> = {
 
 /** How often a blocked screen asks whether the claim on its section has been given up. */
 const CLAIM_POLL_MS = 10_000;
-
-const REASON_ORDER = [
-  SEND_BACK_REASONS.SPELLING,
-  SEND_BACK_REASONS.DATA_CORRECTION,
-  SEND_BACK_REASONS.ANSWER_OPTION,
-] as const;
-
-/** What the viewer can do right now, read off the section and the levels they hold, once for the page and every card. */
-function seatOf(work: SectionWork, can: (key: FeatureKey, level: PermissionLevel) => boolean) {
-  const own = work.seatReplaced ? null : work.seat;
-  const { WRITE } = PERMISSION_LEVELS;
-  // A section write answers any of its three keys at WRITE; typing and releasing each ask for their own.
-  const writes = SECTION_KEYS.some((key) => can(key, WRITE));
-  const types = can(FEATURE_KEYS.QUESTION_AUTHORING, WRITE);
-  return {
-    writes,
-    reading: writes && own === SECTION_SEATS.READER && Boolean(work.reader?.canMarkRead),
-    typing: types && own === SECTION_SEATS.TYPIST && Boolean(work.typist?.canMarkDone),
-    fixing: writes && own === SECTION_SEATS.TYPIST && !work.offered,
-    releasing: work.canRelease && can(FEATURE_KEYS.QUESTION_PROOFREAD, WRITE),
-  };
-}
 
 /** One section of one test as its typist, its proof-reader or the test's owner works it. */
 export function SectionAuthoringPage() {
@@ -505,11 +452,7 @@ function cardOf(
   work: SectionWork,
   question: SectionQuestion,
   index: number,
-  {
-    seat,
-    clock,
-    pending,
-  }: { seat: ReturnType<typeof seatOf>; clock: WorkClock | null; pending: boolean },
+  { seat, clock, pending }: { seat: Seat; clock: WorkClock | null; pending: boolean },
   onChanged: (next: SectionWork) => void,
   onSettle: (savedId?: string) => Promise<void>,
 ): WorkspaceCard {
@@ -542,418 +485,4 @@ function cardOf(
       />
     ),
   };
-}
-
-/** The viewer's own time on one question, running while it is the one on screen. */
-function OwnClock({ clock, id, held }: Readonly<{ clock: WorkClock; id: string; held: number }>) {
-  const seconds = useSyncExternalStore(clock.subscribe, () => clock.shown(id, held));
-  return <TimeSpent seconds={seconds} label="Time on this question" />;
-}
-
-/** Each seat's time on the question, for the owner and a super admin, who are sent both. */
-function SeatTimes({ time }: Readonly<{ time: QuestionTime }>) {
-  if (time.typist === null || time.reader === null) return null;
-  return (
-    <>
-      <TimeSpent seat="Typist" seconds={time.typist} />
-      <TimeSpent seat="Proof-reader" seconds={time.reader} />
-    </>
-  );
-}
-
-/** The viewer's own seat in the panel, running with the cards' clocks so the two always add up. */
-function OwnTimeStat({
-  clock,
-  held,
-  cards,
-}: Readonly<{ clock: WorkClock; held: number; cards: Parameters<typeof liveTotal>[2] }>) {
-  const seconds = useSyncExternalStore(clock.subscribe, () => liveTotal(clock, held, cards));
-  return <TimeStat seconds={seconds} />;
-}
-
-/** A seat's whole time on the section, as My sections totals it; summed off the questions listed only where that is not sent. */
-function seatTime(work: SectionWork, seat: 'typist' | 'reader'): number | null {
-  const whole = work[seat]?.secondsSpent ?? null;
-  if (whole !== null) return whole;
-  const own = work.seat === (seat === 'typist' ? SECTION_SEATS.TYPIST : SECTION_SEATS.READER);
-  let total: number | null = null;
-  for (const { time } of work.questions) {
-    const seconds = time[seat] ?? (own ? time.own : null);
-    if (seconds !== null) total = (total ?? 0) + seconds;
-  }
-  return total;
-}
-
-/** Why a question came back, in the reader's words, and where else an edit to it would land. */
-function CardNotice({
-  work,
-  question,
-}: Readonly<{ work: SectionWork; question: SectionQuestion }>) {
-  const { review } = question;
-  const fixed = review.state === REVIEW_STATES.FIXED;
-  const sentBack = Boolean(review.reason) && (fixed || review.state === REVIEW_STATES.SENT_BACK);
-  // A framed paper's typist writes questions no other test holds yet; a picked paper's fixes the bank's own.
-  const shared = work.seat !== SECTION_SEATS.TYPIST || work.paperSource === PAPER_SOURCES.PICKED;
-  const warnsOfOtherTests = question.editable && shared;
-  if (!sentBack && !warnsOfOtherTests) return null;
-  const reason = review.reason ? SEND_BACK_REASON_LABELS[review.reason] : '';
-  const said = [`${fixed ? 'Fixed after being sent back' : 'Sent back'}: ${reason}.`, review.note];
-  return (
-    <>
-      {sentBack ? (
-        <NoticeChip
-          tone={fixed ? 'info' : 'warning'}
-          label={fixed ? 'Fixed after being sent back' : 'Sent back'}
-        >
-          {said.filter(Boolean).join(' ')}
-        </NoticeChip>
-      ) : null}
-      {warnsOfOtherTests ? (
-        <OtherTestsNotice
-          questionId={question.questionId}
-          read={() =>
-            api.admin.sectionWork.otherTests(
-              work.testId,
-              work.baseConfigSectionId,
-              question.questionId,
-            )
-          }
-        />
-      ) : null}
-    </>
-  );
-}
-
-/** What can be done to this one question, on its own card: check it, send it back, mark it fixed. */
-function CardActions({
-  work,
-  question,
-  seat,
-  fixable,
-  onChanged,
-  onSettle,
-}: Readonly<{
-  work: SectionWork;
-  question: SectionQuestion;
-  seat: ReturnType<typeof seatOf>;
-  /** Sent back to the viewer, with no unsaved edit that marking it fixed would leave behind. */
-  fixable: boolean;
-  onChanged: (next: SectionWork) => void;
-  onSettle: (savedId?: string) => Promise<void>;
-}>) {
-  const [sending, setSending] = useState(false);
-  const { testId, baseConfigSectionId: sectionId } = work;
-  const id = question.questionId;
-  const state = question.review.state;
-
-  const review = useMutation({
-    mutationFn: (act: 'check' | 'uncheck' | 'fixed') => {
-      if (act === 'check') return api.admin.sectionWork.check(testId, sectionId, id);
-      if (act === 'uncheck') return api.admin.sectionWork.uncheck(testId, sectionId, id);
-      return api.admin.sectionWork.fixed(testId, sectionId, id);
-    },
-    onSuccess: onChanged,
-  });
-
-  if (seat.reading) {
-    if (state === REVIEW_STATES.SENT_BACK) return <Badge variant="warning">With the typist</Badge>;
-    const checked = state === REVIEW_STATES.CHECKED;
-    return (
-      <>
-        <Button
-          type="button"
-          size="sm"
-          variant={checked ? 'default' : 'outline'}
-          aria-pressed={checked}
-          loading={review.isPending}
-          onClick={() => review.mutate(checked ? 'uncheck' : 'check')}
-        >
-          <CheckCheck aria-hidden />
-          {checked ? 'Checked' : 'Check'}
-        </Button>
-        {/* Left out with nobody to take it: the server refuses a send-back on a section with no typist. */}
-        {work.typist ? (
-          <Button type="button" size="sm" variant="outline" onClick={() => setSending(true)}>
-            Send back
-          </Button>
-        ) : null}
-        {sending ? (
-          <SendBackDialog
-            work={work}
-            question={question}
-            onClose={() => setSending(false)}
-            onSent={onChanged}
-          />
-        ) : null}
-      </>
-    );
-  }
-  if (fixable) {
-    return (
-      <Button
-        type="button"
-        size="sm"
-        loading={review.isPending}
-        onClick={() => review.mutate('fixed')}
-      >
-        Mark fixed
-      </Button>
-    );
-  }
-  if (question.deletable && seat.writes) {
-    return <DeleteQuestion work={work} question={question} onSettle={onSettle} />;
-  }
-  return null;
-}
-
-/** A typist's own mistake, taken back while it is still off the paper. */
-function DeleteQuestion({
-  work,
-  question,
-  onSettle,
-}: Readonly<{
-  work: SectionWork;
-  question: SectionQuestion;
-  onSettle: (savedId?: string) => Promise<void>;
-}>) {
-  const named = question.preview ? `“${question.preview}”` : 'This question';
-  // No id: the deleted question's own read sits under this section, and refetching it would 404.
-  const deleting = useDeleteQuestion({
-    consequence: `${named} is removed for good.`,
-    remove: () =>
-      api.admin.sectionWork.remove(work.testId, work.baseConfigSectionId, question.questionId),
-    onDeleted: () => onSettle(),
-  });
-
-  return (
-    <>
-      <Button type="button" size="sm" variant="outline" onClick={deleting.ask}>
-        <Trash2 aria-hidden />
-        Delete
-      </Button>
-      <ConfirmDialog {...deleting.confirm} />
-    </>
-  );
-}
-
-/** One question back to its typist, with the reason and what to change. */
-function SendBackDialog({
-  work,
-  question,
-  onClose,
-  onSent,
-}: Readonly<{
-  work: SectionWork;
-  question: SectionQuestion;
-  onClose: () => void;
-  onSent: (next: SectionWork) => void;
-}>) {
-  const [reason, setReason] = useState<SendBackReason | ''>('');
-  const [note, setNote] = useState('');
-  const send = useMutation({
-    meta: { success: 'Sent back to the typist.' },
-    mutationFn: (chosen: SendBackReason) =>
-      api.admin.sectionWork.sendBack(work.testId, work.baseConfigSectionId, question.questionId, {
-        reason: chosen,
-        note: note.trim() || undefined,
-      }),
-    onSuccess: (next) => {
-      onSent(next);
-      onClose();
-    },
-  });
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Send back to the typist</DialogTitle>
-        </DialogHeader>
-        <DialogBody className="flex flex-col gap-4">
-          <RadioGroup
-            name={`send-back-${question.questionId}`}
-            legend="Reason"
-            value={reason}
-            onValueChange={(next) => setReason(next as SendBackReason)}
-            className="grid gap-2"
-          >
-            {REASON_ORDER.map((one) => (
-              <RadioGroupItem
-                key={one}
-                id={`send-back-${question.questionId}-${one}`}
-                value={one}
-                label={SEND_BACK_REASON_LABELS[one]}
-              />
-            ))}
-          </RadioGroup>
-          <Textarea
-            aria-label="What to change"
-            placeholder="What to change (optional)"
-            value={note}
-            maxLength={500}
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </DialogBody>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="outline">
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button
-            type="button"
-            disabled={reason === ''}
-            loading={send.isPending}
-            onClick={() => reason && send.mutate(reason)}
-          >
-            Send back
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** The section's progress, one tab per role: who holds it, what is pending, and a tile per question. */
-function ProgressPanel({
-  work,
-  seat,
-  clock,
-  activeKey,
-  jump,
-}: Readonly<{
-  work: SectionWork;
-  seat: ReturnType<typeof seatOf>;
-  /** Running only for the viewer's own seat, while the paper can still change. */
-  clock: WorkClock | null;
-  activeKey: string;
-  jump: (key: string) => void;
-}>) {
-  const counts = countsOf(work);
-  const ownSeat = work.seat === SECTION_SEATS.TYPIST ? 'typist' : 'reader';
-  const timeOf = (role: 'typist' | 'reader') => {
-    const held = seatTime(work, role);
-    if (!clock || role !== ownSeat || held === null) return <TimeStat seconds={held} />;
-    const cards = work.questions.map(({ questionId, time }) => [questionId, time.own] as const);
-    // The blank card's seconds are on screen too, until its save names the question they belong to.
-    return (
-      <OwnTimeStat
-        clock={clock}
-        held={held}
-        cards={seat.typing ? [...cards, [NEW_CARD, 0]] : cards}
-      />
-    );
-  };
-  const tiles = (
-    <ol className="grid grid-cols-5 gap-1.5">
-      {work.questions.map((question, index) => (
-        <li key={question.questionId}>
-          <button
-            type="button"
-            aria-label={`Question ${index + 1}, ${REVIEW_STATE_LABELS[question.review.state]}`}
-            aria-current={question.questionId === activeKey ? 'true' : undefined}
-            onClick={() => jump(question.questionId)}
-            className={cn(
-              'h-8 w-full rounded-md border text-xs tabular-nums transition-colors hover:bg-muted',
-              'focus-visible:shadow-focus focus-visible:outline-none',
-              TILE_TONE[question.review.state],
-              question.questionId === activeKey && 'ring-2 ring-primary',
-            )}
-          >
-            {index + 1}
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
-
-  return (
-    <Tabs defaultValue={work.seat === SECTION_SEATS.TYPIST ? 'typist' : 'reader'}>
-      <TabsList>
-        <TabsTrigger value="typist">Typist</TabsTrigger>
-        <TabsTrigger value="reader">Proof-reader</TabsTrigger>
-      </TabsList>
-      <TabsContent value="typist" className="flex flex-col gap-3 pt-3">
-        <Holder holder={work.typist} earlier={earlierOf(work, 'TYPIST')} />
-        <DueStat holder={work.typist} />
-        <Stat label="Written" value={`${counts.written} of ${work.questionCount}`} />
-        <Stat label="Sent back to fix" value={counts.sentBack} />
-        {timeOf('typist')}
-        {seat.typing ? (
-          <Button asChild size="sm" variant="outline">
-            <Link to={ROUTES.AUTHORING_IMPORT(work.testId, work.baseConfigSectionId)}>
-              <Upload aria-hidden />
-              Import sheet
-            </Link>
-          </Button>
-        ) : null}
-        {tiles}
-      </TabsContent>
-      <TabsContent value="reader" className="flex flex-col gap-3 pt-3">
-        <Holder holder={work.reader} earlier={earlierOf(work, 'PROOFREADER')} />
-        <DueStat holder={work.reader} />
-        <Stat label="Checked" value={`${counts.checked} of ${work.questions.length}`} />
-        <Stat label="Sent back" value={counts.sentBack} />
-        <Stat label="Fixed, to check again" value={counts.fixed} />
-        {timeOf('reader')}
-        {tiles}
-      </TabsContent>
-    </Tabs>
-  );
-}
-
-const TILE_TONE: Record<ReviewState, string> = {
-  [REVIEW_STATES.UNCHECKED]: 'border-border bg-surface',
-  [REVIEW_STATES.CHECKED]: 'border-success/30 bg-success-subtle text-success-ink',
-  [REVIEW_STATES.SENT_BACK]: 'border-warning/40 bg-warning-subtle text-warning-ink',
-  [REVIEW_STATES.FIXED]: 'border-info/30 bg-info-subtle text-info-ink',
-};
-
-function countsOf(work: SectionWork) {
-  const count = (state: ReviewState) =>
-    work.questions.filter((question) => question.review.state === state).length;
-  return {
-    written: work.typist?.writtenCount ?? work.questions.length,
-    checked: count(REVIEW_STATES.CHECKED),
-    sentBack: count(REVIEW_STATES.SENT_BACK),
-    fixed: count(REVIEW_STATES.FIXED),
-  };
-}
-
-const earlierOf = (work: SectionWork, role: Assignment['role']) =>
-  work.history.filter((row) => row.role === role);
-
-function Holder({
-  holder,
-  earlier,
-}: Readonly<{ holder: Assignment | null; earlier: readonly Assignment[] }>) {
-  return (
-    <div className="flex flex-col gap-1">
-      <TruncatedText className="text-sm font-medium">
-        {holder ? holder.assigneeName : 'Nobody yet'}
-      </TruncatedText>
-      {earlier.length > 0 ? (
-        <TruncatedText className="text-xs text-muted-foreground">
-          {`Earlier: ${earlier.map((row) => row.assigneeName).join(', ')}`}
-        </TruncatedText>
-      ) : null}
-    </div>
-  );
-}
-
-function DueStat({ holder }: Readonly<{ holder: Assignment | null }>) {
-  return holder?.dueAt ? <Stat label="Due" value={instituteDayLabel(holder.dueAt)} /> : null;
-}
-
-function TimeStat({ seconds }: Readonly<{ seconds: number | null }>) {
-  return seconds === null ? null : <Stat label="Time spent" value={clockText(seconds)} />;
-}
-
-function Stat({ label, value }: Readonly<{ label: string; value: string | number }>) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium tabular-nums">{value}</span>
-    </div>
-  );
 }

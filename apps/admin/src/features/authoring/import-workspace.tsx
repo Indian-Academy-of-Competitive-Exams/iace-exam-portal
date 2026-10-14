@@ -10,7 +10,8 @@ import {
 import { Badge, Tooltip, TooltipContent, TooltipTrigger, TruncatedText, cn } from '@iace/ui';
 import { api } from '../../lib/api';
 import { importDraftQueryKey, importDraftsQueryKey } from '../../lib/constants';
-import { AuthoringWorkspace, type Held, type WorkspaceSource } from './authoring-workspace';
+import { AuthoringWorkspace } from './authoring-workspace';
+import type { Held, WorkspaceSource } from './workspace-types';
 import { NoticeChip } from './notice-chip';
 import { headerOfDraft, stateOfDraft, toDraft } from './question-scaffold';
 

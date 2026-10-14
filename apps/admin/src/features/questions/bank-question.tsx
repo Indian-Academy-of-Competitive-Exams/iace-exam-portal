@@ -23,11 +23,8 @@ import {
   questionQueryKey,
 } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
-import {
-  AuthoringWorkspace,
-  type Held,
-  type WorkspaceSource,
-} from '../authoring/authoring-workspace';
+import { AuthoringWorkspace } from '../authoring/authoring-workspace';
+import type { Held, WorkspaceSource } from '../authoring/workspace-types';
 import { headerOf, stateOf, toDraft } from '../authoring/question-scaffold';
 
 const CODE_TAKEN = 'Another question already has that code';

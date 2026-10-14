@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { WORK_TIME_REPORT_MAX_SECONDS } from '@iace/contracts';
 import { api } from '../../lib/api';
-import { NEW_CARD } from './authoring-workspace';
+import { NEW_CARD } from './workspace-types';
 import { WorkClock, reportTime } from './work-clock';
 
 const SECOND_MS = 1000;
