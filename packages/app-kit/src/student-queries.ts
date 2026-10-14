@@ -1,6 +1,13 @@
 /** Every read both student clients cache, keyed once, so web and mobile can never cache one read twice. */
-import { queryOptions } from '@tanstack/react-query';
-import { type LanguageCode } from '@iace/contracts';
+import { queryOptions, type QueryClient } from '@tanstack/react-query';
+import {
+  AppException,
+  ErrorCodes,
+  ownDetailsMoved,
+  type LanguageCode,
+  type Me,
+  type UpdateMeInput,
+} from '@iace/contracts';
 import { type AppApiClient } from './api-client';
 import { isBriefRefused } from './catalog';
 import { hasNoResult, isMarkingPending, retryWhileMarking } from './marking';
@@ -14,6 +21,46 @@ const ME = 'me';
 
 /** The student's RECORD — profile and photo; under its own leaf, since the root prefixes every read below. */
 export const PROFILE_QUERY_KEY = [ME, 'profile'] as const;
+
+/** The names the profile FORM registers. The server keys errors the same way, and matches on the leaf too. */
+export const PROFILE_FORM_FIELDS = [
+  'fullName',
+  'profile.motherName',
+  'profile.fatherName',
+  'profile.dob',
+  'profile.email',
+  'profile.address',
+  'profile.gender',
+] as const;
+
+/** Saves the student's own details: on the newest stamp while none of them moved, else the one the edit began on, which is refused. */
+export async function saveOwnDetails(
+  api: AppApiClient,
+  queryClient: QueryClient,
+  opened: Me | null,
+  current: Me | undefined,
+  values: UpdateMeInput,
+) {
+  const send = (latest: Me | undefined) =>
+    api.me.update({
+      ...values,
+      expectedUpdatedAt: (ownDetailsMoved(opened, latest).length === 0 ? latest : opened)
+        ?.updatedAt,
+    });
+  try {
+    return await send(current);
+  } catch (error) {
+    if (!AppException.is(error) || error.code !== ErrorCodes.CONFLICT) throw error;
+    // An enrolment or a block moves the stamp too, so the record is read again before giving up.
+    const latest = await queryClient.fetchQuery({
+      queryKey: PROFILE_QUERY_KEY,
+      queryFn: () => api.me.profile(),
+      staleTime: 0,
+    });
+    if (ownDetailsMoved(opened, latest).length > 0) throw error;
+    return send(latest);
+  }
+}
 
 /** The student catalog, cached under one key so a submit can drop it. */
 export const CATALOG_QUERY_KEY = [ME, 'catalog'] as const;

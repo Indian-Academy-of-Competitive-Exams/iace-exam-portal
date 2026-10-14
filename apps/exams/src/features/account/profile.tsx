@@ -4,11 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import {
-  AppException,
   courseLabel,
   DOCUMENT_KINDS,
   EARLIEST_BIRTH_DATE,
-  ErrorCodes,
   GENDERS,
   ownDetailsMoved,
   todayISO,
@@ -18,7 +16,7 @@ import {
   type UpdateMeInput,
   type Gender,
 } from '@iace/contracts';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, PROFILE_FORM_FIELDS, saveOwnDetails } from '@iace/app-kit';
 import {
   Alert,
   Badge,
@@ -43,17 +41,6 @@ import { PreTestPrompt } from '../../components/pre-test-prompt';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
 import { ME_QUERY_KEY, NAV_ITEMS, PROFILE_QUERY_KEY } from '../../lib/constants';
-
-/** The names the FORM registers. The server keys errors the same way, and matches on the leaf too. */
-const FORM_FIELDS = [
-  'fullName',
-  'profile.motherName',
-  'profile.fatherName',
-  'profile.dob',
-  'profile.email',
-  'profile.address',
-  'profile.gender',
-] as const;
 
 /** One page in two states: view mode is the same fields, inert, so nothing moves on Edit. */
 export function ProfilePage() {
@@ -98,25 +85,9 @@ export function ProfilePage() {
 
   const save = useMutation({
     // `fields` keeps a validation failure off the toast and on the input that caused it.
-    meta: { success: 'Your details have been saved.', fields: FORM_FIELDS },
-    mutationFn: async (values: UpdateMeInput) => {
-      // On the newest stamp while none of these fields has moved, else the one the edit began on, which is refused.
-      const send = (latest: Me | undefined) =>
-        api.me.update({
-          ...values,
-          expectedUpdatedAt: (ownDetailsMoved(opened, latest).length === 0 ? latest : opened)
-            ?.updatedAt,
-        });
-      try {
-        return await send(me.data);
-      } catch (error) {
-        if (!AppException.is(error) || error.code !== ErrorCodes.CONFLICT) throw error;
-        // An enrolment or a block moves the stamp too, so the record is read again before giving up.
-        const latest = await queryClient.fetchQuery({ ...profileQuery, staleTime: 0 });
-        if (ownDetailsMoved(opened, latest).length > 0) throw error;
-        return send(latest);
-      }
-    },
+    meta: { success: 'Your details have been saved.', fields: PROFILE_FORM_FIELDS },
+    mutationFn: (values: UpdateMeInput) =>
+      saveOwnDetails(api, queryClient, opened, me.data, values),
     onSuccess: (updated) => {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
       // The identity carries preTestReady, and saving these fields is what changes it.
@@ -124,7 +95,7 @@ export function ProfilePage() {
       form.reset(form.getValues());
       setIsEditing(false);
     },
-    onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),
+    onError: (error) => applyFieldErrors(error, form.setError, PROFILE_FORM_FIELDS),
   });
 
   const ready = !me.isPending && !me.error;

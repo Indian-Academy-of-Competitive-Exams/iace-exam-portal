@@ -3,16 +3,20 @@
  * sitting. One copy: web and mobile drifted apart while each held its own.
  */
 import {
+  COHORT_COMPARISON_FLOOR,
+  COHORT_COUNT_EVERY_MIN,
   contentLanguageOf,
   instituteDayLabel,
   instituteWallTime,
   LANGUAGE_LABELS,
   LANGUAGE_MODE,
+  QUESTION_FILTERS,
   round2,
   TIMER_TEMPLATE,
   type ExamBrief,
   type LanguageCode,
   type PerformancePoint,
+  type QuestionReportRow,
   type TimerTemplate,
 } from '@iace/contracts';
 
@@ -98,4 +102,40 @@ export function greetingFor(now: Date, name: string | null | undefined): string 
   const hour = Number(instituteWallTime(now).slice(11, 13));
   const word = (GREETINGS.find((band) => hour < band.until) ?? GREETINGS[2]).word;
   return name ? `${word}, ${name}` : word;
+}
+
+/** Names both facts a bar can carry, so the key and the reader's own pick never need two charts. */
+export function optionMark(
+  option: Readonly<{ isCorrect: boolean; optionId: string }>,
+  chosen: string | null,
+): string {
+  const marks = [option.isCorrect ? 'correct' : null, option.optionId === chosen ? 'yours' : null];
+  const named = marks.filter((mark) => mark !== null);
+  return named.length === 0 ? '' : `: ${named.join(', ')}`;
+}
+
+export function matchesQuestionFilter(row: QuestionReportRow, filter: string): boolean {
+  if (filter === QUESTION_FILTERS.CORRECT) return row.isCorrect === true;
+  if (filter === QUESTION_FILTERS.INCORRECT) return row.isCorrect === false;
+  if (filter === QUESTION_FILTERS.UNATTEMPTED) return row.isCorrect === null;
+  return true;
+}
+
+export function yourAnswerOf(row: QuestionReportRow): string {
+  if (row.typedAnswer !== null) return row.typedAnswer;
+  const chosen = row.optionCounts.find((option) => option.optionId === row.selectedOptionId);
+  return chosen === undefined ? DASH : `Option ${chosen.position}`;
+}
+
+export function correctAnswerOf(row: QuestionReportRow): string {
+  if (row.correctAnswer !== null) return row.correctAnswer;
+  const correct = row.optionCounts.find((option) => option.isCorrect);
+  return correct === undefined ? DASH : `Option ${correct.position}`;
+}
+
+/** Why a cohort column is a dash: too few have sat it, or the pass that counts it has not run. */
+export function cohortNoteSays(cohortSize: number): string {
+  return cohortSize < COHORT_COMPARISON_FLOOR
+    ? `Comparison against other students opens once ${COHORT_COMPARISON_FLOOR} have sat this paper.`
+    : `The comparison against other students is counted every ${COHORT_COUNT_EVERY_MIN} minutes.`;
 }

@@ -86,6 +86,7 @@ export {
 export {
   EFFORT_RUNNERS,
   FIELD_SAMPLE_FLOOR,
+  effortBars,
   effortLine,
   paperEffort,
   sectionReadings,
@@ -95,10 +96,14 @@ export {
 } from './handed-in';
 export { markNotificationRead } from './notifications';
 export {
+  cohortNoteSays,
+  correctAnswerOf,
   greetingFor,
   isSectionalPaper,
   languagesOf,
+  matchesQuestionFilter,
   negativeOf,
+  optionMark,
   ordinal,
   ordinalSuffix,
   paceWord,
@@ -106,6 +111,7 @@ export {
   sectionMarksOf,
   sectionalOf,
   totalMarksOf,
+  yourAnswerOf,
 } from './student-figures';
 export { seenTours, useTourRun, type SeenTours, type TourRun, type TourStep } from './tour';
 export { useInfinitePages, usePagedPicker, type PickerPageParams } from './use-infinite-pages';
@@ -148,6 +154,8 @@ export {
   SYSTEM_CHECK_QUERY_KEY,
   testPaperQueryKey,
   createStudentQueries,
+  PROFILE_FORM_FIELDS,
+  saveOwnDetails,
 } from './student-queries';
 export { paperFor } from './exam/served-paper';
 export { TOP_QUARTER, trendOf, type Trendline } from './trend';

@@ -3,8 +3,6 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
-  COHORT_COMPARISON_FLOOR,
-  COHORT_COUNT_EVERY_MIN,
   distractorThatWon,
   percentLabel,
   QUESTION_FILTERS,
@@ -12,7 +10,16 @@ import {
   type QuestionReport,
   type QuestionReportRow,
 } from '@iace/contracts';
-import { dispositionLabel, paceWord, QUESTION_REPORT_FILTERS } from '@iace/app-kit';
+import {
+  cohortNoteSays,
+  correctAnswerOf,
+  dispositionLabel,
+  matchesQuestionFilter,
+  optionMark,
+  paceWord,
+  QUESTION_REPORT_FILTERS,
+  yourAnswerOf,
+} from '@iace/app-kit';
 import { Text } from '../ui/text';
 import { questionReportQuery } from '../../lib/queries';
 import { asText, useFilterState, type FilterState } from '../../lib/filters';
@@ -67,7 +74,7 @@ function Body({ report, state }: Readonly<{ report: QuestionReport; state: Filte
   // The list's own "Any result" row is the unset value, which is how a choice filter reads as off.
   const filter = asText(state.values.status) || QUESTION_FILTERS.ALL;
   const rows = useMemo(
-    () => report.questions.filter((row) => matches(row, filter)),
+    () => report.questions.filter((row) => matchesQuestionFilter(row, filter)),
     [report.questions, filter],
   );
 
@@ -151,8 +158,8 @@ function Question({ row }: Readonly<{ row: QuestionReportRow }>) {
         </View>
 
         <View className="flex-row flex-wrap gap-x-5 gap-y-1 border-t border-border pt-3">
-          <Figure label="Your answer" value={yourAnswer(row)} />
-          <Figure label="Correct answer" value={correctAnswer(row)} />
+          <Figure label="Your answer" value={yourAnswerOf(row)} />
+          <Figure label="Correct answer" value={correctAnswerOf(row)} />
         </View>
       </Pressable>
 
@@ -195,52 +202,12 @@ function Distribution({ row }: Readonly<{ row: QuestionReportRow }>) {
 
 /** Why a cohort column is a dash: too few have sat it, or the pass that counts it has not run. */
 function CohortNote({ cohortSize }: Readonly<{ cohortSize: number }>) {
-  if (cohortSize < COHORT_COMPARISON_FLOOR) {
-    return (
-      <Alert variant="info">
-        {`Comparison against other students opens once ${COHORT_COMPARISON_FLOOR} have sat this paper.`}
-      </Alert>
-    );
-  }
-  return (
-    <Alert variant="info">
-      {`The comparison against other students is counted every ${COHORT_COUNT_EVERY_MIN} minutes.`}
-    </Alert>
-  );
-}
-
-/** Names both facts a bar can carry, so the key and the reader's own pick never need two charts. */
-function optionMark(
-  option: Readonly<{ isCorrect: boolean; optionId: string }>,
-  chosen: string | null,
-): string {
-  const marks = [option.isCorrect ? 'correct' : null, option.optionId === chosen ? 'yours' : null];
-  const named = marks.filter((mark) => mark !== null);
-  return named.length === 0 ? '' : `: ${named.join(', ')}`;
+  return <Alert variant="info">{cohortNoteSays(cohortSize)}</Alert>;
 }
 
 function resultOf(row: QuestionReportRow) {
   if (row.isCorrect === true) return RESULTS.RIGHT;
   return row.isCorrect === false ? RESULTS.WRONG : RESULTS.LEFT;
-}
-
-function matches(row: QuestionReportRow, filter: string): boolean {
-  if (filter === QUESTION_FILTERS.CORRECT) return row.isCorrect === true;
-  if (filter === QUESTION_FILTERS.INCORRECT) return row.isCorrect === false;
-  if (filter === QUESTION_FILTERS.UNATTEMPTED) return row.isCorrect === null;
-  return true;
-}
-
-function yourAnswer(row: QuestionReportRow): string {
-  if (row.typedAnswer !== null) return row.typedAnswer;
-  const chosen = row.optionCounts.find((option) => option.optionId === row.selectedOptionId);
-  return chosen === undefined ? DASH : `Option ${chosen.position}`;
-}
-
-function correctAnswer(row: QuestionReportRow): string {
-  if (row.correctAnswer !== null) return row.correctAnswer;
-  const correct = row.optionCounts.find((option) => option.isCorrect);
-  return correct === undefined ? DASH : `Option ${correct.position}`;
 }
 
 function paceOf(pace: number | null): string {

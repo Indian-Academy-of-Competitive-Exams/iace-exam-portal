@@ -17,8 +17,6 @@ import {
   type MeasureBar,
 } from '@iace/ui';
 import {
-  COHORT_COMPARISON_FLOOR,
-  COHORT_COUNT_EVERY_MIN,
   QUESTION_FILTERS,
   distractorThatWon,
   percentLabel,
@@ -28,11 +26,16 @@ import {
   type QuestionReportRow,
 } from '@iace/contracts';
 import {
+  cohortNoteSays,
+  correctAnswerOf,
   dispositionLabel,
   isMarkingPending,
   isSittingVoided,
+  matchesQuestionFilter,
+  optionMark,
   paceWord,
   QUESTION_REPORT_FILTERS,
+  yourAnswerOf,
 } from '@iace/app-kit';
 import { questionReportQuery } from '../../lib/queries';
 import { SittingSetAside } from './report';
@@ -93,7 +96,7 @@ function Body({
   onFilter: (filter: QuestionFilter) => void;
 }>) {
   const rows = useMemo(
-    () => report.questions.filter((row) => matches(row, filter)),
+    () => report.questions.filter((row) => matchesQuestionFilter(row, filter)),
     [report.questions, filter],
   );
   const columns = useMemo(() => columnsFor(), []);
@@ -162,18 +165,7 @@ function Body({
 
 /** Why a cohort column is a dash: too few have sat it, or the pass that counts it has not run. */
 function CohortNote({ cohortSize }: Readonly<{ cohortSize: number }>) {
-  if (cohortSize < COHORT_COMPARISON_FLOOR) {
-    return (
-      <Alert variant="info">
-        {`Comparison against other students opens once ${COHORT_COMPARISON_FLOOR} have sat this paper.`}
-      </Alert>
-    );
-  }
-  return (
-    <Alert variant="info">
-      {`The comparison against other students is counted every ${COHORT_COUNT_EVERY_MIN} minutes.`}
-    </Alert>
-  );
+  return <Alert variant="info">{cohortNoteSays(cohortSize)}</Alert>;
 }
 
 /** ListView speaks the filter's wire value; the empty one is this table's "any result". */
@@ -208,16 +200,6 @@ function Distribution({ row }: Readonly<{ row: QuestionReportRow }>) {
       )}
     </div>
   );
-}
-
-/** Names both facts a bar can carry, so the key and the reader's own pick never need two charts. */
-function optionMark(
-  option: Readonly<{ isCorrect: boolean; optionId: string }>,
-  chosen: string | null,
-): string {
-  const marks = [option.isCorrect ? 'correct' : null, option.optionId === chosen ? 'yours' : null];
-  const named = marks.filter((mark) => mark !== null);
-  return named.length === 0 ? '' : `: ${named.join(', ')}`;
 }
 
 function columnsFor(): DataTableColumn<QuestionReportRow>[] {
@@ -294,13 +276,13 @@ function columnsFor(): DataTableColumn<QuestionReportRow>[] {
       key: 'yours',
       header: 'Your answer',
       className: 'max-w-[10rem]',
-      cell: (row) => <TruncatedText>{yourAnswer(row)}</TruncatedText>,
+      cell: (row) => <TruncatedText>{yourAnswerOf(row)}</TruncatedText>,
     },
     {
       key: 'correct',
       header: 'Correct answer',
       className: 'max-w-[10rem]',
-      cell: (row) => <TruncatedText>{correctAnswer(row)}</TruncatedText>,
+      cell: (row) => <TruncatedText>{correctAnswerOf(row)}</TruncatedText>,
     },
   ];
 }
@@ -308,25 +290,6 @@ function columnsFor(): DataTableColumn<QuestionReportRow>[] {
 function resultOf(row: QuestionReportRow) {
   if (row.isCorrect === true) return RESULTS.RIGHT;
   return row.isCorrect === false ? RESULTS.WRONG : RESULTS.LEFT;
-}
-
-function matches(row: QuestionReportRow, filter: QuestionFilter): boolean {
-  if (filter === QUESTION_FILTERS.CORRECT) return row.isCorrect === true;
-  if (filter === QUESTION_FILTERS.INCORRECT) return row.isCorrect === false;
-  if (filter === QUESTION_FILTERS.UNATTEMPTED) return row.isCorrect === null;
-  return true;
-}
-
-function yourAnswer(row: QuestionReportRow): string {
-  if (row.typedAnswer !== null) return row.typedAnswer;
-  const chosen = row.optionCounts.find((option) => option.optionId === row.selectedOptionId);
-  return chosen === undefined ? DASH : `Option ${chosen.position}`;
-}
-
-function correctAnswer(row: QuestionReportRow): string {
-  if (row.correctAnswer !== null) return row.correctAnswer;
-  const correct = row.optionCounts.find((option) => option.isCorrect);
-  return correct === undefined ? DASH : `Option ${correct.position}`;
 }
 
 const clock = (seconds: number) => (seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m`);

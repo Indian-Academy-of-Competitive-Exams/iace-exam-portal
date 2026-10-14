@@ -1,4 +1,5 @@
 /** What a handed-in paper says before it is marked: its own effort, and who that effort stands beside. */
+import { minutes } from './catalog';
 import { type FieldEffort, type SectionEffort, type SectionEffortFigure } from '@iace/contracts';
 
 export const EFFORT_RUNNERS = {
@@ -104,4 +105,32 @@ export function effortLine(
   const average = isThin(field) ? null : attemptedBy(field?.average);
   if (average !== null && mine.attempted > average) return 'Attempted, above the field average';
   return 'Attempted';
+}
+
+/** One hue a runner, the same on every figure, so a bar is recognised before its label is read. */
+const RUNNER_TONES = {
+  [EFFORT_RUNNERS.YOU]: 1,
+  [EFFORT_RUNNERS.TOPPER]: 2,
+  [EFFORT_RUNNERS.FIELD]: 3,
+  [EFFORT_RUNNERS.PREVIOUS]: 4,
+} as const;
+
+/** A mean is rarely whole, so it is read to one decimal; a whole count never grows a `.0`. */
+const countLabel = (count: number) => String(Math.round(count * 10) / 10);
+
+const barOf = (reading: EffortReading, value: number, display: string) => ({
+  key: reading.runner,
+  label: reading.label,
+  value,
+  display,
+  faint: reading.faint,
+  tone: RUNNER_TONES[reading.runner],
+});
+
+/** The two bar charts of a section's effort: how much was attempted, and how long it took. */
+export function effortBars(readings: readonly EffortReading[]) {
+  return {
+    attempted: readings.map((r) => barOf(r, r.attempted, countLabel(r.attempted))),
+    time: readings.map((r) => barOf(r, r.timeSpentSec, minutes(r.timeSpentSec))),
+  };
 }

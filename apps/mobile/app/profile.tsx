@@ -4,12 +4,10 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { applyFieldErrors } from '@iace/app-kit';
+import { applyFieldErrors, PROFILE_FORM_FIELDS, saveOwnDetails } from '@iace/app-kit';
 import {
-  AppException,
   DOCUMENT_KINDS,
   EARLIEST_BIRTH_DATE,
-  ErrorCodes,
   GENDERS,
   ownDetailsMoved,
   todayISO,
@@ -33,17 +31,6 @@ import { Skeleton } from '../src/components/ui/skeleton';
 import { TextField } from '../src/components/ui/text-field';
 
 const DASH = '—';
-
-/** The names the FORM registers. The server keys errors the same way, and matches on the leaf too. */
-const FORM_FIELDS = [
-  'fullName',
-  'profile.motherName',
-  'profile.fatherName',
-  'profile.dob',
-  'profile.email',
-  'profile.address',
-  'profile.gender',
-] as const;
 
 const GENDER_OPTIONS: readonly ChipOption[] = GENDERS.map((value) => ({
   value,
@@ -72,25 +59,9 @@ export default function ProfileScreen() {
   }, [me.data, reset, isEditing]);
 
   const save = useMutation({
-    meta: { fields: FORM_FIELDS },
-    mutationFn: async (values: UpdateMeInput) => {
-      // On the newest stamp while none of these fields has moved, else the one the edit began on, which is refused.
-      const send = (latest: Me | undefined) =>
-        api.me.update({
-          ...values,
-          expectedUpdatedAt: (ownDetailsMoved(opened, latest).length === 0 ? latest : opened)
-            ?.updatedAt,
-        });
-      try {
-        return await send(me.data);
-      } catch (error) {
-        if (!AppException.is(error) || error.code !== ErrorCodes.CONFLICT) throw error;
-        // An enrolment or a block moves the stamp too, so the record is read again before giving up.
-        const latest = await queryClient.fetchQuery({ ...profileQuery, staleTime: 0 });
-        if (ownDetailsMoved(opened, latest).length > 0) throw error;
-        return send(latest);
-      }
-    },
+    meta: { fields: PROFILE_FORM_FIELDS },
+    mutationFn: (values: UpdateMeInput) =>
+      saveOwnDetails(api, queryClient, opened, me.data, values),
     onSuccess: (updated) => {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
       // Re-read as well: an upload answering after this would otherwise put back the record it left with.
@@ -101,7 +72,7 @@ export default function ProfileScreen() {
       setIsEditing(false);
     },
     // Explicit type argument: this app's own react-hook-form copy is a separate install from app-kit's.
-    onError: (error) => applyFieldErrors<UpdateMeInput>(error, form.setError, FORM_FIELDS),
+    onError: (error) => applyFieldErrors<UpdateMeInput>(error, form.setError, PROFILE_FORM_FIELDS),
   });
 
   if (me.isLoading) {

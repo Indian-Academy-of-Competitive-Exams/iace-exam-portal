@@ -4,23 +4,13 @@
  */
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { usePrefetchQuery, useQuery } from '@tanstack/react-query';
+import { Button, ChartFigure, MeasureBars, Metric, PageFrame, PageHeader, plural } from '@iace/ui';
 import {
-  Button,
-  ChartFigure,
-  MeasureBars,
-  Metric,
-  PageFrame,
-  PageHeader,
-  plural,
-  type MeasureBar,
-} from '@iace/ui';
-import {
-  EFFORT_RUNNERS,
+  effortBars,
   effortLine,
   minutes,
   paperEffort,
   sectionReadings,
-  type EffortReading,
   type EndedSitting,
 } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
@@ -28,14 +18,6 @@ import { type FieldEffort, type SectionEffort } from '@iace/contracts';
 import { Hero, HeroFigure, PageBody, Section } from '../../components/ui';
 import { NAV_ITEMS, ROUTES } from '../../lib/constants';
 import { fieldEffortQuery, scoreCardAheadQuery } from '../../lib/queries';
-
-/** One hue a runner, the same on every figure, so a bar is recognised before its label is read. */
-const RUNNER_TONES = {
-  [EFFORT_RUNNERS.YOU]: 1,
-  [EFFORT_RUNNERS.TOPPER]: 2,
-  [EFFORT_RUNNERS.FIELD]: 3,
-  [EFFORT_RUNNERS.PREVIOUS]: 4,
-} as const;
 
 export function SubmittedPage() {
   const { attemptId = '' } = useParams();
@@ -95,39 +77,18 @@ function SectionEffortFigures({
   section,
   field,
 }: Readonly<{ section: SectionEffort; field: FieldEffort | undefined }>) {
-  const readings = sectionReadings(section, field);
+  const bars = effortBars(sectionReadings(section, field));
 
   return (
     <Section title={section.name} meta={plural(section.total, 'question')}>
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <ChartFigure title="Attempted">
-          <MeasureBars bars={readings.map(attemptedBar)} max={section.total} />
+          <MeasureBars bars={bars.attempted} max={section.total} />
         </ChartFigure>
         <ChartFigure title="Time">
-          <MeasureBars bars={readings.map(timeBar)} max={0} />
+          <MeasureBars bars={bars.time} max={0} />
         </ChartFigure>
       </div>
     </Section>
   );
 }
-
-/** A mean is rarely whole, so it is read to one decimal; a whole count never grows a `.0`. */
-const countLabel = (count: number) => String(Math.round(count * 10) / 10);
-
-const attemptedBar = (reading: EffortReading): MeasureBar => ({
-  key: reading.runner,
-  label: reading.label,
-  value: reading.attempted,
-  display: countLabel(reading.attempted),
-  faint: reading.faint,
-  tone: RUNNER_TONES[reading.runner],
-});
-
-const timeBar = (reading: EffortReading): MeasureBar => ({
-  key: reading.runner,
-  label: reading.label,
-  value: reading.timeSpentSec,
-  display: minutes(reading.timeSpentSec),
-  faint: reading.faint,
-  tone: RUNNER_TONES[reading.runner],
-});

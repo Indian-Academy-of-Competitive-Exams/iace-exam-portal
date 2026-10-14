@@ -5,14 +5,7 @@
 import { ScrollView, View } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePrefetchQuery, useQuery } from '@tanstack/react-query';
-import {
-  EFFORT_RUNNERS,
-  effortLine,
-  minutes,
-  paperEffort,
-  sectionReadings,
-  type EffortReading,
-} from '@iace/app-kit';
+import { effortBars, effortLine, minutes, paperEffort, sectionReadings } from '@iace/app-kit';
 import { type FieldEffort, type SectionEffort } from '@iace/contracts';
 import { Text } from '../../../src/components/ui/text';
 import { DETAIL_ROUTES, ROUTES } from '../../../src/lib/nav';
@@ -21,16 +14,8 @@ import { endedSittingQuery, fieldEffortQuery, scoreCardAheadQuery } from '../../
 import { Button } from '../../../src/components/ui/button';
 import { Card } from '../../../src/components/ui/card';
 import { Hero, HeroFigure } from '../../../src/components/ui/hero';
-import { MeasureBars, type MeasureBar } from '../../../src/components/ui/measure-bars';
+import { MeasureBars } from '../../../src/components/ui/measure-bars';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
-
-/** One hue a runner, the same on every figure, so a bar is recognised before its label is read. */
-const RUNNER_TONES = {
-  [EFFORT_RUNNERS.YOU]: 1,
-  [EFFORT_RUNNERS.TOPPER]: 2,
-  [EFFORT_RUNNERS.FIELD]: 3,
-  [EFFORT_RUNNERS.PREVIOUS]: 4,
-} as const;
 
 export default function SubmittedScreen() {
   const { attemptId = '' } = useLocalSearchParams<{ attemptId: string }>();
@@ -81,7 +66,7 @@ function SectionEffortFigures({
   section,
   field,
 }: Readonly<{ section: SectionEffort; field: FieldEffort | undefined }>) {
-  const readings = sectionReadings(section, field);
+  const bars = effortBars(sectionReadings(section, field));
 
   return (
     <View className="gap-2">
@@ -94,34 +79,13 @@ function SectionEffortFigures({
       <Card className="gap-4 p-4">
         <View className="gap-3">
           <Text variant="subsection">Attempted</Text>
-          <MeasureBars bars={readings.map(attemptedBar)} max={section.total} />
+          <MeasureBars bars={bars.attempted} max={section.total} />
         </View>
         <View className="gap-3 border-t border-border pt-4">
           <Text variant="subsection">Time</Text>
-          <MeasureBars bars={readings.map(timeBar)} max={0} />
+          <MeasureBars bars={bars.time} max={0} />
         </View>
       </Card>
     </View>
   );
 }
-
-/** A mean is rarely whole, so it is read to one decimal; a whole count never grows a `.0`. */
-const countLabel = (count: number) => String(Math.round(count * 10) / 10);
-
-const attemptedBar = (reading: EffortReading): MeasureBar => ({
-  key: reading.runner,
-  label: reading.label,
-  value: reading.attempted,
-  display: countLabel(reading.attempted),
-  faint: reading.faint,
-  tone: RUNNER_TONES[reading.runner],
-});
-
-const timeBar = (reading: EffortReading): MeasureBar => ({
-  key: reading.runner,
-  label: reading.label,
-  value: reading.timeSpentSec,
-  display: minutes(reading.timeSpentSec),
-  faint: reading.faint,
-  tone: RUNNER_TONES[reading.runner],
-});
