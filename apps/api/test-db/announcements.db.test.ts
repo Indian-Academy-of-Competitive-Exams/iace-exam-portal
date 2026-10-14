@@ -128,7 +128,7 @@ describe('Sending the same notice again', () => {
     const { admin, audience, draft } = await branchOf();
 
     const sent = await service.send(draft(), admin.id);
-    const page = await service.list({ page: 1, pageSize: 20 });
+    const page = await service.list({ page: 1, pageSize: 20, q: undefined });
 
     assert.deepEqual(sent.audience, audience);
     assert.deepEqual(
@@ -179,5 +179,22 @@ describe("Exporting an announcement's deliveries", () => {
 
   it('refuses an announcement that does not exist', async () => {
     await assert.rejects(service.exportDeliveries(uid()), { code: ErrorCodes.NOT_FOUND });
+  });
+});
+
+describe('Listing announcements', () => {
+  it('narrows by channel, with in-app only as a channel of its own, and by the words in it', async () => {
+    const inApp = await makeAnnouncement(prisma);
+    const bySms = await makeAnnouncement(prisma, [DeliveryChannel.SMS]);
+    await prisma.announcement.update({ where: { id: bySms.id }, data: { title: 'Fee reminder' } });
+    const ids = async (narrowed: object) =>
+      (await service.list({ page: 1, pageSize: 20, q: undefined, ...narrowed })).items.map(
+        (row) => row.id,
+      );
+
+    assert.deepEqual(await ids({ channel: ['IN_APP_ONLY'] }), [inApp.id]);
+    assert.deepEqual(await ids({ channel: ['SMS'] }), [bySms.id]);
+    assert.deepEqual(await ids({ q: 'fee' }), [bySms.id]);
+    assert.deepEqual((await ids({ channel: ['IN_APP_ONLY', 'SMS'] })).length, 2);
   });
 });

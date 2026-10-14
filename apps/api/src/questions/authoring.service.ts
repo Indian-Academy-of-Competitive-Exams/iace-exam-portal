@@ -20,7 +20,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { shiftInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { computeStemHash } from './question-core';
-import { writtenBetween } from './question-query';
+import { withinInstituteDays } from '../common/time/institute-day';
 import { QuestionsService } from './questions.service';
 
 /** Every read and write fenced to the author, over the one service that owns the two tables. */
@@ -64,7 +64,7 @@ export class AuthoringService {
       createdById: adminId,
       ...(query.assignmentId?.length ? { assignmentId: { in: query.assignmentId } } : {}),
       ...(query.testId ? { assignment: { testId: query.testId } } : {}),
-      ...(query.from || query.to ? { createdAt: writtenBetween(query.from, query.to) } : {}),
+      ...(query.from || query.to ? { createdAt: withinInstituteDays(query.from, query.to) } : {}),
     });
   }
 

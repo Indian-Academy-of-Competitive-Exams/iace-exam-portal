@@ -9,6 +9,7 @@ import {
   type Paginated,
 } from '@iace/contracts';
 import { pageArgs, paged } from '../common/pagination';
+import { withinInstituteDays } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** What one notification is written from. `testSeriesId` is the deep link, not decoration. */
@@ -62,10 +63,7 @@ export class NotificationsService {
 
   /** One student's own bell, newest first; a cursor pages after that row, not by position. The student id is never taken from the request. */
   async list(studentId: string, query: NotificationListQuery): Promise<Paginated<Notification>> {
-    const where: Prisma.NotificationWhereInput = {
-      studentId,
-      ...(query.unreadOnly ? { isRead: false } : {}),
-    };
+    const where: Prisma.NotificationWhereInput = { studentId, AND: narrowedBy(query) };
 
     // The cursor row is excluded by id, not `skip: 1`: once read it leaves the unread filter and skip would eat the next row.
     const page: Prisma.NotificationFindManyArgs = query.cursor
@@ -95,11 +93,28 @@ export class NotificationsService {
 
     const updated = await this.prisma.notification.update({
       where: { id },
-      data: { isRead: true },
+      data: { isRead: true, readAt: new Date() },
     });
     return toNotification(updated);
   }
 }
+
+/** Every filter the bell is read through; an empty list narrows nothing. */
+function narrowedBy(query: NotificationListQuery): Prisma.NotificationWhereInput[] {
+  const filters: Prisma.NotificationWhereInput[] = [];
+  if (query.unreadOnly) filters.push(unreadAsOf(query.unreadAsOf));
+  if (query.type) filters.push({ type: { in: query.type } });
+  if (query.from || query.to)
+    filters.push({ createdAt: withinInstituteDays(query.from, query.to) });
+  if (query.q)
+    filters.push({ OR: [{ title: textHolding(query.q) }, { body: textHolding(query.q) }] });
+  return filters;
+}
+
+const textHolding = (q: string) => ({ contains: q, mode: 'insensitive' }) as const;
+
+const unreadAsOf = (asOf: string | undefined): Prisma.NotificationWhereInput =>
+  asOf ? { OR: [{ isRead: false }, { readAt: { gt: new Date(asOf) } }] } : { isRead: false };
 
 function toNotification(row: NotificationColumns): Notification {
   return {

@@ -5,13 +5,15 @@
  */
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnstableNativeVariable } from 'nativewind';
 import SlidersHorizontal from 'lucide-react-native/icons/sliders-horizontal';
 import { Text } from './text';
 import { asSet, asText, summaryOf, type FilterSpec, type FilterState } from '../../lib/filters';
 import { useTokenColor } from '../../lib/use-token-color';
+import { dayOf, valueOfDay } from '../../lib/picker-day';
 import { Button } from './button';
 import { Chip, ChipRow } from './chip-row';
 
@@ -189,7 +191,52 @@ function FilterControl({
     );
   }
 
+  if (filter.kind === 'date') return <FilterDate filter={filter} state={state} />;
+
   return null;
+}
+
+/** A civil day, picked rather than typed; tapping a set one again offers to clear it. */
+function FilterDate({ filter, state }: Readonly<{ filter: FilterSpec; state: FilterState }>) {
+  const [open, setOpen] = useState(false);
+  const held = asText(state.values[filter.key]);
+
+  return (
+    <View className="gap-1.5">
+      <Text variant="metaStrong">{filter.label}</Text>
+      <View className="flex-row items-center gap-3">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={filter.label}
+          onPress={() => setOpen((shown) => !shown)}
+          className="h-11 flex-1 justify-center rounded-md border border-input bg-surface px-3"
+        >
+          <Text className={held ? 'text-base text-foreground' : 'text-base text-placeholder'}>
+            {held || 'Any day'}
+          </Text>
+        </Pressable>
+        {held ? (
+          <Button variant="ghost" onPress={() => state.setFilter(filter.key, '')}>
+            Clear
+          </Button>
+        ) : null}
+      </View>
+      {open ? (
+        <DateTimePicker
+          value={dayOf(held)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          maximumDate={filter.max ? dayOf(filter.max) : undefined}
+          onValueChange={(_event, picked) => {
+            // Android's dialog dismisses itself; iOS's spinner stays until the field is tapped again.
+            if (Platform.OS !== 'ios') setOpen(false);
+            state.setFilter(filter.key, valueOfDay(picked));
+          }}
+          onDismiss={() => setOpen(false)}
+        />
+      ) : null}
+    </View>
+  );
 }
 
 /** Choosing nothing already means every one of them, so the last one off is an empty set, not none. */

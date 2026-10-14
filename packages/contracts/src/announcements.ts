@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { csvQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
-import { studentListQuerySchema } from './students';
+import { dateOnlySchema, studentListQuerySchema } from './students';
 
 /** What an admin says to a cohort. The audience is the STUDENT FILTER, not a new vocabulary. */
 
@@ -83,5 +84,21 @@ export const announcementSchema = announcementSummarySchema.extend({
 });
 export type Announcement = z.infer<typeof announcementSchema>;
 
-export const announcementListQuerySchema = paginationQuerySchema;
+/** In-app reaches every recipient, so it is the one channel an announcement with no paid channel has. */
+export const ANNOUNCEMENT_LIST_CHANNELS = {
+  IN_APP_ONLY: 'IN_APP_ONLY',
+  ...ANNOUNCEMENT_CHANNELS,
+} as const;
+const announcementListChannelSchema = z.enum(ANNOUNCEMENT_LIST_CHANNELS);
+export type AnnouncementListChannel = z.infer<typeof announcementListChannelSchema>;
+
+export const announcementListQuerySchema = paginationQuerySchema.extend({
+  /** Matches the title or the body. */
+  q: searchQuery(),
+  channel: csvQuery(announcementListChannelSchema),
+  /** Civil days in Asia/Kolkata, widened to the whole day by the service. */
+  from: dateOnlySchema.optional(),
+  to: dateOnlySchema.optional(),
+});
+export type AnnouncementListQuery = z.infer<typeof announcementListQuerySchema>;
 export type AnnouncementListQueryInput = z.input<typeof announcementListQuerySchema>;

@@ -23,6 +23,7 @@ import {
   type AttemptStatus,
   type DifficultyLevel,
   type ExamCourse,
+  type NotificationType,
   type QuestionStatus,
   type QuestionType,
   type LiveAnswer,
@@ -230,13 +231,19 @@ export function makeAdmin(
 
 export function makeNotification(
   prisma: PrismaService,
-  input: { studentId: string; isRead?: boolean; createdAt?: Date; title?: string },
+  input: {
+    studentId: string;
+    isRead?: boolean;
+    createdAt?: Date;
+    title?: string;
+    type?: NotificationType;
+  },
 ): Promise<{ id: string }> {
   return prisma.notification.create({
     data: {
       id: uid(),
       studentId: input.studentId,
-      type: NOTIFICATION_TYPE.GENERIC,
+      type: input.type ?? NOTIFICATION_TYPE.GENERIC,
       title: input.title ?? 'Something happened',
       isRead: input.isRead ?? false,
       ...(input.createdAt ? { createdAt: input.createdAt } : {}),

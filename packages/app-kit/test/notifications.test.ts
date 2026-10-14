@@ -5,6 +5,9 @@ import { type Notification, type Paginated } from '@iace/contracts';
 import { markNotificationRead } from '../src/notifications';
 import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/student-queries';
 
+const PHONE_LIST = notificationsQueryKey({ unreadOnly: 'true' });
+const WEB_PAGE = notificationsQueryKey({ filters: {}, page: 1, pageSize: 20 });
+
 const page = (items: Notification[], total: number): Paginated<Notification> => ({
   items,
   total,
@@ -20,18 +23,26 @@ function bellHolding(unread: string[]) {
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
   const rows = [...unread.map((id) => row(id)), row('old', true)];
   client.setQueryData(UNREAD_QUERY_KEY, page([], unread.length));
-  for (const unreadOnly of [true, false]) {
-    client.setQueryData<InfiniteData<Paginated<Notification>>>(notificationsQueryKey(unreadOnly), {
-      pages: [page(unreadOnly ? rows.filter((one) => !one.isRead) : rows, rows.length)],
-      pageParams: [1],
-    });
-  }
+  // The phone holds pages endlessly; the web holds one page at a time.
+  client.setQueryData<InfiniteData<Paginated<Notification>>>(PHONE_LIST, {
+    pages: [
+      page(
+        rows.filter((one) => !one.isRead),
+        rows.length,
+      ),
+    ],
+    pageParams: [1],
+  });
+  client.setQueryData<Paginated<Notification>>(WEB_PAGE, page(rows, rows.length));
   return {
     client,
     waiting: () => client.getQueryData<Paginated<Notification>>(UNREAD_QUERY_KEY)?.total,
     isRead: (id: string) =>
+      client.getQueryData<Paginated<Notification>>(WEB_PAGE)?.items.find((one) => one.id === id)
+        ?.isRead,
+    isReadOnPhone: (id: string) =>
       client
-        .getQueryData<InfiniteData<Paginated<Notification>>>(notificationsQueryKey(false))
+        .getQueryData<InfiniteData<Paginated<Notification>>>(PHONE_LIST)
         ?.pages[0]?.items.find((one) => one.id === id)?.isRead,
   };
 }
@@ -46,6 +57,7 @@ describe('markNotificationRead', () => {
     assert.equal(bell.waiting(), 0);
     assert.equal(bell.isRead('a'), true);
     assert.equal(bell.isRead('b'), true);
+    assert.equal(bell.isReadOnPhone('a'), true);
   });
 
   /** The failure this prevents: a double tap sending two reads, and each answer taking one off the badge. */

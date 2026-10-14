@@ -1,11 +1,13 @@
 /// <reference types="nativewind/types" />
+import { useEffect, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   markNotificationRead,
   NOTIFICATION_FILTERS,
-  READ_STATE,
+  notificationKindOf,
+  notificationQuery,
   useInfinitePages,
 } from '@iace/app-kit';
 import { instituteDayLabel, type Notification } from '@iace/contracts';
@@ -16,7 +18,7 @@ import { DETAIL_ROUTES } from '../src/lib/nav';
 import { asText, useFilterState, type FilterState } from '../src/lib/filters';
 import { Badge } from '../src/components/ui/badge';
 import { Card } from '../src/components/ui/card';
-import { FilterSummary, FilterTrigger } from '../src/components/ui/filter-bar';
+import { FilterSearch, FilterSummary, FilterTrigger } from '../src/components/ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
 import { ListFooter } from '../src/components/ui/list-footer';
 import { Skeleton } from '../src/components/ui/skeleton';
@@ -24,14 +26,14 @@ import { Skeleton } from '../src/components/ui/skeleton';
 /** What the institute has told this student, newest first. Opening one marks it read. */
 export default function NotificationsScreen() {
   const state = useFilterState(NOTIFICATION_FILTERS);
-  const unreadOnly = asText(state.values.state) === READ_STATE.UNREAD;
+  const search = useSettled(asText(state.values.q));
+  const query = notificationQuery({ ...state.values, q: search });
   const queryClient = useQueryClient();
   const router = useRouter();
 
   const list = useInfinitePages({
-    queryKey: notificationsQueryKey(unreadOnly),
-    fetchPage: (page, _signal, after) =>
-      api.me.notifications({ page, unreadOnly: unreadOnly ? 'true' : undefined, cursor: after }),
+    queryKey: notificationsQueryKey(query),
+    fetchPage: (page, _signal, after) => api.me.notifications({ ...query, page, cursor: after }),
     cursorOf: (row) => row.id,
   });
 
@@ -60,12 +62,29 @@ export default function NotificationsScreen() {
         // A failed page is asked for again by the footer's Retry: its changing height would have the scroll ask in a loop.
         onEndReached={list.isLoadMoreError ? undefined : list.loadMore}
         renderItem={({ item }) => <Row row={item} onPress={() => open(item)} />}
-        ListHeaderComponent={<FilterSummary state={state} filters={NOTIFICATION_FILTERS} />}
-        ListEmptyComponent={<ListBody list={list} unreadOnly={unreadOnly} />}
+        ListHeaderComponent={
+          <View className="gap-3">
+            <FilterSearch state={state} filters={NOTIFICATION_FILTERS} />
+            <FilterSummary state={state} filters={NOTIFICATION_FILTERS} />
+          </View>
+        }
+        ListEmptyComponent={<ListBody list={list} filtered={state.activeCount > 0} />}
         ListFooterComponent={<ListFooter list={list} />}
       />
     </>
   );
+}
+
+const SEARCH_SETTLE_MS = 300;
+
+/** What was typed once the typing pauses, so a word asks the server once rather than per letter. */
+function useSettled(typed: string): string {
+  const [settled, setSettled] = useState(typed);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(typed), SEARCH_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [typed]);
+  return settled;
 }
 
 const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, gap: 12 };
@@ -77,10 +96,10 @@ const filterHeader = (state: FilterState) => () => (
 
 function ListBody({
   list,
-  unreadOnly,
+  filtered,
 }: Readonly<{
   list: { isLoading: boolean; isError: boolean; retry: () => void };
-  unreadOnly: boolean;
+  filtered: boolean;
 }>) {
   if (list.isLoading) {
     return (
@@ -99,8 +118,8 @@ function ListBody({
       />
     );
   }
-  return unreadOnly ? (
-    <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing unread" />
+  return filtered ? (
+    <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing matches" />
   ) : (
     <EmptyState title="No notifications yet" />
   );
@@ -115,7 +134,7 @@ function Row({ row, onPress }: Readonly<{ row: Notification; onPress: () => void
           {row.isRead ? null : <Badge variant="primary">New</Badge>}
         </View>
         {row.body ? <Text variant="body">{row.body}</Text> : null}
-        <Text variant="meta">{instituteDayLabel(row.createdAt)}</Text>
+        <Text variant="meta">{`${notificationKindOf(row.type)} · ${instituteDayLabel(row.createdAt)}`}</Text>
       </Pressable>
     </Card>
   );

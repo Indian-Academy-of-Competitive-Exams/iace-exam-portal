@@ -7,38 +7,33 @@ import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  asText,
   markNotificationRead,
   NOTIFICATION_FILTERS,
-  READ_STATE,
-  useInfinitePages,
+  notificationKindOf,
+  notificationQuery,
 } from '@iace/app-kit';
-import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { Settings } from 'lucide-react';
 import {
   Badge,
   Button,
   EmptyState,
   EMPTY_STATE_KINDS,
+  FILLS,
   PageHeader,
+  Pagination,
   PanelFrame,
   Skeleton,
   plural,
   type ListFilter,
 } from '@iace/ui';
-import {
-  instituteDateTimeLabel,
-  NOTIFICATION_TYPE,
-  type Notification,
-  type NotificationType,
-} from '@iace/contracts';
+import { instituteDateTimeLabel, type Notification } from '@iace/contracts';
 import { api } from '../../lib/api';
 import {
   NAV_ITEMS,
-  NOTIFICATIONS_PAGE_SIZE,
+  NOTIFICATION_LISTS_QUERY_KEY,
   ROUTES,
   UNREAD_QUERY_KEY,
-  notificationsQueryKey,
 } from '../../lib/constants';
 
 const SKELETON_KEYS = ['a', 'b', 'c', 'd'];
@@ -46,39 +41,22 @@ const SKELETON_KEYS = ['a', 'b', 'c', 'd'];
 /** Half the row on screen is a read, not a row that clipped the edge of the viewport. */
 const SEEN_RATIO = 0.5;
 
-/** What the exam world calls each of these, not what the enum spells. */
-const TYPE_LABEL: Record<NotificationType, string> = {
-  [NOTIFICATION_TYPE.RESULT_READY]: 'Result',
-  [NOTIFICATION_TYPE.TEST_ASSIGNED]: 'Test',
-  [NOTIFICATION_TYPE.GRANT_ADDED]: 'Access',
-  [NOTIFICATION_TYPE.ENROLLMENT_ADDED]: 'Enrolment',
-  [NOTIFICATION_TYPE.GENERIC]: 'Notice',
-  [NOTIFICATION_TYPE.RESULT_UPDATED]: 'Result',
-  [NOTIFICATION_TYPE.PIN_CHANGED]: 'Security',
-  [NOTIFICATION_TYPE.WELCOME]: 'Welcome',
-};
-
 const FILTERS = NOTIFICATION_FILTERS as ListFilter[];
 
 export function NotificationsPage() {
-  const filters = useFilterSpec(FILTERS);
-  const unreadOnly = asText(filters.values.state) === READ_STATE.UNREAD;
+  // Fixed for the visit: a row read on page one still counts as unread, so page two starts where it should.
+  const [openedAt] = React.useState(() => new Date().toISOString());
 
-  // Paged, not pinned to the first: a student with thirty results must be able to reach the oldest.
-  const list = useInfinitePages({
-    queryKey: notificationsQueryKey(unreadOnly),
-    fetchPage: (page, _signal, after) =>
-      api.me.notifications({
-        ...(unreadOnly ? { unreadOnly: 'true' } : {}),
-        page,
-        pageSize: NOTIFICATIONS_PAGE_SIZE,
-        cursor: after,
-      }),
-    cursorOf: (row) => row.id,
+  const list = useListScreen({
+    queryKey: NOTIFICATION_LISTS_QUERY_KEY,
+    filters: FILTERS,
+    toQuery: (values) => notificationQuery(values, openedAt),
+    fetchPage: (params) => api.me.notifications(params),
   });
 
   return (
     <PanelFrame
+      fills
       header={
         <PageHeader
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
@@ -94,9 +72,19 @@ export function NotificationsPage() {
           }
         />
       }
-      filters={{ spec: FILTERS, state: filters }}
+      // No All/Any choice: the bell's filters always narrow together.
+      filters={{ spec: FILTERS, state: { ...list, matchAny: undefined, setMatchAny: undefined } }}
     >
-      <FeedRegion list={list} rows={list.items} unreadOnly={unreadOnly} />
+      <div className={FILLS}>
+        <div className="relative min-h-0 flex-1 overflow-y-auto">
+          <FeedRegion list={list} filtered={isFiltered(list.values)} />
+        </div>
+        {list.hasLoaded && list.total > 0 ? (
+          <div className="shrink-0 pt-4">
+            <Pagination {...list.pagination} />
+          </div>
+        ) : null}
+      </div>
     </PanelFrame>
   );
 }
@@ -104,19 +92,15 @@ export function NotificationsPage() {
 /** Loading and failing are not "none yet", and a filtered empty is not an empty bell. */
 function FeedRegion({
   list,
-  rows,
-  unreadOnly,
+  filtered,
 }: Readonly<{
+  filtered: boolean;
   list: {
+    rows: readonly Notification[];
     isLoading: boolean;
-    isError: boolean;
-    retry: () => void;
-    isLoadingMore: boolean;
-    hasMore: boolean;
-    loadMore: () => void;
+    isError?: boolean;
+    retry?: () => void;
   };
-  rows: readonly Notification[];
-  unreadOnly: boolean;
 }>) {
   if (list.isLoading) {
     return (
@@ -127,8 +111,7 @@ function FeedRegion({
       </div>
     );
   }
-  // Only with nothing held: a failed "Show older" keeps the rows, and the button to ask again.
-  if (list.isError && rows.length === 0) {
+  if (list.isError && list.rows.length === 0) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}
@@ -137,39 +120,28 @@ function FeedRegion({
       />
     );
   }
-  if (rows.length === 0) {
-    return unreadOnly ? (
-      <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing unread" />
+  if (list.rows.length === 0) {
+    return filtered ? (
+      <EmptyState kind={EMPTY_STATE_KINDS.FILTERED} title="Nothing matches" />
     ) : (
       <EmptyState title="No notifications yet" />
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* The rule is on the WRAPPER and full width; the row inside keeps its radius and its hover,
-          so a hovered row cannot bend the line it sits above. */}
-      <div className="flex flex-col divide-y divide-border">
-        {rows.map((row) => (
-          <div key={row.id} className="py-1">
-            <NotificationRow notification={row} />
-          </div>
-        ))}
-      </div>
-
-      {list.hasMore ? (
-        <Button
-          variant="outline"
-          className="self-center"
-          onClick={list.loadMore}
-          disabled={list.isLoadingMore}
-        >
-          Show older
-        </Button>
-      ) : null}
+    // The rule is on the wrapper and full width, so a hovered row cannot bend the line it sits above.
+    <div className="flex flex-col divide-y divide-border">
+      {list.rows.map((row) => (
+        <div key={row.id} className="py-1">
+          <NotificationRow notification={row} />
+        </div>
+      ))}
     </div>
   );
 }
+
+const isFiltered = (values: object): boolean =>
+  Object.values(values).some((value) => (Array.isArray(value) ? value.length > 0 : Boolean(value)));
 
 /** A row in one panel, never its own card: a card inside the frame's card is a card in a card. */
 function NotificationRow({ notification }: Readonly<{ notification: Notification }>) {
@@ -187,7 +159,9 @@ function NotificationRow({ notification }: Readonly<{ notification: Notification
         <span className="flex flex-wrap items-center gap-2">
           {unread ? <span aria-hidden className="size-2 shrink-0 rounded-full bg-primary" /> : null}
           <span className="font-medium">{notification.title}</span>
-          <Badge variant={unread ? 'primary' : 'neutral'}>{TYPE_LABEL[notification.type]}</Badge>
+          <Badge variant={unread ? 'primary' : 'neutral'}>
+            {notificationKindOf(notification.type)}
+          </Badge>
         </span>
         {notification.body ? <span className="text-sm">{notification.body}</span> : null}
         <span className="text-xs text-muted-foreground">

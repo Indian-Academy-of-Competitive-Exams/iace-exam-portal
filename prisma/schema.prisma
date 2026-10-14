@@ -1110,6 +1110,8 @@ model Notification {
   testSeriesId   String?   @db.Uuid
   announcementId String?   @db.Uuid
   isRead         Boolean   @default(false)
+  // When it was read, so a list opened earlier can keep a row it has since marked read.
+  readAt         DateTime? @db.Timestamptz(3)
   // Stamped when the push sweep claims the row; the sweep finds its work through a partial index on null.
   pushedAt       DateTime? @db.Timestamptz(3)
   // Set only by a retry, to hold the row back: null means the sweep may take it now.

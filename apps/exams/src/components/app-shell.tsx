@@ -12,7 +12,7 @@ import {
 import { api } from '../lib/api';
 import {
   NAV_ITEMS,
-  notificationsQueryKey,
+  NOTIFICATION_LISTS_QUERY_KEY,
   PROFILE_QUERY_KEY,
   ROUTES,
   STORAGE_KEYS,
@@ -52,9 +52,7 @@ export function AppShell() {
     const rose = counted.current !== null && total > counted.current;
     counted.current = total;
     if (!rose) return;
-    for (const unreadOnly of [true, false]) {
-      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey(unreadOnly) });
-    }
+    void queryClient.invalidateQueries({ queryKey: NOTIFICATION_LISTS_QUERY_KEY });
   }, [total, queryClient]);
 
   const unreadCount = total ?? 0;

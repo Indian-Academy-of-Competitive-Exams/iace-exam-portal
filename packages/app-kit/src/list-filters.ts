@@ -6,6 +6,10 @@
 import {
   courseLabel,
   EXAM_COURSES,
+  NOTIFICATION_TYPE,
+  todayISO,
+  type NotificationListQueryInput,
+  type NotificationType,
   QUESTION_FILTERS,
   TEST_BUCKET,
   type ExamCourse,
@@ -23,13 +27,15 @@ export interface FilterItem {
 
 export interface FilterSpec {
   key: string;
-  kind: 'search' | 'choice' | 'multi';
+  kind: 'search' | 'choice' | 'multi' | 'date';
   label: string;
   /** Beside the search on the web; on the phone, what stays out of the sheet. */
   primary?: boolean;
   placeholder?: string;
-  /** Absent only on `search`, which offers no choices to list. */
+  /** Absent on `search` and `date`, which offer no choices to list. */
   items?: readonly FilterItem[];
+  /** The latest `YYYY-MM-DD` a `date` may pick. */
+  max?: string;
 }
 
 /** A filter's value is a string or a set of them; these are how either is read without a cast. */
@@ -44,7 +50,32 @@ export const asSet = (value: FilterValue | undefined): readonly string[] =>
 /** Which notifications are shown. Unread leads: it is the one a bell is opened for. */
 export const READ_STATE = { ALL: ANY_CHOICE, UNREAD: 'unread' } as const;
 
+/** What a student calls each kind, several types to one where the student sees no difference. */
+export const NOTIFICATION_KINDS = {
+  RESULT: {
+    label: 'Result',
+    types: [NOTIFICATION_TYPE.RESULT_READY, NOTIFICATION_TYPE.RESULT_UPDATED],
+  },
+  TEST: { label: 'Test', types: [NOTIFICATION_TYPE.TEST_ASSIGNED] },
+  ACCESS: { label: 'Access', types: [NOTIFICATION_TYPE.GRANT_ADDED] },
+  ENROLMENT: { label: 'Enrolment', types: [NOTIFICATION_TYPE.ENROLLMENT_ADDED] },
+  NOTICE: { label: 'Notice', types: [NOTIFICATION_TYPE.GENERIC] },
+  SECURITY: { label: 'Security', types: [NOTIFICATION_TYPE.PIN_CHANGED] },
+  WELCOME: { label: 'Welcome', types: [NOTIFICATION_TYPE.WELCOME] },
+} as const satisfies Record<string, { label: string; types: readonly NotificationType[] }>;
+type NotificationKind = keyof typeof NOTIFICATION_KINDS;
+
+const KIND_ENTRIES = Object.entries(NOTIFICATION_KINDS) as [
+  NotificationKind,
+  (typeof NOTIFICATION_KINDS)[NotificationKind],
+][];
+
+export const notificationKindOf = (type: NotificationType): string =>
+  KIND_ENTRIES.find(([, kind]) => (kind.types as readonly string[]).includes(type))?.[1].label ??
+  type;
+
 export const NOTIFICATION_FILTERS: readonly FilterSpec[] = [
+  { key: 'q', kind: 'search', label: 'Search', primary: true, placeholder: 'Search notifications' },
   {
     key: 'state',
     kind: 'choice',
@@ -55,7 +86,33 @@ export const NOTIFICATION_FILTERS: readonly FilterSpec[] = [
       { value: READ_STATE.ALL, label: 'All' },
     ],
   },
+  {
+    key: 'kind',
+    kind: 'multi',
+    label: 'Type',
+    items: KIND_ENTRIES.map(([value, kind]) => ({ value, label: kind.label })),
+  },
+  { key: 'from', kind: 'date', label: 'From', max: todayISO() },
+  { key: 'to', kind: 'date', label: 'To', max: todayISO() },
 ];
+
+/** The filters as the endpoint takes them; `unreadAsOf` holds a paged Unread list still while its rows are read. */
+export function notificationQuery(
+  values: Readonly<Record<string, FilterValue | undefined>>,
+  unreadAsOf?: string,
+): NotificationListQueryInput {
+  const unreadOnly = asText(values.state) === READ_STATE.UNREAD;
+  const kinds = asSet(values.kind).filter(
+    (one): one is NotificationKind => one in NOTIFICATION_KINDS,
+  );
+  return {
+    ...(unreadOnly ? { unreadOnly: 'true', unreadAsOf } : {}),
+    q: asText(values.q) || undefined,
+    type: kinds.length > 0 ? kinds.flatMap((one) => NOTIFICATION_KINDS[one].types) : undefined,
+    from: asText(values.from) || undefined,
+    to: asText(values.to) || undefined,
+  };
+}
 
 export const QUESTION_REPORT_FILTERS: readonly FilterSpec[] = [
   {

@@ -9,7 +9,7 @@ import {
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
 import { drawableFor } from './question-core';
-import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
+import { withinInstituteDays } from '../common/time/institute-day';
 
 /** `testIsOpen` as a where: its earliest opening, a program's included, less `START_GRACE_MS` is at or before now. */
 export const reachableTest = (now: Date): Prisma.TestWhereInput => {
@@ -24,14 +24,6 @@ export const reachableTest = (now: Date): Prisma.TestWhereInput => {
     ],
   };
 };
-
-/** A civil day in Asia/Kolkata is a whole day, not the instant its name would parse to. */
-export function writtenBetween(from: string | undefined, to: string | undefined) {
-  return {
-    ...(from ? { gte: startOfInstituteDay(from) } : {}),
-    ...(to ? { lte: endOfInstituteDay(to) } : {}),
-  };
-}
 
 /** The filter half of the questions list. Pure, so it is testable without a database. */
 export function questionWhere(query: QuestionListQuery): Prisma.QuestionWhereInput {
@@ -70,7 +62,8 @@ function narrowsTheBank(query: QuestionListQuery): Prisma.QuestionWhereInput[] {
       },
     });
   }
-  if (query.from || query.to) filters.push({ createdAt: writtenBetween(query.from, query.to) });
+  if (query.from || query.to)
+    filters.push({ createdAt: withinInstituteDays(query.from, query.to) });
 
   return filters;
 }

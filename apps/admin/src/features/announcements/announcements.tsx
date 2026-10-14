@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Plus, Send } from 'lucide-react';
 import {
+  ANNOUNCEMENT_LIST_CHANNELS,
   DELIVERY_RETENTION_DAYS,
   EXPORT_KINDS,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  todayISO,
   type AnnouncementStats,
   type AnnouncementSummary,
 } from '@iace/contracts';
@@ -36,8 +38,22 @@ import { ExportButton } from '../../components/export-button';
 import { ComposeAnnouncementDialog } from './compose-announcement-dialog';
 import { CHANNEL_LABEL, rupees } from './money';
 
-/** Nothing to narrow yet: an announcement carries no dimension worth filtering a short list by. */
-const NO_FILTERS = [] as const satisfies readonly ListFilter[];
+const FILTERS = [
+  { key: 'q', kind: 'search', label: 'Search', placeholder: 'Search announcements', primary: true },
+  {
+    key: 'channel',
+    kind: 'multi',
+    label: 'Channel',
+    primary: true,
+    items: [
+      { value: ANNOUNCEMENT_LIST_CHANNELS.IN_APP_ONLY, label: 'In-app only' },
+      { value: ANNOUNCEMENT_LIST_CHANNELS.WHATSAPP, label: CHANNEL_LABEL.WHATSAPP },
+      { value: ANNOUNCEMENT_LIST_CHANNELS.SMS, label: CHANNEL_LABEL.SMS },
+    ],
+  },
+  { key: 'from', kind: 'date', label: 'Sent from', max: todayISO() },
+  { key: 'to', kind: 'date', label: 'Sent to', max: todayISO() },
+] as const satisfies readonly ListFilter[];
 
 /** What an admin said and to whom. A sent notice is immutable; the one action re-sends a copy. */
 export function AnnouncementsPage() {
@@ -64,8 +80,13 @@ export function AnnouncementsPage() {
 
   const announcements = useListScreen({
     queryKey: QUERY_KEYS.ANNOUNCEMENTS,
-    filters: NO_FILTERS,
-    toQuery: () => ({}),
+    filters: FILTERS,
+    toQuery: (values) => ({
+      q: values.q,
+      channel: values.channel,
+      from: values.from,
+      to: values.to,
+    }),
     fetchPage: (params) => api.admin.announcements.list(params),
   });
 
@@ -111,7 +132,9 @@ export function AnnouncementsPage() {
           render: (row) => <AnnouncementPanel announcement={row} />,
           label: () => 'Delivery',
         }}
+        filters={FILTERS}
         empty="No announcements yet"
+        emptyFiltered="No announcement matches"
       />
     </TableFrame>
   );

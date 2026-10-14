@@ -27,8 +27,11 @@ export const NOTIFICATIONS_QUERY_KEY = [ME, 'notifications'] as const;
 /** The bell's own count, kept apart from the list so paging never disturbs it. */
 export const UNREAD_QUERY_KEY = [...NOTIFICATIONS_QUERY_KEY, 'unread'] as const;
 
-export const notificationsQueryKey = (unreadOnly: boolean) =>
-  [...NOTIFICATIONS_QUERY_KEY, { unreadOnly }] as const;
+/** Every list of them, whatever it is filtered by: what a read patches and a push refreshes. */
+export const NOTIFICATION_LISTS_QUERY_KEY = [...NOTIFICATIONS_QUERY_KEY, 'list'] as const;
+
+export const notificationsQueryKey = (query: object) =>
+  [...NOTIFICATION_LISTS_QUERY_KEY, query] as const;
 
 /** Every saved question, and the prefix the two reads below share so one toggle moves them together. */
 const SAVED_QUERY_KEY = [ME, 'saved'] as const;

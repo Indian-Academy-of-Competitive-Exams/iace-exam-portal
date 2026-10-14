@@ -23,6 +23,10 @@ export function activeFilterCount(values: FilterValues, filters: readonly Filter
 export function summaryOf(filters: readonly FilterSpec[], values: FilterValues): string[] {
   return filters.flatMap((filter) => {
     if (filter.kind === 'search') return [];
+    if (filter.kind === 'date') {
+      const day = asText(values[filter.key]);
+      return day ? [`${filter.label} ${day}`] : [];
+    }
     const held = filter.kind === 'multi' ? asSet(values[filter.key]) : [asText(values[filter.key])];
     return held
       .filter((one) => one !== '')
@@ -36,7 +40,7 @@ export function offeredValues(values: FilterValues, filters: readonly FilterSpec
     filters.flatMap((filter): [string, FilterValue][] => {
       const held = values[filter.key];
       if (held === undefined) return [];
-      if (filter.kind === 'search') return [[filter.key, held]];
+      if (filter.kind === 'search' || filter.kind === 'date') return [[filter.key, held]];
       const offered = (one: string) => filter.items?.some((item) => item.value === one) ?? false;
       if (filter.kind === 'multi') return [[filter.key, asSet(held).filter(offered)]];
       return offered(asText(held)) ? [[filter.key, held]] : [];

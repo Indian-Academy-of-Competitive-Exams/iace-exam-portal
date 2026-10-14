@@ -12,7 +12,7 @@ import {
 
 /** A notification is written with the fact it tells of, so the guarantee is one row per fact. */
 
-const PAGE = { page: 1, pageSize: 20, unreadOnly: undefined };
+const PAGE = { page: 1, pageSize: 20, unreadOnly: undefined, q: undefined };
 
 const prisma = testPrisma();
 const service = new NotificationsService(prisma);
@@ -236,5 +236,65 @@ describe('Telling a student', () => {
     await service.tell(prisma, adHoc);
 
     assert.equal(await prisma.notification.count(), 2);
+  });
+});
+
+describe('NotificationsService — narrowing the bell', () => {
+  it('narrows by type, by the words in it and by the day it arrived at the institute', async () => {
+    const me = await makeStudent(prisma);
+    const result = await makeNotification(prisma, {
+      studentId: me.id,
+      type: NOTIFICATION_TYPE.RESULT_READY,
+      title: 'Your SSC result is ready',
+      createdAt: new Date('2026-06-01T10:00:00.000Z'),
+    });
+    // 01:30 on 2 June in Asia/Kolkata, though still 1 June in UTC.
+    const holiday = await makeNotification(prisma, {
+      studentId: me.id,
+      title: 'Holiday on Friday',
+      createdAt: new Date('2026-06-01T20:00:00.000Z'),
+    });
+    const ids = async (narrowed: object) =>
+      (await service.list(me.id, { ...PAGE, ...narrowed })).items.map((row) => row.id);
+
+    assert.deepEqual(await ids({ type: [NOTIFICATION_TYPE.RESULT_READY] }), [result.id]);
+    assert.deepEqual(await ids({ q: 'holiday' }), [holiday.id]);
+    assert.deepEqual(await ids({ from: '2026-06-02', to: '2026-06-02' }), [holiday.id]);
+    assert.deepEqual(await ids({ to: '2026-06-01' }), [result.id]);
+  });
+
+  /** The failure this prevents: page one read on sight leaves Unread, and page two skips as many rows. */
+  it('keeps a row read since the list opened under Unread, so the next page does not skip one', async () => {
+    const me = await makeStudent(prisma);
+    const [oldest, middle, newest] = [
+      await makeNotification(prisma, {
+        studentId: me.id,
+        createdAt: new Date('2026-06-01T01:00:00.000Z'),
+      }),
+      await makeNotification(prisma, {
+        studentId: me.id,
+        createdAt: new Date('2026-06-01T02:00:00.000Z'),
+      }),
+      await makeNotification(prisma, {
+        studentId: me.id,
+        createdAt: new Date('2026-06-01T03:00:00.000Z'),
+      }),
+    ];
+    const unread = { ...PAGE, pageSize: 1, unreadOnly: true, unreadAsOf: new Date().toISOString() };
+
+    const first = await service.list(me.id, unread);
+    assert.deepEqual(
+      first.items.map((row) => row.id),
+      [newest.id],
+    );
+    await service.markRead(me.id, newest.id);
+
+    const second = await service.list(me.id, { ...unread, page: 2 });
+    assert.deepEqual(
+      second.items.map((row) => row.id),
+      [middle.id],
+    );
+    assert.equal(second.total, 3);
+    assert.notEqual(second.items[0]?.id, oldest.id);
   });
 });

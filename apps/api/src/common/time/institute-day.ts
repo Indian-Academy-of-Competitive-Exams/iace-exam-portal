@@ -38,3 +38,11 @@ export function toDateColumn(day: string): Date {
 export function fromDateColumn(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
+
+/** A `YYYY-MM-DD` from/to filter as an instant range, each end widened to its whole day; either end may be open. */
+export function withinInstituteDays(from: string | undefined, to: string | undefined) {
+  return {
+    ...(from ? { gte: startOfInstituteDay(from) } : {}),
+    ...(to ? { lte: endOfInstituteDay(to) } : {}),
+  };
+}

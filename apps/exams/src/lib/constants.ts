@@ -77,9 +77,6 @@ export const PICKER_WIDTH = { REPORT: 'w-full sm:w-[26rem]', SCOPE: 'w-44' } as 
 /** What the worker posts on a push; its twin is PUSH_RECEIVED in public/sw.js, which cannot import. */
 export const PUSH_RECEIVED = 'push-received';
 
-/** One page of the bell, and the page size the header count is asked for. */
-export const NOTIFICATIONS_PAGE_SIZE = 20;
-
 /** The VAPID key this browser subscribes with, which is all the settings screen reads. */
 export const PUSH_CONFIG_QUERY_KEY = ['me', 'push-subscription'] as const;
 
@@ -94,6 +91,7 @@ export {
   PROFILE_QUERY_KEY,
   SYSTEM_CHECK_QUERY_KEY,
   TEST_DAYS_QUERY_KEY,
+  NOTIFICATION_LISTS_QUERY_KEY,
   UNREAD_QUERY_KEY,
   bookmarksInAttemptQueryKey,
   briefQueryKey,

@@ -24,7 +24,7 @@ import {
   type AnnouncementSummary,
   type CreateAnnouncementBody,
   type Paginated,
-  type PaginationQuery,
+  type AnnouncementListQuery,
 } from '@iace/contracts';
 import { Audit, AuditContext } from '../audit';
 import { sendWorkbook } from '../common/exporting';
@@ -50,7 +50,7 @@ export class AnnouncementsController {
   @RequiresFeature(FEATURE_KEYS.NOTIFICATION_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
   list(
-    @Query(new ZodQuery(announcementListQuerySchema)) query: PaginationQuery,
+    @Query(new ZodQuery(announcementListQuerySchema)) query: AnnouncementListQuery,
   ): Promise<Paginated<AnnouncementSummary>> {
     return this.announcements.list(query);
   }

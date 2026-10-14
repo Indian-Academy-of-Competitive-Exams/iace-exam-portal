@@ -16,10 +16,13 @@ import {
   type AnnouncementStats,
   type AnnouncementSummary,
   type CreateAnnouncementBody,
-  type PaginationQuery,
+  ANNOUNCEMENT_LIST_CHANNELS,
+  type AnnouncementListChannel,
+  type AnnouncementListQuery,
   type Paginated,
 } from '@iace/contracts';
 import { pageArgs, paged } from '../common/pagination';
+import { withinInstituteDays } from '../common/time/institute-day';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
 import {
@@ -145,14 +148,16 @@ export class AnnouncementsService {
   }
 
   /** Rows only. Counting the ledger per row would be six queries each; the panel asks for its own. */
-  async list(query: PaginationQuery): Promise<Paginated<AnnouncementSummary>> {
+  async list(query: AnnouncementListQuery): Promise<Paginated<AnnouncementSummary>> {
+    const where = announcementWhere(query);
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.announcement.findMany({
+        where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         ...pageArgs(query),
         include: { createdBy: { select: { id: true, fullName: true, email: true } } },
       }),
-      this.prisma.announcement.count(),
+      this.prisma.announcement.count({ where }),
     ]);
 
     return paged(query, rows.map(toSummary), total);
@@ -289,3 +294,20 @@ function toSummary(row: AnnouncementRow): AnnouncementSummary {
     createdAt: row.createdAt.toISOString(),
   };
 }
+
+function announcementWhere(query: AnnouncementListQuery): Prisma.AnnouncementWhereInput {
+  const filters: Prisma.AnnouncementWhereInput[] = [];
+  if (query.channel) filters.push({ OR: query.channel.map(sentOn) });
+  if (query.from || query.to)
+    filters.push({ createdAt: withinInstituteDays(query.from, query.to) });
+  if (query.q) {
+    const text = { contains: query.q, mode: 'insensitive' } as const;
+    filters.push({ OR: [{ title: text }, { body: text }] });
+  }
+  return { AND: filters };
+}
+
+const sentOn = (channel: AnnouncementListChannel): Prisma.AnnouncementWhereInput =>
+  channel === ANNOUNCEMENT_LIST_CHANNELS.IN_APP_ONLY
+    ? { paidChannels: { isEmpty: true } }
+    : { paidChannels: { has: channel } };

@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { ATTEMPT_STATUS, attemptStatusSchema, type AttemptStatus } from './attempts';
-import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
+import { csvIdQuery, csvQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema, displayNameSchema } from './naming';
 import { examCourseSchema } from './exams';
+import { dateOnlySchema } from './students';
 
 // ============================================================================
 // Access. A series' kind decides who reaches it and a grant overrides every
@@ -283,6 +284,14 @@ export const notificationListQuerySchema = paginationQuerySchema.extend({
   unreadOnly: optionalBooleanQuery(),
   /** The last row held: the page answered starts after it, whatever has been read since. */
   cursor: z.uuid().optional(),
+  /** When the list was opened: a row read since still counts as unread, so a later page does not skip past it. */
+  unreadAsOf: z.iso.datetime().optional(),
+  /** Matches the title or the body. */
+  q: searchQuery(),
+  type: csvQuery(notificationTypeSchema),
+  /** Civil days in Asia/Kolkata, widened to the whole day by the service. */
+  from: dateOnlySchema.optional(),
+  to: dateOnlySchema.optional(),
 });
 export type NotificationListQuery = z.infer<typeof notificationListQuerySchema>;
 export type NotificationListQueryInput = z.input<typeof notificationListQuerySchema>;

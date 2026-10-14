@@ -20,6 +20,7 @@ export {
   PROFILE_QUERY_KEY,
   SYSTEM_CHECK_QUERY_KEY,
   TEST_DAYS_QUERY_KEY,
+  NOTIFICATION_LISTS_QUERY_KEY,
   UNREAD_QUERY_KEY,
   bookmarksInAttemptQueryKey,
   briefQueryKey,
