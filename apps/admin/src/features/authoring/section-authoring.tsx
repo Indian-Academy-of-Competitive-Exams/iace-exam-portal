@@ -521,10 +521,15 @@ function cardOf(
         <span className="text-sm font-semibold tabular-nums">
           {`Question ${index + 1} of ${work.questions.length}`}
         </span>
+      </>
+    ),
+    status: (
+      <>
         <Badge variant={REVIEW_BADGE[review.state]}>{REVIEW_STATE_LABELS[review.state]}</Badge>
         {clock ? <OwnClock clock={clock} id={question.questionId} held={time.own} /> : null}
         {!clock && work.seat !== SECTION_SEATS.OWNER ? <TimeSpent seconds={time.own} /> : null}
         <SeatTimes time={time} />
+        <CardNotice work={work} question={question} />
       </>
     ),
     actions: (
@@ -537,7 +542,6 @@ function cardOf(
         onSettle={onSettle}
       />
     ),
-    notice: <CardNotice work={work} question={question} />,
   };
 }
 

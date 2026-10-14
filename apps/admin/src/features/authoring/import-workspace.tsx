@@ -7,10 +7,11 @@ import {
   type QuestionImportPlan,
   type QuestionImportRow,
 } from '@iace/contracts';
-import { Alert, Badge, Tooltip, TooltipContent, TooltipTrigger, TruncatedText, cn } from '@iace/ui';
+import { Badge, Tooltip, TooltipContent, TooltipTrigger, TruncatedText, cn } from '@iace/ui';
 import { api } from '../../lib/api';
 import { importDraftQueryKey, importDraftsQueryKey } from '../../lib/constants';
 import { AuthoringWorkspace, type Held, type WorkspaceSource } from './authoring-workspace';
+import { NoticeChip } from './notice-chip';
 import { headerOfDraft, stateOfDraft, toDraft } from './question-scaffold';
 
 /** What Import will do with a row, said the way the preview table says it. */
@@ -48,9 +49,9 @@ function SheetReasons({ row }: Readonly<{ row: QuestionImportRow }>) {
   const reasons = row.issues.filter((issue) => SHEET_ONLY_VALIDATION_CODES.has(issue.code));
   if (reasons.length === 0) return null;
   return (
-    <div className="px-4 pt-3">
-      <Alert variant="warning">{reasons.map((issue) => issue.message).join('. ')}</Alert>
-    </div>
+    <NoticeChip tone="warning" label="Found in the sheet">
+      {reasons.map((issue) => issue.message).join('. ')}
+    </NoticeChip>
   );
 }
 
@@ -105,7 +106,7 @@ export function ImportWorkspace({
       cards: rows.map((row, index) => ({
         key: String(row.line),
         lead: <RowLead row={row} index={index} total={rows.length} />,
-        notice: <SheetReasons row={row} />,
+        status: <SheetReasons row={row} />,
         editable: row.action !== 'left_out',
       })),
       query: (line) => ({

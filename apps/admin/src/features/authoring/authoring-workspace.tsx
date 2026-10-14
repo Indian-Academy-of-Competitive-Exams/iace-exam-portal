@@ -43,8 +43,8 @@ export interface WorkspaceCard {
   key: string;
   lead: React.ReactNode;
   actions?: React.ReactNode;
-  /** Glyphs in the card's bar; the words behind each open on a click. */
-  notice?: React.ReactNode;
+  /** The foot of the editor pane: where the question stands, its clocks, and its notices. */
+  status?: React.ReactNode;
   editable: boolean;
 }
 
@@ -374,10 +374,7 @@ export function AuthoringWorkspace({
           {keys.map((key, index) => {
             const card = source.cards.find((one) => one.key === key);
             const lead = (
-              <CardLead title={title}>
-                {leadOf(key, card, source.create?.lead)}
-                {card?.notice}
-              </CardLead>
+              <CardLead title={title}>{leadOf(key, card, source.create?.lead)}</CardLead>
             );
             return (
               <section
@@ -406,6 +403,7 @@ export function AuthoringWorkspace({
                         editable={editableCard(key)}
                         lead={lead}
                         actions={card?.actions}
+                        status={card?.status}
                         view={views[key] ?? FIRST_VIEW}
                         romanised={romanised}
                         duplicate={key === active ? duplicate : null}
@@ -560,6 +558,7 @@ function CardBody({
   editable,
   lead,
   actions,
+  status,
   view,
   romanised,
   duplicate,
@@ -574,6 +573,7 @@ function CardBody({
   editable: boolean;
   lead: React.ReactNode;
   actions: React.ReactNode;
+  status?: React.ReactNode;
   view: View;
   romanised: boolean;
   duplicate: string | null;
@@ -607,6 +607,7 @@ function CardBody({
       readOnly={!editable}
       lead={lead}
       actions={actions}
+      status={status}
       view={view}
       romanised={romanised}
       duplicate={duplicate}
@@ -624,6 +625,7 @@ function EditBody({
   readOnly,
   lead,
   actions,
+  status,
   view,
   romanised,
   duplicate,
@@ -636,6 +638,7 @@ function EditBody({
   readOnly: boolean;
   lead: React.ReactNode;
   actions: React.ReactNode;
+  status?: React.ReactNode;
   view: View;
   romanised: boolean;
   duplicate: string | null;
@@ -652,6 +655,7 @@ function EditBody({
     <QuestionPanes
       lead={lead}
       previewAction={actions}
+      status={status}
       questionId={questionKey}
       state={shown.state}
       language={view.language}

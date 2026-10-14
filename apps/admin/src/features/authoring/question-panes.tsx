@@ -43,6 +43,7 @@ export function QuestionPanes({
   onLanguageChange,
   onSave,
   lead,
+  status,
   previewAction,
   readOnly = false,
 }: Readonly<{
@@ -59,6 +60,8 @@ export function QuestionPanes({
   onSave: () => void;
   /** Ahead of the languages: whose question this is, where there are several. */
   lead?: React.ReactNode;
+  /** The editor pane's foot, opposite Validation: where the question stands. */
+  status?: React.ReactNode;
   /** At the preview's end: what may be done to this question. */
   previewAction?: React.ReactNode;
   /** Not the viewer's to change, or held by somebody else: the editor shows, and takes nothing. */
@@ -106,6 +109,11 @@ export function QuestionPanes({
             className="flex-1 rounded-none border-0 shadow-none focus-within:border-transparent focus-within:shadow-none"
           />
         </div>
+        {status ? (
+          <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-surface px-4 py-1">
+            {status}
+          </div>
+        ) : null}
       </section>
 
       <section className="flex min-h-0 flex-col">
