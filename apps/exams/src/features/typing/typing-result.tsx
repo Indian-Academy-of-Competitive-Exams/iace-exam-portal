@@ -1,5 +1,6 @@
 /** A typing result: the figure it is held to, the rest, and the typing marked word by word. */
 import { Link } from 'react-router-dom';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   TYPED_WORD,
   type TypedWord,
@@ -19,7 +20,7 @@ import {
   cn,
 } from '@iace/ui';
 import { Hero, HeroFigure, PageBody, Section } from '../../components/ui';
-import { ROUTES } from '../../lib/constants';
+import { NAV_ITEMS, ROUTES } from '../../lib/constants';
 import { METRIC_UNITS, headlineOf, mistakesOf, targetLabel } from '@iace/app-kit';
 
 const WORD_MARKS: Readonly<Record<TypedWordKind, { label: string; className: string }>> = {
@@ -57,7 +58,15 @@ export function TypingResultView({
   return (
     // Outside the shell, so it brings the shell's own content wrapper with it.
     <div className={cn('flex h-dvh flex-col', PAGE_CONTENT_CLASS, 'max-w-5xl')}>
-      <PageFrame header={<PageHeader title={preset.label} />}>
+      <PageFrame
+        header={
+          <PageHeader
+            // Outside the shell there is no rail, so the trail is the way back.
+            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: preset.label }]} />}
+            title={preset.label}
+          />
+        }
+      >
         <PageBody>
           {saveFailed ? (
             <Alert variant="danger">

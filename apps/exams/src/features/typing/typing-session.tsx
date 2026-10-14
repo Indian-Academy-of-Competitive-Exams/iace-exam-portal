@@ -1,6 +1,6 @@
 /** One practice session, full screen like the sitting it rehearses: fetch a passage, type, see the result. */
 import { useRef, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AppException,
@@ -108,6 +108,8 @@ function Sitting({
 }: Readonly<{ preset: TypingPreset; passage: string; onFinish: (typed: string) => void }>) {
   const [typed, setTyped] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const navigate = useNavigate();
   // The countdown calls whichever of these the latest render made, so it sees all that was typed.
   const finish = () => onFinish(typed);
 
@@ -138,9 +140,22 @@ function Sitting({
         backspace={preset.backspace}
       />
 
-      <footer className="flex shrink-0 justify-end border-t border-exam-border px-exam py-2">
+      <footer className="flex shrink-0 justify-between gap-4 border-t border-exam-border px-exam py-2">
+        <Button variant="outline" onClick={() => setLeaving(true)}>
+          Leave
+        </Button>
         <Button onClick={() => setConfirming(true)}>Submit</Button>
       </footer>
+
+      <ConfirmDialog
+        open={leaving}
+        onOpenChange={setLeaving}
+        title="Leave typing practice"
+        description={`This session is not scored or saved, and the ${typingKeyDepressions(passage, typed).toLocaleString('en-IN')} key depressions typed are lost.`}
+        confirmLabel="Leave"
+        destructive
+        onConfirm={() => navigate(ROUTES.TYPING)}
+      />
 
       <ConfirmDialog
         open={confirming}
