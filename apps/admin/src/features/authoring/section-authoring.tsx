@@ -517,11 +517,9 @@ function cardOf(
     key: question.questionId,
     editable: question.editable && seat.writes,
     lead: (
-      <>
-        <span className="text-sm font-semibold tabular-nums">
-          {`Question ${index + 1} of ${work.questions.length}`}
-        </span>
-      </>
+      <span className="text-sm font-semibold tabular-nums">
+        {`Question ${index + 1} of ${work.questions.length}`}
+      </span>
     ),
     status: (
       <>

@@ -394,24 +394,22 @@ export function AuthoringWorkspace({
                   )}
                 >
                   {Math.abs(index - Math.max(activeIndex, 0)) <= LIVE_AROUND ? (
-                    <>
-                      <CardBody
-                        questionKey={key}
-                        source={source}
-                        blank={blank}
-                        held={edits[key]}
-                        editable={editableCard(key)}
-                        lead={lead}
-                        actions={card?.actions}
-                        status={card?.status}
-                        view={views[key] ?? FIRST_VIEW}
-                        romanised={romanised}
-                        duplicate={key === active ? duplicate : null}
-                        onEdit={(change) => edit(key, change)}
-                        onView={(change) => view(key, change)}
-                        onSave={saveAndNext}
-                      />
-                    </>
+                    <CardBody
+                      questionKey={key}
+                      source={source}
+                      blank={blank}
+                      held={edits[key]}
+                      editable={editableCard(key)}
+                      lead={lead}
+                      actions={card?.actions}
+                      status={card?.status}
+                      view={views[key] ?? FIRST_VIEW}
+                      romanised={romanised}
+                      duplicate={key === active ? duplicate : null}
+                      onEdit={(change) => edit(key, change)}
+                      onView={(change) => view(key, change)}
+                      onSave={saveAndNext}
+                    />
                   ) : (
                     <div className={BAR}>{lead}</div>
                   )}
