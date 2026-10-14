@@ -3,12 +3,20 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { everySitting, minutes, newestFirst, ordinalSuffix, sittingHint } from '@iace/app-kit';
+import {
+  everySitting,
+  minutes,
+  newestFirst,
+  ordinalSuffix,
+  sittingHint,
+  bestLine,
+  lastSatLine,
+  plural,
+} from '@iace/app-kit';
 import {
   RECENT_STANDINGS,
   dispositionRates,
   effortPerSitting,
-  instituteDayLabel,
   percentLabel,
   rankSubjectsByWeakness,
   scopesSat,
@@ -22,7 +30,6 @@ import {
 import { Text } from '../ui/text';
 import { DETAIL_ROUTES, ROUTES } from '../../lib/nav';
 import { overviewQuery, performanceQuery } from '../../lib/queries';
-import { plural } from '../../lib/plural';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Hero, HeroFigure } from '../ui/hero';
@@ -111,18 +118,15 @@ function Body({
 
 /** The standing is a percentile, so until a sitting is marked there is nothing to lead with. */
 function Standing({ overview }: Readonly<{ overview: StudentOverview }>) {
-  const { avgPercentile, bestPercentile, lastAttemptAt } = overview.standing;
+  const { avgPercentile } = overview.standing;
   if (overview.standing.testsEvaluated === 0) return null;
 
   return (
-    <Hero
-      eyebrow={`Average percentile · last ${RECENT_STANDINGS}`}
-      meta={lastAttemptAt === null ? undefined : `Last sat ${instituteDayLabel(lastAttemptAt)}`}
-    >
+    <Hero eyebrow={`Average percentile · last ${RECENT_STANDINGS}`} meta={lastSatLine(overview)}>
       <HeroFigure
         value={avgPercentile ?? DASH}
         unit={avgPercentile === null ? undefined : ordinalSuffix(avgPercentile)}
-        caption={bestPercentile === null ? 'nothing marked yet' : `best ${bestPercentile}`}
+        caption={bestLine(overview)}
       />
     </Hero>
   );

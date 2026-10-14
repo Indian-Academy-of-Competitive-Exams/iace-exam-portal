@@ -25,6 +25,9 @@ import {
   round2,
 } from '@iace/contracts';
 import { paceWord } from '../src';
+import { signed, timeSegments, type Benchmark } from '../src/report-copy';
+
+export type { Benchmark };
 
 const UNMEASURED = '—';
 const SECONDS_PER_MINUTE = 60;
@@ -137,12 +140,6 @@ export function CohortFigure({
       )}
     </ChartFigure>
   );
-}
-
-/** What the crowd and the best of it did with the same paper, read under the reader's own bar. */
-export interface Benchmark {
-  average: number | null;
-  topper: number | null;
 }
 
 /** Three values on one line: a comparison is taken in at a glance or it is not taken in. */
@@ -279,42 +276,13 @@ export function TimeFigure({
   paceIndex?: number | null;
   benchmark?: Benchmark;
 }>) {
-  const onCorrect = Math.round(time.avgOnCorrectSec * counts.correct);
-  const onWrong = Math.round(time.avgOnWrongSec * counts.wrong);
-  const rest = Math.max(0, time.totalSec - onCorrect - onWrong - time.spentOnUnattemptedSec);
-
-  const segments: CompositionSegment[] = [
-    {
-      key: 'correct',
-      label: 'On right answers',
-      value: onCorrect,
-      display: minutes(onCorrect),
-      tone: 'positive',
-    },
-    {
-      key: 'wrong',
-      label: 'On wrong answers',
-      value: onWrong,
-      display: minutes(onWrong),
-      tone: 'negative',
-    },
-    {
-      key: 'left',
-      label: 'On questions left',
-      value: time.spentOnUnattemptedSec,
-      display: minutes(time.spentOnUnattemptedSec),
-      tone: 'neutral',
-    },
-  ];
-  if (rest > 0) {
-    segments.push({
-      key: 'rest',
-      label: 'Unscored',
-      value: rest,
-      display: minutes(rest),
-      tone: 'neutral',
-    });
-  }
+  const segments: CompositionSegment[] = timeSegments(time, counts).map((part) => ({
+    key: part.key,
+    label: part.label,
+    value: part.seconds,
+    display: minutes(part.seconds),
+    tone: part.tone,
+  }));
 
   return (
     <ChartFigure
@@ -336,5 +304,3 @@ export function TimeFigure({
     </ChartFigure>
   );
 }
-
-const signed = (value: number) => (value > 0 ? `+${round2(value)}` : String(round2(value)));

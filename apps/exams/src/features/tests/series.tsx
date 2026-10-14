@@ -26,6 +26,7 @@ import {
   type SeriesProgress,
 } from '@iace/app-kit';
 import {
+  ATTEMPT_STATUS,
   instituteDateTimeLabel,
   TEST_BUCKET,
   testAction,
@@ -46,9 +47,9 @@ import {
   TilesSkeleton,
 } from '../../components/ui';
 
-const BUCKET_BADGE: Readonly<Record<string, 'success' | 'neutral' | 'warning'>> = {
+const BUCKET_BADGE: Readonly<Record<string, 'success' | 'neutral' | 'primary'>> = {
   [TEST_BUCKET.DONE]: 'success',
-  [TEST_BUCKET.OPEN]: 'success',
+  [TEST_BUCKET.OPEN]: 'primary',
   [TEST_BUCKET.LATER]: 'neutral',
 };
 
@@ -188,11 +189,14 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
     {
       key: 'state',
       header: 'State',
-      cell: (row) => (
-        <Badge variant={BUCKET_BADGE[testBucket(row)] ?? 'neutral'}>
-          {BUCKET_LABEL[testBucket(row)]}
-        </Badge>
-      ),
+      cell: (row) =>
+        row.attemptStatus === ATTEMPT_STATUS.IN_PROGRESS ? (
+          <Badge variant="warning">In progress</Badge>
+        ) : (
+          <Badge variant={BUCKET_BADGE[testBucket(row)] ?? 'neutral'}>
+            {BUCKET_LABEL[testBucket(row)]}
+          </Badge>
+        ),
     },
     { key: 'when', header: 'When', cell: (row) => whenLine(row, now) },
     {
@@ -201,7 +205,12 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
         const action = testAction(row);
         if (action) {
           return (
-            <StartSitting testId={row.id} resume={row.liveAttemptId} size="sm">
+            <StartSitting
+              testId={row.id}
+              resume={row.liveAttemptId}
+              size="sm"
+              variant={action === 'RESUME' ? 'warning' : 'default'}
+            >
               {action === 'RESUME' ? 'Resume' : 'Start'}
             </StartSitting>
           );

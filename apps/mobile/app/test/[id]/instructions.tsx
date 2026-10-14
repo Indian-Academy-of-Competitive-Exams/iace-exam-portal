@@ -13,6 +13,7 @@ import {
   LANGUAGE_LABELS,
   languagesFor,
   NAVIGATION_POLICY,
+  TEST_UI,
   type ExamBrief,
   type LanguageCode,
   type NavigationPolicy,
@@ -22,9 +23,11 @@ import {
   beginChoice,
   FORWARD_ONLY_NOTICE,
   isBriefRefused,
+  isSectionalPaper,
   PALETTE_SAYS,
   NEEDS_KEYBOARD_SAYS,
   needsKeyboard,
+  plural,
 } from '@iace/app-kit';
 import { Text } from '../../../src/components/ui/text';
 import { briefQuery, testPaperQuery } from '../../../src/lib/queries';
@@ -34,12 +37,12 @@ import { Card } from '../../../src/components/ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
 import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
+import { PaperRules } from '../../../src/components/exam/paper-rules';
 import { AnsweredTick, PALETTE_LEGEND } from '../../../src/components/exam/question-palette';
 import { SystemCheck } from '../../../src/components/tests/system-check';
 import { EXAM_RESUME_PARAM } from '../../../src/lib/constants';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
-import { plural } from '../../../src/lib/plural';
 import { sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
@@ -166,6 +169,17 @@ function InstructionsContent({
       {paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY ? (
         <Alert variant="warning">{FORWARD_ONLY_NOTICE}</Alert>
       ) : null}
+
+      <View className="gap-2">
+        <Text variant="section">How the paper works</Text>
+        <Card className="p-4">
+          <PaperRules
+            forwardOnly={paper.navigation === NAVIGATION_POLICY.FORWARD_ONLY}
+            sectional={isSectionalPaper(paper)}
+            omr={paper.testUi === TEST_UI.OMR}
+          />
+        </Card>
+      </View>
 
       <PaletteCard navigation={paper.navigation} />
 

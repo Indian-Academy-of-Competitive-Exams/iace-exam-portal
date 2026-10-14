@@ -34,6 +34,7 @@ import {
   type BookmarkControl,
   type ReviewedQuestion,
   type Verdict,
+  NO_SECTION_QUESTIONS,
 } from '@iace/app-kit';
 import { Passage } from '../exam/passage';
 import { WrittenReview } from '../typing/written-review';
@@ -117,7 +118,7 @@ export function ReviewPaper({
               bookmark={bookmark}
             />
           ) : (
-            <Alert variant="info">Nothing was served in this section.</Alert>
+            <Alert variant="info">{NO_SECTION_QUESTIONS}</Alert>
           )}
           <ReviewPalette questions={inSection} openId={open?.questionId ?? ''} onOpen={setOpenId} />
         </div>

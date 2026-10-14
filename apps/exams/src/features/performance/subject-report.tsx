@@ -2,8 +2,8 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
-import { minutes } from '@iace/app-kit';
-import { round2, type SectionalStanding } from '@iace/contracts';
+import { minutes, perMinute } from '@iace/app-kit';
+import { type SectionalStanding } from '@iace/contracts';
 import { scoreCardQuery } from '../../lib/queries';
 import { ScoreCardGate } from './score-card-gate';
 import { PageBody, Section } from '../../components/ui';
@@ -99,10 +99,4 @@ function standingOf(row: SectionalStanding) {
   if (row.cohortAverageScore === null) return STANDINGS.NONE;
   if (row.score > row.cohortAverageScore) return STANDINGS.ABOVE;
   return row.score < row.cohortAverageScore ? STANDINGS.BELOW : STANDINGS.LEVEL;
-}
-
-/** What a minute in this section actually bought — the one figure that crosses marks with time. */
-function perMinute(score: number | null, seconds: number | null): string {
-  if (score === null || seconds === null || seconds === 0) return DASH;
-  return round2(score / (seconds / 60)).toFixed(2);
 }

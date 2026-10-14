@@ -2,15 +2,21 @@ import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Card, EmptyState, EMPTY_STATE_KINDS, Metric, StatRow, cn } from '@iace/ui';
-import { CohortFigure, MarksFigure, TimeFigure, type Benchmark } from '@iace/app-kit/browser';
-import { METRIC_UNITS, headlineOf, minutes, ordinalSuffix, targetLabel } from '@iace/app-kit';
+import { CohortFigure, MarksFigure, TimeFigure } from '@iace/app-kit/browser';
+import {
+  METRIC_UNITS,
+  headlineOf,
+  minutes,
+  ordinalSuffix,
+  targetLabel,
+  timeBenchmark,
+} from '@iace/app-kit';
 import {
   TYPING_PRESETS,
   paperCounts,
   scoreTyping,
   type CohortCurve,
   type ScoreCard,
-  type SectionalStanding,
   type TypingSitting,
 } from '@iace/contracts';
 import { scoreCardQuery, typingInAttemptQuery } from '../../lib/queries';
@@ -108,7 +114,7 @@ function Result({ card, typing }: Readonly<{ card: ScoreCard; typing: readonly T
             time={card.time}
             counts={counts}
             paceIndex={card.paceIndex}
-            benchmark={timeAgainst(card.sections)}
+            benchmark={timeBenchmark(card.sections)}
           />
         </div>
         {curve === null ? null : <CohortFigure cohort={curve} />}
@@ -201,20 +207,3 @@ function beaten(card: ScoreCard): string {
 /** The paper's own marks against the crowd's — the two figures a result is actually read against. */
 const marksAgainst = (curve: CohortCurve | null) =>
   curve === null ? undefined : { average: curve.averageScore, topper: curve.topperScore };
-
-/** The topper's clock is only ever known per SECTION, so their paper is the sum of those. */
-function timeAgainst(sections: readonly SectionalStanding[]): Benchmark | undefined {
-  const measured = sections.filter((section) => section.topperTimeSec !== null);
-  if (measured.length === 0) return undefined;
-
-  return {
-    average: sumOrNull(sections.map((section) => section.cohortAverageTimeSec)),
-    topper: measured.reduce((total, section) => total + (section.topperTimeSec ?? 0), 0),
-  };
-}
-
-/** One unmeasured section makes the total a guess, so the whole comparison stands down. */
-function sumOrNull(values: readonly (number | null)[]): number | null {
-  if (values.includes(null)) return null;
-  return values.reduce((total: number, value) => total + (value ?? 0), 0);
-}

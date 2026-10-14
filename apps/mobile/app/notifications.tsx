@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
-import { useEffect, useState } from 'react';
-import { FlatList, Pressable, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { FlatList, Pressable, View, type ViewToken } from 'react-native';
+import Settings from 'lucide-react-native/icons/settings';
 import { Stack, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -10,13 +11,14 @@ import {
   notificationQuery,
   useInfinitePages,
 } from '@iace/app-kit';
-import { instituteDayLabel, type Notification } from '@iace/contracts';
+import { instituteDateTimeLabel, type Notification } from '@iace/contracts';
 import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
 import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
-import { DETAIL_ROUTES } from '../src/lib/nav';
+import { ACCOUNT_ROUTES, DETAIL_ROUTES } from '../src/lib/nav';
 import { asText, useFilterState, type FilterState } from '../src/lib/filters';
 import { Badge } from '../src/components/ui/badge';
+import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
 import { FilterSearch, FilterSummary, FilterTrigger } from '../src/components/ui/filter-bar';
 import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
@@ -44,6 +46,15 @@ export default function NotificationsScreen() {
     onError: () => void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY }),
   });
 
+  // `mutate` is stable, which FlatList requires of this callback.
+  const { mutate: markRead } = read;
+  const onViewable = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken<Notification>[] }) => {
+      for (const { item } of viewableItems) if (item && !item.isRead) markRead(item.id);
+    },
+    [markRead],
+  );
+
   const open = (row: Notification) => {
     if (!row.isRead) read.mutate(row.id);
     if (row.testId) router.navigate(DETAIL_ROUTES.TEST(row.testId));
@@ -52,12 +63,20 @@ export default function NotificationsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerRight: filterHeader(state) }} />
+      <Stack.Screen
+        options={{
+          headerRight: headerActions(state, () =>
+            router.navigate(ACCOUNT_ROUTES.NOTIFICATION_SETTINGS),
+          ),
+        }}
+      />
       <FlatList
         className="flex-1 bg-background"
         contentContainerStyle={CONTENT_STYLE}
         data={list.items}
         keyExtractor={(row) => row.id}
+        onViewableItemsChanged={onViewable}
+        viewabilityConfig={VIEWABLE}
         onEndReachedThreshold={0.5}
         // A failed page is asked for again by the footer's Retry: its changing height would have the scroll ask in a loop.
         onEndReached={list.isLoadMoreError ? undefined : list.loadMore}
@@ -75,6 +94,8 @@ export default function NotificationsScreen() {
   );
 }
 
+const VIEWABLE = { itemVisiblePercentThreshold: 50, minimumViewTime: 500 };
+
 const SEARCH_SETTLE_MS = 300;
 
 /** What was typed once the typing pauses, so a word asks the server once rather than per letter. */
@@ -90,8 +111,13 @@ function useSettled(typed: string): string {
 const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, gap: 12 };
 
 /** A header action is a render function the navigator calls, so it is built outside the screen. */
-const filterHeader = (state: FilterState) => () => (
-  <FilterTrigger bare state={state} filters={NOTIFICATION_FILTERS} />
+const headerActions = (state: FilterState, settings: () => void) => () => (
+  <View className="flex-row items-center gap-2">
+    <FilterTrigger bare state={state} filters={NOTIFICATION_FILTERS} />
+    <Button variant="ghost" size="sm" icon={Settings} onPress={settings}>
+      Settings
+    </Button>
+  </View>
 );
 
 function ListBody({
@@ -129,12 +155,13 @@ function Row({ row, onPress }: Readonly<{ row: Notification; onPress: () => void
   return (
     <Card>
       <Pressable accessibilityRole="button" onPress={onPress} className="gap-2 p-4">
-        <View className="flex-row items-start justify-between gap-3">
+        <View className="flex-row items-center gap-2">
+          {row.isRead ? null : <View className="size-2 rounded-full bg-primary" />}
           <Text className="flex-1 text-base font-semibold text-foreground">{row.title}</Text>
-          {row.isRead ? null : <Badge variant="primary">New</Badge>}
+          <Badge variant={row.isRead ? 'neutral' : 'primary'}>{notificationKindOf(row.type)}</Badge>
         </View>
         {row.body ? <Text variant="body">{row.body}</Text> : null}
-        <Text variant="meta">{`${notificationKindOf(row.type)} · ${instituteDayLabel(row.createdAt)}`}</Text>
+        <Text variant="meta">{instituteDateTimeLabel(row.createdAt)}</Text>
       </Pressable>
     </Card>
   );

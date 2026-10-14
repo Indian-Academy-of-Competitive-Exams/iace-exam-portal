@@ -36,6 +36,7 @@ import {
   paceWord,
   QUESTION_REPORT_FILTERS,
   yourAnswerOf,
+  clock,
 } from '@iace/app-kit';
 import { questionReportQuery } from '../../lib/queries';
 import { SittingSetAside } from './report';
@@ -291,8 +292,6 @@ function resultOf(row: QuestionReportRow) {
   if (row.isCorrect === true) return RESULTS.RIGHT;
   return row.isCorrect === false ? RESULTS.WRONG : RESULTS.LEFT;
 }
-
-const clock = (seconds: number) => (seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m`);
 
 const asPercent = (ratio: number | null) => (ratio === null ? null : ratio * 100);
 

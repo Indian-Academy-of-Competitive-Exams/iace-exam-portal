@@ -9,49 +9,28 @@ import { X } from 'lucide-react';
 import { Button } from './button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { cn } from '../../lib/utils';
-import {
-  CALCULATOR_KEYS,
-  CALCULATOR_OPS,
-  CALCULATOR_START,
-  pressCalculatorKey,
-  type CalculatorState,
-} from './calculator-keys';
-
-/** Four columns, so `=` takes the two rows beside the last digits and `0` takes two columns. */
-const KEYPAD: readonly Readonly<{ key: string; span?: string }>[] = [
-  { key: CALCULATOR_KEYS.CLEAR },
-  { key: CALCULATOR_KEYS.BACKSPACE },
-  { key: CALCULATOR_OPS.DIVIDE },
-  { key: CALCULATOR_OPS.MULTIPLY },
-  { key: '7' },
-  { key: '8' },
-  { key: '9' },
-  { key: CALCULATOR_OPS.SUBTRACT },
-  { key: '4' },
-  { key: '5' },
-  { key: '6' },
-  { key: CALCULATOR_OPS.ADD },
-  { key: '1' },
-  { key: '2' },
-  { key: '3' },
-  { key: CALCULATOR_KEYS.EQUALS, span: 'row-span-2 h-auto' },
-  { key: '0', span: 'col-span-2' },
-  { key: CALCULATOR_KEYS.DECIMAL },
-];
 
 const KEY =
   'h-10 rounded border border-exam-border bg-exam-surface text-sm text-exam-ink transition hover:bg-exam-surface-2 focus-visible:shadow-focus focus-visible:outline-none';
 
-/** An operator reads as the instruction, a digit as the number: all the colour has to say. */
-const OPERATORS = new Set<string>([...Object.values(CALCULATOR_OPS), CALCULATOR_KEYS.EQUALS]);
+const SPANS = { TALL: 'row-span-2 h-auto', WIDE: 'col-span-2' } as const;
 
 export interface CalculatorProps {
+  display: string;
+  /** Four columns of keys; the behaviour behind them lives with the caller, shared with the phone. */
+  keypad: readonly Readonly<{ key: string; operator: boolean; span?: keyof typeof SPANS }>[];
+  onKey: (key: string) => void;
   onClose: () => void;
   className?: string;
 }
 
-export function Calculator({ onClose, className }: Readonly<CalculatorProps>) {
-  const [state, setState] = React.useState<CalculatorState>(CALCULATOR_START);
+export function Calculator({
+  display,
+  keypad,
+  onKey,
+  onClose,
+  className,
+}: Readonly<CalculatorProps>) {
   const [at, setAt] = React.useState<{ x: number; y: number } | null>(null);
   const panel = React.useRef<HTMLFieldSetElement>(null);
   const grip = React.useRef<{ dx: number; dy: number } | null>(null);
@@ -134,20 +113,20 @@ export function Calculator({ onClose, className }: Readonly<CalculatorProps>) {
         aria-live="polite"
         className="block truncate border-b border-exam-border px-3 py-2 text-right font-mono text-xl text-exam-ink"
       >
-        {state.display}
+        {display}
       </output>
 
       <div className="grid grid-cols-4 gap-1 p-1">
-        {KEYPAD.map(({ key, span }) => (
+        {keypad.map(({ key, operator, span }) => (
           <button
             key={key}
             type="button"
-            onClick={() => setState((before) => pressCalculatorKey(before, key))}
+            onClick={() => onKey(key)}
             className={cn(
               KEY,
-              OPERATORS.has(key) ? 'font-semibold text-exam-current' : 'font-medium',
-              key === CALCULATOR_KEYS.EQUALS && 'bg-exam-surface-2',
-              span,
+              operator ? 'font-semibold text-exam-current' : 'font-medium',
+              span === 'TALL' && 'bg-exam-surface-2',
+              span && SPANS[span],
             )}
           >
             {key}

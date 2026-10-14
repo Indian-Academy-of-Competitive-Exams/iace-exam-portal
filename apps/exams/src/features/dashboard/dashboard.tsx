@@ -23,14 +23,14 @@ import {
   trendOf,
   waitingOn,
   type Sittable,
+  laneOf,
+  papersLine,
 } from '@iace/app-kit';
 import { PageCrumbs, StreakFigure } from '@iace/app-kit/browser';
 import {
   RECENT_STANDINGS,
-  instituteDateTimeLabel,
   dispositionRates,
   percentLabel,
-  testIsOpen,
   type PerformancePoint,
   type StudentOverview,
 } from '@iace/contracts';
@@ -330,27 +330,6 @@ function TestExit({ row, small }: Readonly<{ row: Sittable; small?: boolean }>) 
       {row.action === 'RESUME' ? 'Resume' : 'Start test'}
     </StartSitting>
   );
-}
-
-const laneOf = (row: Sittable): Lane => {
-  if (row.action === 'RESUME') return 'In progress';
-  return row.action === 'START' ? 'Open now' : 'Up next';
-};
-
-const papersLine = (row: Sittable, now: Date) =>
-  [
-    row.seriesName,
-    `${plural(row.test.totalQuestions, 'question')} · ${Math.round(row.test.durationSec / 60)} minutes`,
-    whenLine(row, now),
-  ]
-    .filter((part) => part !== null)
-    .join(' · ');
-
-function whenLine(row: Sittable, now: Date): string | null {
-  const { opensAt } = row.test;
-  if (opensAt === null || testIsOpen(opensAt, now)) return null;
-
-  return `opens ${instituteDateTimeLabel(opensAt)}`;
 }
 
 interface QueryState {

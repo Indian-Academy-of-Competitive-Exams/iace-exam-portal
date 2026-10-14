@@ -99,7 +99,11 @@ function NoSitting({
   if (waiting) return <Skeleton className="h-24 rounded-xl" />;
   if (failed) {
     return (
-      <EmptyState kind={EMPTY_STATE_KINDS.FAILURE} title="Sittings did not load" onRetry={retry} />
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        title="Could not load your sittings"
+        onRetry={retry}
+      />
     );
   }
   return <EmptyState title="No marked sittings" />;
@@ -114,7 +118,7 @@ function Figures({ ask }: Readonly<{ ask: DownloadAsk }>) {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}
-        title="This report did not load"
+        title="Could not load this report"
         onRetry={report.refetch}
       />
     );

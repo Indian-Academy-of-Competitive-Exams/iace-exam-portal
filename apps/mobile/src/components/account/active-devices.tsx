@@ -56,7 +56,7 @@ export function ActiveDevices() {
     return (
       <EmptyState
         kind={EMPTY_STATE_KINDS.FAILURE}
-        title="Devices did not load"
+        title="Could not load your devices"
         onRetry={sessions.refetch}
       />
     );

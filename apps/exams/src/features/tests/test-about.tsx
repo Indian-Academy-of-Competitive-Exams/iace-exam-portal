@@ -263,7 +263,11 @@ function Exits({
   return (
     <div data-tour={TOUR_TARGETS.ABOUT_EXIT} className="flex flex-wrap items-center gap-3">
       {action ? (
-        <StartSitting testId={testId} resume={listed?.liveAttemptId}>
+        <StartSitting
+          testId={testId}
+          resume={listed?.liveAttemptId}
+          variant={action === 'RESUME' ? 'warning' : 'default'}
+        >
           {action === 'RESUME' ? 'Resume test' : 'Proceed to test'}
         </StartSitting>
       ) : (

@@ -20,6 +20,8 @@ import {
   newestFirst,
   reportTabOf,
   sittingHint,
+  marksOf,
+  RETAKE_NOTICE,
 } from '@iace/app-kit';
 import { type PerformancePoint } from '@iace/contracts';
 import { performanceQuery } from '../../lib/queries';
@@ -137,7 +139,7 @@ function noticesFor(sitting: PerformancePoint): string[] {
   const notices: string[] = [];
   // A paper with no marks is never ranked, so being unranked there says nothing about a retake.
   if (!sitting.isGraded && sitting.maxMarks > 0) {
-    notices.push('This was a retake, so it is marked but it does not carry a rank.');
+    notices.push(RETAKE_NOTICE);
   }
   return notices;
 }
@@ -158,7 +160,3 @@ function useSittings() {
 /** A paper that is a typing test alone has no subjects, questions or marks to break down: its score card is all of it. */
 const tabsFor = (sitting: PerformancePoint | null) =>
   sitting?.maxMarks === 0 ? REPORT_TABS.filter((tab) => tab.path === '') : REPORT_TABS;
-
-/** A paper that is a typing test alone carries no marks, and "0 of 0" would read as a failure. */
-const marksOf = (point: PerformancePoint) =>
-  point.maxMarks === 0 ? undefined : `${point.score} of ${point.maxMarks} marks`;

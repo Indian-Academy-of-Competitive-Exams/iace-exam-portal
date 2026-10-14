@@ -5,15 +5,21 @@
 import { ScrollView, View } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePrefetchQuery, useQuery } from '@tanstack/react-query';
-import { effortBars, effortLine, minutes, paperEffort, sectionReadings } from '@iace/app-kit';
+import {
+  effortBars,
+  effortLine,
+  minutes,
+  paperEffort,
+  sectionReadings,
+  plural,
+} from '@iace/app-kit';
 import { type FieldEffort, type SectionEffort } from '@iace/contracts';
 import { Text } from '../../../src/components/ui/text';
-import { DETAIL_ROUTES, ROUTES } from '../../../src/lib/nav';
-import { plural } from '../../../src/lib/plural';
+import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { endedSittingQuery, fieldEffortQuery, scoreCardAheadQuery } from '../../../src/lib/queries';
 import { Button } from '../../../src/components/ui/button';
 import { Card } from '../../../src/components/ui/card';
-import { Hero, HeroFigure } from '../../../src/components/ui/hero';
+import { Hero, HeroFigure, ScreenTitle } from '../../../src/components/ui/hero';
 import { MeasureBars } from '../../../src/components/ui/measure-bars';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
 
@@ -33,6 +39,8 @@ export default function SubmittedScreen() {
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-5 px-5 py-6">
+      <ScreenTitle>Handed in</ScreenTitle>
+
       <Hero eyebrow="Your paper">
         <HeroFigure
           value={paper.attempted}
@@ -52,10 +60,6 @@ export default function SubmittedScreen() {
 
       <Button onPress={() => router.replace(DETAIL_ROUTES.REPORT(attemptId))}>
         See your result
-      </Button>
-
-      <Button variant="outline" onPress={() => router.dismissTo(ROUTES.TESTS)}>
-        Go to your tests
       </Button>
     </ScrollView>
   );

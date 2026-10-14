@@ -3,8 +3,18 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { REPORT_TABS, SITTING_VOIDED_SAYS, isSittingVoided, type ReportTab } from '@iace/app-kit';
-import { scoreCardQuery } from '../../../src/lib/queries';
+import {
+  REPORT_TABS,
+  RETAKE_NOTICE,
+  SITTING_VOIDED_SAYS,
+  everySitting,
+  isRetake,
+  isSittingVoided,
+  marksOf,
+  type ReportTab,
+} from '@iace/app-kit';
+import { performanceQuery, scoreCardQuery } from '../../../src/lib/queries';
+import { Alert } from '../../../src/components/ui/alert';
 import { ChipRow, type ChipOption } from '../../../src/components/ui/chip-row';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
 import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
@@ -32,6 +42,9 @@ export default function ReportScreen() {
   const [tab, setTab] = useState<string>(SCORE_CARD);
   const card = useQuery(scoreCardQuery(attemptId));
   const title = card.data?.testTitle;
+  const trend = useQuery(performanceQuery);
+  const sitting = everySitting(trend.data).find((point) => point.attemptId === attemptId);
+  const marks = sitting ? marksOf(sitting) : undefined;
   // Every tab reads a sitting that will never be marked, so the one refusal stands in for all five.
   const setAside = isSittingVoided(card.error);
   const tabs = useTourTarget(TOUR_TARGETS.REPORT_TABS);
@@ -59,6 +72,8 @@ export default function ReportScreen() {
             {title}
           </Text>
         ) : null}
+        {marks ? <Text className="text-sm text-muted-foreground">{marks}</Text> : null}
+        {sitting && isRetake(sitting) ? <Alert variant="info">{RETAKE_NOTICE}</Alert> : null}
         <View {...tabs}>
           <ChipRow scroll options={TABS} value={tab} onChange={setTab} />
         </View>

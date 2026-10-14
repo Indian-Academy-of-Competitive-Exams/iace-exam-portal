@@ -2,12 +2,24 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { dispositionLabel, isMarkingPending, useBookmarks, verdictOf } from '@iace/app-kit';
+import {
+  NO_MARKS_YET,
+  NO_SECTION_QUESTIONS,
+  REPORT_FAILED,
+  VERDICT,
+  dispositionLabel,
+  isMarkingPending,
+  useBookmarks,
+  verdictOf,
+} from '@iace/app-kit';
+import Star from 'lucide-react-native/icons/star';
 import { LANGUAGE_MODE, type ExamSection, type SolutionReport } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { solutionsQuery } from '../../lib/queries';
 import { ChipRow, type ChipOption } from '../ui/chip-row';
+import { Alert } from '../ui/alert';
+import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
 import { Skeleton } from '../ui/skeleton';
@@ -31,7 +43,12 @@ export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   if (isMarkingPending(solutions.error)) {
     return (
       <View className="flex-1 justify-center px-6">
-        <EmptyState title="No marks yet" onRetry={() => void solutions.refetch()} />
+        <EmptyState
+          title={NO_MARKS_YET.title}
+          // ui-copy-ok: consequence
+          hint={NO_MARKS_YET.hint}
+          onRetry={() => void solutions.refetch()}
+        />
       </View>
     );
   }
@@ -41,7 +58,7 @@ export function SolutionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
       <View className="flex-1 justify-center px-6">
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
-          title="The solutions did not load"
+          title={REPORT_FAILED.solutions}
           onRetry={() => void solutions.refetch()}
         />
       </View>
@@ -81,9 +98,10 @@ function Paper({
   );
   const question = inSection[at];
 
-  if (!question) return <EmptyState title="No questions" className="px-6 py-10" />;
+  if (!question) return <Alert className="mx-5 my-3">{NO_SECTION_QUESTIONS}</Alert>;
 
-  const verdict = VERDICT_STYLE[verdictOf(question)];
+  const verdictKind = verdictOf(question);
+  const verdict = VERDICT_STYLE[verdictKind];
   const disposition = dispositionLabel(question);
   const saved = bookmark.saved.has(question.questionId);
 
@@ -100,17 +118,26 @@ function Paper({
         ) : null}
 
         <View className="flex-row items-center justify-between gap-3">
-          <Text variant="label">
-            {[`Question ${question.order}`, verdict.label, disposition].filter(Boolean).join(' · ')}
-          </Text>
+          <Text variant="label">{`Question ${at + 1} of ${inSection.length}`}</Text>
           <Button
             variant="ghost"
             size="sm"
+            icon={Star}
             loading={bookmark.pendingId === question.questionId}
+            accessibilityState={{ selected: saved }}
             onPress={() => bookmark.onToggle(question.questionId)}
           >
             {saved ? 'Saved' : 'Save'}
           </Button>
+        </View>
+
+        <View className="flex-row flex-wrap items-center gap-2">
+          <Badge variant={verdictKind === VERDICT.RIGHT ? 'success' : 'neutral'}>
+            {verdict.label}
+          </Badge>
+          {disposition ? <Badge variant="info">{disposition}</Badge> : null}
+          <Badge>{`${question.marksAwarded ?? 0} / ${question.marks}`}</Badge>
+          <Badge>{`Time spent: ${question.timeSpentSec}s`}</Badge>
         </View>
       </View>
 

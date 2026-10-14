@@ -42,6 +42,9 @@ import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-sta
 /** Stable identity: a `[]` literal at the call site would re-run the preload memo on every render. */
 const NO_QUESTIONS: readonly ExamQuestion[] = [];
 
+/** Nothing is open to pause while the brief loads. */
+const refuse = async () => false;
+
 /** Asked before any sitting is started: a typing section cannot be sat here, and the clock must not find that out. */
 export default function ExamScreen() {
   const { testId = '' } = useLocalSearchParams<{ testId: string }>();
@@ -60,7 +63,16 @@ export default function ExamScreen() {
     );
   }
   // A brief that did not load is no reason to keep a candidate from an ordinary paper.
-  return brief.isPending ? null : <Sitting />;
+  return brief.isPending ? (
+    <ExamSkin
+      view={null}
+      paperQuestions={NO_QUESTIONS}
+      calculatorEnabled={false}
+      onPause={refuse}
+    />
+  ) : (
+    <Sitting />
+  );
 }
 
 function Sitting() {
@@ -179,6 +191,7 @@ function Sitting() {
       <ExamSkin
         view={view}
         paperQuestions={paper.data?.paper.questions ?? NO_QUESTIONS}
+        calculatorEnabled={paper.data?.paper.calculatorEnabled ?? false}
         // Silence is what pauses a sitting, so it is left only once its answers are on the server.
         onPause={async () => {
           if (!view || !(await view.saveNow())) return false;

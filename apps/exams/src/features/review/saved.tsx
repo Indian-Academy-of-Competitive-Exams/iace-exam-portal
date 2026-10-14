@@ -11,6 +11,7 @@ import { SAVED_FILTER_FIELDS } from '@iace/app-kit';
 import {
   Alert,
   Badge,
+  ConfirmDialog,
   DropdownMenuItem,
   ListView,
   MultiCombobox,
@@ -72,6 +73,7 @@ function FacetPicker({
 function SavedList() {
   const queryClient = useQueryClient();
   const [reading, setReading] = useState<SavedQuestion | null>(null);
+  const [dropping, setDropping] = useState<string | null>(null);
 
   const drop = useMutation({
     meta: { success: 'Removed from your list.' },
@@ -121,7 +123,7 @@ function SavedList() {
     <ListView
       list={list}
       filters={filterSpec}
-      columns={savedColumns(drop.isPending, (id) => drop.mutate(id), setReading)}
+      columns={savedColumns(drop.isPending, setDropping, setReading)}
       rowKey={(row) => row.id}
       empty="No saved questions yet"
       emptyFiltered="Nothing matches"
@@ -135,6 +137,19 @@ function SavedList() {
           {reading ? (
             <SavedQuestionDialog saved={reading} onClose={() => setReading(null)} />
           ) : null}
+          <ConfirmDialog
+            open={dropping !== null}
+            onOpenChange={(open) => !open && setDropping(null)}
+            // ui-copy-ok: consequence — a confirm names what it is about to do
+            title="Remove this question?"
+            description="It leaves your saved questions. Star it again from the solution review to bring it back."
+            confirmLabel="Remove"
+            destructive
+            loading={drop.isPending}
+            onConfirm={() => {
+              if (dropping) drop.mutate(dropping, { onSettled: () => setDropping(null) });
+            }}
+          />
         </>
       }
     />

@@ -1,13 +1,12 @@
 /// <reference types="nativewind/types" />
 import { useState } from 'react';
 import { keepPreviousData, useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { everySitting } from '@iace/app-kit';
+import { everySitting, plural } from '@iace/app-kit';
 import { testsSat } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { api } from '../../lib/api';
 import { leaderboardQueryKey } from '../../lib/constants';
 import { performanceQuery } from '../../lib/queries';
-import { plural } from '../../lib/plural';
 import { Alert } from '../ui/alert';
 import { ChipRow } from '../ui/chip-row';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';

@@ -14,12 +14,7 @@ import {
   Pause,
   Send,
 } from 'lucide-react';
-import {
-  ANSWER_STATES,
-  TEST_UI,
-  type ExamTemplateConfig,
-  type PaletteCounts,
-} from '@iace/contracts';
+import { TEST_UI, type ExamTemplateConfig } from '@iace/contracts';
 import {
   Alert,
   Button,
@@ -32,7 +27,7 @@ import {
   Watermark,
   cn,
 } from '@iace/ui';
-import { ANSWER_STATE_LABELS, PAPER_LOCK, TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { PAPER_LOCK, sectionTally, TIMER_KIND, type ExamView } from '@iace/app-kit';
 import { ExamTimer } from '../../exam-timer';
 import { OptionList } from '../../option-list';
 import { QuestionPalette } from '../../question-palette';
@@ -140,14 +135,6 @@ function Timer({ view: { timer }, config }: Readonly<ExamSlotProps>) {
   ) : (
     <ExamTimer clock={timer.clock} onExpire={timer.onExpire} labelled={labelled} />
   );
-}
-
-/** What a section costs so far, without opening it — the one thing its tab cannot show. */
-function sectionTally(counts: PaletteCounts): string {
-  // The same five states the palette draws, so the tab and the grid never disagree.
-  return ANSWER_STATES.filter((state) => counts[state] > 0)
-    .map((state) => `${counts[state]} ${ANSWER_STATE_LABELS[state].toLowerCase()}`)
-    .join(' · ');
 }
 
 export function SectionBar({

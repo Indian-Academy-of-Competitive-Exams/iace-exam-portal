@@ -234,3 +234,35 @@ export {
   type Sittable,
   type TestResult,
 } from './catalog';
+export {
+  CALCULATOR_ERROR,
+  CALCULATOR_KEYPAD,
+  CALCULATOR_KEYS,
+  CALCULATOR_OPS,
+  CALCULATOR_START,
+  pressCalculatorKey,
+  useCalculator,
+  type CalculatorState,
+} from './calculator';
+export { paperRulesFor, type PaperRule, type PaperTraits } from './exam-paper-rules';
+export { sectionTally } from './exam-section-tally';
+export { answersByKeyboard } from './exam-keyboard-answer';
+export {
+  NO_MARKS_YET,
+  NO_SECTION_QUESTIONS,
+  REPORT_FAILED,
+  RETAKE_NOTICE,
+  WRITTEN_NOTICE,
+  clock,
+  isRetake,
+  marksOf,
+  perMinute,
+  signed,
+  timeBenchmark,
+  timeSegments,
+  timeWords,
+  type Benchmark as TimeBenchmark,
+  type TimeSegment,
+  type TimeTone,
+} from './report-copy';
+export { LANES, bestLine, laneOf, lastSatLine, papersLine, plural, type Lane } from './home-lines';

@@ -6,12 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { applyFieldErrors, PROFILE_FORM_FIELDS, saveOwnDetails } from '@iace/app-kit';
 import {
+  courseLabel,
   DOCUMENT_KINDS,
   EARLIEST_BIRTH_DATE,
   GENDERS,
   ownDetailsMoved,
   todayISO,
   updateMeSchema,
+  type EnrolmentName,
   type Gender,
   type Me,
   type UpdateMeInput,
@@ -22,6 +24,7 @@ import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../src/lib/constants';
 import { DocumentCard } from '../src/components/account/document-card';
 import { HistoryEditor, type HistoryColumn } from '../src/components/account/history-editor';
 import { Alert } from '../src/components/ui/alert';
+import { Badge } from '../src/components/ui/badge';
 import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
 import { ChipRow, type ChipOption } from '../src/components/ui/chip-row';
@@ -32,10 +35,15 @@ import { TextField } from '../src/components/ui/text-field';
 
 const DASH = '—';
 
-const GENDER_OPTIONS: readonly ChipOption[] = GENDERS.map((value) => ({
-  value,
-  label: `${value.charAt(0)}${value.slice(1).toLowerCase()}`,
-}));
+const NO_GENDER = '';
+
+const GENDER_OPTIONS: readonly ChipOption[] = [
+  { value: NO_GENDER, label: 'Prefer not to say' },
+  ...GENDERS.map((value) => ({
+    value,
+    label: `${value.charAt(0)}${value.slice(1).toLowerCase()}`,
+  })),
+];
 
 /** Their own record: what the institute holds, and the fields they may set themselves. */
 export default function ProfileScreen() {
@@ -46,6 +54,11 @@ export default function ProfileScreen() {
   const profileQuery = { queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() };
   const me = useQuery(profileQuery);
   const moved = isEditing ? ownDetailsMoved(opened, me.data) : [];
+
+  const edit = () => {
+    setOpened(me.data ?? null);
+    setIsEditing(true);
+  };
 
   const form = useForm({
     resolver: zodResolver(updateMeSchema),
@@ -59,7 +72,7 @@ export default function ProfileScreen() {
   }, [me.data, reset, isEditing]);
 
   const save = useMutation({
-    meta: { fields: PROFILE_FORM_FIELDS },
+    meta: { success: 'Your details have been saved.', fields: PROFILE_FORM_FIELDS },
     mutationFn: (values: UpdateMeInput) =>
       saveOwnDetails(api, queryClient, opened, me.data, values),
     onSuccess: (updated) => {
@@ -89,7 +102,7 @@ export default function ProfileScreen() {
       <View className="flex-1 justify-center bg-background px-6">
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
-          title="Your details did not load"
+          title="Could not load your details"
           onRetry={() => void me.refetch()}
         />
       </View>
@@ -103,7 +116,16 @@ export default function ProfileScreen() {
     >
       <ScrollView contentContainerClassName="gap-6 px-5 py-6" keyboardShouldPersistTaps="handled">
         {me.data.preTestReady ? null : (
-          <Alert variant="warning">
+          <Alert
+            variant="warning"
+            action={
+              isEditing ? null : (
+                <Button size="sm" onPress={edit}>
+                  Add them
+                </Button>
+              )
+            }
+          >
             Before your first test we need your mother&rsquo;s name, father&rsquo;s name and date of
             birth. They go on your hall ticket.
           </Alert>
@@ -147,7 +169,7 @@ export default function ProfileScreen() {
                   label="Gender"
                   options={GENDER_OPTIONS}
                   value={typeof field.value === 'string' ? field.value : ''}
-                  onChange={(next) => field.onChange(next as Gender)}
+                  onChange={(next) => field.onChange((next || null) as Gender | null)}
                 />
               )}
             />
@@ -157,7 +179,7 @@ export default function ProfileScreen() {
               name="profile.educationDetails"
               title="Education"
               addLabel="Add a qualification"
-              empty="Nothing added yet"
+              empty="No qualifications added yet"
               columns={EDUCATION_COLUMNS}
               emptyRow={EMPTY_EDUCATION}
             />
@@ -167,21 +189,21 @@ export default function ProfileScreen() {
               name="profile.pastExamHistory"
               title="Exams sat elsewhere"
               addLabel="Add an exam"
-              empty="Nothing added yet"
+              empty="No previous exams added yet"
               columns={EXAM_COLUMNS}
               emptyRow={EMPTY_EXAM}
             />
 
             {moved.length > 0 ? (
               <Alert variant="warning">
-                Changed elsewhere since you began editing: {moved.join(', ')}. Cancel, then edit
+                Changed elsewhere since you began editing: {moved.join(', ')}. Discard, then edit
                 again from your details as they stand.
               </Alert>
             ) : null}
 
             <View className="flex-row gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 className="flex-1"
                 disabled={save.isPending}
                 onPress={() => {
@@ -189,15 +211,15 @@ export default function ProfileScreen() {
                   setIsEditing(false);
                 }}
               >
-                Cancel
+                Discard
               </Button>
               <Button
                 className="flex-1"
                 loading={save.isPending}
-                disabled={moved.length > 0}
+                disabled={!form.formState.isDirty || moved.length > 0}
                 onPress={form.handleSubmit((values) => save.mutate(values))}
               >
-                Save
+                Save changes
               </Button>
             </View>
           </View>
@@ -205,13 +227,7 @@ export default function ProfileScreen() {
           <View className="gap-4">
             <Text variant="section">Your details</Text>
             <Rows rows={detailsOf(me.data)} />
-            <Button
-              variant="outline"
-              onPress={() => {
-                setOpened(me.data);
-                setIsEditing(true);
-              }}
-            >
+            <Button variant="outline" onPress={edit}>
               Edit your details
             </Button>
 
@@ -228,16 +244,56 @@ export default function ProfileScreen() {
 
 /** What the institute holds them on, and none of it theirs to change. */
 function Enrolment({ me }: Readonly<{ me: Me }>) {
+  const { enrolment } = me;
+
   return (
     <View className="gap-4">
       <Text variant="section">Enrolment</Text>
-      <Rows
-        rows={[
-          { label: 'Branch', value: me.enrolment.branch },
-          { label: 'Exams', value: me.enrolment.exams.map((one) => one.name).join(', ') },
-          { label: 'Programs', value: me.enrolment.programs.map((one) => one.name).join(', ') },
-        ]}
-      />
+      <Rows rows={[{ label: 'Branch', value: enrolment.branch ?? NONE_RECORDED }]} />
+      <Card>
+        <Names label="Course" names={me.enrolledCourses.map(courseLabel)} />
+        <Names label="Programs" names={enrolment.programs.map(nameOf)} divided />
+        <Names label="Exams" names={enrolment.exams.map(nameOf)} divided />
+        <Verified label="Aadhaar" isVerified={me.profile?.aadhaarVerified ?? false} />
+        <Verified label="PAN" isVerified={me.profile?.panVerified ?? false} />
+      </Card>
+    </View>
+  );
+}
+
+const NONE_RECORDED = 'None recorded';
+
+const nameOf = (entry: EnrolmentName) => entry.name;
+
+function Names({
+  label,
+  names,
+  divided = false,
+}: Readonly<{ label: string; names: readonly string[]; divided?: boolean }>) {
+  return (
+    <View className={divided ? 'gap-2 border-t border-border p-4' : 'gap-2 p-4'}>
+      <Text variant="meta">{label}</Text>
+      {names.length === 0 ? (
+        <Text variant="muted">{NONE_RECORDED}</Text>
+      ) : (
+        <View className="flex-row flex-wrap gap-1.5">
+          {names.map((name) => (
+            <Badge key={name}>{name}</Badge>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** Never the number and never the image — the platform stores only whether it was checked. */
+function Verified({ label, isVerified }: Readonly<{ label: string; isVerified: boolean }>) {
+  return (
+    <View className="gap-2 border-t border-border p-4">
+      <Text variant="meta">{label}</Text>
+      <Badge variant={isVerified ? 'success' : 'neutral'}>
+        {isVerified ? 'Verified' : 'Not verified'}
+      </Badge>
     </View>
   );
 }
@@ -265,7 +321,7 @@ function Rows({ rows }: Readonly<{ rows: readonly DetailRow[] }>) {
 
 const detailsOf = (me: Me): DetailRow[] => [
   { label: 'Full name', value: me.fullName },
-  { label: 'Mobile number', value: me.mobile },
+  { label: 'Mobile', value: me.mobile },
   { label: "Mother's name", value: me.profile?.motherName },
   { label: "Father's name", value: me.profile?.fatherName },
   { label: 'Date of birth', value: me.profile?.dob },
@@ -298,16 +354,16 @@ const EMPTY_EXAM = { exam: '', year: '', result: '' };
 function Documents({ me }: Readonly<{ me: Me }>) {
   return (
     <View className="gap-4">
-      <Text variant="section">Documents</Text>
+      <Text variant="section">Your documents</Text>
       <View className="flex-row gap-3">
         <DocumentCard
           kind={DOCUMENT_KINDS.PHOTO}
-          label="Photo"
+          label="Passport photo"
           url={me.profile?.photoUrl ?? null}
         />
         <DocumentCard
           kind={DOCUMENT_KINDS.TENTH_MARKSHEET}
-          label="10th marksheet"
+          label="Class 10 marksheet"
           url={me.profile?.tenthMarksheetUrl ?? null}
         />
       </View>

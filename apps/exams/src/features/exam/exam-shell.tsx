@@ -6,7 +6,7 @@
 import { useState, type ReactNode } from 'react';
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, Calculator, ConfirmDialog } from '@iace/ui';
-import { submittingSays, type ExamView } from '@iace/app-kit';
+import { CALCULATOR_KEYPAD, submittingSays, useCalculator, type ExamView } from '@iace/app-kit';
 import { Layout } from './templates/shared/layout';
 import { type ExamSlotProps } from './templates/shared/slots';
 import { useLockedZoom } from './lock-zoom';
@@ -61,7 +61,7 @@ export function ExamShell({
         />
 
         {/* Mounted here, not in a skin, so a config that offers one cannot be drawn without it. */}
-        {calculating ? <Calculator onClose={() => setCalculating(false)} /> : null}
+        {calculating ? <CalculatorPanel onClose={() => setCalculating(false)} /> : null}
       </div>
 
       {fullscreen.nagging ? <Nag fullscreen={fullscreen} says={nagSays(fullscreen.exits)} /> : null}
@@ -124,4 +124,12 @@ function FullscreenNag({
 function nagSays(exits: number): string {
   const left = exits > 1 ? `You left full screen ${exits} times.` : 'You left full screen.';
   return `${left} Your paper is still running and the clock has not stopped.`;
+}
+
+/** Its own component, so closing the calculator drops the sum with it. */
+function CalculatorPanel({ onClose }: Readonly<{ onClose: () => void }>) {
+  const { display, press } = useCalculator();
+  return (
+    <Calculator display={display} keypad={CALCULATOR_KEYPAD} onKey={press} onClose={onClose} />
+  );
 }

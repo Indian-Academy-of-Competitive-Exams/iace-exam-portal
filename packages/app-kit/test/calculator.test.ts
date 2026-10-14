@@ -6,7 +6,7 @@ import {
   CALCULATOR_OPS,
   CALCULATOR_START,
   pressCalculatorKey,
-} from '../src/components/ui/calculator-keys';
+} from '../src/calculator';
 
 const press = (...keys: readonly string[]): string =>
   keys.reduce(pressCalculatorKey, CALCULATOR_START).display;

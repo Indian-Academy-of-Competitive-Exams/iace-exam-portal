@@ -43,6 +43,7 @@ export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
 export const ACCOUNT_ROUTES = {
   PROFILE: '/profile',
   NOTIFICATIONS: '/notifications',
+  NOTIFICATION_SETTINGS: '/notification-settings',
 } as const;
 
 /** What a path starts with while a paper is being sat: nothing pushed over the tabs may refetch behind it. */

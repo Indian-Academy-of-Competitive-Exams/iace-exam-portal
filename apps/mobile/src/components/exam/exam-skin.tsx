@@ -6,12 +6,16 @@
  */
 import { Fragment, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Calculator, FileText, Info, Pause, type LucideIcon } from 'lucide-react-native';
+import { useUnstableNativeVariable } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNetworkState } from 'expo-network';
 import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
 import {
+  answersByKeyboard,
   PAPER_LOCK,
   PAUSE_SAYS,
+  sectionTally,
   submittingSays,
   TIMER_KIND,
   usePause,
@@ -24,6 +28,8 @@ import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Skeleton } from '../ui/skeleton';
 import { ExamTimer, SectionTimer } from './exam-timer';
 import { QuestionContent, type QuestionContentProps } from './question-content';
+import { CalculatorSheet, PaperSheet, RulesSheet } from './exam-sheets';
+import { PaperWatermark } from './paper-watermark';
 import { QuestionPalette } from './question-palette';
 
 /** Every paper resolves to the default skin on a phone, whatever its template says. */
@@ -43,22 +49,27 @@ const WAITING: QuestionContentProps = {
   onBubble: () => undefined,
 };
 
-/** Enough repeats to reach the corners of a tall phone without measuring it. */
-const WATERMARK_TILES = Array.from({ length: 24 }, (_, index) => index);
-
 export interface ExamSkinProps {
   view: ExamView | null;
   /** The paper's full question list, all sections, so a dead zone still shows a figure not yet reached. */
   paperQuestions: readonly ExamQuestion[];
+  calculatorEnabled: boolean;
   /** Leaves the paper to be come back to; the server gives the time away back when it is reopened. */
   onPause: () => Promise<boolean>;
 }
 
-export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinProps>) {
+export function ExamSkin({
+  view,
+  paperQuestions,
+  calculatorEnabled,
+  onPause,
+}: Readonly<ExamSkinProps>) {
   const insets = useSafeAreaInsets();
   const network = useNetworkState();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [paperOpen, setPaperOpen] = useState(false);
+  const [calculating, setCalculating] = useState(false);
   const pause = usePause(onPause);
   const offline = network.isConnected === false || network.isInternetReachable === false;
 
@@ -73,6 +84,8 @@ export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinPro
           view={view}
           onPalette={() => setPaletteOpen(true)}
           onRules={() => setRulesOpen(true)}
+          onPaper={() => setPaperOpen(true)}
+          onCalculator={calculatorEnabled ? () => setCalculating(true) : undefined}
           onPause={pause.ask}
         />
       ) : (
@@ -81,8 +94,8 @@ export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinPro
       {view && (view.hasUnsaved || offline) ? (
         <Alert variant="warning" className="mx-4 mt-2">
           {offline
-            ? 'Your connection is offline. You can continue the test; answers are kept on this phone and will sync when it returns. Keep the app open.'
-            : 'Your latest answers are not saved yet. They are kept on this phone and sent when the connection is back, but the clock does not wait.'}
+            ? 'Your connection is offline. You can continue the test; answers will sync when it returns. Keep this app open.'
+            : 'Your answers have not reached the server yet. They will be retried automatically. Keep this app open.'}
         </Alert>
       ) : null}
       <QuestionBody view={view} paperQuestions={paperQuestions} />
@@ -92,6 +105,10 @@ export function ExamSkin({ view, paperQuestions, onPause }: Readonly<ExamSkinPro
           paletteOpen={paletteOpen}
           rulesOpen={rulesOpen}
           onCloseRules={() => setRulesOpen(false)}
+          paperOpen={paperOpen}
+          onClosePaper={() => setPaperOpen(false)}
+          calculating={calculating}
+          onCloseCalculator={() => setCalculating(false)}
           onClosePalette={() => setPaletteOpen(false)}
         />
       ) : null}
@@ -134,27 +151,36 @@ function SittingHead({
   view,
   onPalette,
   onRules,
+  onPaper,
+  onCalculator,
   onPause,
 }: Readonly<{
   view: ExamView;
   onPalette: () => void;
   onRules: () => void;
+  onPaper: () => void;
+  onCalculator: (() => void) | undefined;
   onPause: () => void;
 }>) {
   return (
     <Fragment>
-      <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-exam-border px-4 py-2">
+      <View className="flex-row items-center gap-1 border-b border-exam-border pl-4 pr-2">
+        <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-semibold text-exam-ink">
+          {view.title}
+        </Text>
+        <HeadIcon icon={FileText} label="Question paper" onPress={onPaper} />
+        <HeadIcon icon={Info} label="Instructions" onPress={onRules} />
+        {onCalculator ? (
+          <HeadIcon icon={Calculator} label="Calculator" onPress={onCalculator} />
+        ) : null}
+        <HeadIcon icon={Pause} label="Pause" disabled={view.locked !== null} onPress={onPause} />
+      </View>
+
+      <View className="flex-row items-center justify-between gap-2 border-b border-exam-border px-4 py-2">
         <SittingClock view={view} />
-        {/* Four buttons outrun a phone's width; unwrapped, Submit was pushed off the screen. */}
-        <View className="flex-1 flex-row flex-wrap justify-end gap-2">
+        <View className="flex-row gap-2">
           <Button variant="outline" onPress={onPalette}>
-            Question palette
-          </Button>
-          <Button variant="ghost" onPress={onRules}>
-            Instructions
-          </Button>
-          <Button variant="ghost" disabled={view.locked !== null} onPress={onPause}>
-            Pause
+            Palette
           </Button>
           <Button
             variant="outline"
@@ -177,6 +203,7 @@ function SittingHead({
           <SectionTab
             key={section.id}
             name={section.name}
+            tally={sectionTally(view.sectionCounts(section.id))}
             active={section.id === view.sectionId}
             reachable={view.locked === null && view.reachable.includes(section.id)}
             onOpen={() => view.openSection(section.id)}
@@ -199,12 +226,41 @@ function SittingHead({
   );
 }
 
+function HeadIcon({
+  icon: Icon,
+  label,
+  disabled,
+  onPress,
+}: Readonly<{ icon: LucideIcon; label: string; disabled?: boolean; onPress: () => void }>) {
+  const ink = useUnstableNativeVariable('--foreground');
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
+      onPress={onPress}
+      className={cn('h-11 w-11 items-center justify-center', disabled && 'opacity-50')}
+    >
+      <Icon size={20} color={typeof ink === 'string' ? ink : undefined} />
+    </Pressable>
+  );
+}
+
 function SectionTab({
   name,
+  tally,
   active,
   reachable,
   onOpen,
-}: Readonly<{ name: string; active: boolean; reachable: boolean; onOpen: () => void }>) {
+}: Readonly<{
+  name: string;
+  tally: string;
+  active: boolean;
+  reachable: boolean;
+  onOpen: () => void;
+}>) {
   return (
     <Pressable
       accessibilityRole="tab"
@@ -212,7 +268,7 @@ function SectionTab({
       disabled={active || !reachable}
       onPress={onOpen}
       className={cn(
-        'h-11 justify-center border-b-2 px-3',
+        'min-h-11 justify-center border-b-2 px-3 py-1',
         active ? 'border-exam-current' : 'border-transparent',
         !reachable && 'opacity-50',
       )}
@@ -222,6 +278,7 @@ function SectionTab({
       >
         {name}
       </Text>
+      {tally ? <Text className="text-xs text-exam-ink-muted">{tally}</Text> : null}
     </Pressable>
   );
 }
@@ -266,38 +323,26 @@ function QuestionBody({
   );
 }
 
-/** The one thing on the paper that leads back to a person, faint enough to read through. */
-function PaperWatermark({ text }: Readonly<{ text: string }>) {
-  return (
-    <View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      className="pointer-events-none absolute inset-0 flex-row flex-wrap content-around justify-around overflow-hidden"
-    >
-      {WATERMARK_TILES.map((tile) => (
-        <Text
-          key={tile}
-          className="w-1/3 -rotate-45 py-6 text-center text-xs text-exam-ink opacity-5"
-        >
-          {text}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
 function SittingFoot({
   view,
   paletteOpen,
   onClosePalette,
   rulesOpen,
   onCloseRules,
+  paperOpen,
+  onClosePaper,
+  calculating,
+  onCloseCalculator,
 }: Readonly<{
   view: ExamView;
   paletteOpen: boolean;
   onClosePalette: () => void;
   rulesOpen: boolean;
   onCloseRules: () => void;
+  paperOpen: boolean;
+  onClosePaper: () => void;
+  calculating: boolean;
+  onCloseCalculator: () => void;
 }>) {
   const { submit, fullscreen } = view;
   const off = view.locked !== null;
@@ -331,7 +376,11 @@ function SittingFoot({
                   Mark for review & next
                 </Button>
               )}
-              <Button variant="ghost" disabled={off} onPress={view.clearResponse}>
+              <Button
+                variant="ghost"
+                disabled={off || answersByKeyboard(view.question)}
+                onPress={view.clearResponse}
+              >
                 Clear response
               </Button>
             </View>
@@ -342,7 +391,7 @@ function SittingFoot({
         )}
       </View>
 
-      {/* iOS presents one Modal at a time, so the focus warning stands the other two down. */}
+      {/* iOS presents one Modal at a time, so the focus warning stands the others down. */}
       <QuestionPalette
         view={view}
         open={paletteOpen && !fullscreen.nagging}
@@ -360,13 +409,9 @@ function SittingFoot({
         onCancel={submit.cancel}
       />
 
-      <Modal
-        visible={rulesOpen && !fullscreen.nagging}
-        animationType="slide"
-        onRequestClose={onCloseRules}
-      >
-        <SittingRules onClose={onCloseRules} />
-      </Modal>
+      <RulesSheet view={view} open={rulesOpen && !fullscreen.nagging} onClose={onCloseRules} />
+      <PaperSheet view={view} open={paperOpen && !fullscreen.nagging} onClose={onClosePaper} />
+      <CalculatorSheet open={calculating && !fullscreen.nagging} onClose={onCloseCalculator} />
 
       <Modal
         transparent
@@ -382,39 +427,6 @@ function SittingFoot({
         </View>
       </Modal>
     </Fragment>
-  );
-}
-
-/** The rules a candidate may re-read mid-sitting; the palette already stands in for the paper. */
-function SittingRules({ onClose }: Readonly<{ onClose: () => void }>) {
-  return (
-    <View className="flex-1 bg-exam-surface">
-      <View className="flex-row items-center justify-between border-b border-exam-border px-4 py-3">
-        <Text className="text-base font-semibold text-exam-ink">Instructions</Text>
-        <Button variant="ghost" onPress={onClose}>
-          Close
-        </Button>
-      </View>
-
-      <ScrollView contentContainerClassName="gap-3 p-4">
-        <Text className="text-sm leading-relaxed text-exam-ink">
-          The clock is the server&apos;s. It keeps running if you leave the app, and the paper ends
-          by itself when it reaches zero — you do not have to submit for that to happen.
-        </Text>
-        <Text className="text-sm leading-relaxed text-exam-ink">
-          The palette marks every question as answered, not answered, not visited, marked for
-          review, or answered and marked. A marked answer is still marked for scoring.
-        </Text>
-        <Text className="text-sm leading-relaxed text-exam-ink">
-          Save &amp; next keeps your answer and moves on. Mark for review &amp; next keeps it and
-          flags the question. Clear response removes your answer entirely.
-        </Text>
-        <Text className="text-sm leading-relaxed text-exam-ink">
-          An option is kept the moment you choose it, so opening another question from the palette
-          keeps it too.
-        </Text>
-      </ScrollView>
-    </View>
   );
 }
 

@@ -11,9 +11,13 @@ import {
   type QuestionReportRow,
 } from '@iace/contracts';
 import {
+  NO_MARKS_YET,
+  REPORT_FAILED,
+  clock,
   cohortNoteSays,
   correctAnswerOf,
   dispositionLabel,
+  isMarkingPending,
   matchesQuestionFilter,
   optionMark,
   paceWord,
@@ -55,12 +59,25 @@ export function QuestionsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
     );
   }
 
+  if (isMarkingPending(report.error)) {
+    return (
+      <View className="flex-1 justify-center px-6">
+        <EmptyState
+          title={NO_MARKS_YET.title}
+          // ui-copy-ok: consequence
+          hint={NO_MARKS_YET.hint}
+          onRetry={() => void report.refetch()}
+        />
+      </View>
+    );
+  }
+
   if (!report.data) {
     return (
       <View className="flex-1 justify-center px-6">
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
-          title="This question report did not load"
+          title={REPORT_FAILED.questions}
           onRetry={() => void report.refetch()}
         />
       </View>
@@ -110,7 +127,7 @@ function Header({
         <StatTile label="Left blank, most answered" value={insights.blankButAnswerable} />
         <StatTile
           label="Time that bought nothing"
-          value={percentLabel(insights.wastedShare, DASH)}
+          value={`${percentLabel(insights.wastedShare, DASH)} · ${clock(insights.timeOnWrongSec + insights.timeOnBlankSec)}`}
         />
       </StatTileRow>
 

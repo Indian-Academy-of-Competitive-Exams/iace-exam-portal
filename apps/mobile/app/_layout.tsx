@@ -157,6 +157,7 @@ function Navigation() {
           <Stack.Screen name="attempts/[attemptId]/report" options={{ ...page, title: 'Report' }} />
           <Stack.Screen name="profile" options={{ ...page, title: 'Your details' }} />
           <Stack.Screen name="notifications" options={{ ...page, title: 'Notifications' }} />
+          <Stack.Screen name="notification-settings" options={{ ...page, title: 'Settings' }} />
         </Stack.Protected>
         <Stack.Protected guard={!identity}>
           <Stack.Screen name="login" />

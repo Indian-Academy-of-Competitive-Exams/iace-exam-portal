@@ -7,10 +7,9 @@ import {
   type PerformancePoint,
   type ScoreCard,
 } from '@iace/contracts';
-import { everySitting } from '@iace/app-kit';
+import { everySitting, plural } from '@iace/app-kit';
 import { Text } from '../ui/text';
 import { performanceQuery, scoreCardQuery } from '../../lib/queries';
-import { plural } from '../../lib/plural';
 import { Alert } from '../ui/alert';
 import { Card } from '../ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';

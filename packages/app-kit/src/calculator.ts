@@ -1,8 +1,5 @@
-/**
- * A four-function calculator's whole behaviour, kept apart from the keypad that
- * draws it so the arithmetic can be tested without a DOM. The keys ARE their
- * labels: one array, no second map to drift from the first.
- */
+/** A four-function calculator's whole behaviour, shared by both clients; the keys ARE their labels. */
+import { useCallback, useState } from 'react';
 
 export const CALCULATOR_OPS = {
   DIVIDE: '÷',
@@ -95,4 +92,39 @@ function fold({ op, left }: Pending, right: number): number {
 /** 0.1 + 0.2 must read 0.3: a float's own string is the one place this can be wrong. */
 function show(value: number): string {
   return String(Number(value.toPrecision(12)));
+}
+
+/** Four columns: `=` takes two rows and `0` two columns, which each client draws its own way. */
+export const CALCULATOR_KEYPAD: readonly Readonly<{
+  key: string;
+  operator: boolean;
+  span?: 'TALL' | 'WIDE';
+}>[] = [
+  { key: CALCULATOR_KEYS.CLEAR, operator: false },
+  { key: CALCULATOR_KEYS.BACKSPACE, operator: false },
+  { key: CALCULATOR_OPS.DIVIDE, operator: true },
+  { key: CALCULATOR_OPS.MULTIPLY, operator: true },
+  { key: '7', operator: false },
+  { key: '8', operator: false },
+  { key: '9', operator: false },
+  { key: CALCULATOR_OPS.SUBTRACT, operator: true },
+  { key: '4', operator: false },
+  { key: '5', operator: false },
+  { key: '6', operator: false },
+  { key: CALCULATOR_OPS.ADD, operator: true },
+  { key: '1', operator: false },
+  { key: '2', operator: false },
+  { key: '3', operator: false },
+  { key: CALCULATOR_KEYS.EQUALS, operator: true, span: 'TALL' },
+  { key: '0', operator: false, span: 'WIDE' },
+  { key: CALCULATOR_KEYS.DECIMAL, operator: false },
+];
+
+export function useCalculator() {
+  const [state, setState] = useState<CalculatorState>(CALCULATOR_START);
+  const press = useCallback(
+    (key: string) => setState((before) => pressCalculatorKey(before, key)),
+    [],
+  );
+  return { display: state.display, press };
 }

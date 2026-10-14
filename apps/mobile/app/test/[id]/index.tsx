@@ -1,6 +1,8 @@
 /** What a student reads BEFORE the clock starts — ported from the web's `test-about.tsx`. */
 import { Fragment } from 'react';
 import { ScrollView, View } from 'react-native';
+import CalendarClock from 'lucide-react-native/icons/calendar-clock';
+import LockKeyhole from 'lucide-react-native/icons/lock-keyhole';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -17,6 +19,7 @@ import {
   totalMarksOf,
   NEEDS_KEYBOARD_SAYS,
   needsKeyboard,
+  plural,
 } from '@iace/app-kit';
 import {
   instituteDateTimeLabel,
@@ -35,13 +38,12 @@ import { Card } from '../../../src/components/ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
 import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
+import { ExamJourney } from '../../../src/components/tests/exam-journey';
 import { PastAttempts } from '../../../src/components/tests/past-attempts';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
 import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
-import { plural } from '../../../src/lib/plural';
-import { sectionLine } from '../../../src/lib/brief-lines';
 
 type Phase = 'LOADING' | 'REFUSED' | 'ERROR' | 'READY';
 
@@ -145,19 +147,16 @@ function AboutContent({
       <View className="gap-1">
         <Text variant="title">{brief.title ?? 'Test'}</Text>
         {seriesName ? <Text variant="muted">{seriesName}</Text> : null}
-        {listed ? (
-          <Text variant="muted">
-            Opens {listed.opensAt === null ? 'any time' : instituteDateTimeLabel(listed.opensAt)}
-          </Text>
-        ) : null}
       </View>
+
+      {listed ? <Window test={listed} /> : null}
 
       {listed ? <ShutNotice test={listed} now={now} /> : null}
 
       <View {...band}>
         <StatTileRow>
           <StatTile label="Questions" value={brief.totalQuestions} />
-          <StatTile label="Duration" value={`${Math.round(brief.durationSec / 60)} min`} />
+          <StatTile label="Duration (minutes)" value={Math.round(brief.durationSec / 60)} />
           <StatTile label="Total marks" value={totalMarksOf(brief)} />
           <StatTile label="Negative" value={negativeOf(brief)} />
         </StatTileRow>
@@ -172,6 +171,7 @@ function AboutContent({
         catalog={catalog}
         now={now}
         needsKeyboard={needsKeyboard(brief)}
+        journey={brief.journey}
       />
 
       <PastAttempts testId={testId} />
@@ -184,8 +184,26 @@ function ShutNotice({ test, now }: Readonly<{ test: StudentCatalogTest; now: Dat
   const bucket = testBucket(test);
   if (bucket === TEST_BUCKET.OPEN || bucket === TEST_BUCKET.DONE) return null;
   const shut = shutOf(test, now);
+  if (shut === TEST_SHUT.HOLD) return <Alert variant="danger">{SHUT_SAYS[shut].notice}</Alert>;
+
   return (
-    <Alert variant={shut === TEST_SHUT.HOLD ? 'danger' : 'info'}>{SHUT_SAYS[shut].notice}</Alert>
+    <Alert icon={shut === TEST_SHUT.NOT_OPEN ? CalendarClock : LockKeyhole}>
+      {SHUT_SAYS[shut].notice}
+    </Alert>
+  );
+}
+
+/** A time is prose, not a figure: set at a headline size it shouts over the title above it. */
+function Window({ test }: Readonly<{ test: StudentCatalogTest }>) {
+  return (
+    <View className="gap-1">
+      <Text className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Opens
+      </Text>
+      <Text className="text-base font-semibold text-foreground">
+        {test.opensAt === null ? 'Any time' : instituteDateTimeLabel(test.opensAt)}
+      </Text>
+    </View>
   );
 }
 
@@ -200,14 +218,17 @@ function SectionsCard({ brief }: Readonly<{ brief: ExamBrief }>) {
       </View>
       <Card>
         {brief.sections.map((section, index) => (
-          <View key={section.id} className={cn('gap-1 p-4', index > 0 && 'border-t border-border')}>
-            <View className="flex-row items-center justify-between gap-2">
-              <Text numberOfLines={1} className="flex-1 text-sm font-medium text-foreground">
-                {section.name}
-              </Text>
-              <Text variant="subsection">{sectionMarksOf(section)} marks</Text>
-            </View>
-            <Text variant="meta">{sectionLine(section)}</Text>
+          <View
+            key={section.id}
+            className={cn('gap-1.5 p-4', index > 0 && 'border-t border-border')}
+          >
+            <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+              {section.name}
+            </Text>
+            <InfoRow label="Questions" value={String(section.questionCount)} />
+            <InfoRow label="Marks each" value={String(section.marksPerQuestion)} />
+            <InfoRow label="Negative" value={String(section.negativeMarks)} />
+            <InfoRow label="Section marks" value={String(sectionMarksOf(section))} />
           </View>
         ))}
       </Card>
@@ -245,8 +266,10 @@ function Exits({
   catalog,
   now,
   needsKeyboard,
+  journey,
 }: Readonly<{
   testId: string;
+  journey: ExamBrief['journey'];
   listed: StudentCatalogTest | undefined;
   /** A typing section is typed on a real keyboard, so the paper is not started from a phone. */
   needsKeyboard: boolean;
@@ -264,18 +287,38 @@ function Exits({
     );
   }
 
+  return (
+    <Fragment>
+      <Proceed testId={testId} listed={listed} now={now} needsKeyboard={needsKeyboard} />
+      {journey ? <ExamJourney journey={journey} /> : null}
+    </Fragment>
+  );
+}
+
+function Proceed({
+  testId,
+  listed,
+  now,
+  needsKeyboard,
+}: Readonly<{
+  testId: string;
+  listed: StudentCatalogTest | undefined;
+  now: Date;
+  needsKeyboard: boolean;
+}>) {
   const action = listed ? testAction(listed) : null;
 
-  if (action && needsKeyboard) return <Alert variant="info">{NEEDS_KEYBOARD_SAYS}</Alert>;
-  if (!action) {
+  if (!action)
     return <Button disabled>{listed ? shutReason(listed, now) : 'Not open to you'}</Button>;
-  }
+  if (needsKeyboard) return <Alert variant="info">{NEEDS_KEYBOARD_SAYS}</Alert>;
 
   return (
     <Fragment>
       {listed && offersRetake(listed) ? <Alert>{RETAKE_SAYS}</Alert> : null}
       <Link href={DETAIL_ROUTES.TEST_INSTRUCTIONS(testId, listed?.liveAttemptId)} asChild>
-        <Button>{action === 'RESUME' ? 'Resume test' : 'Proceed to test'}</Button>
+        <Button variant={action === 'RESUME' ? 'warning' : 'default'}>
+          {action === 'RESUME' ? 'Resume test' : 'Proceed to test'}
+        </Button>
       </Link>
     </Fragment>
   );

@@ -1,11 +1,17 @@
 /// <reference types="nativewind/types" />
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { minutes } from '@iace/app-kit';
+import {
+  NO_MARKS_YET,
+  REPORT_FAILED,
+  isMarkingPending,
+  minutes,
+  perMinute,
+  plural,
+} from '@iace/app-kit';
 import { type SectionalStanding } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { scoreCardQuery } from '../../lib/queries';
-import { plural } from '../../lib/plural';
 import { Badge, type BadgeVariant } from '../ui/badge';
 import { Card } from '../ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../ui/empty-state';
@@ -30,10 +36,18 @@ export function SubjectsPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   return (
     <RefreshScroll refreshing={card.isRefetching} onRefresh={refresh}>
       {card.isLoading ? <Skeleton className="h-64 rounded-xl" /> : null}
-      {card.isLoadingError ? (
+      {isMarkingPending(card.error) ? (
+        <EmptyState
+          title={NO_MARKS_YET.title}
+          // ui-copy-ok: consequence
+          hint={NO_MARKS_YET.hint}
+          onRetry={refresh}
+        />
+      ) : null}
+      {card.isLoadingError && !isMarkingPending(card.error) ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
-          title="This subject report did not load"
+          title={REPORT_FAILED.sections}
           onRetry={refresh}
         />
       ) : null}
@@ -85,6 +99,11 @@ function Section({ section }: Readonly<{ section: SectionalStanding }>) {
         <Figure label="Your time" value={minutes(section.timeSpentSec)} />
         <Figure label="Average time" value={minutes(section.cohortAverageTimeSec)} />
         <Figure label="Topper time" value={minutes(section.topperTimeSec)} />
+        <Figure label="Marks a minute" value={perMinute(section.score, section.timeSpentSec)} />
+        <Figure
+          label="Average a minute"
+          value={perMinute(section.cohortAverageScore, section.cohortAverageTimeSec)}
+        />
       </View>
     </Card>
   );

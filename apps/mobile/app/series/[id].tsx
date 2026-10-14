@@ -5,6 +5,7 @@
  */
 import { Fragment } from 'react';
 import { FlatList, View } from 'react-native';
+import LockKeyhole from 'lucide-react-native/icons/lock-keyhole';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -17,18 +18,18 @@ import {
   type SeriesProgress,
   type Sittable,
   type TestResult,
+  plural,
 } from '@iace/app-kit';
 import { type PerformancePoint, type StudentCatalogSeries } from '@iace/contracts';
 import { Text } from '../../src/components/ui/text';
 import { catalogQuery, performanceQuery } from '../../src/lib/queries';
-import { Alert } from '../../src/components/ui/alert';
 import { Button } from '../../src/components/ui/button';
 import { Card } from '../../src/components/ui/card';
 import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
 import { Skeleton } from '../../src/components/ui/skeleton';
+import { Alert } from '../../src/components/ui/alert';
 import { TestTile } from '../../src/components/tests/test-tile';
 import { ROUTES } from '../../src/lib/nav';
-import { plural } from '../../src/lib/plural';
 
 const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 32, gap: 12 };
 
@@ -100,7 +101,8 @@ function SeriesBody({ phase, onRetry }: Readonly<{ phase: Phase; onRetry: () => 
   if (phase === 'REFUSED') {
     return <EmptyState kind={EMPTY_STATE_KINDS.REFUSED} title="This series is not one you reach" />;
   }
-  return <EmptyState title="No tests yet" />;
+  // ui-copy-ok: consequence
+  return <EmptyState title="Nothing has been put in this series yet" />;
 }
 
 function SeriesHeader({
@@ -124,7 +126,7 @@ function SeriesHeader({
           </Text>
         </View>
         <Link href={ROUTES.PERFORMANCE} asChild>
-          <Button variant="ghost" size="sm">
+          <Button variant="outline" size="sm">
             Your performance
           </Button>
         </Link>
@@ -133,7 +135,9 @@ function SeriesHeader({
       <Standing trend={trend} progress={progress} sat={sat} />
 
       {series.sequentialTests ? (
-        <Alert>These open one at a time: finish the test before it to reach the next.</Alert>
+        <Alert icon={LockKeyhole}>
+          These open one at a time: finish the test before it to reach the next.
+        </Alert>
       ) : null}
 
       <View className="flex-row items-baseline justify-between">

@@ -14,14 +14,30 @@ import { VERDICT, verdictOf, type ReviewedQuestion, type Verdict } from '@iace/a
 interface VerdictStyle {
   label: string;
   fill: string;
+  edge: string;
   ink: string;
 }
 
 /** The three verdicts, their names and their colours — the only source of either. */
 export const VERDICT_STYLE: Readonly<Record<Verdict, VerdictStyle>> = {
-  [VERDICT.RIGHT]: { label: 'Correct', fill: 'bg-success-subtle', ink: 'text-success-ink' },
-  [VERDICT.WRONG]: { label: 'Incorrect', fill: 'bg-destructive-subtle', ink: 'text-destructive' },
-  [VERDICT.LEFT]: { label: 'Unattempted', fill: 'bg-muted', ink: 'text-muted-foreground' },
+  [VERDICT.RIGHT]: {
+    label: 'Correct',
+    fill: 'bg-success-subtle',
+    edge: 'border-success',
+    ink: 'text-success-ink',
+  },
+  [VERDICT.WRONG]: {
+    label: 'Incorrect',
+    fill: 'bg-destructive-subtle',
+    edge: 'border-destructive',
+    ink: 'text-destructive',
+  },
+  [VERDICT.LEFT]: {
+    label: 'Unattempted',
+    fill: 'bg-muted',
+    edge: 'border-border',
+    ink: 'text-muted-foreground',
+  },
 };
 
 const VERDICTS: readonly Verdict[] = [VERDICT.RIGHT, VERDICT.WRONG, VERDICT.LEFT];
@@ -62,7 +78,13 @@ export function ReviewPalette({
           <View className="gap-2 px-4">
             {VERDICTS.map((verdict) => (
               <View key={verdict} className="flex-row items-center gap-3">
-                <View className={cn('h-4 w-4 rounded-sm', VERDICT_STYLE[verdict].fill)} />
+                <View
+                  className={cn(
+                    'h-4 w-4 rounded-sm border',
+                    VERDICT_STYLE[verdict].fill,
+                    VERDICT_STYLE[verdict].edge,
+                  )}
+                />
                 <Text variant="body" className="flex-1">
                   {VERDICT_STYLE[verdict].label}
                 </Text>
@@ -102,7 +124,7 @@ function PaletteCell({
   current,
   onPress,
 }: Readonly<{ number: number; verdict: Verdict; current: boolean; onPress: () => void }>) {
-  const { label, fill, ink } = VERDICT_STYLE[verdict];
+  const { label, fill, edge, ink } = VERDICT_STYLE[verdict];
 
   return (
     <Pressable
@@ -113,8 +135,8 @@ function PaletteCell({
       className={cn(
         'h-11 w-11 items-center justify-center rounded-md border-2',
         fill,
-        // Positional only: a ring, never a fill, so it cannot read as a verdict.
-        current ? 'border-primary' : 'border-transparent',
+        // Positional only: a brand ring over the verdict's own edge, never a fill.
+        current ? 'border-primary' : edge,
       )}
     >
       <Text className={cn('text-sm font-semibold', ink)}>{number}</Text>

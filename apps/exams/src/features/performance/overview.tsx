@@ -22,13 +22,16 @@ import {
   TimeReturnFigure,
   WeakestSubjectsFigure,
 } from '@iace/app-kit/browser';
-import { everySitting, newestFirst, ordinalSuffix, sittingHint } from '@iace/app-kit';
 import {
-  RECENT_STANDINGS,
+  everySitting,
+  newestFirst,
+  ordinalSuffix,
+  sittingHint,
+  bestLine,
+  lastSatLine,
+} from '@iace/app-kit';
+import {
   TEST_SCOPE_LABELS,
-  civilDate,
-  instituteDayLabel,
-  todayISO,
   effortPerSitting,
   scopesSat,
   volumeByScope,
@@ -79,7 +82,7 @@ export function OverviewPage() {
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           size="display"
           title="Performance"
-          meta={overview.data ? satOn(overview.data) : undefined}
+          meta={overview.data ? lastSatLine(overview.data) : undefined}
           action={
             <span
               data-tour={TOUR_TARGETS.PERFORMANCE_PICKERS}
@@ -220,29 +223,4 @@ function headlineOf(overview: StudentOverview) {
       caption={bestLine(overview)}
     />
   );
-}
-
-function satOn(overview: StudentOverview): string | undefined {
-  const at = overview.standing.lastAttemptAt;
-  if (at === null) return undefined;
-  const days = daysSince(at);
-  const ago = days === 0 ? 'today' : plural(days, 'day') + ' ago';
-  return `Last sat ${instituteDayLabel(at)} · ${ago}`;
-}
-
-/** Whole institute days between two civil dates — never a UTC subtraction on a stored instant. */
-function daysSince(at: string): number {
-  const then = Date.parse(`${civilDate(new Date(at))}T00:00:00Z`);
-  const today = Date.parse(`${todayISO()}T00:00:00Z`);
-  return Math.max(0, Math.round((today - then) / 86_400_000));
-}
-
-/** The average alone is half the story; the best is what a student is actually chasing. */
-function bestLine(overview: StudentOverview): string {
-  const { avgPercentile, bestPercentile } = overview.standing;
-  const over = `average of your last ${RECENT_STANDINGS}`;
-  if (bestPercentile === null) return over;
-  const spread =
-    avgPercentile === null ? '' : ` · ${Math.round(bestPercentile - avgPercentile)} above it`;
-  return `${over} · best ${bestPercentile}${spread}`;
 }

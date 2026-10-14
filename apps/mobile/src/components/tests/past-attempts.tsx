@@ -2,13 +2,12 @@
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { everySitting, newestFirst } from '@iace/app-kit';
+import { everySitting, newestFirst, plural } from '@iace/app-kit';
 import { instituteDateTimeLabel, type PerformancePoint } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { Card } from '../ui/card';
 import { DETAIL_ROUTES } from '../../lib/nav';
 import { performanceQuery } from '../../lib/queries';
-import { plural } from '../../lib/plural';
 import { cn } from '../../lib/cn';
 
 const DASH = '—';

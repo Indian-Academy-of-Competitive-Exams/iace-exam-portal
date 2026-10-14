@@ -14,6 +14,7 @@ import {
   type Emptiness,
   type Sittable,
   type TestResult,
+  plural,
 } from '@iace/app-kit';
 import { TEST_SHUT, type StudentCatalogSeries } from '@iace/contracts';
 import { Text } from '../../src/components/ui/text';
@@ -24,7 +25,6 @@ import { Skeleton } from '../../src/components/ui/skeleton';
 import { FilterSearch, FilterSummary, FilterTrigger } from '../../src/components/ui/filter-bar';
 import { SeriesShelf } from '../../src/components/tests/series-shelf';
 import { asText, useFilterState, type FilterSpec, type FilterState } from '../../src/lib/filters';
-import { plural } from '../../src/lib/plural';
 import { TourTrigger, usePageTour, useTourTarget } from '../../src/lib/page-tour';
 import { TESTS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../src/lib/tours';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
@@ -105,6 +105,7 @@ function CatalogBody({
   if (isLoading) {
     return (
       <View className="gap-4">
+        <Skeleton className="h-56 rounded-xl" />
         <Skeleton className="h-56 rounded-xl" />
         <Skeleton className="h-56 rounded-xl" />
       </View>

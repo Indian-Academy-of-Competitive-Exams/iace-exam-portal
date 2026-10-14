@@ -26,6 +26,4 @@ export const isTypingQuestion = (question: ExamQuestion | undefined): boolean =>
 export const isWrittenQuestion = (question: ExamQuestion | undefined): boolean =>
   question?.type === QUESTION_TYPE.DESCRIPTIVE;
 
-/** Typed or written: its answer is minutes of work, so one click must never be able to clear it. */
-export const answersByKeyboard = (question: ExamQuestion | undefined): boolean =>
-  isTypingQuestion(question) || isWrittenQuestion(question);
+export { answersByKeyboard } from '@iace/app-kit';

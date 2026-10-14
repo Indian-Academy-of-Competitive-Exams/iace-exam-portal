@@ -5,13 +5,18 @@ import {
   METRIC_UNITS,
   headlineOf,
   isMarkingPending,
+  NO_MARKS_YET,
+  REPORT_FAILED,
+  WRITTEN_NOTICE,
   minutes,
   mistakesOf,
+  timeBenchmark,
   ordinalSuffix,
   targetLabel,
 } from '@iace/app-kit';
 import {
   TYPING_PRESETS,
+  paperCounts,
   scoreTyping,
   type MarkComposition,
   type ScoreCard,
@@ -19,6 +24,7 @@ import {
 } from '@iace/contracts';
 import { Text } from '../ui/text';
 import { scoreCardQuery, typingInAttemptQuery } from '../../lib/queries';
+import { Alert } from '../ui/alert';
 import { Badge } from '../ui/badge';
 import { Card } from '../ui/card';
 import { Hero, HeroFigure } from '../ui/hero';
@@ -27,6 +33,7 @@ import { MeasureBars, type MeasureBar } from '../ui/measure-bars';
 import { RefreshScroll } from '../ui/refresh-scroll';
 import { Skeleton } from '../ui/skeleton';
 import { StatTile, StatTileRow } from '../ui/stat-tile';
+import { CohortFigure, TimeFigure } from './score-card-figures';
 
 export function ScoreCardPanel({ attemptId }: Readonly<{ attemptId: string }>) {
   const card = useQuery(scoreCardQuery(attemptId));
@@ -41,16 +48,16 @@ export function ScoreCardPanel({ attemptId }: Readonly<{ attemptId: string }>) {
       {isMarkingPending(card.error) ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.EMPTY}
-          title="No marks yet"
+          title={NO_MARKS_YET.title}
           // ui-copy-ok: consequence
-          hint="Your paper is handed in and safe."
+          hint={NO_MARKS_YET.hint}
           onRetry={refresh}
         />
       ) : null}
       {card.isLoadingError && !isMarkingPending(card.error) ? (
         <EmptyState
           kind={EMPTY_STATE_KINDS.FAILURE}
-          title="Your score card did not load"
+          title={REPORT_FAILED.scoreCard}
           onRetry={refresh}
         />
       ) : null}
@@ -76,8 +83,13 @@ function Result({ card, typing }: Readonly<{ card: ScoreCard; typing: readonly T
   const attempted = card.correctCount + card.wrongCount;
   const accuracy = attempted === 0 ? 0 : Math.round((card.correctCount / attempted) * 100);
 
+  // A curve exists only where a cohort drew one; a retake has none to show.
+  const curve = card.cohort && card.cohort.bands.length > 0 ? card.cohort : null;
+  const counts = paperCounts(card.sections);
+
   return (
     <>
+      {card.hasWritten ? <Alert variant="info">{WRITTEN_NOTICE}</Alert> : null}
       <Headline card={card} />
 
       <StatTileRow>
@@ -98,6 +110,13 @@ function Result({ card, typing }: Readonly<{ card: ScoreCard; typing: readonly T
       </StatTileRow>
 
       <Marks composition={card.composition} />
+      <TimeFigure
+        time={card.time}
+        counts={counts}
+        paceIndex={card.paceIndex}
+        benchmark={timeBenchmark(card.sections)}
+      />
+      {curve === null ? null : <CohortFigure cohort={curve} />}
 
       {typing.map((sitting) => (
         <TypingResult key={sitting.sectionId} sitting={sitting} />

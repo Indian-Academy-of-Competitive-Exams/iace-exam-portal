@@ -1,6 +1,6 @@
 /** The one line a section reads as on the two screens that list a paper's sections. */
 import { type ExamBrief } from '@iace/contracts';
-import { plural } from './plural';
+import { plural } from '@iace/app-kit';
 
 const SECONDS_PER_MINUTE = 60;
 
