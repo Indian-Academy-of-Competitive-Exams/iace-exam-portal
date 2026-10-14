@@ -8,11 +8,13 @@
       "distribution": "internal"
     },
     "preview": {
+      "channel": "preview",
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "env": { "EXPO_PUBLIC_API_URL": "https://api.staging.examprep.iace.co.in" }
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
       "android": { "buildType": "app-bundle" }
     }

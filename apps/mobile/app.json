@@ -6,6 +6,8 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "iace-mobile",
+    "runtimeVersion": { "policy": "fingerprint" },
+    "updates": { "url": "https://u.expo.dev/243dc5bc-b41a-422f-b3fa-9c2c5139ac2e" },
     "icon": "./assets/icon.png",
     "android": {
       "package": "in.co.iace.mobile",
