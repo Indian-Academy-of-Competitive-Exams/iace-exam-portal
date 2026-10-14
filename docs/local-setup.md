@@ -204,20 +204,19 @@ at start.
 
 ## 7b. Mobile push (optional, Android)
 
-Push is off until a Firebase project is wired to it, and the channel reports itself unavailable
-rather than failing per send — so skip this unless you are working on notifications.
+Push stays off in a checkout until the service account reaches `.env`, and the channel reports
+itself unavailable rather than failing per send — so skip this unless you are working on
+notifications.
 
-1. **Create the project** at <https://console.firebase.google.com> (Analytics is not needed).
-2. **Add an Android app** to it. The package name must be exactly `in.co.iace.mobile`, the value in
-   `apps/mobile/app.json`; a mismatch registers a token FCM will not deliver to. No SHA-1 is needed
-   — that is for Google Sign-In, not messaging.
-3. **Download `google-services.json`** and put it at `apps/mobile/google-services.json`, then add
-   `"googleServicesFile": "./google-services.json"` back to `android` in `apps/mobile/app.json`.
-   The file is gitignored — it names one project's app, so every environment drops in its own — and
-   the key is out of `app.json` because prebuild throws rather than warns when it cannot copy a file
-   no checkout has, which made every Android build impossible until push was wired.
-4. **Project settings → Service accounts → Generate new private key.** From the JSON it downloads,
-   three fields go in the root `.env` — and the file itself goes nowhere near the repo:
+The Firebase project is **`iace-exams-mobile`** and the app half needs nothing from you:
+`apps/mobile/google-services.json` is tracked, because it holds a project number, the package name
+`in.co.iace.mobile` and a package-restricted API key — no secret, and Google ships it inside every
+APK. It is tracked rather than ignored because EAS Build uploads only what git tracks, and one
+institute has one Firebase project.
+
+1. **Project settings → Service accounts → Generate new private key**, from the Firebase console.
+   From the JSON it downloads, three fields go in the root `.env` — and the file itself goes
+   nowhere near the repo:
 
    ```
    FCM_PROJECT_ID=<project_id>
@@ -225,8 +224,8 @@ rather than failing per send — so skip this unless you are working on notifica
    FCM_PRIVATE_KEY="<private_key, in double quotes, its \n escapes left as they are>"
    ```
 
-5. **Restart the API.** It logs `Mobile push is not configured` on boot until all three are set.
-6. **Build a development client.** Expo Go cannot receive remote push at all — it was removed in
+2. **Restart the API.** It logs `Mobile push is not configured` on boot until all three are set.
+3. **Build a development client.** Expo Go cannot receive remote push at all — it was removed in
    SDK 53 — so `npx expo run:android` (Android Studio and an SDK required), or
    `npx eas build -p android --profile development` from `apps/mobile`. The app registers the
    phone's own FCM token, never an Expo push token, so nothing here needs an Expo account — but
