@@ -1,4 +1,4 @@
-/** The typing screen itself: the passage above, the box below. It knows no clock and saves nothing. */
+/** The typing screen itself: the passage on the left, the box on the right, stacked on a phone. It knows no clock and saves nothing. */
 import type * as React from 'react';
 import { TYPED_TEXT_MAX, typingKeyDepressions } from '@iace/contracts';
 import { Textarea, cn } from '@iace/ui';
@@ -36,40 +36,42 @@ export function TypingPane({
         className,
       )}
     >
-      <section
-        aria-label="Passage"
-        onCopy={refuse}
-        onContextMenu={refuse}
-        className="typing-passage relative min-h-0 flex-1 select-none overflow-y-auto rounded-exam-option border border-exam-border bg-exam-surface-2 p-exam text-base leading-loose text-exam-ink"
-      >
-        {passage}
-      </section>
+      <div className="typing-split flex min-h-0 flex-1 flex-col gap-exam-gap md:flex-row">
+        <section
+          aria-label="Passage"
+          onCopy={refuse}
+          onContextMenu={refuse}
+          className="typing-passage relative min-h-0 flex-1 select-none md:basis-0 overflow-y-auto rounded-exam-option border border-exam-border bg-exam-surface-2 p-exam text-base leading-loose text-exam-ink"
+        >
+          {passage}
+        </section>
 
-      <Textarea
-        // Remounted as it opens: a box that mounted disabled would never take the focus it asks for.
-        key={disabled ? 'closed' : 'open'}
-        aria-label="Type the passage here"
-        autoFocus
-        value={value}
-        disabled={disabled}
-        spellCheck={false}
-        autoCorrect="off"
-        autoCapitalize="off"
-        autoComplete="off"
-        maxLength={TYPED_TEXT_MAX}
-        onBlur={onBlur}
-        onPaste={refuse}
-        onDrop={refuse}
-        onContextMenu={refuse}
-        onKeyDown={(event) => {
-          if (!backspace && ERASING_KEYS.has(event.key)) event.preventDefault();
-        }}
-        // Typing over a selection erases too, so without backspace only what extends the text is kept.
-        onChange={(event) => {
-          if (backspace || event.target.value.startsWith(value)) onChange(event.target.value);
-        }}
-        className="typing-box h-48 shrink-0 resize-none border-exam-border bg-exam-surface text-base leading-loose text-exam-ink"
-      />
+        <Textarea
+          // Remounted as it opens: a box that mounted disabled would never take the focus it asks for.
+          key={disabled ? 'closed' : 'open'}
+          aria-label="Type the passage here"
+          autoFocus
+          value={value}
+          disabled={disabled}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
+          maxLength={TYPED_TEXT_MAX}
+          onBlur={onBlur}
+          onPaste={refuse}
+          onDrop={refuse}
+          onContextMenu={refuse}
+          onKeyDown={(event) => {
+            if (!backspace && ERASING_KEYS.has(event.key)) event.preventDefault();
+          }}
+          // Typing over a selection erases too, so without backspace only what extends the text is kept.
+          onChange={(event) => {
+            if (backspace || event.target.value.startsWith(value)) onChange(event.target.value);
+          }}
+          className="typing-box h-48 shrink-0 resize-none border-exam-border bg-exam-surface text-base leading-loose text-exam-ink md:h-auto md:min-h-0 md:flex-1 md:basis-0"
+        />
+      </div>
 
       <dl className="typing-count flex shrink-0 gap-6 text-sm tabular-nums text-exam-ink">
         <div className="flex items-baseline gap-2">
