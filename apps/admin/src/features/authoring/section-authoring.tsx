@@ -25,7 +25,6 @@ import {
   SECTION_QUESTION_TYPES,
 } from '@iace/contracts';
 import {
-  Alert,
   Badge,
   Button,
   ConfirmDialog,
@@ -69,6 +68,7 @@ import { useAuth } from '../../providers/auth';
 import { useDeleteQuestion } from './use-delete-question';
 import { SectionThreadButton } from '../../components/section-thread';
 import { OtherTestsNotice } from './cross-test-warning';
+import { NoticeChip } from './notice-chip';
 import { TypistDoneDialog } from './typist-done-dialog';
 import {
   AuthoringWorkspace,
@@ -596,9 +596,14 @@ function CardNotice({
   const reason = review.reason ? SEND_BACK_REASON_LABELS[review.reason] : '';
   const said = [`${fixed ? 'Fixed after being sent back' : 'Sent back'}: ${reason}.`, review.note];
   return (
-    <div className="flex flex-col gap-2 px-4 pt-3">
+    <>
       {sentBack ? (
-        <Alert variant={fixed ? 'info' : 'warning'}>{said.filter(Boolean).join(' ')}</Alert>
+        <NoticeChip
+          tone={fixed ? 'info' : 'warning'}
+          label={fixed ? 'Fixed after being sent back' : 'Sent back'}
+        >
+          {said.filter(Boolean).join(' ')}
+        </NoticeChip>
       ) : null}
       {warnsOfOtherTests ? (
         <OtherTestsNotice
@@ -612,7 +617,7 @@ function CardNotice({
           }
         />
       ) : null}
-    </div>
+    </>
   );
 }
 

@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { type QuestionOnOtherTest } from '@iace/contracts';
-import { Alert, SkeletonParagraph } from '@iace/ui';
 import { questionOtherTestsQueryKey } from '../../lib/constants';
+import { NoticeChip } from './notice-chip';
 
 const TEST_NAMES = new Intl.ListFormat('en-IN', { style: 'long', type: 'conjunction' });
 
@@ -25,29 +25,7 @@ function sharedMessage(shared: readonly QuestionOnOtherTest[]): string {
   return `This question is also on ${names}, ${opened} opened. A fix here changes it there too.`;
 }
 
-/** Silent when nothing else holds the question, which is what makes it worth reading. */
-function CrossTestWarning({
-  loading,
-  tests,
-}: Readonly<{ loading: boolean; tests: readonly QuestionOnOtherTest[] }>) {
-  const [open, sharedOnly] = useMemo(
-    () => [tests.filter((test) => test.isOpen), tests.filter((test) => !test.isOpen)],
-    [tests],
-  );
-
-  if (loading) return <SkeletonParagraph lines={2} />;
-  if (tests.length === 0) return null;
-
-  return (
-    <>
-      {open.length > 0 ? <Alert variant="warning">{openedMessage(open)}</Alert> : null}
-
-      {sharedOnly.length > 0 ? <Alert variant="info">{sharedMessage(sharedOnly)}</Alert> : null}
-    </>
-  );
-}
-
-/** Asked before the edit, not reported after it: which other tests a fix here reaches. */
+/** Silent while it loads and when nothing else holds the question, which is what makes it worth opening. */
 export function OtherTestsNotice({
   questionId,
   read,
@@ -56,9 +34,27 @@ export function OtherTestsNotice({
     queryKey: questionOtherTestsQueryKey(questionId),
     queryFn: read,
   });
+  const tests = elsewhere.data;
+  const [open, sharedOnly] = useMemo(
+    () => [
+      (tests ?? []).filter((test) => test.isOpen),
+      (tests ?? []).filter((test) => !test.isOpen),
+    ],
+    [tests],
+  );
+
   return (
-    <div className="flex flex-col gap-2 px-4 pt-4 empty:hidden">
-      <CrossTestWarning loading={elsewhere.isLoading} tests={elsewhere.data ?? []} />
-    </div>
+    <>
+      {open.length > 0 ? (
+        <NoticeChip tone="warning" label="On tests that have opened">
+          {openedMessage(open)}
+        </NoticeChip>
+      ) : null}
+      {sharedOnly.length > 0 ? (
+        <NoticeChip tone="info" label="On other tests">
+          {sharedMessage(sharedOnly)}
+        </NoticeChip>
+      ) : null}
+    </>
   );
 }

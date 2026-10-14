@@ -1,6 +1,6 @@
 import { Check, CircleAlert, CircleDot, Circle, TriangleAlert } from 'lucide-react';
 import { QUESTION_TYPE, hasText, previewTextOf, type QuestionLanguage } from '@iace/contracts';
-import { Accordion, Badge, RichContent, cn, type BadgeProps } from '@iace/ui';
+import { Badge, RichContent, cn } from '@iace/ui';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
 
 /** One rule, and how the question stands against it. */
@@ -90,44 +90,40 @@ const STANDING = {
   fail: { label: 'Required', variant: 'danger' },
 } as const;
 
-/** The whole list in one badge, so a closed panel still says whether the question can be saved. */
-function statusOf(checks: readonly Check[]): { variant: BadgeProps['variant']; label: string } {
-  const count = (state: Check['state']) => checks.filter((check) => check.state === state).length;
-  const failing = count('fail');
-  if (failing > 0) return { variant: 'danger', label: `${failing} required` };
-  const warning = count('warn');
-  if (warning > 0) return { variant: 'warning', label: `${warning} optional` };
-  return { variant: 'success', label: 'All clear' };
+/** The list in a badge per standing, so the closed footer still says whether the question can be saved. */
+export function ChecksStatus({ checks }: Readonly<{ checks: readonly Check[] }>) {
+  const failing = checks.filter((check) => check.state === 'fail').length;
+  const warning = checks.filter((check) => check.state === 'warn').length;
+  if (failing === 0 && warning === 0) return <Badge variant="success">All clear</Badge>;
+  return (
+    <>
+      {failing > 0 ? <Badge variant="danger">{`${failing} required`}</Badge> : null}
+      {warning > 0 ? <Badge variant="warning">{`${warning} optional`}</Badge> : null}
+    </>
+  );
 }
 
-export function AuthoringChecks({ checks }: Readonly<{ checks: readonly Check[] }>) {
-  const status = statusOf(checks);
+export function ChecksList({ checks }: Readonly<{ checks: readonly Check[] }>) {
   return (
-    <Accordion
-      className="rounded-md"
-      title={<span className="text-sm font-semibold">Validation</span>}
-      meta={<Badge variant={status.variant}>{status.label}</Badge>}
-    >
-      <ul className="flex flex-col gap-2.5">
-        {checks.map((check) => {
-          const Icon = ICON[check.state];
-          const standing = STANDING[check.state];
-          return (
-            <li key={check.key} className="flex items-center gap-3 text-sm">
-              <Icon className={cn('size-4 shrink-0', TONE[check.state])} aria-hidden />
-              <span className="min-w-0 flex-1">{check.label}</span>
-              {standing ? (
-                <Badge variant={standing.variant} className="shrink-0">
-                  {standing.label}
-                </Badge>
-              ) : null}
-              {check.meta ? (
-                <span className="shrink-0 text-xs text-muted-foreground">{check.meta}</span>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </Accordion>
+    <ul className="flex flex-col gap-2.5">
+      {checks.map((check) => {
+        const Icon = ICON[check.state];
+        const standing = STANDING[check.state];
+        return (
+          <li key={check.key} className="flex items-center gap-3 text-sm">
+            <Icon className={cn('size-4 shrink-0', TONE[check.state])} aria-hidden />
+            <span className="min-w-0 flex-1">{check.label}</span>
+            {standing ? (
+              <Badge variant={standing.variant} className="shrink-0">
+                {standing.label}
+              </Badge>
+            ) : null}
+            {check.meta ? (
+              <span className="shrink-0 text-xs text-muted-foreground">{check.meta}</span>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -195,7 +195,6 @@ function Editor({ id }: Readonly<{ id: string | undefined }>) {
               canSave={canSave}
               readOnly={!canWrite}
               boxVersion={boxVersion}
-              checks={checks}
               onRegions={onRegions}
               onCycleLanguage={cycleLanguage}
               onLanguageChange={switchLanguage}
@@ -208,6 +207,7 @@ function Editor({ id }: Readonly<{ id: string | undefined }>) {
       </div>
 
       <Legend
+        checks={checks}
         actions={
           typing ? (
             <Button type="button" size="sm" disabled={!canSave} onClick={saveNow}>
