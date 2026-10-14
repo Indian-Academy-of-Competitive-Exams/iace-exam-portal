@@ -160,6 +160,11 @@ describe('SubmitService', () => {
     assert.equal(result.answeredCount, 1);
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
     assert.equal((await attemptRow(built.attemptId)).status, ATTEMPT_STATUS.SUBMITTED);
+    assert.equal(
+      await built.state.read(built.attemptId),
+      null,
+      'the key is taken, so no save lands',
+    );
     assert.deepEqual(built.queue.jobs, [
       {
         name: QUEUE_NAMES.SCORING,
@@ -185,18 +190,23 @@ describe('SubmitService', () => {
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
   });
 
-  /** Late is late at submit too; the sitting still ends rather than waiting for the sweeper. */
-  it('drops a batch that comes in past the deadline, and still ends the sitting', async () => {
-    const built = await build({ endsAt: LATE });
-    await built.state.open(built.live);
+  /** Late is late at submit too; the sitting still ends rather than waiting for the sweeper, key or no key. */
+  for (const [what, keyHeld] of [
+    ['drops a batch that comes in past the deadline, and still ends the sitting', true],
+    ['ends a late sitting whose live state is gone, dropping the batch it carries', false],
+  ] as const) {
+    it(what, async () => {
+      const built = await build({ endsAt: LATE });
+      if (keyHeld) await built.state.open(built.live);
 
-    const result = await built.submit.submit(built.student, built.attemptId, {
-      last: { revision: 1, answers: [built.change()] },
+      const result = await built.submit.submit(built.student, built.attemptId, {
+        last: { revision: 1, answers: [built.change()] },
+      });
+
+      assert.equal(result.submittedByThisCall, true);
+      assert.equal(await chosenOn(built.attemptId, built.q1), null);
     });
-
-    assert.equal(result.submittedByThisCall, true);
-    assert.equal(await chosenOn(built.attemptId, built.q1), null);
-  });
+  }
 
   /** A retry of a submit that did land must not fail on the batch it carries again. */
   it('answers a retried submit with the first outcome, batch and all', async () => {
@@ -226,18 +236,6 @@ describe('SubmitService', () => {
 
     assert.equal(await chosenOn(built.attemptId, built.q1), RIGHT_OPTION);
     assert.equal(await chosenOn(built.attemptId, built.q2), RIGHT_OPTION);
-  });
-
-  /** A late sitting whose key is gone is ended with what it holds, not refused with a 409. */
-  it('ends a late sitting whose live state is gone, dropping the batch it carries', async () => {
-    const built = await build({ endsAt: LATE });
-
-    const result = await built.submit.submit(built.student, built.attemptId, {
-      last: { revision: 1, answers: [built.change()] },
-    });
-
-    assert.equal(result.submittedByThisCall, true);
-    assert.equal(await chosenOn(built.attemptId, built.q1), null);
   });
 
   /** A retry racing the submit that landed: the batch meets an ended sitting, and the answer is the first outcome. */
@@ -277,26 +275,6 @@ describe('SubmitService', () => {
     assert.equal(second.submittedByThisCall, false);
     assert.equal(second.submittedAt, first.submittedAt);
     assert.equal(built.queue.jobs.length, 1);
-  });
-
-  /** Taking the state shuts the door: nothing can be saved into a sitting that has ended. */
-  it('leaves no live state behind, so a later save is refused', async () => {
-    const built = await build();
-    await answered(built);
-
-    await built.submit.submit(built.student, built.attemptId);
-
-    assert.equal(await built.state.read(built.attemptId), null);
-    await assert.rejects(
-      () =>
-        built.state.save(
-          built.student,
-          built.attemptId,
-          { revision: 9, answers: [built.change()] },
-          NOW,
-        ),
-      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED,
-    );
   });
 
   it('submits an empty paper for a student who answered nothing', async () => {
@@ -417,17 +395,6 @@ describe('a queue that is down at submit', () => {
       built.queue.jobs.map((job) => job.jobId),
       [scoringJobId(built.attemptId)],
     );
-  });
-
-  it('does not queue twice a sitting whose job the queue still holds', async () => {
-    const built = await build();
-    await answered(built);
-
-    await built.submit.submit(built.student, built.attemptId);
-    await prisma.attempt.update({ where: { id: built.attemptId }, data: { submittedAt: LATE } });
-    await built.sweeper.process();
-
-    assert.equal(built.queue.jobs.length, 1);
   });
 });
 

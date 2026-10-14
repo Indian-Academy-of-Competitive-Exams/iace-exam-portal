@@ -138,71 +138,48 @@ const missing = (error: unknown) => AppException.is(error) && error.code === Err
 
 const HOLDERS = ['paper', 'stat'] as const;
 
-/** Something that keys on this version of the question: a paper row, or a rollup pointing at one. */
-async function heldBy(
-  holder: (typeof HOLDERS)[number],
-  questionId: string,
-  questionVersionId: string,
-) {
+/** A paper row pinning this exact version (the current one unless named), on a test the caller can then open. */
+async function pinnedOn(questionId: string, questionVersionId?: string) {
   const catalog = await makeCatalog(prisma);
   const test = await makeTest(prisma, catalog);
   const section = await makeSection(prisma, catalog);
-  const paperRow = (onQuestion: string, onVersion: string) =>
-    prisma.paperQuestion.create({
-      data: {
-        id: uid(),
-        testId: test.id,
-        baseConfigId: catalog.baseConfigId,
-        baseConfigSectionId: section.id,
-        questionId: onQuestion,
-        questionVersionId: onVersion,
-        order: 1,
-        marks: 2,
-        negativeMarks: 0.5,
-      },
-    });
-  if (holder === 'paper') {
-    await paperRow(questionId, questionVersionId);
-  } else {
-    // A rollup row points at its paper row by id alone, so another question's row carries it.
-    const other = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    const row = await paperRow(other.id, other.versionId);
-    await prisma.testQuestionStat.create({
-      data: { testId: test.id, paperQuestionId: row.id, questionId, computedAt: new Date() },
-    });
-  }
-}
-
-/** A paper row pinning this exact version, on a test the caller can then open. */
-async function pinnedOn(questionId: string, questionVersionId: string) {
-  const catalog = await makeCatalog(prisma);
-  const test = await makeTest(prisma, catalog);
-  const section = await makeSection(prisma, catalog);
-  await prisma.paperQuestion.create({
+  const row = await prisma.paperQuestion.create({
     data: {
       id: uid(),
       testId: test.id,
       baseConfigId: catalog.baseConfigId,
       baseConfigSectionId: section.id,
       questionId,
-      questionVersionId,
+      questionVersionId: questionVersionId ?? (await currentVersionOf(questionId)),
       order: 1,
       marks: 2,
       negativeMarks: 0.5,
     },
   });
-  return { testId: test.id };
+  return { testId: test.id, paperQuestionId: row.id };
 }
 
-const openedAgo = (testId: string) =>
+/** Something that keys on the question: a paper row, or a rollup pointing at one. */
+async function heldBy(holder: (typeof HOLDERS)[number], questionId: string) {
+  if (holder === 'paper') {
+    await pinnedOn(questionId);
+    return;
+  }
+  // A rollup row points at its paper row by id alone, so another question's row carries it.
+  const other = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+  const { testId, paperQuestionId } = await pinnedOn(other.id, other.versionId);
+  await prisma.testQuestionStat.create({
+    data: { testId, paperQuestionId, questionId, computedAt: new Date() },
+  });
+}
+
+const offeredOpening = (testId: string, opensAtMs: number) =>
   prisma.test.update({
     where: { id: testId },
-    data: {
-      status: TEST_STATUS.ACTIVE,
-      finalizedAt: new Date(),
-      opensAt: new Date(Date.now() - 60_000),
-    },
+    data: { status: TEST_STATUS.ACTIVE, finalizedAt: new Date(), opensAt: new Date(opensAtMs) },
   });
+
+const openedAgo = (testId: string) => offeredOpening(testId, Date.now() - 60_000);
 
 const currentVersionOf = async (id: string) => (await questionRow(id)).currentVersionId ?? '';
 
@@ -373,49 +350,12 @@ describe('QuestionsService — retiring and status', () => {
 });
 
 describe('QuestionsService.update', () => {
-  it('replaces the options rather than adding to them', async () => {
-    const { questions } = await build();
-    const created = await questions.create(draft(), ADMIN);
-
-    const updated = await questions.update(
-      created.id,
-      draft({
-        stem: { en: 'What is 20% of 150?' },
-        options: [
-          { position: 1, isCorrect: false, text: { en: '20' } },
-          { position: 2, isCorrect: true, text: { en: '30' } },
-          { position: 3, isCorrect: false, text: { en: '45' } },
-          { position: 4, isCorrect: false, text: { en: '50' } },
-        ],
-      }),
-      ADMIN,
-    );
-
-    assert.deepEqual(
-      updated.options.map((option) => previewTextOf(plainTextOf(option.text.en))),
-      ['20', '30', '45', '50'],
-    );
-  });
-
-  it('does not call a question a duplicate of itself', async () => {
-    const { questions } = await build();
-    const created = await questions.create(draft(), ADMIN);
-
-    const updated = await questions.update(
-      created.id,
-      draft({ difficulty: DIFFICULTY_LEVEL.HIGH }),
-      ADMIN,
-    );
-
-    assert.equal(updated.difficulty, DIFFICULTY_LEVEL.HIGH);
-  });
-
   /** A save that rewrites the option text leaves the correct one where it was, and the diff says so. */
-  it('reports a real change but no correctOptionPositions change when only the option text moves', async () => {
+  it('replaces the options, reporting a real change but no correctOptionPositions change when only the option text moves', async () => {
     const { questions, audit } = await build();
     const created = await questions.create(draft(), ADMIN);
 
-    const { changed } = await recording(audit, () =>
+    const { result, changed } = await recording(audit, () =>
       questions.update(
         created.id,
         draft({
@@ -437,6 +377,10 @@ describe('QuestionsService.update', () => {
       to: DIFFICULTY_LEVEL.HIGH,
     });
     assert.ok(changed && !('correctOptionPositions' in changed));
+    assert.deepEqual(
+      result.options.map((option) => previewTextOf(plainTextOf(option.text.en))),
+      ['20', '30', '45', '50'],
+    );
   });
 });
 
@@ -446,7 +390,7 @@ describe('QuestionsService.update — what versioning is for', () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
     const [pinned] = await versions();
-    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    const { testId } = await pinnedOn(created.id);
     await openedAgo(testId);
 
     const edited = await questions.update(
@@ -515,14 +459,15 @@ describe('QuestionsService.update — what a save leaves alone, and what it name
   });
 
   /** The failure this prevents: a History line reading as two uuids nobody can tell apart. */
-  it('records the subject and topic a question moved between by name', async () => {
+  it('moves a question nothing has drawn, recording the subject and topic it moved between by name', async () => {
     const { questions, audit } = await build();
     const created = await questions.create(draft(), ADMIN);
 
-    const { changed } = await recording(audit, () =>
+    const { result, changed } = await recording(audit, () =>
       questions.update(created.id, draft(ELSEWHERE), ADMIN),
     );
 
+    assert.equal(result.subject.id, BANK.GENERAL_AWARENESS);
     assert.deepEqual(changed?.subject, { from: 'QUANTITATIVE APTITUDE', to: 'GENERAL AWARENESS' });
     assert.deepEqual(changed?.topic, { from: 'ARITHMETIC', to: 'HISTORY' });
     assert.equal(changed?.subjectId, undefined);
@@ -591,37 +536,12 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
     assert.equal((await versions())[0]?.createdById, OTHER_ADMIN);
   });
 
-  /** An attempt stores the option id it was shown, and a revision is still an edit of that row. */
-  it('keeps the option ids a revision inherits', async () => {
-    const { questions } = await build();
-    const created = await questions.create(draft(), ADMIN);
-
-    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
-
-    assert.deepEqual(
-      edited.options.map((option) => option.id),
-      created.options.map((option) => option.id),
-    );
-  });
-
-  it('rewrites a published question in place while nothing has drawn it', async () => {
-    const { questions } = await build();
-    const created = await questions.create(draft(), ADMIN);
-    const versionId = await currentVersionOf(created.id);
-
-    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
-
-    assert.equal(edited.version, 1);
-    assert.equal((await versions()).length, 1);
-    assert.equal(await currentVersionOf(created.id), versionId);
-  });
-
   /** An unreached paper is not the belt status used to be — its version still rewrites in place. */
   it('rewrites in place a version an unreached paper holds, and the paper follows it', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
-    await heldBy('paper', created.id, versionId);
+    await heldBy('paper', created.id);
 
     const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
@@ -643,40 +563,9 @@ describe('QuestionsService.update — a working copy is rewritten, not appended'
       'the paper follows the rewrite, so it now reads the new stem',
     );
   });
-
-  /** Publishing is no longer the freeze — a paper students can reach is. */
-  it('keeps revising in place after publishing, while nothing reachable pins it', async () => {
-    const { questions } = await build();
-    const created = await questions.create(draft(), ADMIN);
-    await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
-    assert.equal((await versions()).length, 1);
-
-    await questions.unarchive(created.id);
-    const published = await questions.update(
-      created.id,
-      draft({ stem: { en: 'What is 25% of 200?', hi: 'x' } }),
-      ADMIN,
-    );
-
-    assert.equal(published.version, 1);
-    assert.equal((await versions()).length, 1);
-  });
 });
 
 describe('QuestionsService.update — revisability follows reachability', () => {
-  it('rewrites in place while the test that pins the version is still a draft', async () => {
-    const { questions } = await build();
-    const created = await questions.create(draft(), ADMIN);
-    const versionId = await currentVersionOf(created.id);
-    await pinnedOn(created.id, versionId);
-
-    const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
-
-    assert.equal((await versions()).length, 1, 'an unopened paper must not force a new version');
-    assert.equal(edited.version, 1);
-    assert.equal(await currentVersionOf(created.id), versionId);
-  });
-
   it('appends once the test that pins it has opened', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
@@ -707,19 +596,12 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   it('appends when only a program unlock has opened, not the test itself', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    const { testId } = await pinnedOn(created.id);
     const program = await prisma.program.create({
       data: { id: uid(), code: uid(), name: 'Morning batch' },
       select: { code: true },
     });
-    await prisma.test.update({
-      where: { id: testId },
-      data: {
-        status: TEST_STATUS.ACTIVE,
-        finalizedAt: new Date(),
-        opensAt: new Date(Date.now() + 86_400_000),
-      },
-    });
+    await offeredOpening(testId, Date.now() + 86_400_000);
     await prisma.testProgramUnlock.create({
       data: { testId, programCode: program.code, opensAt: new Date(Date.now() - 60_000) },
     });
@@ -732,7 +614,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   it('leaves a test that has not been offered unreachable, whatever its opensAt', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    const { testId } = await pinnedOn(created.id);
     await prisma.test.update({
       where: { id: testId },
       data: { opensAt: new Date(Date.now() - 60_000) },
@@ -747,7 +629,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
   it('leaves a never-offered test unreachable once an admin retires it', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    const { testId } = await pinnedOn(created.id);
     await prisma.test.update({
       where: { id: testId },
       data: { status: TEST_STATUS.INACTIVE, opensAt: new Date(Date.now() - 60_000) },
@@ -764,14 +646,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
     const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     const { testId } = await pinnedOn(created.id, versionId);
-    await prisma.test.update({
-      where: { id: testId },
-      data: {
-        status: TEST_STATUS.ACTIVE,
-        finalizedAt: new Date(),
-        opensAt: new Date(Date.now() + 86_400_000),
-      },
-    });
+    await offeredOpening(testId, Date.now() + 86_400_000);
 
     const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
@@ -786,14 +661,7 @@ describe('QuestionsService.update — revisability follows reachability', () => 
     const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
     const { testId } = await pinnedOn(created.id, versionId);
-    await prisma.test.update({
-      where: { id: testId },
-      data: {
-        status: TEST_STATUS.ACTIVE,
-        finalizedAt: new Date(),
-        opensAt: new Date(Date.now() + START_GRACE_MS / 2),
-      },
-    });
+    await offeredOpening(testId, Date.now() + START_GRACE_MS / 2);
 
     const edited = await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 
@@ -870,7 +738,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
   async function readAndReleased() {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    const { testId } = await pinnedOn(created.id);
     const { baseConfigId, baseConfigSectionId } = await prisma.paperQuestion.findFirstOrThrow({
       where: { questionId: created.id },
     });
@@ -953,7 +821,7 @@ describe('QuestionsService.update — reworded words are read again', () => {
   /** The failure this prevents: a draft spared on the earlier words carrying that tick onto the new ones when the question is put back. */
   it('drops the tick on a draft still pinning the earlier words, too', async () => {
     const { questions, questionId, checkedAt } = await readAndReleased();
-    const reached = await pinnedOn(questionId, await currentVersionOf(questionId));
+    const reached = await pinnedOn(questionId);
     await openedAgo(reached.testId);
 
     await questions.update(questionId, draft({ stem: REWORDED }), ADMIN);
@@ -975,7 +843,7 @@ describe('QuestionsService.versions — the chain, and who sat which wording', (
   it('reads newest first, naming the hand behind each link and the papers pinning it', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+    const { testId } = await pinnedOn(created.id);
     await openedAgo(testId);
     await questions.update(created.id, draft({ stem: REWORDED }), OTHER_ADMIN);
     const sat = await prisma.test.findUniqueOrThrow({
@@ -1012,26 +880,17 @@ describe('QuestionsService — being depended on settles what a question is', ()
   it('refuses to move a question a paper has drawn to another subject', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    await heldBy('paper', created.id, await currentVersionOf(created.id));
+    await heldBy('paper', created.id);
 
     await assert.rejects(() => questions.update(created.id, draft(ELSEWHERE), ADMIN), conflict);
     assert.equal((await questionRow(created.id)).subjectId, BANK.QUANT);
-  });
-
-  it('lets a question nothing has drawn be moved to another subject', async () => {
-    const { questions } = await build();
-    const created = await questions.create(draft(), ADMIN);
-
-    const moved = await questions.update(created.id, draft(ELSEWHERE), ADMIN);
-
-    assert.equal(moved.subject.id, BANK.GENERAL_AWARENESS);
   });
 
   /** The failure this prevents: a question typed without a topic that nobody can ever file once it is on a paper. */
   it('gives a drawn question the topic it never had', async () => {
     const { questions } = await build();
     const created = await questions.create(draft({ topicId: null }), ADMIN);
-    await heldBy('paper', created.id, await currentVersionOf(created.id));
+    await heldBy('paper', created.id);
 
     await questions.update(created.id, draft({ topicId: BANK.ALGEBRA }), ADMIN);
 
@@ -1041,7 +900,7 @@ describe('QuestionsService — being depended on settles what a question is', ()
   it('refuses to move a drawn question off the topic it has, or to take it away', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    await heldBy('paper', created.id, await currentVersionOf(created.id));
+    await heldBy('paper', created.id);
 
     for (const topicId of [BANK.ALGEBRA, null]) {
       await assert.rejects(() => questions.update(created.id, draft({ topicId }), ADMIN), conflict);
@@ -1053,7 +912,7 @@ describe('QuestionsService — being depended on settles what a question is', ()
   it('refuses to retype a question a paper has drawn', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    await heldBy('paper', created.id, await currentVersionOf(created.id));
+    await heldBy('paper', created.id);
 
     await assert.rejects(() => questions.update(created.id, draft(TYPED), ADMIN), conflict);
     assert.equal((await questionRow(created.id)).type, QUESTION_TYPE.SINGLE_MCQ);
@@ -1230,7 +1089,7 @@ describe('QuestionsService — what the screen is told', () => {
   it('says a question a paper has drawn cannot', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
-    await heldBy('paper', created.id, await currentVersionOf(created.id));
+    await heldBy('paper', created.id);
 
     assert.equal((await questions.list(listQuery())).items[0]?.inUse, true);
     assert.equal((await questions.detail(created.id)).inUse, true);
@@ -1301,25 +1160,23 @@ describe('QuestionsService.remove — the one hard delete', () => {
   });
 
   /** Status is not what makes a question safe to remove — having nothing depend on it is. */
-  for (const status of [QUESTION_STATUS.ACTIVE, QUESTION_STATUS.ARCHIVED] as const) {
-    it(`deletes an unreferenced question that is ${status}`, async () => {
-      const { questions } = await build();
-      const created = await questions.create(draft(), ADMIN);
-      if (status === QUESTION_STATUS.ARCHIVED) await questions.archive(created.id);
+  it('deletes an unreferenced question that is archived', async () => {
+    const { questions } = await build();
+    const created = await questions.create(draft(), ADMIN);
+    await questions.archive(created.id);
 
-      await questions.remove(created.id);
+    await questions.remove(created.id);
 
-      assert.equal(await prisma.question.count(), 0);
-      assert.equal(await prisma.questionVersion.count(), 0);
-    });
-  }
+    assert.equal(await prisma.question.count(), 0);
+    assert.equal(await prisma.questionVersion.count(), 0);
+  });
 
   /** Deleting what a paper keys on would leave a scored result reading a question that is gone. */
   for (const holder of HOLDERS) {
     it(`refuses a draft that a ${holder} already keys on`, async () => {
       const { questions } = await build();
       const created = await questions.create(draft(), ADMIN);
-      await heldBy(holder, created.id, await currentVersionOf(created.id));
+      await heldBy(holder, created.id);
 
       await assert.rejects(() => questions.remove(created.id), conflict);
       assert.ok(await prisma.question.findUnique({ where: { id: created.id } }));
@@ -1380,27 +1237,19 @@ describe('QuestionsService.update — a save that changes nothing', () => {
     assert.equal(previewTextOf(plainTextOf(content.en?.stem)), 'What is 20% of 150?');
   });
 
-  it('writes no version when the content is byte for byte what is stored', async () => {
+  /** Re-crediting a draft on every save would hand it to whoever opened it last. */
+  it('writes no version when the content is byte for byte what is stored, and keeps its author', async () => {
     const { questions } = await build();
     const created = await questions.create(draft(), ADMIN);
     const versionId = await currentVersionOf(created.id);
-
-    const saved = await questions.update(created.id, draft(), ADMIN);
-
-    assert.equal((await versions()).length, 1);
-    assert.equal(saved.version, 1);
-    assert.equal(await currentVersionOf(created.id), versionId);
-  });
-
-  /** Re-crediting a draft on every save would hand it to whoever opened it last. */
-  it('leaves a draft credited to whoever actually wrote it', async () => {
-    const { questions } = await build();
-    const created = await questions.create(draft(), ADMIN);
     const [written] = await versions();
 
-    await questions.update(created.id, draft(), OTHER_ADMIN);
+    const saved = await questions.update(created.id, draft(), OTHER_ADMIN);
 
-    const [after] = await versions();
+    const [after, ...rest] = await versions();
+    assert.equal(rest.length, 0);
+    assert.equal(saved.version, 1);
+    assert.equal(await currentVersionOf(created.id), versionId);
     assert.equal(after?.createdById, ADMIN);
     assert.deepEqual(after?.createdAt, written?.createdAt);
   });
@@ -1442,7 +1291,7 @@ describe('QuestionsService.update — a save that changes nothing', () => {
     it(`versions a published question when only ${what} changed`, async () => {
       const { questions } = await build();
       const created = await questions.create(draft(), ADMIN);
-      const { testId } = await pinnedOn(created.id, await currentVersionOf(created.id));
+      const { testId } = await pinnedOn(created.id);
       await openedAgo(testId);
 
       const saved = await questions.update(created.id, draft(over), ADMIN);
@@ -1770,7 +1619,7 @@ describe('QuestionsService.update — one lock order, Test before Question', () 
     const order: string[] = [];
     const { questions } = await build([], watchingLocks(order));
     const created = await questions.create(draft(), ADMIN);
-    await heldBy('paper', created.id, await currentVersionOf(created.id));
+    await heldBy('paper', created.id);
 
     await questions.update(created.id, draft({ stem: REWORDED }), ADMIN);
 

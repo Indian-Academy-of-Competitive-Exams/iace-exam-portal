@@ -88,6 +88,25 @@ async function seedConfig(seed: ConfigSeed): Promise<string> {
 
 const configRow = (id: string) => prisma.baseConfig.findUniqueOrThrow({ where: { id } });
 
+const storedSections = (baseConfigId: string) =>
+  prisma.baseConfigSection.findMany({ where: { baseConfigId }, orderBy: { order: 'asc' } });
+
+/** The stored paper in the shape the editor posts it back: renumbered from zero, nothing changed. */
+const postedBack = (stored: Awaited<ReturnType<typeof storedSections>>) =>
+  stored.map((section, index) => ({
+    name: section.name,
+    order: index,
+    subjectId: section.subjectId,
+    questionCount: section.questionCount,
+    marksPerQuestion: Number(section.marksPerQuestion),
+    negativeMarks: Number(section.negativeMarks),
+    durationSec: section.durationSec,
+    perQuestionSec: section.perQuestionSec,
+    mandatory: section.mandatory,
+    meritOrQualifying: section.meritOrQualifying,
+    qualifyingCutoff: null,
+  }));
+
 /** The SSC CGL Tier 1 shape, in the form the editor posts. */
 function draft(
   examStageId: string,
@@ -513,12 +532,8 @@ describe('BaseConfigsService — a config a test is built on', () => {
           error.code === ErrorCodes.CONFLICT &&
           /[Cc]lone/.test(error.message),
       );
-      const kept = await prisma.baseConfigSection.findMany({
-        where: { baseConfigId: configId },
-        select: { id: true },
-      });
       assert.deepEqual(
-        kept.map((section) => section.id),
+        (await storedSections(configId)).map((section) => section.id),
         paper.sectionIds,
       );
     }
@@ -531,36 +546,14 @@ describe('BaseConfigsService — a config a test is built on', () => {
       questions: ['Reasoning'],
     });
     const configId = paper.catalog.baseConfigId;
-    const stored = await prisma.baseConfigSection.findMany({
-      where: { baseConfigId: configId },
-      orderBy: { order: 'asc' },
-    });
-
     await service.update(configId, {
       name: 'Tier 1 (drafts)',
-      sections: stored.map((section, index) => ({
-        name: section.name,
-        order: index,
-        subjectId: section.subjectId,
-        questionCount: section.questionCount,
-        marksPerQuestion: Number(section.marksPerQuestion),
-        negativeMarks: Number(section.negativeMarks),
-        durationSec: section.durationSec,
-        perQuestionSec: section.perQuestionSec,
-        mandatory: section.mandatory,
-        meritOrQualifying: section.meritOrQualifying,
-        qualifyingCutoff: null,
-      })),
+      sections: postedBack(await storedSections(configId)),
     });
 
     assert.equal((await configRow(configId)).name, 'Tier 1 (drafts)');
-    const kept = await prisma.baseConfigSection.findMany({
-      where: { baseConfigId: configId },
-      orderBy: { order: 'asc' },
-      select: { id: true },
-    });
     assert.deepEqual(
-      kept.map((section) => section.id),
+      (await storedSections(configId)).map((section) => section.id),
       paper.sectionIds,
     );
   });
@@ -573,35 +566,17 @@ describe('BaseConfigsService — a config a test is built on', () => {
     });
     const configId = paper.catalog.baseConfigId;
     await prisma.baseConfig.update({ where: { id: configId }, data: { languages: ['EN', 'HI'] } });
-    const stored = await prisma.baseConfigSection.findMany({
-      where: { baseConfigId: configId },
-      orderBy: { order: 'asc' },
-    });
+    const stored = await storedSections(configId);
     const posted = (english: ('EN' | 'HI' | 'TE')[]) =>
-      stored.map((section, index) => ({
-        name: section.name,
-        order: index,
-        subjectId: section.subjectId,
-        questionCount: section.questionCount,
-        marksPerQuestion: Number(section.marksPerQuestion),
-        negativeMarks: Number(section.negativeMarks),
-        durationSec: section.durationSec,
-        perQuestionSec: section.perQuestionSec,
-        mandatory: section.mandatory,
-        meritOrQualifying: section.meritOrQualifying,
-        qualifyingCutoff: null,
+      postedBack(stored).map((section, index) => ({
+        ...section,
         languages: index === 0 ? english : [],
       }));
 
     await service.update(configId, { sections: posted(['EN']) });
 
-    const kept = await prisma.baseConfigSection.findMany({
-      where: { baseConfigId: configId },
-      orderBy: { order: 'asc' },
-      select: { id: true, languages: true },
-    });
     assert.deepEqual(
-      kept.map((section) => [section.id, section.languages]),
+      (await storedSections(configId)).map((section) => [section.id, section.languages]),
       [
         [paper.sectionIds[0], ['EN']],
         [paper.sectionIds[1], []],
@@ -759,7 +734,7 @@ describe('BaseConfigsService — clone to evolve', () => {
   });
 
   /** The point of cloning: the copy is editable where the original is not. */
-  it('accepts the shape change the locked original refused', async () => {
+  it('accepts the shape change the locked original refused, leaving the original as it was', async () => {
     const original = await seedConfig({
       examStageId: await makeStage(prisma),
       locked: true,
@@ -770,6 +745,7 @@ describe('BaseConfigsService — clone to evolve', () => {
     const edited = await service.update(clone.id, { durationSec: 7200 });
 
     assert.equal(edited.durationSec, 7200);
+    assert.equal((await configRow(original)).durationSec, 3600, 'the original is left as it was');
   });
 
   /** The failure this prevents: a clone of the official pattern losing the workbook's own words. */
@@ -784,19 +760,6 @@ describe('BaseConfigsService — clone to evolve', () => {
 
     const copied = await prisma.baseConfigSection.findMany({ where: { baseConfigId: clone.id } });
     assert.equal(copied[0]?.patternNote, 'Part A — 25 questions, 2 marks each');
-  });
-
-  it('leaves the original untouched', async () => {
-    const original = await seedConfig({
-      examStageId: await makeStage(prisma),
-      locked: true,
-      sections: ['A'],
-    });
-
-    const clone = await service.clone(original, {}, ADMIN);
-    await service.update(clone.id, { durationSec: 7200 });
-
-    assert.equal((await configRow(original)).durationSec, 3600);
   });
 });
 

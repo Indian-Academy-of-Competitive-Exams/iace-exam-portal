@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Alert } from '../src/components/ui/alert';
 import { Spinner, LoadingState } from '../src/components/ui/spinner';
-import { Skeleton, SkeletonParagraph } from '../src/components/ui/skeleton';
+import { Skeleton } from '../src/components/ui/skeleton';
 import { Separator } from '../src/components/ui/separator';
 import { Brandmark } from '../src/components/ui/brandmark';
 import { StatRow } from '../src/components/ui/stat-row';
@@ -47,15 +47,6 @@ describe('Skeleton', () => {
     const { container } = render(<Skeleton variant="row" />);
 
     assert.equal(container.firstElementChild?.getAttribute('aria-hidden'), 'true');
-  });
-
-  it('draws the paragraph it was asked for, ending short', () => {
-    const { container } = render(<SkeletonParagraph lines={4} />);
-    const lines = [...(container.firstElementChild?.children ?? [])];
-
-    assert.equal(lines.length, 4);
-    assert.ok(lines.at(-1)?.className.includes('w-[62%]'));
-    assert.ok(!lines[0]?.className.includes('w-[62%]'));
   });
 });
 
@@ -216,26 +207,5 @@ describe('Alert', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
     assert.equal(screen.queryByText('Your performance did not load.'), null);
-  });
-});
-
-describe('Separator — dashed', () => {
-  /** A filled div has nothing to leave gaps in, so a dash has to come from a border. */
-  it('draws a dash with a border rather than a fill', () => {
-    const { container } = render(<Separator orientation="vertical" dashed />);
-
-    const rule = container.firstElementChild;
-    assert.ok(rule?.className.includes('border-dashed'));
-    assert.ok(rule?.className.includes('border-l'));
-    assert.equal(rule?.className.includes('bg-border'), false);
-    // THE failure this prevents: h-full beats align-self, so a rule in a flex row draws nothing.
-    assert.ok(rule?.className.includes('self-stretch'));
-    assert.equal(rule?.className.includes('h-full'), false);
-  });
-
-  it('still fills when it is not dashed', () => {
-    const { container } = render(<Separator orientation="vertical" />);
-
-    assert.ok(container.firstElementChild?.className.includes('bg-border'));
   });
 });

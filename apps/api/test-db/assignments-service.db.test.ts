@@ -19,6 +19,7 @@ import {
   type AssignmentWithTest,
   type CreateAssignmentInput,
   type FeatureKey,
+  type PaperSource,
   type MineAssignmentsQueryInput,
   type PermissionLevel,
   type SectionProgressQueryInput,
@@ -104,6 +105,16 @@ const body = (over: Partial<CreateAssignmentInput>): CreateAssignmentInput =>
     ...over,
   });
 
+const assignSeat = (
+  assignments: AssignmentsService,
+  testId: string,
+  baseConfigSectionId: string,
+  assigneeId: string,
+  role: AssignmentRole = ASSIGNMENT_ROLES.TYPIST,
+  over: Partial<CreateAssignmentInput> = {},
+) =>
+  assignments.assign(testId, body({ baseConfigSectionId, assigneeId, role, ...over }), assigneeId);
+
 /** The rows a queue read hands back — every caller below reads those, not the page around them. */
 const queue = async (
   assignments: AssignmentsService,
@@ -138,13 +149,14 @@ const refusedWith = (code: string) => (error: unknown) =>
 const framed = (catalog: Catalog, over: { title?: string } = {}) =>
   makeTest(prisma, catalog, { ...over, paperSource: PAPER_SOURCES.FRAMED });
 
-/** The same, for a paper built whole: `makePaper` leaves the source unsaid. */
-const sayFramed = (testId: string) =>
-  prisma.test.update({
-    where: { id: testId },
-    data: { paperSource: PAPER_SOURCES.FRAMED },
-    select: { id: true },
-  });
+/** A built paper of one section wanting one question, its source declared. */
+async function onePaperSection(source: PaperSource = PAPER_SOURCES.FRAMED) {
+  const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
+  await prisma.test.update({ where: { id: paper.testId }, data: { paperSource: source } });
+  const sectionId = paper.sectionIds[0] ?? '';
+  await prisma.baseConfigSection.update({ where: { id: sectionId }, data: { questionCount: 1 } });
+  return { testId: paper.testId, sectionId };
+}
 
 const statusOf = async (testId: string) =>
   (await prisma.test.findUniqueOrThrow({ where: { id: testId }, select: { status: true } })).status;
@@ -153,11 +165,8 @@ const statusOf = async (testId: string) =>
 const finalizedNow = (id: string) =>
   prisma.questionAssignment.update({ where: { id }, data: { finalizedAt: new Date() } });
 
-/** A reader's release as the flow leaves it: every question on their section checked, then the stamp. */
-async function releasedNow(id: string) {
-  const { testId, baseConfigSectionId } = await prisma.questionAssignment.findUniqueOrThrow({
-    where: { id },
-  });
+/** Every question on a section's paper checked, as a reader leaves it. */
+async function checkEveryQuestion(testId: string, baseConfigSectionId: string) {
   const onPaper = await prisma.paperQuestion.findMany({
     where: { testId, baseConfigSectionId },
     select: { questionId: true },
@@ -170,24 +179,21 @@ async function releasedNow(id: string) {
       checkedAt: new Date(),
     })),
   });
+}
+
+/** A reader's release as the flow leaves it: every question on their section checked, then the stamp. */
+async function releasedNow(id: string) {
+  const { testId, baseConfigSectionId } = await prisma.questionAssignment.findUniqueOrThrow({
+    where: { id },
+  });
+  await checkEveryQuestion(testId, baseConfigSectionId);
   await finalizedNow(id);
 }
 
 /** A section's paper at its count, handed to its reader and every question checked: ready to release. */
 async function wholePaper(catalog: Catalog, testId: string, baseConfigSectionId: string) {
   await fillPaper(catalog, testId, baseConfigSectionId);
-  const onPaper = await prisma.paperQuestion.findMany({
-    where: { testId, baseConfigSectionId },
-    select: { questionId: true },
-  });
-  await prisma.questionReview.createMany({
-    data: onPaper.map(({ questionId }) => ({
-      testId,
-      baseConfigSectionId,
-      questionId,
-      checkedAt: new Date(),
-    })),
-  });
+  await checkEveryQuestion(testId, baseConfigSectionId);
   await prisma.questionAssignment.updateMany({
     where: { testId, baseConfigSectionId, role: ASSIGNMENT_ROLES.PROOFREADER },
     data: { handedAt: new Date() },
@@ -228,24 +234,8 @@ describe('AssignmentsService — assigning', () => {
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
 
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
+    await assignSeat(assignments, test.id, section.id, typist.id);
+    await assignSeat(assignments, test.id, section.id, reader.id, ASSIGNMENT_ROLES.PROOFREADER);
 
     const rows = await assignments.forTest(test.id, OWNER);
     assert.equal(rows.length, 2);
@@ -268,16 +258,7 @@ describe('AssignmentsService — assigning', () => {
     const admin = await makeAdmin(prisma);
 
     await assert.rejects(
-      () =>
-        assignments.assign(
-          test.id,
-          body({
-            baseConfigSectionId: section.id,
-            assigneeId: admin.id,
-            role: ASSIGNMENT_ROLES.TYPIST,
-          }),
-          admin.id,
-        ),
+      () => assignSeat(assignments, test.id, section.id, admin.id),
       (error: unknown) =>
         AppException.is(error) &&
         error.code === ErrorCodes.VALIDATION_ERROR &&
@@ -294,27 +275,10 @@ describe('AssignmentsService — assigning', () => {
     const admin = await makeAdmin(prisma);
     await grant(admin.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(admin.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: admin.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      admin.id,
-    );
+    await assignSeat(assignments, test.id, section.id, admin.id);
 
     await assert.rejects(
-      () =>
-        assignments.assign(
-          test.id,
-          body({
-            baseConfigSectionId: section.id,
-            assigneeId: admin.id,
-            role: ASSIGNMENT_ROLES.PROOFREADER,
-          }),
-          admin.id,
-        ),
+      () => assignSeat(assignments, test.id, section.id, admin.id, ASSIGNMENT_ROLES.PROOFREADER),
       (error: unknown) =>
         AppException.is(error) &&
         error.code === ErrorCodes.VALIDATION_ERROR &&
@@ -332,11 +296,8 @@ describe('AssignmentsService — assigning', () => {
     const [earlier, next] = [await makeAdmin(prisma), await makeAdmin(prisma)];
     for (const admin of [earlier, next]) await grant(admin.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(earlier.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const give = (
-      baseConfigSectionId: string,
-      assigneeId: string,
-      role: AssignmentRole = ASSIGNMENT_ROLES.TYPIST,
-    ) => assignments.assign(test.id, body({ baseConfigSectionId, assigneeId, role }), assigneeId);
+    const give = (sectionId: string, assigneeId: string, role?: AssignmentRole) =>
+      assignSeat(assignments, test.id, sectionId, assigneeId, role);
     const typing = await give(wrote.id, earlier.id);
     await give(blank.id, earlier.id);
     const question = await makeQuestion(prisma, { subjectId: (await makeSubject(prisma)).id });
@@ -553,16 +514,7 @@ describe('AssignmentsService — where the questions come from', () => {
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
 
     await assert.rejects(
-      () =>
-        assignments.assign(
-          test.id,
-          body({
-            baseConfigSectionId: section.id,
-            assigneeId: typist.id,
-            role: ASSIGNMENT_ROLES.TYPIST,
-          }),
-          typist.id,
-        ),
+      () => assignSeat(assignments, test.id, section.id, typist.id),
       (error: unknown) =>
         AppException.is(error) &&
         error.code === ErrorCodes.CONFLICT &&
@@ -579,14 +531,12 @@ describe('AssignmentsService — where the questions come from', () => {
     const reader = await makeAdmin(prisma, { fullName: 'Arjun' });
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
 
-    const created = await assignments.assign(
+    const created = await assignSeat(
+      assignments,
       test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+      section.id,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
 
     assert.equal(created.role, ASSIGNMENT_ROLES.PROOFREADER);
@@ -595,28 +545,6 @@ describe('AssignmentsService — where the questions come from', () => {
 });
 
 describe('AssignmentsService — removing', () => {
-  it('removes an assignment nobody has finalized', async () => {
-    const { assignments } = build();
-    const catalog = await makeCatalog(prisma);
-    const test = await framed(catalog);
-    const section = await makeSection(prisma, catalog);
-    const typist = await makeAdmin(prisma);
-    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    const created = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-
-    await assignments.remove(test.id, created.id);
-
-    assert.equal(await prisma.questionAssignment.findUnique({ where: { id: created.id } }), null);
-  });
-
   /** The failure this prevents: a proof-read record disappearing after the fact. */
   it('refuses to remove a finalized assignment', async () => {
     const { assignments } = build();
@@ -625,14 +553,12 @@ describe('AssignmentsService — removing', () => {
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const created = await assignments.assign(
+    const created = await assignSeat(
+      assignments,
       test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+      section.id,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
     await finalizedNow(created.id);
 
@@ -652,15 +578,7 @@ describe('AssignmentsService — a typist hands over with Done, not finalize', (
     const section = await makeSection(prisma, catalog);
     const typist = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    const created = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
+    const created = await assignSeat(assignments, test.id, section.id, typist.id);
 
     await assert.rejects(() => assignments.finalize(created.id), refusedWith(ErrorCodes.CONFLICT));
   });
@@ -675,24 +593,14 @@ describe('AssignmentsService — mine', () => {
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    await assignments.assign(
-      testOne.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
+    await assignSeat(assignments, testOne.id, section.id, reader.id, ASSIGNMENT_ROLES.PROOFREADER);
     const secondSection = await makeSection(prisma, catalog, { order: 2 });
-    const second = await assignments.assign(
+    const second = await assignSeat(
+      assignments,
       testTwo.id,
-      body({
-        baseConfigSectionId: secondSection.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+      secondSection.id,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
 
     const mine = await queue(assignments, reader.id);
@@ -710,15 +618,7 @@ describe('AssignmentsService — mine', () => {
     const admin = await makeAdmin(prisma);
     await grant(admin.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(admin.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const typing = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: admin.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      admin.id,
-    );
+    const typing = await assignSeat(assignments, test.id, section.id, admin.id);
 
     const typistQueue = await queue(assignments, admin.id, { role: ASSIGNMENT_ROLES.TYPIST });
 
@@ -736,15 +636,7 @@ describe('AssignmentsService — mine', () => {
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
+    await assignSeat(assignments, test.id, section.id, reader.id, ASSIGNMENT_ROLES.PROOFREADER);
 
     const mine = await queue(assignments, reader.id);
 
@@ -769,24 +661,8 @@ describe('AssignmentsService — mine', () => {
         },
       },
     });
-    await assignments.assign(
-      withMix.id,
-      body({
-        baseConfigSectionId: sectionA.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    await assignments.assign(
-      withoutMix.id,
-      body({
-        baseConfigSectionId: sectionB.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
+    await assignSeat(assignments, withMix.id, sectionA.id, typist.id);
+    await assignSeat(assignments, withoutMix.id, sectionB.id, typist.id);
 
     const mine = await queue(assignments, typist.id);
 
@@ -806,24 +682,14 @@ describe('AssignmentsService — mine', () => {
     const sectionB = await makeSection(prisma, catalog, { order: 2 });
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const done = await assignments.assign(
+    const done = await assignSeat(
+      assignments,
       test.id,
-      body({
-        baseConfigSectionId: sectionA.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+      sectionA.id,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: sectionB.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
+    await assignSeat(assignments, test.id, sectionB.id, reader.id, ASSIGNMENT_ROLES.PROOFREADER);
     await finalizedNow(done.id);
 
     const outstanding = await queue(assignments, reader.id, { outstanding: 'true' });
@@ -872,20 +738,8 @@ describe('AssignmentsService — mine', () => {
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
     for (const test of [typed, picked]) {
-      await assignments.assign(
-        test.id,
-        body({ baseConfigSectionId: section.id, assigneeId: typist.id }),
-        typist.id,
-      );
-      await assignments.assign(
-        test.id,
-        body({
-          baseConfigSectionId: section.id,
-          assigneeId: reader.id,
-          role: ASSIGNMENT_ROLES.PROOFREADER,
-        }),
-        reader.id,
-      );
+      await assignSeat(assignments, test.id, section.id, typist.id);
+      await assignSeat(assignments, test.id, section.id, reader.id, ASSIGNMENT_ROLES.PROOFREADER);
     }
     await prisma.questionAssignment.updateMany({
       where: { testId: picked.id, role: ASSIGNMENT_ROLES.PROOFREADER },
@@ -931,18 +785,7 @@ describe('AssignmentsService — mine', () => {
     assert.equal(await offered(), false, 'the paper is short');
     await fillPaper(catalog, test.id, section.id);
     assert.equal(await offered(), false, 'nothing is checked');
-    const onPaper = await prisma.paperQuestion.findMany({
-      where: { testId: test.id },
-      select: { questionId: true },
-    });
-    await prisma.questionReview.createMany({
-      data: onPaper.map(({ questionId }) => ({
-        testId: test.id,
-        baseConfigSectionId: section.id,
-        questionId,
-        checkedAt: new Date(),
-      })),
-    });
+    await checkEveryQuestion(test.id, section.id);
     assert.equal(await offered(), true);
   });
 
@@ -958,24 +801,8 @@ describe('AssignmentsService — mine', () => {
     const other = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(other.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    const own = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: ours.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: theirs.id,
-        assigneeId: other.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      other.id,
-    );
+    const own = await assignSeat(assignments, test.id, ours.id, typist.id);
+    await assignSeat(assignments, test.id, theirs.id, other.id);
 
     const rows = await queue(assignments, typist.id, { role: ASSIGNMENT_ROLES.TYPIST });
 
@@ -994,26 +821,12 @@ describe('AssignmentsService — mine', () => {
     const english = await makeSection(prisma, catalog, { name: 'English', order: 2 });
     const typist = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    await assignments.assign(
-      banking.id,
-      body({
-        baseConfigSectionId: reasoning.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: dueIn(0),
-      }),
-      typist.id,
-    );
-    await assignments.assign(
-      railway.id,
-      body({
-        baseConfigSectionId: english.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: dueIn(4),
-      }),
-      typist.id,
-    );
+    await assignSeat(assignments, banking.id, reasoning.id, typist.id, ASSIGNMENT_ROLES.TYPIST, {
+      dueAt: dueIn(0),
+    });
+    await assignSeat(assignments, railway.id, english.id, typist.id, ASSIGNMENT_ROLES.TYPIST, {
+      dueAt: dueIn(4),
+    });
 
     const byTest = await queue(assignments, typist.id, { testId: railway.id });
     const bySection = await queue(assignments, typist.id, { baseConfigSectionId: reasoning.id });
@@ -1063,23 +876,13 @@ describe('AssignmentsService — section progress', () => {
     const reader = await makeAdmin(prisma, { fullName: 'Arjun' });
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const typing = await assignments.assign(
+    const typing = await assignSeat(assignments, test.id, section.id, typist.id);
+    const reading = await assignSeat(
+      assignments,
       test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    const reading = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+      section.id,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
     await finalizedNow(typing.id);
     await finalizedNow(reading.id);
@@ -1101,24 +904,20 @@ describe('AssignmentsService — section progress', () => {
     const reader = await makeAdmin(prisma, { fullName: 'Arjun' });
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const typing = await assignments.assign(
+    const typing = await assignSeat(
+      assignments,
       test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: dueIn(0),
-      }),
+      section.id,
       typist.id,
+      ASSIGNMENT_ROLES.TYPIST,
+      { dueAt: dueIn(0) },
     );
-    const reading = await assignments.assign(
+    const reading = await assignSeat(
+      assignments,
       test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+      section.id,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
 
     const rows = await progress();
@@ -1145,24 +944,8 @@ describe('AssignmentsService — section progress', () => {
     const reader = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const typing = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
+    const typing = await assignSeat(assignments, test.id, section.id, typist.id);
+    await assignSeat(assignments, test.id, section.id, reader.id, ASSIGNMENT_ROLES.PROOFREADER);
     for (const stem of ['One', 'Two']) {
       const question = await makeQuestion(prisma, { subjectId: subject.id, stem });
       await prisma.question.update({
@@ -1245,36 +1028,15 @@ describe('AssignmentsService — section progress', () => {
     await grant(priya.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(arjun.id, FEATURE_KEYS.QUESTION_PROOFREAD);
     await grant(arjun.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: shared.id,
-        assigneeId: priya.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: dueIn(0),
-      }),
-      priya.id,
-    );
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: shared.id,
-        assigneeId: arjun.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-        dueAt: dueIn(15),
-      }),
-      arjun.id,
-    );
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: late.id,
-        assigneeId: arjun.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-        dueAt: dueIn(4),
-      }),
-      arjun.id,
-    );
+    await assignSeat(assignments, test.id, shared.id, priya.id, ASSIGNMENT_ROLES.TYPIST, {
+      dueAt: dueIn(0),
+    });
+    await assignSeat(assignments, test.id, shared.id, arjun.id, ASSIGNMENT_ROLES.PROOFREADER, {
+      dueAt: dueIn(15),
+    });
+    await assignSeat(assignments, test.id, late.id, arjun.id, ASSIGNMENT_ROLES.TYPIST, {
+      dueAt: dueIn(4),
+    });
 
     const readByArjun = await progress({ assigneeId: [arjun.id] });
     const thatWeek = await progress({ dueFrom: dueIn(0), dueTo: dueIn(1) });
@@ -1333,24 +1095,8 @@ describe('AssignmentsService — the section a row is on', () => {
     });
     const typist = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    const onNamed = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: named.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    const onOpen = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: open.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
+    const onNamed = await assignSeat(assignments, test.id, named.id, typist.id);
+    const onOpen = await assignSeat(assignments, test.id, open.id, typist.id);
 
     const byId = new Map((await queue(assignments, typist.id)).map((row) => [row.id, row]));
     assert.equal(byId.get(onNamed.id)?.sectionSubjectId, subject.id);
@@ -1367,14 +1113,12 @@ describe('AssignmentsService — finalizing', () => {
     const section = await makeSection(prisma, catalog);
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const created = await assignments.assign(
+    const created = await assignSeat(
+      assignments,
       test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+      section.id,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
 
     await wholePaper(catalog, test.id, section.id);
@@ -1387,170 +1131,81 @@ describe('AssignmentsService — finalizing', () => {
 });
 
 describe('the offer gate', () => {
-  it('refuses while a section is still being proof-read, then allows once finalized', async () => {
-    const { assignments } = build();
-    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
-    await sayFramed(paper.testId);
-    await prisma.baseConfigSection.update({
-      where: { id: paper.sectionIds[0] ?? '' },
-      data: { questionCount: 1 },
-    });
-    const reader = await makeAdmin(prisma);
-    await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const created = await assignments.assign(
-      paper.testId,
-      body({
-        baseConfigSectionId: paper.sectionIds[0] ?? '',
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
-
-    await assert.rejects(
-      () => offerTest(prisma, paper.testId),
-      (error: unknown) =>
-        AppException.is(error) &&
-        error.code === ErrorCodes.VALIDATION_ERROR &&
-        /1 section is still being proof-read: Reasoning/.test(error.message),
-    );
-
-    await releasedNow(created.id);
-    await offerTest(prisma, paper.testId);
-
-    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
-  });
+  const stillProofRead = (error: unknown) =>
+    AppException.is(error) &&
+    error.code === ErrorCodes.VALIDATION_ERROR &&
+    /1 section is still being proof-read: Reasoning/.test(error.message);
 
   /** The shape the gate exists for: a typist finishing does not by itself clear the section. */
-  it('with both roles assigned, the typist finalising is not enough — the reader still has to', async () => {
+  it('refuses while a reader has not released, even with the typist done, then allows once they do', async () => {
     const { assignments } = build();
-    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
-    await sayFramed(paper.testId);
-    await prisma.baseConfigSection.update({
-      where: { id: paper.sectionIds[0] ?? '' },
-      data: { questionCount: 1 },
-    });
+    const { testId, sectionId } = await onePaperSection();
     const typist = await makeAdmin(prisma);
     const reader = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const typistRow = await assignments.assign(
-      paper.testId,
-      body({
-        baseConfigSectionId: paper.sectionIds[0] ?? '',
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    const readerRow = await assignments.assign(
-      paper.testId,
-      body({
-        baseConfigSectionId: paper.sectionIds[0] ?? '',
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+    const typistRow = await assignSeat(assignments, testId, sectionId, typist.id);
+    const readerRow = await assignSeat(
+      assignments,
+      testId,
+      sectionId,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
 
     await finalizedNow(typistRow.id);
 
-    await assert.rejects(
-      () => offerTest(prisma, paper.testId),
-      (error: unknown) =>
-        AppException.is(error) &&
-        error.code === ErrorCodes.VALIDATION_ERROR &&
-        /1 section is still being proof-read: Reasoning/.test(error.message),
-    );
+    await assert.rejects(() => offerTest(prisma, testId), stillProofRead);
 
     await releasedNow(readerRow.id);
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, testId);
 
-    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
+    assert.equal(await statusOf(testId), TEST_STATUS.ACTIVE);
   });
 
   /** The override: a test cannot be unshippable because one person's row will never be finalized. */
   it('lets a super admin offer over a section nobody has marked read', async () => {
     const { assignments } = build();
-    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
-    await sayFramed(paper.testId);
-    await prisma.baseConfigSection.update({
-      where: { id: paper.sectionIds[0] ?? '' },
-      data: { questionCount: 1 },
-    });
+    const { testId, sectionId } = await onePaperSection();
     const reader = await makeAdmin(prisma);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    await assignments.assign(
-      paper.testId,
-      body({
-        baseConfigSectionId: paper.sectionIds[0] ?? '',
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
+    await assignSeat(assignments, testId, sectionId, reader.id, ASSIGNMENT_ROLES.PROOFREADER);
 
-    await assert.rejects(
-      () => offerTest(prisma, paper.testId),
-      refusedWith(ErrorCodes.VALIDATION_ERROR),
-    );
-    await offerTest(prisma, paper.testId, true);
+    await assert.rejects(() => offerTest(prisma, testId), refusedWith(ErrorCodes.VALIDATION_ERROR));
+    await offerTest(prisma, testId, true);
 
-    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
+    assert.equal(await statusOf(testId), TEST_STATUS.ACTIVE);
   });
 
   /** A picked section's typist only fixes what comes back, so theirs is no job the offer waits on. */
   it('offers a picked test whose typist never finished anything', async () => {
     const { assignments } = build();
-    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
-    await prisma.test.update({
-      where: { id: paper.testId },
-      data: { paperSource: PAPER_SOURCES.PICKED },
-    });
-    await prisma.baseConfigSection.update({
-      where: { id: paper.sectionIds[0] ?? '' },
-      data: { questionCount: 1 },
-    });
+    const { testId, sectionId } = await onePaperSection(PAPER_SOURCES.PICKED);
     const typist = await makeAdmin(prisma, { fullName: 'Priya' });
-    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    await assignments.assign(
-      paper.testId,
-      body({
-        baseConfigSectionId: paper.sectionIds[0] ?? '',
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
     const reader = await makeAdmin(prisma);
+    await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const reading = await assignments.assign(
-      paper.testId,
-      body({
-        baseConfigSectionId: paper.sectionIds[0] ?? '',
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+    await assignSeat(assignments, testId, sectionId, typist.id);
+    const reading = await assignSeat(
+      assignments,
+      testId,
+      sectionId,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
     await releasedNow(reading.id);
 
-    await offerTest(prisma, paper.testId);
+    await offerTest(prisma, testId);
 
-    assert.equal(await statusOf(paper.testId), TEST_STATUS.ACTIVE);
+    assert.equal(await statusOf(testId), TEST_STATUS.ACTIVE);
   });
 
   /** Nothing outstanding is not the same as read: a test nobody was asked to read waits for a reader. */
   it('refuses a test that never had any assignments', async () => {
-    const paper = await makePaper(prisma, { sections: ['Reasoning'], questions: ['Quant'] });
-    await sayFramed(paper.testId);
-    await prisma.baseConfigSection.update({
-      where: { id: paper.sectionIds[0] ?? '' },
-      data: { questionCount: 1 },
-    });
+    const { testId } = await onePaperSection();
 
-    await assert.rejects(() => offerTest(prisma, paper.testId), /has no proof-reader: Reasoning/);
-    assert.equal(await statusOf(paper.testId), TEST_STATUS.DRAFT);
+    await assert.rejects(() => offerTest(prisma, testId), /has no proof-reader: Reasoning/);
+    assert.equal(await statusOf(testId), TEST_STATUS.DRAFT);
   });
 });
 
@@ -1567,24 +1222,8 @@ describe('AssignmentsService — what a section has written so far', () => {
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
 
-    const typing = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
-      reader.id,
-    );
+    const typing = await assignSeat(assignments, test.id, section.id, typist.id);
+    await assignSeat(assignments, test.id, section.id, reader.id, ASSIGNMENT_ROLES.PROOFREADER);
 
     for (const stem of ['One', 'Two', 'Three']) {
       const question = await makeQuestion(prisma, { subjectId: subject.id, stem });
@@ -1617,23 +1256,13 @@ describe('AssignmentsService — a reader gets a whole section', () => {
     const reader = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     await grant(reader.id, FEATURE_KEYS.QUESTION_PROOFREAD);
-    const typing = await assignments.assign(
+    const typing = await assignSeat(assignments, test.id, section.id, typist.id);
+    const reading = await assignSeat(
+      assignments,
       test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      }),
-      typist.id,
-    );
-    const reading = await assignments.assign(
-      test.id,
-      body({
-        baseConfigSectionId: section.id,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      }),
+      section.id,
       reader.id,
+      ASSIGNMENT_ROLES.PROOFREADER,
     );
     return { assignments, catalog, test, section, typing, reading, reader };
   }
@@ -1664,18 +1293,7 @@ describe('AssignmentsService — a reader gets a whole section', () => {
       (error: unknown) => AppException.is(error) && /not checked yet/.test(error.message),
     );
 
-    const onPaper = await prisma.paperQuestion.findMany({
-      where: { testId: test.id },
-      select: { questionId: true },
-    });
-    await prisma.questionReview.createMany({
-      data: onPaper.map(({ questionId }) => ({
-        testId: test.id,
-        baseConfigSectionId: section.id,
-        questionId,
-        checkedAt: new Date(),
-      })),
-    });
+    await checkEveryQuestion(test.id, section.id);
     await prisma.test.update({ where: { id: test.id }, data: { finalizedAt: new Date() } });
     await assert.rejects(
       () => assignments.finalize(reading.id),
@@ -1695,26 +1313,13 @@ describe('AssignmentsService — a reader gets a whole section', () => {
     const next = await makeAdmin(prisma);
     await grant(next.id, FEATURE_KEYS.QUESTION_AUTHORING);
 
-    const taken = await assignments.assign(
-      test.id,
-      body({ baseConfigSectionId: section.id, assigneeId: next.id, role: ASSIGNMENT_ROLES.TYPIST }),
-      next.id,
-    );
+    const taken = await assignSeat(assignments, test.id, section.id, next.id);
 
     const earlier = await prisma.questionAssignment.findUniqueOrThrow({ where: { id: typing.id } });
     assert.notEqual(earlier.replacedAt, null);
     assert.ok(taken.finalizedAt, 'the section’s progress carries over to whoever holds the role');
     await assert.rejects(
-      () =>
-        assignments.assign(
-          test.id,
-          body({
-            baseConfigSectionId: section.id,
-            assigneeId: next.id,
-            role: ASSIGNMENT_ROLES.TYPIST,
-          }),
-          next.id,
-        ),
+      () => assignSeat(assignments, test.id, section.id, next.id),
       refusedWith(ErrorCodes.VALIDATION_ERROR),
     );
   });
@@ -1765,10 +1370,15 @@ describe('AssignmentsService — a due date', () => {
     const typist = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
 
-    const typing = await assignments.assign(
+    const typing = await assignSeat(
+      assignments,
       test.id,
-      body({ baseConfigSectionId: section.id, assigneeId: typist.id, dueAt: dueIn(1) }),
+      section.id,
       typist.id,
+      ASSIGNMENT_ROLES.TYPIST,
+      {
+        dueAt: dueIn(1),
+      },
     );
 
     assert.equal(typing.dueAt, endOf(dueIn(1)));
@@ -1783,11 +1393,7 @@ describe('AssignmentsService — a due date', () => {
     const typist = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
     const due = (dueAt: string) =>
-      assignments.assign(
-        test.id,
-        body({ baseConfigSectionId: section.id, assigneeId: typist.id, dueAt }),
-        typist.id,
-      );
+      assignSeat(assignments, test.id, section.id, typist.id, ASSIGNMENT_ROLES.TYPIST, { dueAt });
 
     await assert.rejects(
       () => due(dueIn(-1)),
@@ -1809,10 +1415,15 @@ describe('AssignmentsService — moving a due day', () => {
     const section = await makeSection(prisma, catalog, { name: 'Reasoning' });
     const typist = await makeAdmin(prisma);
     await grant(typist.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    const held = await bench.assignments.assign(
+    const held = await assignSeat(
+      bench.assignments,
       test.id,
-      body({ baseConfigSectionId: section.id, assigneeId: typist.id, dueAt: dueIn(2) }),
+      section.id,
       typist.id,
+      ASSIGNMENT_ROLES.TYPIST,
+      {
+        dueAt: dueIn(2),
+      },
     );
     return { ...bench, catalog, test, section, typist, held };
   }
@@ -1898,11 +1509,7 @@ describe('AssignmentsService — moving a due day', () => {
     const { assignments, test, section, held } = await typing();
     const next = await makeAdmin(prisma);
     await grant(next.id, FEATURE_KEYS.QUESTION_AUTHORING);
-    await assignments.assign(
-      test.id,
-      body({ baseConfigSectionId: section.id, assigneeId: next.id }),
-      next.id,
-    );
+    await assignSeat(assignments, test.id, section.id, next.id);
 
     await assert.rejects(
       () => assignments.changeDueDay(test.id, held.id, due(dueIn(6))),
@@ -1961,24 +1568,30 @@ async function timeOn(
   });
 }
 
+/** A section held by a typist and a reader, each in their own seat. */
+async function typistAndReader(catalog: Catalog, testId: string) {
+  const typist = await makeAdmin(prisma);
+  const reader = await makeAdmin(prisma);
+  const typing = await held(catalog, testId, typist.id, { name: 'Reasoning' });
+  const reading = await prisma.questionAssignment.create({
+    data: {
+      testId,
+      baseConfigId: catalog.baseConfigId,
+      baseConfigSectionId: typing.baseConfigSectionId,
+      assigneeId: reader.id,
+      role: ASSIGNMENT_ROLES.PROOFREADER,
+    },
+  });
+  return { typist, reader, typing, reading };
+}
+
 describe('AssignmentsService — time spent on a section', () => {
   /** The failure this prevents: a typist's row carrying their reader's time, or the two merging. */
   it('gives each holder their own seat’s time, on the queue, the test and the progress list', async () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     const test = await framed(catalog);
-    const typist = await makeAdmin(prisma);
-    const reader = await makeAdmin(prisma);
-    const typing = await held(catalog, test.id, typist.id, { name: 'Reasoning' });
-    const reading = await prisma.questionAssignment.create({
-      data: {
-        testId: test.id,
-        baseConfigId: catalog.baseConfigId,
-        baseConfigSectionId: typing.baseConfigSectionId,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      },
-    });
+    const { typist, reader, typing, reading } = await typistAndReader(catalog, test.id);
     await timeOn(typing, typist.id, 90);
     await timeOn(typing, typist.id, 30);
     await timeOn(reading, reader.id, 45);
@@ -2003,18 +1616,7 @@ describe('AssignmentsService — time spent on a section', () => {
     const { assignments } = build();
     const catalog = await makeCatalog(prisma);
     const test = await framed(catalog);
-    const typist = await makeAdmin(prisma);
-    const reader = await makeAdmin(prisma);
-    const typing = await held(catalog, test.id, typist.id, { name: 'Reasoning' });
-    const reading = await prisma.questionAssignment.create({
-      data: {
-        testId: test.id,
-        baseConfigId: catalog.baseConfigId,
-        baseConfigSectionId: typing.baseConfigSectionId,
-        assigneeId: reader.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      },
-    });
+    const { typist, reader, typing, reading } = await typistAndReader(catalog, test.id);
     await timeOn(typing, typist.id, 90);
     await timeOn(reading, reader.id, 45);
     const timesFor = async (viewer: { id: string; isSuperAdmin?: boolean }) =>

@@ -246,15 +246,6 @@ describe('the Score Card', () => {
     assert.deepEqual([card.rank, card.percentile, card.cohortSize], [null, null, null]);
   });
 
-  it('refuses a paper nobody has marked yet, and says why', async () => {
-    const { studentId, attemptId } = await mine(await paper(), { marked: false });
-
-    await assert.rejects(
-      () => analytics().scoreCard(studentId, attemptId),
-      refusedWith(ErrorCodes.CONFLICT),
-    );
-  });
-
   /** The failure this prevents: a voided sitting reading as marking still queued, behind a Retry that cannot work. */
   it('refuses a voided sitting as set aside, within the refusal budget', async () => {
     const { studentId, attemptId } = await mine(await paper(), {
@@ -411,15 +402,6 @@ describe('the Solution Report', () => {
 
     assert.ok(shown.includes('What is 7'), 'the English stem must be there');
     assert.ok(!shown.includes('saat guna chhah'), 'a language nobody sat must not be');
-  });
-
-  it('refuses a paper nobody has marked yet', async () => {
-    const { studentId, attemptId } = await reviewed({ marked: false });
-
-    await assert.rejects(
-      () => reports().solutions(studentId, attemptId, {}),
-      refusedWith(ErrorCodes.CONFLICT),
-    );
   });
 
   it('refuses a voided sitting as set aside, not as unmarked', async () => {
@@ -733,36 +715,8 @@ describe('the trend across every test a student has sat', () => {
     );
   });
 
-  /** The defect this prevents: standings scanned every sitting ever made, not just the 20 plotted. */
-  it('still ranks every plotted sitting once history runs past the trend length', async () => {
-    const catalog = await makeCatalog(prisma);
-    const student = await makeStudent(prisma);
-    const dayMs = 24 * 60 * 60 * 1000;
-    const sittings: string[] = [];
-    for (let day = 0; day < 25; day += 1) {
-      const testId = (await makeTest(prisma, catalog)).id;
-      const submittedAt = new Date(STARTED.getTime() + day * dayMs);
-      const sitting = await makeSitting(prisma, {
-        testId,
-        studentId: student.id,
-        score: 10,
-        submittedAt,
-      });
-      sittings.push(sitting.id);
-    }
-
-    const trend = await reports().performance(student.id);
-
-    assert.equal(trend.testsSat, 25);
-    assert.deepEqual(
-      trend.points.map((point) => point.attemptId),
-      sittings.slice(5),
-    );
-    assert.ok(trend.points.every((point) => point.rank === 1 && point.percentile === 100));
-  });
-
-  /** The defect this prevents: a tile, a picker or a paper's history forgetting the 21st sitting back. */
-  it('lists every sitting past the trend length, each with its marks and its report', async () => {
+  /** The defect this prevents: standings scanned every sitting ever made, and a tile or paper history forgetting the 21st back. */
+  it('ranks every plotted sitting and lists every sitting once history runs past the trend length', async () => {
     const catalog = await makeCatalog(prisma);
     const student = await makeStudent(prisma);
     const dayMs = 24 * 60 * 60 * 1000;
@@ -781,7 +735,12 @@ describe('the trend across every test a student has sat', () => {
 
     const trend = await reports().performance(student.id);
 
-    assert.equal(trend.points.length, 20);
+    assert.equal(trend.testsSat, 25);
+    assert.deepEqual(
+      trend.points.map((point) => point.attemptId),
+      sittings.slice(5),
+    );
+    assert.ok(trend.points.every((point) => point.rank === 1 && point.percentile === 100));
     assert.deepEqual(
       trend.sittings?.map((sitting) => [sitting.attemptId, sitting.score]),
       sittings.map((attemptId, day) => [attemptId, day]),

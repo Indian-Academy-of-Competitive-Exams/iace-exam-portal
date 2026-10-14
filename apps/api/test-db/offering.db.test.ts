@@ -140,8 +140,10 @@ const refused = async (attempt: Promise<unknown>) => {
 };
 
 describe('OfferingService — a test belongs to one series', () => {
-  it('replaces the series on the test itself, names the new one back, and drops the old position', async () => {
-    const { service } = await serviceWith();
+  /** The defect this closes: the old whole-set save rebuilt the link and dropped the opening with it. */
+  it('replaces the series on the test itself, names the new one back, drops the old position, and keeps the openings', async () => {
+    const { service } = await serviceWith({ opensAt: OPENS_AT });
+    await programOpening(new Date(OPENS_AT.getTime() - HOUR_MS));
 
     const link = await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
 
@@ -152,33 +154,32 @@ describe('OfferingService — a test belongs to one series', () => {
     });
     const row = await testRow();
     assert.deepEqual([row.testSeriesId, row.seriesOrder], [idFor('srs_2'), null]);
+    assert.deepEqual(row.opensAt, OPENS_AT);
+    assert.equal(await prisma.testProgramUnlock.count(), 1);
   });
 
-  /** A student who could reach it through srs_1 has a held catalog that no longer holds. */
-  it('tells the catalog cache once when an offered test moves', async () => {
-    const { service, events } = await serviceWith({ ...FROZEN, status: TEST_STATUS.ACTIVE });
+  /** A student who could reach it through srs_1 has a held catalog that no longer holds; a draft or a no-op move rebuilds nothing. */
+  for (const [what, held, target, busted] of [
+    [
+      'tells the catalog cache once when an offered test moves',
+      { ...FROZEN, status: TEST_STATUS.ACTIVE },
+      'srs_2',
+      ['srs_2'],
+    ],
+    ['says nothing to the cache when a draft moves', {}, 'srs_2', []],
+    ['says nothing to the cache when the series it was given is the one it holds', {}, 'srs_1', []],
+  ] as const) {
+    it(what, async () => {
+      const { service, events } = await serviceWith(held);
 
-    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
+      await service.moveToSeries(TEST, { testSeriesId: idFor(target) });
 
-    assert.deepEqual(catalogBusts(events), [idFor('srs_2')]);
-  });
-
-  /** The held catalog carries offered tests alone, so a draft's move rebuilds nothing. */
-  it('says nothing to the cache when a draft moves', async () => {
-    const { service, events } = await serviceWith();
-
-    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
-
-    assert.deepEqual(catalogBusts(events), []);
-  });
-
-  it('says nothing to the cache when the series it was given is the one it holds', async () => {
-    const { service, events } = await serviceWith();
-
-    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_1') });
-
-    assert.deepEqual(catalogBusts(events), []);
-  });
+      assert.deepEqual(
+        catalogBusts(events),
+        busted.map((label) => idFor(label)),
+      );
+    });
+  }
 
   it('refuses a series that no longer exists', async () => {
     const { service } = await serviceWith();
@@ -224,17 +225,6 @@ describe('OfferingService — a test belongs to one series', () => {
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /2 attempts/);
     assert.equal((await testRow()).testSeriesId, idFor('srs_1'));
-  });
-
-  /** The defect this closes: the old whole-set save rebuilt the link and dropped the opening with it. */
-  it('moves a test to another series without losing its opening or its program openings', async () => {
-    const { service } = await serviceWith({ opensAt: OPENS_AT });
-    await programOpening(new Date(OPENS_AT.getTime() - HOUR_MS));
-
-    await service.moveToSeries(TEST, { testSeriesId: idFor('srs_2') });
-
-    assert.deepEqual((await testRow()).opensAt, OPENS_AT);
-    assert.equal(await prisma.testProgramUnlock.count(), 1);
   });
 
   /** The failure this prevents: a move smuggles a duplicate name past the check the create path makes. */

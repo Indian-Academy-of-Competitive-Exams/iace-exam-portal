@@ -143,13 +143,16 @@ async function sitting(over: Sat = {}) {
 }
 
 describe('AttemptPaperService — what a candidate is allowed to see', () => {
-  it('never tells the student which option is correct', async () => {
+  it('never tells the student which option is correct, nor any score or marks awarded', async () => {
     const { student, attemptId } = await sitting();
 
     const paper = await service.paper(student, attemptId);
 
     // The failure this prevents: `isCorrect` riding along in the options JSON to the browser.
-    assert.ok(!JSON.stringify(paper).includes('isCorrect'));
+    const serialized = JSON.stringify(paper);
+    for (const leak of ['isCorrect', 'answerKey', 'marksAwarded', 'solution', 'correctCount']) {
+      assert.ok(!serialized.includes(leak), `${leak} must not reach a candidate`);
+    }
     for (const served of paper.questions) {
       for (const option of served.options) {
         assert.deepEqual(Object.keys(option).sort(), ['id', 'position', 'text']);
@@ -166,16 +169,6 @@ describe('AttemptPaperService — what a candidate is allowed to see', () => {
     assert.deepEqual(Object.keys(paper.questions[0]?.content.en ?? {}), ['stem', 'passage']);
     assert.ok(JSON.stringify(paper).includes('Study the series 2, 4, 8.'));
     assert.ok(!JSON.stringify(paper).includes('Because.'));
-  });
-
-  it('carries no score or marks awarded either', async () => {
-    const { student, attemptId } = await sitting();
-
-    const serialized = JSON.stringify(await service.paper(student, attemptId));
-
-    for (const leak of ['answerKey', 'marksAwarded', 'solution', 'correctCount']) {
-      assert.ok(!serialized.includes(leak), `${leak} must not reach a candidate`);
-    }
   });
 });
 

@@ -201,6 +201,7 @@ describe('planStudentImport', () => {
     assert.deepEqual(plan.rows, []);
     assert.equal(plan.fileErrors.length, 1);
     assert.match(plan.fileErrors[0] ?? '', /"Mobile Number"/);
+    assert.match(plan.fileErrors[0] ?? '', /sample file/);
   });
 
   it('handles an empty upload without throwing', () => {
@@ -253,14 +254,18 @@ describe('the columns an admin actually writes', () => {
     "Mobile Number,Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs,Mother's Name,Date of Birth,Gender";
 
   const sheet = (...cells: string[]) => `${ALL_HEADERS}\n${cells.join(',')}`;
+  const planSheet = (...cells: string[]) =>
+    planStudentImport(readCsvTable(sheet(...cells)), context());
 
   /** The whole point of the wider template: a roster now decides what a student can reach. */
   it('carries the access columns onto the row it plans', () => {
-    const plan = planStudentImport(
-      readCsvTable(
-        sheet('9876543210', 'OFFLINE', 'Ameerpet', 'SSC', '"SSC CGL, RRB JE"', 'SSC FOUNDATION'),
-      ),
-      context(),
+    const plan = planSheet(
+      '9876543210',
+      'OFFLINE',
+      'Ameerpet',
+      'SSC',
+      '"SSC CGL, RRB JE"',
+      'SSC FOUNDATION',
     );
 
     const row = plan.rows[0];
@@ -274,20 +279,14 @@ describe('the columns an admin actually writes', () => {
 
   /** The sheet carries the branch NAME; nobody filling one in has a cuid to hand. */
   it('resolves the branch by name, however it was cased or spaced', () => {
-    const plan = planStudentImport(
-      readCsvTable(sheet('9876543210', 'OFFLINE', '  ameerpet  ', '', 'SSC CGL', '')),
-      context(),
-    );
+    const plan = planSheet('9876543210', 'OFFLINE', '  ameerpet  ', '', 'SSC CGL', '');
 
     assert.deepEqual(plan.rows[0]?.errors, []);
     assert.equal(plan.rows[0]?.currentBranchId, 'br_ameerpet');
   });
 
   it('refuses a branch that is not on the list, naming what it read', () => {
-    const plan = planStudentImport(
-      readCsvTable(sheet('9876543210', 'OFFLINE', 'Nowhere', '', 'SSC CGL', '')),
-      context(),
-    );
+    const plan = planSheet('9876543210', 'OFFLINE', 'Nowhere', '', 'SSC CGL', '');
 
     assert.equal(plan.rows[0]?.action, 'skip');
     assert.match(plan.rows[0]?.errors.join(' ') ?? '', /no active branch called "NOWHERE"/);
@@ -295,20 +294,14 @@ describe('the columns an admin actually writes', () => {
 
   /** Demanding all three would refuse a student on one exam and in no program. */
   it('takes a row carrying only one of the three access routes', () => {
-    const plan = planStudentImport(
-      readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', '', 'SSC CGL', '')),
-      context(),
-    );
+    const plan = planSheet('9876543210', 'OFFLINE', 'AMEERPET', '', 'SSC CGL', '');
 
     assert.deepEqual(plan.rows[0]?.errors, []);
     assert.equal(plan.rows[0]?.action, 'create');
   });
 
   it('refuses a row that names none of them, because it reaches nothing', () => {
-    const plan = planStudentImport(
-      readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', '', '', '')),
-      context(),
-    );
+    const plan = planSheet('9876543210', 'OFFLINE', 'AMEERPET', '', '', '');
 
     assert.equal(plan.rows[0]?.action, 'skip');
     assert.match(plan.rows[0]?.errors.join(' ') ?? '', /reaches no test series/);
@@ -316,14 +309,8 @@ describe('the columns an admin actually writes', () => {
 
   /** An import only adds, so a sheet that fills in names alone must not be refused for a student who already reaches something. */
   it('judges and shows an existing student as the row leaves them holding', () => {
-    const plan = planStudentImport(
-      readCsvTable(sheet('9000000001', 'OFFLINE', 'AMEERPET', '', 'SSC CGL', '')),
-      context(),
-    );
-    const blank = planStudentImport(
-      readCsvTable(sheet('9000000001', 'OFFLINE', 'AMEERPET', '', '', '')),
-      context(),
-    );
+    const plan = planSheet('9000000001', 'OFFLINE', 'AMEERPET', '', 'SSC CGL', '');
+    const blank = planSheet('9000000001', 'OFFLINE', 'AMEERPET', '', '', '');
 
     assert.deepEqual(plan.rows[0]?.programs, ['SSC FOUNDATION']);
     assert.deepEqual(plan.rows[0]?.enrolledExams, ['SSC CGL']);
@@ -334,10 +321,7 @@ describe('the columns an admin actually writes', () => {
   /** The failure this prevents: the course the sample file names, split on its own slash and refused. */
   it('reads AP/TS POLICE as the one course it is, alone or beside another', () => {
     const coursesOf = (cell: string) =>
-      planStudentImport(
-        readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', `"${cell}"`, '', '')),
-        context(),
-      ).rows[0];
+      planSheet('9876543210', 'OFFLINE', 'AMEERPET', `"${cell}"`, '', '').rows[0];
 
     assert.deepEqual(coursesOf('AP/TS POLICE')?.errors, []);
     assert.deepEqual(coursesOf('AP/TS POLICE')?.enrolledCourses, ['AP_TS_POLICE']);
@@ -350,10 +334,7 @@ describe('the columns an admin actually writes', () => {
   });
 
   it('refuses an exam code and a program code the catalog does not hold', () => {
-    const plan = planStudentImport(
-      readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', '', 'SSC CGI', 'MADE UP')),
-      context(),
-    );
+    const plan = planSheet('9876543210', 'OFFLINE', 'AMEERPET', '', 'SSC CGI', 'MADE UP');
 
     const errors = plan.rows[0]?.errors.join(' ') ?? '';
     assert.match(errors, /No such exam code: SSC CGI/);
@@ -362,10 +343,7 @@ describe('the columns an admin actually writes', () => {
 
   /** The same pairing the admin screens refuse — the importer writes rows no screen could save. */
   it('refuses an online student put at a physical centre', () => {
-    const plan = planStudentImport(
-      readCsvTable(sheet('9876543210', 'ONLINE', 'AMEERPET', '', 'SSC CGL', '')),
-      context(),
-    );
+    const plan = planSheet('9876543210', 'ONLINE', 'AMEERPET', '', 'SSC CGL', '');
 
     assert.equal(plan.rows[0]?.action, 'skip');
     assert.match(plan.rows[0]?.errors.join(' ') ?? '', /online student sits in the online branch/);
@@ -394,21 +372,16 @@ describe('the columns an admin actually writes', () => {
   });
 
   it('reads the profile columns, taking a date written either way round', () => {
-    const plan = planStudentImport(
-      readCsvTable(
-        sheet(
-          '9876543210',
-          'OFFLINE',
-          'AMEERPET',
-          '',
-          'SSC CGL',
-          '',
-          'Lakshmi Kumari',
-          '11/04/2003',
-          'female',
-        ),
-      ),
-      context(),
+    const plan = planSheet(
+      '9876543210',
+      'OFFLINE',
+      'AMEERPET',
+      '',
+      'SSC CGL',
+      '',
+      'Lakshmi Kumari',
+      '11/04/2003',
+      'female',
     );
 
     assert.deepEqual(plan.rows[0]?.errors, []);
@@ -416,23 +389,10 @@ describe('the columns an admin actually writes', () => {
     assert.equal(plan.rows[0]?.profile.dob, '2003-04-11');
     assert.equal(plan.rows[0]?.profile.gender, 'FEMALE');
   });
-
-  it('names the column the way the sample file does when it is missing', () => {
-    const plan = planStudentImport(readCsvTable('name,city\nAsha,X'), context());
-
-    assert.match(plan.fileErrors[0] ?? '', /"Mobile Number"/);
-    assert.match(plan.fileErrors[0] ?? '', /sample file/);
-  });
 });
 
 /** These build the lookups the import runs before planning anything. They read the file through the SAME column resolution the planner uses — and once did not, which is the bug below. */
 describe('what the import looks up before it plans', () => {
-  it('collects the mobile numbers under the readable header', () => {
-    const table = readCsvTable('Mobile Number,Full Name\n9876543210,Asha\n9000000001,Existing');
-
-    assert.deepEqual(mobilesIn(table), ['9876543210', '9000000001']);
-  });
-
   /** The failure this exists to prevent, found by re-importing a file rather than by any unit test: reading the raw `mobile` key while the sheet said "Mobile Number" matched nothing, so every row of a RE-import looked new. */
   it('finds them under every spelling of the column', () => {
     for (const header of ['Mobile Number', 'mobile', 'Phone', 'CONTACT_NUMBER']) {

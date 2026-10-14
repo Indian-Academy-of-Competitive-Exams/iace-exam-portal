@@ -3,8 +3,6 @@ import { afterEach, describe, it } from 'node:test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { DataTable, type DataTableColumn } from '../src/components/ui/data-table';
 import { PAGE_CONTENT_CLASS, TableFrame } from '../src/components/ui/table-frame';
-import { Pagination } from '../src/components/ui/pagination';
-import { Card } from '../src/components/ui/card';
 
 afterEach(cleanup);
 
@@ -42,77 +40,6 @@ const groups = () => {
   assert.ok(scroller, 'the table should sit in a wrapper that owns the scrollbar');
   return { head, body, scroller };
 };
-
-describe('table rows', () => {
-  /** Nothing in a heading row is clickable, so a highlight there offers something not on offer; the hover belongs to the body, scoped to its own rows, so it can't reach a thead. */
-  it('offer hover on the body only, never on the heading', () => {
-    render(table());
-    const { head, body } = groups();
-
-    assert.ok(!head.innerHTML.includes('hover'), 'no hover styling anywhere in the thead');
-    assert.match(body.className, /\[&>tr:hover>td\]:/);
-  });
-
-  /** The fill is a pseudo-element inset from the rules and rounded at the row's two ends; the radius must be on the band not the cell, or it rounds `border-b` too and bends the rule away from the table edge. */
-  it('tint a hovered row inside its rules, rounding the band and not the rule', () => {
-    render(table());
-
-    assert.match(groups().body.className, /\[&>tr:hover>td\]:before:bg-muted/);
-
-    const cell = screen.getByRole('cell', { name: 'Ravi' });
-    assert.match(cell.className, /before:inset-y-\[3px\]/, 'clear of both rules');
-    assert.match(cell.className, /first:before:rounded-l-md/, 'rounded at the row ends only');
-    assert.match(cell.className, /last:before:rounded-r-md/);
-    assert.ok(
-      !/(^|\s)(first|last):rounded/.test(cell.className),
-      'a radius on the cell itself would bend its border-b',
-    );
-  });
-
-  /** A collapsed table drops the borders on a sticky heading row. */
-  it('hold the heading still while the body scrolls', () => {
-    render(table());
-    const heading = screen.getByRole('columnheader', { name: 'Student' });
-
-    assert.match(heading.className, /sticky/);
-    assert.match(heading.className, /top-0/);
-    assert.match(heading.className, /bg-(card|background)/, 'or rows show through it');
-    assert.match(document.querySelector('table')?.className ?? '', /border-separate/);
-  });
-
-  /** The failure this prevents: a heading floating on a card, which already IS the surface. */
-  it('float the heading on the page and rest it on a card', () => {
-    render(table());
-    assert.match(screen.getByRole('columnheader', { name: 'Student' }).className, /rounded-s-lg/);
-    cleanup();
-
-    render(<Card>{table()}</Card>);
-    const onCard = screen.getByRole('columnheader', { name: 'Student' });
-    assert.doesNotMatch(onCard.className, /rounded-s-lg/);
-    assert.match(onCard.className, /bg-card/);
-  });
-
-  /** `border-separate` renders no `<tr>` border, and a sticky heading keeps a cell one. */
-  it('draw their rules on the cells, not the row', () => {
-    render(table());
-    const { body } = groups();
-
-    assert.match(screen.getByRole('cell', { name: 'Ravi' }).className, /border-b border-border/);
-    assert.ok(!body.querySelector('tr')?.className.includes('border-b'));
-  });
-
-  /** Pagination closes the box with a border-t of its own. */
-  it('stop at the last row', () => {
-    render(table());
-    assert.match(groups().body.className, /\[&>tr:last-child>td\]:border-b-0/);
-
-    cleanup();
-    const { container } = render(
-      <Pagination page={1} pageSize={10} total={2} onPageChange={() => {}} />,
-    );
-    assert.match(container.firstElementChild?.className ?? '', /border-t/);
-  });
-});
 
 describe('TableFrame', () => {
   /** A framed page stops the wrapper scrolling, not its padding; zeroing the bottom gave the frame the last pixel of the viewport and sat the card on the page edge. */

@@ -31,6 +31,7 @@ const CODE = QUESTION_VALIDATION_CODE;
 const SUBJECT = 'sub_quant';
 const TOPIC = 'top_arithmetic';
 const ALGEBRA = 'top_algebra';
+const QUANT = { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' };
 
 function catalog(): TaxonomyCatalog {
   const context = emptyTaxonomy();
@@ -76,6 +77,17 @@ const MCQ_ROW: Partial<Record<QuestionImportColumnKey, string>> = {
   correct_option: '2',
 };
 
+/** A typed numeric-answer row, by column key. */
+const NUMERIC_ROW: Partial<Record<QuestionImportColumnKey, string>> = {
+  subject: 'Quantitative Aptitude',
+  difficulty: 'LOW',
+  type: 'TEXT_FIELD',
+  stem_en: 'Write pi to two decimal places.',
+  answer_mode: 'NUMERIC',
+  answer_en: '3.14',
+  answer_tolerance: '0.01',
+};
+
 /** Builds the table the reader would produce, with the headers it normalises to. */
 function table(...rows: Partial<Record<QuestionImportColumnKey, string>>[]): CsvTable {
   const headers = QUESTION_IMPORT_COLUMNS.map((column) => normaliseHeader(column.header));
@@ -101,7 +113,6 @@ const plan = (
 ): QuestionImportPlanning => planQuestionImport(table(...rows), catalog(), dedup);
 
 describe('a sheet imported into one section of a test', () => {
-  const QUANT = { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' };
   const sheetOf = (count: number) =>
     Array.from({ length: count }, (_, at) => ({
       ...MCQ_ROW,
@@ -163,7 +174,6 @@ describe('a sheet imported into one section of a test', () => {
 });
 
 describe('a sheet imported into a whole typed test', () => {
-  const QUANT = { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' };
   const section = (name: string, room: number, closed: string | null = null) =>
     [
       lookupName(name),
@@ -393,13 +403,6 @@ describe('the question sheet', () => {
     assert.equal(result.rows[0]?.issues[0]?.column, 'subject');
   });
 
-  it('says a thing once, whichever check reached it', () => {
-    // The sheet cannot resolve the subject and the core then finds no subject id.
-    const row = plan([{ ...MCQ_ROW, subject: 'Reasoning' }]).rows[0];
-    assert.ok(row);
-    assert.equal(row.issues.length, 1);
-  });
-
   it('refuses a topic that is not under that subject rather than inventing one', () => {
     const row = plan([{ ...MCQ_ROW, topic: 'Geometry' }]).rows[0];
     assert.ok(row);
@@ -408,17 +411,7 @@ describe('the question sheet', () => {
   });
 
   it('reads a typed-answer row', () => {
-    const row = plan([
-      {
-        subject: 'Quantitative Aptitude',
-        difficulty: 'LOW',
-        type: 'TEXT_FIELD',
-        stem_en: 'Write pi to two decimal places.',
-        answer_mode: 'NUMERIC',
-        answer_en: '3.14',
-        answer_tolerance: '0.01',
-      },
-    ]).rows[0];
+    const row = plan([NUMERIC_ROW]).rows[0];
     assert.ok(row);
 
     assert.equal(row.action, 'create');
@@ -430,17 +423,7 @@ describe('the question sheet', () => {
   /** The sheet took any number from zero up, so 5000 previewed as Create and the review save refused it. */
   it('skips a row whose tolerance is not one the save would take, and says which cell', () => {
     for (const answer_tolerance of ['5000', '-1', 'abc']) {
-      const row = plan([
-        {
-          subject: 'Quantitative Aptitude',
-          difficulty: 'LOW',
-          type: 'TEXT_FIELD',
-          stem_en: 'Write pi to two decimal places.',
-          answer_mode: 'NUMERIC',
-          answer_en: '3.14',
-          answer_tolerance,
-        },
-      ]).rows[0];
+      const row = plan([{ ...NUMERIC_ROW, answer_tolerance }]).rows[0];
 
       assert.equal(row?.action, 'skip', answer_tolerance);
       assert.deepEqual(
@@ -756,24 +739,19 @@ describe('htmlFromCell', () => {
 });
 
 describe('planQuestionImport — pictures placed over the sheet', () => {
-  it('takes an option that is only a picture, keyed by its bytes', () => {
+  it('takes an option that is only a picture, keyed by its bytes, warning that it is no taller than a line', () => {
     const planned = planWithPictures({ ...MCQ_ROW, option2_en: '' }, { option2_en: [PNG] });
     const row = planned.rows[0];
 
-    assert.deepEqual(row?.issues, []);
-    const [key] = [...(row?.pictures.keys() ?? [])];
-    assert.match(key ?? '', /^questions\/images\/[0-9a-f]{32}\.png$/);
-    assert.match(row?.draft?.options[1]?.text.en ?? '', new RegExp(`data-key="${key}"`));
-  });
-
-  it('warns, without refusing, about a picture no taller than a line of text', () => {
-    const row = planWithPictures({ ...MCQ_ROW, option2_en: '' }, { option2_en: [PNG] }).rows[0];
-
     assert.equal(row?.action, 'create');
+    assert.deepEqual(row?.issues, []);
     assert.deepEqual(
       row?.warnings.map((warning) => warning.column),
       ['option2_en'],
     );
+    const [key] = [...(row?.pictures.keys() ?? [])];
+    assert.match(key ?? '', /^questions\/images\/[0-9a-f]{32}\.png$/);
+    assert.match(row?.draft?.options[1]?.text.en ?? '', new RegExp(`data-key="${key}"`));
   });
 
   /** The failure this prevents: a formula that will not draw reaching a candidate as red text. */

@@ -33,6 +33,18 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
+/** The durable copy of one answered question, as an earlier flush left it. */
+const answeredOn = (questionId: string) => ({
+  [questionId]: {
+    state: ANSWER_STATE.ANSWERED,
+    selectedOptionId: RIGHT_OPTION,
+    typedAnswer: null,
+    timeSpentSec: 20,
+    answeredAt: '2026-09-01T05:01:00.000Z',
+    firstActionAt: null,
+  },
+});
+
 /** A live two-question sitting ending at ENDS_AT; its first answer already flushed when `durable`. */
 async function build(durable = false) {
   const paper = await makePaper(prisma, { questions: ['Reasoning', 'Reasoning'] });
@@ -49,16 +61,7 @@ async function build(durable = false) {
   });
   const [q1 = '', q2 = ''] = paper.items.map((item) => item.questionId);
   if (durable) {
-    const held = {
-      [q1]: {
-        state: ANSWER_STATE.ANSWERED,
-        selectedOptionId: RIGHT_OPTION,
-        typedAnswer: null,
-        timeSpentSec: 20,
-        answeredAt: '2026-09-01T05:01:00.000Z',
-        firstActionAt: null,
-      },
-    };
+    const held = answeredOn(q1);
     const paperRows = await prisma.paperQuestion.findMany({
       where: { testId: paper.testId },
       orderBy: { order: 'asc' },
@@ -122,6 +125,8 @@ describe('AttemptStateService', () => {
     assert.equal(ack.revision, 1);
     const state = await service.current(student, attemptId, NOW);
     assert.equal(state.answers[q1]?.state, ANSWER_STATE.ANSWERED);
+    assert.equal(state.answers[q1]?.selectedOptionId, RIGHT_OPTION);
+    assert.equal(state.revision, 1, 'reading must not move the revision on');
     assert.deepEqual(await redis.client.smembers(redisKeys.attemptsDirty), [attemptId]);
     assert.ok(redis.snapshot()[`attempt:state:${attemptId}`]);
   });
@@ -395,18 +400,6 @@ describe('AttemptStateService', () => {
   });
 
   describe('reading a sitting back', () => {
-    /** The bug this prevents: a mid-test reload showing a blank palette while the answers are safe. */
-    it('returns what the sitting holds, without changing it', async () => {
-      const { service, student, attemptId, q1, change } = await build();
-      await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
-
-      const shown = await service.current(student, attemptId, NOW);
-
-      assert.equal(shown.answers[q1]?.state, ANSWER_STATE.ANSWERED);
-      assert.equal(shown.answers[q1]?.selectedOptionId, RIGHT_OPTION);
-      assert.equal(shown.revision, 1, 'reading must not move the revision on');
-    });
-
     it("reads another student's sitting as missing, never as refused", async () => {
       const { service, student, attemptId, change } = await build();
       await service.save(student, attemptId, { revision: 1, answers: [change()] }, NOW);
@@ -449,23 +442,13 @@ describe('AttemptStateService', () => {
         orderBy: { order: 'asc' },
         select: SHEET_ROW_SELECT,
       });
-      const answerOn = (questionId: string) => ({
-        [questionId]: {
-          state: ANSWER_STATE.ANSWERED,
-          selectedOptionId: RIGHT_OPTION,
-          typedAnswer: null,
-          timeSpentSec: 20,
-          answeredAt: '2026-09-01T05:01:00.000Z',
-          firstActionAt: null,
-        },
-      });
       await prisma.attemptSheet.update({
         where: { attemptId: attemptA.id },
-        data: { answers: sheetOf(answerOn(q1), paperRows, startedAt) },
+        data: { answers: sheetOf(answeredOn(q1), paperRows, startedAt) },
       });
       await prisma.attemptSheet.update({
         where: { attemptId: attemptB.id },
-        data: { answers: sheetOf(answerOn(q2), paperRows, startedAt) },
+        data: { answers: sheetOf(answeredOn(q2), paperRows, startedAt) },
       });
 
       const reads: unknown[] = [];

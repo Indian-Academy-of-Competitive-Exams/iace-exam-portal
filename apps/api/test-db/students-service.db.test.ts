@@ -19,12 +19,7 @@ import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { StudentsService } from '../src/students/students.service';
-import {
-  FakeCodeCatalog,
-  FakeEventBus,
-  FakeMessageSender,
-  FakeStorage,
-} from '../test/support/fakes';
+import { FakeCodeCatalog, FakeEventBus, FakeStorage } from '../test/support/fakes';
 import {
   makeCatalog,
   makeSitting,
@@ -114,14 +109,12 @@ async function serviceWith(over: Bench = {}) {
   const exams = new FakeExams(['SSC CGL', 'RRB JE']);
   const programs = new FakeCodeCatalog(['SSC CGL FOUNDATION']);
   const events = new FakeEventBus();
-  const sender = new FakeMessageSender();
   const auditContext = new AuditContext();
   const storage = new FakeStorage();
   return {
     exams,
     programs,
     events,
-    sender,
     auditContext,
     storage,
     service: new StudentsService(
@@ -138,6 +131,16 @@ async function serviceWith(over: Bench = {}) {
 }
 
 const noStudentYet = { student: null };
+
+/** The service over both kinds of branch and no student, for a case that creates one. */
+const creating = () => serviceWith({ ...noStudentYet, branches: [PHYSICAL, ONLINE_BRANCH] });
+
+/** An offline student at the physical centre, with both branches to move between. */
+const offlineAtCentre = () =>
+  serviceWith({
+    branches: [PHYSICAL, ONLINE_BRANCH],
+    student: { studentType: STUDENT_TYPE.OFFLINE, currentBranchId: PHYSICAL.id },
+  });
 
 const row = () => prisma.student.findUniqueOrThrow({ where: { id: STUDENT } });
 
@@ -279,7 +282,7 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   });
 
   it('refuses an online student at a physical centre, and an offline one in the online branch', async () => {
-    const { service } = await serviceWith({ ...noStudentYet, branches: [PHYSICAL, ONLINE_BRANCH] });
+    const { service } = await creating();
 
     await assert.rejects(
       () =>
@@ -302,7 +305,7 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   });
 
   it('takes an online student in the online branch, and a non-IACE one at none', async () => {
-    const { service } = await serviceWith({ ...noStudentYet, branches: [PHYSICAL, ONLINE_BRANCH] });
+    const { service } = await creating();
 
     await service.create({
       mobile: '9000000011',
@@ -329,7 +332,7 @@ describe('StudentsService.create — the type is the caller’s, never the servi
 
   /** A branch reaches its series, so a non-IACE student put at one reached that centre's tests. */
   it('refuses a non-IACE student at any branch, under the branch field', async () => {
-    const { service } = await serviceWith({ ...noStudentYet, branches: [PHYSICAL, ONLINE_BRANCH] });
+    const { service } = await creating();
 
     for (const [mobile, currentBranchId] of [
       ['9000000014', PHYSICAL.id],
@@ -739,10 +742,7 @@ describe('StudentsService.update — the branch has to suit the type', () => {
   });
 
   it('takes the type and the branch moving together', async () => {
-    const { service } = await serviceWith({
-      branches,
-      student: { studentType: STUDENT_TYPE.OFFLINE, currentBranchId: PHYSICAL.id },
-    });
+    const { service } = await offlineAtCentre();
 
     const updated = await service.update(STUDENT, {
       studentType: STUDENT_TYPE.ONLINE,
@@ -753,10 +753,7 @@ describe('StudentsService.update — the branch has to suit the type', () => {
   });
 
   it('refuses a switch to non-IACE that keeps the branch, and a branch named for a non-IACE student', async () => {
-    const { service } = await serviceWith({
-      branches,
-      student: { studentType: STUDENT_TYPE.OFFLINE, currentBranchId: PHYSICAL.id },
-    });
+    const { service } = await offlineAtCentre();
 
     await assert.rejects(
       () => service.update(STUDENT, { studentType: STUDENT_TYPE.NON_IACE }),
@@ -778,10 +775,7 @@ describe('StudentsService.update — the branch has to suit the type', () => {
   });
 
   it('takes a switch to non-IACE that clears the branch in the same save', async () => {
-    const { service } = await serviceWith({
-      branches,
-      student: { studentType: STUDENT_TYPE.OFFLINE, currentBranchId: PHYSICAL.id },
-    });
+    const { service } = await offlineAtCentre();
 
     const updated = await service.update(STUDENT, {
       studentType: STUDENT_TYPE.NON_IACE,

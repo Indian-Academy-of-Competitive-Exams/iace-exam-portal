@@ -192,7 +192,7 @@ describe('FinalizeService — a reading covers the paper, not just the section',
     await readSection(paper, 0);
     await readSection(paper, 1);
 
-    await offerTest(prisma, paper.testId, true);
+    await offerTest(prisma, paper.testId);
 
     assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
   });
@@ -247,7 +247,7 @@ describe('FinalizeService — a second offer', () => {
   });
 
   /** docs/02 §3: a retired test offered again only changes status. The failure: only a super admin could bring one back. */
-  it('opens a retired test again for any admin, though a super admin offered it past its reader', async () => {
+  it('opens a retired test again for any admin without re-freezing its paper, though a super admin offered it past its reader', async () => {
     const paper = await draft();
     await prisma.questionAssignment.create({
       data: {
@@ -263,6 +263,7 @@ describe('FinalizeService — a second offer', () => {
     const refused = await offerTest(prisma, paper.testId).catch((thrown: unknown) => thrown);
     assert.ok(AppException.is(refused), 'a first offer still waits on the reading');
     await offerTest(prisma, paper.testId, true);
+    const first = await testRow(paper);
     await prisma.test.update({
       where: { id: paper.testId },
       data: { status: TEST_STATUS.INACTIVE },
@@ -270,24 +271,9 @@ describe('FinalizeService — a second offer', () => {
 
     await offerTest(prisma, paper.testId);
 
-    assert.equal(await statusOf(paper), TEST_STATUS.ACTIVE);
-  });
-
-  /** `finalizedAt` is the watermark: without it a retired test re-offered would re-freeze its paper. */
-  it('opens a retired test again without re-freezing its paper', async () => {
-    const paper = await draft();
-    await offerTest(prisma, paper.testId, true);
-    const first = await testRow(paper);
-    await prisma.test.update({
-      where: { id: paper.testId },
-      data: { status: TEST_STATUS.INACTIVE },
-    });
-
-    await offerTest(prisma, paper.testId, true);
-
     const again = await testRow(paper);
     assert.equal(again.status, TEST_STATUS.ACTIVE);
-    assert.deepEqual(again.finalizedAt, first.finalizedAt);
+    assert.deepEqual(again.finalizedAt, first.finalizedAt, 'the paper is not frozen again');
     assert.equal(again.version, 1);
   });
 });

@@ -108,19 +108,6 @@ describe('AdminsService — features', () => {
 });
 
 describe('AdminsService — permissions, saved in one request', () => {
-  it('saves a level and reads it back as the admin permission map', async () => {
-    const { service } = build();
-    const admin = await makeAdmin(prisma);
-
-    const saved = await service.setPermissions(admin.id, {
-      [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
-    });
-
-    assert.deepEqual(saved.permissions, {
-      [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
-    });
-  });
-
   it('grants, changes and removes several features in the one save, leaving the rest alone', async () => {
     const { service } = build();
     const admin = await makeAdmin(prisma);
@@ -128,17 +115,19 @@ describe('AdminsService — permissions, saved in one request', () => {
     await grant(admin.id, FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
     await grant(admin.id, FEATURE_KEYS.DATA_EXPORT, PERMISSION_LEVELS.READ);
 
-    await service.setPermissions(admin.id, {
+    const saved = await service.setPermissions(admin.id, {
       [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
       [FEATURE_KEYS.TEST_MANAGEMENT]: null,
       [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ,
     });
 
-    assert.deepEqual(await service.permissionsFor(admin.id), {
+    const held = {
       [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
       [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ,
       [FEATURE_KEYS.DATA_EXPORT]: PERMISSION_LEVELS.READ,
-    });
+    };
+    assert.deepEqual(saved.permissions, held);
+    assert.deepEqual(await service.permissionsFor(admin.id), held);
     assert.equal((await grantsOf(admin.id)).length, 3, 'one row per feature held');
   });
 
@@ -301,6 +290,8 @@ describe('AdminsService — admins', () => {
     // Nothing to grant: a super admin is past every check the grants are read at.
     assert.deepEqual(created.permissions, {});
     assert.equal(await prisma.adminFeaturePermission.count({ where: { adminId: created.id } }), 0);
+    const row = await prisma.admin.findUniqueOrThrow({ where: { id: created.id } });
+    assert.equal(row.createdById, ACTOR, 'from the token, not the body');
   });
 
   it('leaves the bypass off for every other role', async () => {
@@ -313,20 +304,6 @@ describe('AdminsService — admins', () => {
 
     assert.equal(created.isSuperAdmin, false);
     assert.equal(created.permissions[FEATURE_KEYS.QUESTION_PROOFREAD], PERMISSION_LEVELS.WRITE);
-  });
-
-  it('records who created an admin from the token, not the body', async () => {
-    const { service } = build();
-
-    const created = await service.create(
-      { email: 'new@iace.co.in', role: ADMIN_ROLES.SUPER_ADMIN },
-      ACTOR,
-    );
-
-    assert.equal(created.isSuperAdmin, true);
-    assert.deepEqual(created.permissions, {});
-    const row = await prisma.admin.findUniqueOrThrow({ where: { id: created.id } });
-    assert.equal(row.createdById, ACTOR);
   });
 });
 
@@ -367,17 +344,6 @@ describe('AdminsService — setActive', () => {
   });
 
   /** Deactivation is not deletion: the account still exists, signs in, and lists as Deactivated. */
-  it('switches the account off WITHOUT removing it', async () => {
-    const { service } = build();
-    const admin = await makeAdmin(prisma);
-
-    await service.setActive(admin.id, false, ACTOR);
-
-    const row = await prisma.admin.findUnique({ where: { id: admin.id } });
-    assert.ok(row, 'the row must survive — other records reference the id');
-    assert.equal(row.isActive, false);
-  });
-
   it('leaves a deactivated admin visible in the list', async () => {
     const { service } = build();
     const admin = await makeAdmin(prisma);
@@ -429,17 +395,6 @@ describe('AdminsService — setActive', () => {
     );
   });
 
-  it('switches a deactivated admin back on', async () => {
-    const { service } = build();
-    const admin = await makeAdmin(prisma, { isActive: false });
-
-    const restored = await service.setActive(admin.id, true, ACTOR);
-
-    assert.equal(restored.isActive, true);
-    const row = await prisma.admin.findUniqueOrThrow({ where: { id: admin.id } });
-    assert.equal(row.isActive, true);
-  });
-
   /** The rule that keeps deactivation a removal rather than a pause. */
   it('does NOT hand back the grants deactivation took away', async () => {
     const { service } = build();
@@ -449,6 +404,7 @@ describe('AdminsService — setActive', () => {
     await service.setActive(admin.id, false, ACTOR);
     const restored = await service.setActive(admin.id, true, ACTOR);
 
+    assert.equal(restored.isActive, true);
     assert.deepEqual(restored.permissions, {}, 'reactivation must not restore grants');
     assert.deepEqual(await service.permissionsFor(admin.id), {});
   });

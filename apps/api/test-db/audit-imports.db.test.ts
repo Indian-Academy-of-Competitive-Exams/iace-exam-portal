@@ -308,21 +308,28 @@ describe('ImportsService — the stored sheet keeps the format it arrived in', (
   };
 
   /** The failure this prevents: a CSV roster downloading from the audit list named .xlsx. */
-  it('stores a CSV roster under a .csv key and hands it back as a CSV', async () => {
-    const file = await storedFile(Buffer.from(roster('mobile\n9876543210')));
+  for (const [what, ext, contentType, rosterFile] of [
+    [
+      'a CSV roster under a .csv key and hands it back as a CSV',
+      'csv',
+      'text/csv',
+      () => Promise.resolve(Buffer.from(roster('mobile\n9876543210'))),
+    ],
+    [
+      'a workbook roster under a .xlsx key and hands it back as a workbook',
+      'xlsx',
+      XLSX_CONTENT_TYPE,
+      () => rosterWorkbook('mobile\n9876543210'),
+    ],
+  ] as const) {
+    it(`stores ${what}`, async () => {
+      const file = await storedFile(await rosterFile());
 
-    assert.ok(file.key.endsWith('.csv'), file.key);
-    assert.ok(file.filename.endsWith('.csv'), file.filename);
-    assert.equal(file.contentType, 'text/csv');
-  });
-
-  it('stores a workbook roster under a .xlsx key and hands it back as a workbook', async () => {
-    const file = await storedFile(await rosterWorkbook('mobile\n9876543210'));
-
-    assert.ok(file.key.endsWith('.xlsx'), file.key);
-    assert.ok(file.filename.endsWith('.xlsx'), file.filename);
-    assert.equal(file.contentType, XLSX_CONTENT_TYPE);
-  });
+      assert.ok(file.key.endsWith(`.${ext}`), file.key);
+      assert.ok(file.filename.endsWith(`.${ext}`), file.filename);
+      assert.equal(file.contentType, contentType);
+    });
+  }
 });
 
 describe('ImportsService.commitProgramStudents — the run and the response count the same rows', () => {
@@ -419,14 +426,19 @@ function questionSheet(...stems: string[]): Buffer {
   return Buffer.from([header, ...lines].join('\n'));
 }
 
-/** Previews the sheet and commits the run it opened. */
-async function importQuestions(...stems: string[]) {
+/** The question importer over a bank holding the admin, writing pictures to `storage`. */
+async function questionImporter(storage = new FakeStorage()) {
   await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
-  const service = new QuestionImportService(
+  return new QuestionImportService(
     prisma,
-    new FakeStorage() as never,
+    storage as never,
     new AuditService(prisma, new FakeStorage() as never),
   );
+}
+
+/** Previews the sheet and commits the run it opened. */
+async function importQuestions(...stems: string[]) {
+  const service = await questionImporter();
   await service.preview(questionSheet(...stems), ADMIN);
   const [log] = await importLogs();
   const result = await service.commit(log?.id ?? '', { actorId: ADMIN });
@@ -437,12 +449,7 @@ describe('QuestionImportService — recognising what the bank already holds', ()
   /** The dedup read is scoped to this sheet's own hashes, so it must still find the bank's copy. */
   it('skips a stem already in the bank rather than importing it twice', async () => {
     const stem = 'What is 20% of 150?';
-    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
-    const service = new QuestionImportService(
-      prisma,
-      new FakeStorage() as never,
-      new AuditService(prisma, new FakeStorage() as never),
-    );
+    const service = await questionImporter();
     const run = async (...stems: string[]) => {
       await service.preview(questionSheet(...stems), ADMIN);
       const logs = await importLogs();
@@ -527,13 +534,8 @@ describe('QuestionImportService — pictures placed over the sheet', () => {
     [...storage.objects.keys()].filter((key) => key.startsWith('questions/images/'));
 
   it('stores the picture at preview, so the review window can draw it, and the question points at it', async () => {
-    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
     const storage = new FakeStorage();
-    const service = new QuestionImportService(
-      prisma,
-      storage as never,
-      new AuditService(prisma, new FakeStorage() as never),
-    );
+    const service = await questionImporter(storage);
 
     const plan = await service.preview(await pictureSheet(), ADMIN);
     assert.equal(plan.summary.willCreate, 1);
@@ -547,12 +549,7 @@ describe('QuestionImportService — pictures placed over the sheet', () => {
 
   /** The failure this prevents: every re-upload of a sheet with pictures writing its questions again. */
   it('recognises the same sheet uploaded again as duplicates', async () => {
-    await makeQuestionBank(prisma, { [ADMIN]: 'Admin One' });
-    const service = new QuestionImportService(
-      prisma,
-      new FakeStorage() as never,
-      new AuditService(prisma, new FakeStorage() as never),
-    );
+    const service = await questionImporter();
     const run = async () => {
       const plan = await service.preview(await pictureSheet(), ADMIN);
       return service.commit(plan.importLogId, { actorId: ADMIN });

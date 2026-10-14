@@ -156,13 +156,18 @@ async function cohortRows(testId: string) {
   };
 }
 
+/** One sitting of a new paper, marked and counted: one right, one wrong, one skipped, one right. */
+async function countedOne() {
+  const built = build();
+  const paper = await paperOf();
+  const one = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
+  await counted(built, one.attemptId);
+  return { paper, ...one };
+}
+
 describe('RollupService — counting one sitting in', () => {
   it('counts one sitting into every aggregate it belongs to', async () => {
-    const built = build();
-    const paper = await paperOf();
-    const { attemptId, studentId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
-
-    await counted(built, attemptId);
+    const { paper, studentId } = await countedOne();
 
     const rolled = await testStat(paper.testId);
     assert.equal(rolled?.evaluatedCount, 1);
@@ -172,11 +177,7 @@ describe('RollupService — counting one sitting in', () => {
   });
 
   it('writes the marks the scorer worked out, not a second opinion of them', async () => {
-    const built = build();
-    const paper = await paperOf();
-    const { attemptId, studentId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
-
-    await counted(built, attemptId);
+    const { studentId } = await countedOne();
 
     const student = await studentStat(studentId);
     assert.deepEqual(
@@ -187,11 +188,7 @@ describe('RollupService — counting one sitting in', () => {
   });
 
   it('measures each question, and leaves discrimination for the pass that earns it', async () => {
-    const built = build();
-    const paper = await paperOf();
-    const { attemptId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
-
-    await counted(built, attemptId);
+    const { paper } = await countedOne();
 
     const rows = await prisma.testQuestionStat.findMany({ where: { testId: paper.testId } });
     const measured = paper.items.map((item) =>
@@ -211,11 +208,7 @@ describe('RollupService — counting one sitting in', () => {
   });
 
   it('splits a sitting across the subjects it served', async () => {
-    const built = build();
-    const paper = await paperOf();
-    const { attemptId, studentId } = await sat(paper, [RIGHT, WRONG, null, RIGHT]);
-
-    await counted(built, attemptId);
+    const { paper, studentId } = await countedOne();
 
     const rows = await prisma.studentSubjectStat.findMany({ where: { studentId } });
     const tallyOf = (subjectId: string | undefined) => {

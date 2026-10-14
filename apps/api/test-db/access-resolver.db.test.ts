@@ -240,20 +240,18 @@ describe('AccessResolverService — how a series is reached', () => {
     assert.deepEqual((await reached(outsider)).toSorted(), granted.toSorted());
   });
 
-  it('treats a soft-deleted student as one that is not there', async () => {
-    const { at } = await reachable();
-    const gone = await studentAt(at, { deletedAt: new Date('2026-05-01T00:00:00.000Z') });
-
-    await refused(resolverOn().catalog(gone, NOW), ErrorCodes.NOT_FOUND);
-  });
-
   /** Deactivation takes the platform away, so it has to take the catalog with it. */
-  it('treats a deactivated student as one that is not there', async () => {
-    const { at } = await reachable();
-    const off = await studentAt(at, { isActive: false });
+  for (const [what, over] of [
+    ['soft-deleted', { deletedAt: new Date('2026-05-01T00:00:00.000Z') }],
+    ['deactivated', { isActive: false }],
+  ] as const) {
+    it(`treats a ${what} student as one that is not there`, async () => {
+      const { at } = await reachable();
+      const gone = await studentAt(at, over);
 
-    await refused(resolverOn().catalog(off, NOW), ErrorCodes.NOT_FOUND);
-  });
+      await refused(resolverOn().catalog(gone, NOW), ErrorCodes.NOT_FOUND);
+    });
+  }
 
   it('never shows a test that is not ACTIVE', async () => {
     const { at, seriesId, testId, student } = await reachable();
@@ -300,10 +298,17 @@ describe('AccessResolverService — when a test opens', () => {
     assert.equal(test?.opensAt, '2026-07-01T00:00:00.000Z');
   });
 
-  it('is startable once it has opened, and at the exact instant it opens', async () => {
-    assert.equal((await testAt(new Date('2026-05-01T00:00:00.000Z')))?.canStart, true);
-    await resetDatabase(prisma);
-    assert.equal((await testAt(NOW))?.canStart, true);
+  /** The guarantee the model rests on: an opened test stays startable however long ago it opened. */
+  it('is startable once it has opened, at the exact instant, and long after, because nothing shuts it', async () => {
+    const opened = [
+      new Date('2026-05-01T00:00:00.000Z'),
+      NOW,
+      new Date('2020-01-01T00:00:00.000Z'),
+    ];
+    for (const opensAt of opened) {
+      await resetDatabase(prisma);
+      assert.equal((await testAt(opensAt))?.canStart, true, opensAt.toISOString());
+    }
   });
 
   /** The failure this prevents: a series with no times set locking every student out of it. */
@@ -312,11 +317,6 @@ describe('AccessResolverService — when a test opens', () => {
 
     assert.equal(test?.canStart, true);
     assert.equal(test?.opensAt, null);
-  });
-
-  /** The guarantee the model rests on: an opened test stays startable however long ago it opened. */
-  it('stays startable long after it opened, because nothing shuts it', async () => {
-    assert.equal((await testAt(new Date('2020-01-01T00:00:00.000Z')))?.canStart, true);
   });
 });
 
@@ -721,6 +721,15 @@ describe('AccessResolverService — why a test is shut', () => {
     return seen;
   };
 
+  /** A reason is added to the answer, never a second answer: a test is startable exactly when nothing shuts it. */
+  const startableIffUnshut = (tests: { canStart: boolean; shut?: unknown }[]) => {
+    assert.deepEqual(
+      tests.map((test) => test.canStart),
+      tests.map((test) => test.shut === null),
+    );
+    return tests.map((test) => test.canStart);
+  };
+
   it('names the turn for a test behind an unsat one, and the opening where both hold it', async () => {
     const [tests = []] = await mixed({});
 
@@ -728,6 +737,7 @@ describe('AccessResolverService — why a test is shut', () => {
       tests.map((test) => test.shut),
       [null, TEST_SHUT.TURN, TEST_SHUT.NOT_OPEN],
     );
+    assert.deepEqual(startableIffUnshut(tests), [true, false, false]);
   });
 
   /** THE failure this prevents: a held student told a paper is waiting its turn, or has not opened. */
@@ -738,6 +748,7 @@ describe('AccessResolverService — why a test is shut', () => {
       tests.map((test) => test.shut),
       [TEST_SHUT.HOLD, TEST_SHUT.HOLD, TEST_SHUT.HOLD],
     );
+    assert.deepEqual(startableIffUnshut(tests), [false, false, false]);
   });
 
   it('names the opening on a scheduled test outside any order', async () => {
@@ -747,20 +758,6 @@ describe('AccessResolverService — why a test is shut', () => {
     const test = (await resolverOn().catalog(await studentAt(at), NOW)).series[0]?.tests[0];
 
     assert.equal(test?.shut, TEST_SHUT.NOT_OPEN);
-  });
-
-  /** A reason is added to the answer, never a second answer: a test is startable exactly when nothing shuts it. */
-  it('leaves every test startable exactly when it names no reason', async () => {
-    const tests = (await mixed({}, { isTestBlocked: true })).flat();
-
-    assert.deepEqual(
-      tests.map((test) => test.canStart),
-      [true, false, false, false, false, false],
-    );
-    assert.deepEqual(
-      tests.map((test) => test.canStart),
-      tests.map((test) => test.shut === null),
-    );
   });
 });
 

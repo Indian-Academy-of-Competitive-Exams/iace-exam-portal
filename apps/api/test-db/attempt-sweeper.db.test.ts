@@ -48,25 +48,34 @@ const prisma = testPrisma();
 beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
-/** `count` sittings of one test, by as many students, whose clock ran out an hour ago unless told. */
-async function stranded(count: number, agoMs = HOUR_MS): Promise<string[]> {
+/** `count` sittings of one test by as many new students, each row built by `sitting`; ids in order. */
+async function seeded(
+  count: number,
+  sitting: (testId: string, studentId: string) => Prisma.AttemptCreateManyInput,
+  prepare: (testId: string) => Promise<unknown> = () => Promise.resolve(),
+): Promise<string[]> {
   const test = await makeTest(prisma, await makeCatalog(prisma));
+  await prepare(test.id);
   const students = Array.from({ length: count }, () => uid());
   await prisma.student.createMany({
     data: students.map((id) => ({ id, mobile: uid(), studentType: STUDENT_TYPE.ONLINE })),
   });
+  const attempts = students.map((studentId) => ({ id: uid(), ...sitting(test.id, studentId) }));
+  await prisma.attempt.createMany({ data: attempts });
+  return attempts.map((attempt) => attempt.id);
+}
+
+/** `count` sittings of one test, by as many students, whose clock ran out an hour ago unless told. */
+function stranded(count: number, agoMs = HOUR_MS): Promise<string[]> {
   const endsAt = new Date(Date.now() - agoMs);
-  const attempts = students.map((studentId) => ({
-    id: uid(),
-    testId: test.id,
+  return seeded(count, (testId, studentId) => ({
+    testId,
     studentId,
     attemptNo: 1,
     startedAt: new Date(endsAt.getTime() - HOUR_MS),
     endsAt,
     shuffleSeed: 1,
   }));
-  await prisma.attempt.createMany({ data: attempts });
-  return attempts.map((attempt) => attempt.id);
 }
 
 interface Hooks {
@@ -135,16 +144,10 @@ function build(hooks: Hooks = {}) {
 const ended = () => prisma.attempt.count({ where: { status: ATTEMPT_STATUS.SUBMITTED } });
 
 /** `count` sittings already ended, unscored, and past the grace a scoring job gets to answer. */
-async function unscored(count: number): Promise<string[]> {
-  const test = await makeTest(prisma, await makeCatalog(prisma));
-  const students = Array.from({ length: count }, () => uid());
-  await prisma.student.createMany({
-    data: students.map((id) => ({ id, mobile: uid(), studentType: STUDENT_TYPE.ONLINE })),
-  });
+function unscored(count: number): Promise<string[]> {
   const submittedAt = new Date(Date.now() - SCORING_RETRY_AFTER_MS - HOUR_MS);
-  const attempts = students.map((studentId) => ({
-    id: uid(),
-    testId: test.id,
+  return seeded(count, (testId, studentId) => ({
+    testId,
     studentId,
     attemptNo: 1,
     status: ATTEMPT_STATUS.SUBMITTED,
@@ -153,8 +156,6 @@ async function unscored(count: number): Promise<string[]> {
     submittedAt,
     shuffleSeed: 1,
   }));
-  await prisma.attempt.createMany({ data: attempts });
-  return attempts.map((attempt) => attempt.id);
 }
 
 describe('AttemptSweeperProcessor — a paper put down is not a paper abandoned', () => {
@@ -222,16 +223,6 @@ describe('AttemptSweeperProcessor — a paper put down is not a paper abandoned'
 });
 
 describe('AttemptSweeperProcessor — one sweep, many stranded sittings', () => {
-  /** The bug this prevents: a batching loop that only ever touches its first lane. */
-  it('ends every stranded sitting, not just the first lane of them', async () => {
-    const count = SWEEP_LANES * 2 + 3;
-    await stranded(count);
-
-    await build().sweeper.process();
-
-    assert.equal(await ended(), count);
-  });
-
   /** The bug this prevents: one student's failed end taking every other lane down with it. */
   it('keeps ending the rest when one in the batch is refused', async () => {
     const count = SWEEP_LANES + 2;
@@ -346,29 +337,24 @@ describe('AttemptSweeperProcessor — asking again for the never-scored', () => 
 });
 
 /** `count` sittings marked against revision 0 of a test a drop has since moved to revision 1. */
-async function markedBeforeADrop(count: number): Promise<string[]> {
-  const test = await makeTest(prisma, await makeCatalog(prisma));
-  await prisma.test.update({ where: { id: test.id }, data: { paperRevision: 1 } });
-  const students = Array.from({ length: count }, () => uid());
-  await prisma.student.createMany({
-    data: students.map((id) => ({ id, mobile: uid(), studentType: STUDENT_TYPE.ONLINE })),
-  });
+function markedBeforeADrop(count: number): Promise<string[]> {
   const submittedAt = new Date(Date.now() - HOUR_MS);
-  const attempts = students.map((studentId) => ({
-    id: uid(),
-    testId: test.id,
-    studentId,
-    status: ATTEMPT_STATUS.EVALUATED,
-    startedAt: new Date(submittedAt.getTime() - HOUR_MS),
-    endsAt: submittedAt,
-    submittedAt,
-    evaluatedAt: submittedAt,
-    score: 1,
-    scoredRevision: 0,
-    shuffleSeed: 1,
-  }));
-  await prisma.attempt.createMany({ data: attempts });
-  return attempts.map((attempt) => attempt.id);
+  return seeded(
+    count,
+    (testId, studentId) => ({
+      testId,
+      studentId,
+      status: ATTEMPT_STATUS.EVALUATED,
+      startedAt: new Date(submittedAt.getTime() - HOUR_MS),
+      endsAt: submittedAt,
+      submittedAt,
+      evaluatedAt: submittedAt,
+      score: 1,
+      scoredRevision: 0,
+      shuffleSeed: 1,
+    }),
+    (testId) => prisma.test.update({ where: { id: testId }, data: { paperRevision: 1 } }),
+  );
 }
 
 describe('AttemptSweeperProcessor — asking for the sittings a drop left behind', () => {

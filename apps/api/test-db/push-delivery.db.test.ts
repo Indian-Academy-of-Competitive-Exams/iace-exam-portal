@@ -72,6 +72,76 @@ async function build(sender = new FakePushSender(), fcm = new FakeFcmSender()) {
 const endpoints = async () =>
   (await prisma.pushSubscription.findMany()).map((row) => row.endpoint).sort();
 
+type Built = Awaited<ReturnType<typeof build>>;
+
+const brokenSender = (message: string) =>
+  ({ isConfigured: true, send: () => Promise.reject(new Error(message)) }) as never;
+
+/** The two free channels, each reached through its own registration and its own sender. */
+const CHANNELS = [
+  {
+    name: 'a browser',
+    enrol: ({ push, student }: Built) => push.subscribe(student, SESSION, SUBSCRIPTION),
+    sent: ({ sender }: Built) => sender.sent,
+    unconfigured: () => build(new FakePushSender(false)),
+    broken: () => build(brokenSender('push service is down')),
+  },
+  {
+    name: 'a phone',
+    enrol: ({ push, student }: Built) => push.registerDevice(student, SESSION, DEVICE),
+    sent: ({ fcm }: Built) => fcm.sent,
+    unconfigured: () => build(new FakePushSender(), new FakeFcmSender(false)),
+    broken: () => build(new FakePushSender(), brokenSender('FCM is down')),
+  },
+] as const;
+
+describe('Sending a notification on either free channel', () => {
+  for (const channel of CHANNELS) {
+    /** The whole payload rule: a locked phone renders this, so it must carry no score and no answer. */
+    it(`carries ${channel.name} a title and a link into the app, and nothing else`, async () => {
+      const built = await build();
+      await channel.enrol(built);
+
+      await built.push.deliverAll([built.delivery]);
+
+      assert.deepEqual(channel.sent(built)[0]?.payload, {
+        title: 'Your result is ready',
+        url: NOTIFICATION_INBOX_PATH,
+        notificationId: built.delivery.notificationId,
+      });
+    });
+
+    /** The ledger row IS the decision, so a redelivered job must not push the same thing again. */
+    it(`pushes ${channel.name} once however many times the job runs`, async () => {
+      const built = await build();
+      await channel.enrol(built);
+
+      await built.push.deliverAll([built.delivery]);
+      await built.push.deliverAll([built.delivery]);
+
+      assert.equal(channel.sent(built).length, 1);
+    });
+
+    it(`sends ${channel.name} nothing at all when its sender is not configured`, async () => {
+      const built = await channel.unconfigured();
+      await channel.enrol(built);
+
+      await built.push.deliverAll([built.delivery]);
+
+      assert.equal(channel.sent(built).length, 0);
+      assert.equal(await prisma.notificationDelivery.count(), 0);
+    });
+
+    /** The bell is the source of truth: a push service being down cannot fail the job that wrote it. */
+    it(`never throws ${channel.name}'s failure back at the caller`, async () => {
+      const built = await channel.broken();
+      await channel.enrol(built);
+
+      await assert.doesNotReject(built.push.deliverAll([built.delivery]));
+    });
+  }
+});
+
 describe('Subscribing this browser', () => {
   it('holds one row per endpoint, however often the same device asks', async () => {
     const { push, student } = await build();
@@ -116,20 +186,6 @@ describe('Sending a notification as a push', () => {
     ]);
   });
 
-  /** The whole payload rule: a locked phone renders this, so it must carry no score and no answer. */
-  it('carries a title and a link into the app, and nothing else', async () => {
-    const { push, sender, student, delivery } = await build();
-    await push.subscribe(student, SESSION, SUBSCRIPTION);
-
-    await push.deliverAll([delivery]);
-
-    assert.deepEqual(sender.sent[0]?.payload, {
-      title: 'Your result is ready',
-      url: NOTIFICATION_INBOX_PATH,
-      notificationId: delivery.notificationId,
-    });
-  });
-
   it('records the send on the delivery ledger', async () => {
     const { push, student, delivery } = await build();
     await push.subscribe(student, SESSION, SUBSCRIPTION);
@@ -141,33 +197,12 @@ describe('Sending a notification as a push', () => {
     assert.equal(row?.status, DeliveryStatus.SENT);
   });
 
-  /** The ledger row IS the decision, so a redelivered job must not push the same thing again. */
-  it('pushes once however many times the job runs', async () => {
-    const { push, sender, student, delivery } = await build();
-    await push.subscribe(student, SESSION, SUBSCRIPTION);
-
-    await push.deliverAll([delivery]);
-    await push.deliverAll([delivery]);
-
-    assert.equal(sender.sent.length, 1);
-  });
-
   /** An absence, not a decision: recording one row per student who never enabled push is noise. */
   it('records nothing for a student with no subscription at all', async () => {
     const { push, delivery } = await build();
 
     await push.deliverAll([delivery]);
 
-    assert.equal(await prisma.notificationDelivery.count(), 0);
-  });
-
-  it('sends nothing at all when no VAPID keypair is configured', async () => {
-    const { push, sender, student, delivery } = await build(new FakePushSender(false));
-    await push.subscribe(student, SESSION, SUBSCRIPTION);
-
-    await push.deliverAll([delivery]);
-
-    assert.equal(sender.sent.length, 0);
     assert.equal(await prisma.notificationDelivery.count(), 0);
   });
 });
@@ -211,17 +246,6 @@ describe('When an endpoint has gone', () => {
 
     const [row] = await prisma.notificationDelivery.findMany();
     assert.equal(row?.status, DeliveryStatus.FAILED);
-  });
-
-  /** The bell is the source of truth: a push service being down cannot fail the job that wrote it. */
-  it('never throws its failure back at the caller', async () => {
-    const { push, student, delivery } = await build({
-      isConfigured: true,
-      send: () => Promise.reject(new Error('push service is down')),
-    } as never);
-    await push.subscribe(student, SESSION, SUBSCRIPTION);
-
-    await assert.doesNotReject(push.deliverAll([delivery]));
   });
 
   /** Stored before the host rule existed, or never valid: dropped like a dead one, never POSTed to. */
@@ -292,20 +316,6 @@ describe('Sending a notification to a phone', () => {
     assert.deepEqual(fcm.sent.map((row) => row.token).sort(), ['fcm-one', 'fcm-two']);
   });
 
-  /** The same payload rule as the browser's: a locked phone renders this, so it carries no marks. */
-  it('carries a title and a link into the app, and nothing else', async () => {
-    const { push, fcm, student, delivery } = await build();
-    await push.registerDevice(student, SESSION, DEVICE);
-
-    await push.deliverAll([delivery]);
-
-    assert.deepEqual(fcm.sent[0]?.payload, {
-      title: 'Your result is ready',
-      url: NOTIFICATION_INBOX_PATH,
-      notificationId: delivery.notificationId,
-    });
-  });
-
   /** Two channels, two decisions: a phone reached is not a browser reached. */
   it('books its own ledger row beside the browser one', async () => {
     const { push, student, delivery } = await build();
@@ -320,29 +330,6 @@ describe('Sending a notification to a phone', () => {
       DeliveryChannel.WEB_PUSH,
     ]);
     assert.ok(rows.every((row) => row.status === DeliveryStatus.SENT));
-  });
-
-  it('pushes once however many times the job runs', async () => {
-    const { push, fcm, student, delivery } = await build();
-    await push.registerDevice(student, SESSION, DEVICE);
-
-    await push.deliverAll([delivery]);
-    await push.deliverAll([delivery]);
-
-    assert.equal(fcm.sent.length, 1);
-  });
-
-  it('sends nothing at all when no service account is configured', async () => {
-    const { push, fcm, student, delivery } = await build(
-      new FakePushSender(),
-      new FakeFcmSender(false),
-    );
-    await push.registerDevice(student, SESSION, DEVICE);
-
-    await push.deliverAll([delivery]);
-
-    assert.equal(fcm.sent.length, 0);
-    assert.equal(await prisma.notificationDelivery.count(), 0);
   });
 
   /** FCM reporting a token unregistered is the phone telling us it is gone, so we stop holding it. */
@@ -363,17 +350,6 @@ describe('Sending a notification to a phone', () => {
     );
     const [ledger] = await prisma.notificationDelivery.findMany();
     assert.equal(ledger?.status, DeliveryStatus.SENT, 'the live one still got it');
-  });
-
-  /** The bell is the source of truth: FCM being down cannot fail the job that wrote it. */
-  it('never throws its failure back at the caller', async () => {
-    const { push, student, delivery } = await build(new FakePushSender(), {
-      isConfigured: true,
-      send: () => Promise.reject(new Error('FCM is down')),
-    } as never);
-    await push.registerDevice(student, SESSION, DEVICE);
-
-    await assert.doesNotReject(push.deliverAll([delivery]));
   });
 });
 
@@ -472,19 +448,6 @@ describe('When nothing accepted a free push', () => {
     assert.equal(await swept(push, delivery), null);
   });
 
-  it('moves the one ledger row rather than booking a second', async () => {
-    const { push, student, delivery } = await build(failing());
-    await push.subscribe(student, SESSION, SUBSCRIPTION);
-
-    await swept(push, delivery);
-    await swept(push, delivery);
-
-    const rows = await prisma.notificationDelivery.findMany();
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0]?.attempts, 2);
-    assert.equal(rows[0]?.status, DeliveryStatus.FAILED);
-  });
-
   /** The bound, so an outage that never ends cannot re-push every five minutes for ever. */
   it('stops after three sweeps', async () => {
     const { push, student, delivery } = await build(failing());
@@ -495,8 +458,9 @@ describe('When nothing accepted a free push', () => {
 
     assert.notEqual(await swept(push, delivery), null, 'the third attempt spends it');
     assert.notEqual(await swept(push, delivery), null);
-    const [row] = await prisma.notificationDelivery.findMany();
-    assert.equal(row?.attempts, 3);
+    const rows = await prisma.notificationDelivery.findMany();
+    assert.equal(rows.length, 1, 'the one ledger row moves rather than a second being booked');
+    assert.deepEqual([rows[0]?.attempts, rows[0]?.status], [3, DeliveryStatus.FAILED]);
   });
 
   /** A phone that got it is a student who has been told, so the browser is not worth trying again. */

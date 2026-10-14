@@ -169,6 +169,18 @@ const assign = (
     data: { testId, baseConfigId: catalog.baseConfigId, baseConfigSectionId, assigneeId, role },
   });
 
+const standDown = (id: string) =>
+  prisma.questionAssignment.update({ where: { id }, data: { replacedAt: new Date() } });
+
+const finalizeSeat = (id: string) =>
+  prisma.questionAssignment.update({ where: { id }, data: { finalizedAt: new Date() } });
+
+const needing = (pair: { baseConfigSectionId: string }, questionCount: number) =>
+  prisma.baseConfigSection.update({
+    where: { id: pair.baseConfigSectionId },
+    data: { questionCount },
+  });
+
 /** A section with a typist and a reader on a test from the source given, and one paper question. */
 async function aSection(source: PaperSource = PAPER_SOURCES.FRAMED) {
   const catalog = await makeCatalog(prisma);
@@ -199,6 +211,11 @@ async function aSection(source: PaperSource = PAPER_SOURCES.FRAMED) {
     });
     return question;
   };
+  const placed = async () => {
+    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
+    await onPaper(question);
+    return question;
+  };
   const handToReader = () =>
     prisma.questionAssignment.update({ where: { id: reading.id }, data: { handedAt: new Date() } });
   const typistDone = async () => {
@@ -209,7 +226,7 @@ async function aSection(source: PaperSource = PAPER_SOURCES.FRAMED) {
     await handToReader();
   };
 
-  return { catalog, test, pair, typing, reading, onPaper, typed, handToReader, typistDone };
+  return { catalog, test, pair, typing, reading, onPaper, placed, typed, handToReader, typistDone };
 }
 
 describe('SectionWorkService — who opens a section', () => {
@@ -303,19 +320,15 @@ describe('SectionWorkService — who may change a question, and when', () => {
 
   it('keeps a test owner out until the section is back with them', async () => {
     const { work } = await build();
-    const { pair, test, reading, onPaper, typistDone } = await aSection();
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, test, reading, typistDone, placed } = await aSection();
+    const question = await placed();
     await typistDone();
 
     await assert.rejects(
       () => work.edit(pair, question.id, draft(), viewer(OWNER, OWNS)),
       refusedWith(ErrorCodes.FORBIDDEN),
     );
-    await prisma.questionAssignment.update({
-      where: { id: reading.id },
-      data: { finalizedAt: new Date() },
-    });
+    await finalizeSeat(reading.id);
     await work.edit(
       pair,
       question.id,
@@ -335,9 +348,8 @@ describe('SectionWorkService — who may change a question, and when', () => {
 
   it('lets a test owner change a picked section before handing it over', async () => {
     const { work } = await build();
-    const { pair, onPaper } = await aSection(PAPER_SOURCES.PICKED);
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, placed } = await aSection(PAPER_SOURCES.PICKED);
+    const question = await placed();
 
     const saved = await work.edit(pair, question.id, draft(), viewer(OWNER, OWNS));
 
@@ -346,14 +358,10 @@ describe('SectionWorkService — who may change a question, and when', () => {
 
   it('leaves a reader whose role has passed on reading, and no more', async () => {
     const { work } = await build();
-    const { pair, reading, onPaper, typistDone } = await aSection();
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, reading, typistDone, placed } = await aSection();
+    await placed();
     await typistDone();
-    await prisma.questionAssignment.update({
-      where: { id: reading.id },
-      data: { replacedAt: new Date() },
-    });
+    await standDown(reading.id);
 
     const read = await work.one(pair, viewer(READER));
     assert.equal(read.seatReplaced, true);
@@ -367,10 +375,7 @@ describe('SectionWorkService — a typist the section passed on from', () => {
     const { work } = await build();
     const { catalog, pair, typing, typed } = await aSection();
     const question = await typed();
-    await prisma.questionAssignment.update({
-      where: { id: typing.id },
-      data: { replacedAt: new Date() },
-    });
+    await standDown(typing.id);
     await assign(catalog, pair.testId, pair.baseConfigSectionId, STRANGER, ASSIGNMENT_ROLES.TYPIST);
 
     await assert.rejects(
@@ -393,10 +398,7 @@ describe('SectionWorkService — a typist the section passed on from', () => {
     const { pair, typing, typed } = await aSection();
     const kept = await typed();
     const dropped = await typed();
-    await prisma.questionAssignment.update({
-      where: { id: typing.id },
-      data: { replacedAt: new Date() },
-    });
+    await standDown(typing.id);
 
     const fixed = await work.edit(pair, kept.id, draft(), viewer(TYPIST));
     assert.equal(fixed.id, kept.id);
@@ -411,10 +413,7 @@ describe('SectionWorkService — a section nobody types any more', () => {
     const { work } = await build();
     const { catalog, pair, typing, typed } = await aSection();
     const question = await typed();
-    await prisma.questionAssignment.update({
-      where: { id: typing.id },
-      data: { replacedAt: new Date() },
-    });
+    await standDown(typing.id);
     await prisma.questionAssignment.create({
       data: {
         ...pair,
@@ -439,18 +438,12 @@ describe('SectionWorkService — a test owner who once held a seat', () => {
   /** The failure this prevents: an owner who edits as the owner shown a stood-down typist's page, without either seat's time. */
   it('reads the section as its owner once their own seat has passed on', async () => {
     const { work } = await build();
-    const { catalog, pair, typing, reading, onPaper, typistDone } = await aSection();
-    await onPaper(await makeQuestion(prisma, { subjectId: BANK.QUANT }));
+    const { catalog, pair, typing, reading, typistDone, placed } = await aSection();
+    await placed();
     await typistDone();
-    await prisma.questionAssignment.update({
-      where: { id: typing.id },
-      data: { replacedAt: new Date() },
-    });
+    await standDown(typing.id);
     await assign(catalog, pair.testId, pair.baseConfigSectionId, STRANGER, ASSIGNMENT_ROLES.TYPIST);
-    await prisma.questionAssignment.update({
-      where: { id: reading.id },
-      data: { finalizedAt: new Date() },
-    });
+    await finalizeSeat(reading.id);
 
     const asOwner = await work.one(pair, viewer(TYPIST, OWNS));
     assert.equal(asOwner.seat, SECTION_SEATS.OWNER);
@@ -521,10 +514,7 @@ describe('SectionWorkService.remove', () => {
     const { work } = await build();
     const { pair, typing, typed } = await aSection();
     const own = await typed();
-    await prisma.questionAssignment.update({
-      where: { id: typing.id },
-      data: { replacedAt: new Date() },
-    });
+    await standDown(typing.id);
 
     const [row] = (await work.one(pair, viewer(TYPIST))).questions;
 
@@ -620,7 +610,6 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
     );
   });
 
-  /** The failure this prevents: new typing on a job that is over, or on a paper nobody types. */
   /** The failure this prevents: a super admin who once held the role refused what they may do for anyone. */
   it('has a super admin who once typed the section act through whoever types it now', async () => {
     const { work } = await build();
@@ -646,10 +635,7 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
   it('takes Done from its typist, and refuses the reader, an owner, a stranger and a replaced typist', async () => {
     const { done } = await build();
     const { catalog, pair, typing, typed } = await aSection();
-    await prisma.baseConfigSection.update({
-      where: { id: pair.baseConfigSectionId },
-      data: { questionCount: 1 },
-    });
+    await needing(pair, 1);
     const question = await typed();
     const body = { selected: [question.id], discard: [] };
     const doneBy = (who: SectionViewer) =>
@@ -679,18 +665,12 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
       () => work.create(picked.pair, draft(), viewer(TYPIST)),
       refusedWith(ErrorCodes.CONFLICT),
     );
-    await prisma.questionAssignment.update({
-      where: { id: typing.id },
-      data: { finalizedAt: new Date() },
-    });
+    await finalizeSeat(typing.id);
     await assert.rejects(
       () => work.create(pair, draft(), viewer(TYPIST)),
       refusedWith(ErrorCodes.CONFLICT),
     );
-    await prisma.questionAssignment.update({
-      where: { id: typing.id },
-      data: { replacedAt: new Date() },
-    });
+    await standDown(typing.id);
     await assert.rejects(
       () => work.previewImport(pair, oneRowSheet(), viewer(TYPIST)),
       refusedWith(ErrorCodes.FORBIDDEN),
@@ -832,13 +812,9 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
   /** The failure this prevents: a section released by somebody who is not reading it. */
   it('releases through the reader’s own row, a super admin through its holder’s, and nobody else', async () => {
     const { work } = await build();
-    const { pair, onPaper, typistDone } = await aSection();
-    await prisma.baseConfigSection.update({
-      where: { id: pair.baseConfigSectionId },
-      data: { questionCount: 1 },
-    });
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, typistDone, placed } = await aSection();
+    await needing(pair, 1);
+    const question = await placed();
     await typistDone();
     await work.check(pair, question.id, viewer(READER));
 
@@ -855,10 +831,7 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
   it('offers the release only to its reader, once the section is whole and every question checked', async () => {
     const { work } = await build();
     const { pair, onPaper, typistDone } = await aSection();
-    await prisma.baseConfigSection.update({
-      where: { id: pair.baseConfigSectionId },
-      data: { questionCount: 2 },
-    });
+    await needing(pair, 2);
     const first = await makeQuestion(prisma, { subjectId: BANK.QUANT });
     const second = await makeQuestion(prisma, { subjectId: BANK.QUANT });
     await onPaper(first);
@@ -881,10 +854,7 @@ describe('SectionWorkService — writes taken under the seat the caller holds', 
     const { work } = await build();
     const { catalog, pair, reading, typistDone } = await aSection();
     await typistDone();
-    await prisma.questionAssignment.update({
-      where: { id: reading.id },
-      data: { replacedAt: new Date() },
-    });
+    await standDown(reading.id);
     await assign(
       catalog,
       pair.testId,
@@ -951,9 +921,8 @@ describe('SectionWorkService — what a reader files a question under', () => {
   /** The failure this prevents: a typist who did not know them leaves a paper question unfiled for good. */
   it('lets the reader give a paper question its topic, its tags and its difficulty', async () => {
     const { work } = await build();
-    const { pair, onPaper, typistDone } = await aSection();
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, typistDone, placed } = await aSection();
+    const question = await placed();
     await typistDone();
 
     const filed = await work.edit(
@@ -1027,9 +996,8 @@ describe('SectionWorkService — time on a question', () => {
 describe('SectionWorkService — the reader’s review', () => {
   it('checks, sends back with a reason, takes the fix, and checks again', async () => {
     const { work } = await build();
-    const { pair, onPaper, typistDone } = await aSection();
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, typistDone, placed } = await aSection();
+    const question = await placed();
     await typistDone();
     const stateOf = async () => (await work.one(pair, viewer(READER))).questions[0]?.review.state;
 
@@ -1058,9 +1026,8 @@ describe('SectionWorkService — the reader’s review', () => {
   /** The failure this prevents: a question its reader changed after passing it, released under the tick it had before. */
   it('drops the reader’s tick when they edit the question, its words left alone or not', async () => {
     const { work } = await build();
-    const { pair, onPaper, typistDone } = await aSection();
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, typistDone, placed } = await aSection();
+    const question = await placed();
     await typistDone();
     await work.edit(pair, question.id, draft(), viewer(READER));
     await work.check(pair, question.id, viewer(READER));
@@ -1082,9 +1049,8 @@ describe('SectionWorkService — the reader’s review', () => {
 
   it('refuses a send-back when the section has no typist to take it', async () => {
     const { work } = await build();
-    const { pair, typing, onPaper, handToReader } = await aSection(PAPER_SOURCES.PICKED);
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, typing, handToReader, placed } = await aSection(PAPER_SOURCES.PICKED);
+    const question = await placed();
     await handToReader();
     await prisma.questionAssignment.delete({ where: { id: typing.id } });
 
@@ -1097,9 +1063,8 @@ describe('SectionWorkService — the reader’s review', () => {
 
   it('refuses a typist marking fixed what was never sent back, and anyone but the reader checking', async () => {
     const { work } = await build();
-    const { pair, onPaper, typistDone } = await aSection();
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, typistDone, placed } = await aSection();
+    const question = await placed();
     await typistDone();
 
     await assert.rejects(
@@ -1115,9 +1080,8 @@ describe('SectionWorkService — the reader’s review', () => {
   /** The failure this prevents: one section's seats clearing a tick, or taking a fix, on another section of the same test. */
   it('refuses a review write on a question the test holds under another section', async () => {
     const { work } = await build();
-    const { catalog, pair, onPaper, typistDone } = await aSection();
-    const own = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(own);
+    const { catalog, pair, typistDone, placed } = await aSection();
+    const own = await placed();
     await typistDone();
 
     const other = await makeSection(prisma, catalog, { name: 'Reasoning', order: 2 });
@@ -1183,11 +1147,10 @@ describe('SectionWorkService — review writes take turns', () => {
   /** The failure this prevents: a tick landing on a question just sent back, which release and the offer then count as read. */
   it('never leaves a question both sent back and checked when the two land together', async () => {
     const { work } = await build();
-    const { pair, onPaper, typistDone } = await aSection();
+    const { pair, typistDone, placed } = await aSection();
     const questions = [];
     for (let round = 0; round < ROUNDS; round++) {
-      const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-      await onPaper(question);
+      const question = await placed();
       questions.push(question);
     }
     await typistDone();
@@ -1214,13 +1177,9 @@ describe('SectionWorkService — review writes take turns', () => {
   /** The failure this prevents: a section released over a question whose tick was taken back as the release landed. */
   it('never leaves a released section with an unticked question when a release and an uncheck land together', async () => {
     const { work } = await build();
-    const { pair, reading, onPaper, typistDone } = await aSection();
-    await prisma.baseConfigSection.update({
-      where: { id: pair.baseConfigSectionId },
-      data: { questionCount: 1 },
-    });
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, reading, typistDone, placed } = await aSection();
+    await needing(pair, 1);
+    const question = await placed();
     await typistDone();
 
     for (let round = 0; round < ROUNDS; round++) {
@@ -1249,9 +1208,8 @@ describe('SectionWorkService — review writes take turns', () => {
   it('refuses a review write that lands after the section was released', async () => {
     const first: { run?: () => Promise<unknown> } = {};
     const { work } = await build({ section: landingFirst(first) });
-    const { pair, reading, onPaper, typistDone } = await aSection();
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, reading, typistDone, placed } = await aSection();
+    const question = await placed();
     await typistDone();
     const released = () =>
       prisma.questionAssignment.update({
@@ -1276,13 +1234,9 @@ describe('SectionWorkService — review writes take turns', () => {
   it('refuses a release whose section lost a tick after its check passed', async () => {
     const first: { run?: () => Promise<unknown> } = {};
     const { work } = await build({ roles: landingFirst(first) });
-    const { pair, reading, onPaper, typistDone } = await aSection();
-    await prisma.baseConfigSection.update({
-      where: { id: pair.baseConfigSectionId },
-      data: { questionCount: 1 },
-    });
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { pair, reading, typistDone, placed } = await aSection();
+    await needing(pair, 1);
+    const question = await placed();
     await typistDone();
     await work.check(pair, question.id, viewer(READER));
 
@@ -1300,9 +1254,8 @@ describe('SectionWorkService — review writes take turns', () => {
 describe('SectionWorkService — the cross-test warning', () => {
   it('names another test holding the question, and leaves out the section’s own', async () => {
     const { work } = await build();
-    const { catalog, pair, onPaper, typistDone } = await aSection();
-    const question = await makeQuestion(prisma, { subjectId: BANK.QUANT });
-    await onPaper(question);
+    const { catalog, pair, typistDone, placed } = await aSection();
+    const question = await placed();
     await typistDone();
     const other = await makeTest(prisma, catalog, { title: 'Grand Test 4' });
     const otherSection = await makeSection(prisma, catalog, { name: 'Quant again', order: 2 });

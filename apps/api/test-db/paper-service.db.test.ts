@@ -215,19 +215,19 @@ function landingFirst(first: { run?: () => Promise<unknown> }): PrismaService {
 }
 
 /** Picked by hand, so this is how a paper is built up to the counts its config asks. */
+const pickInto = (service: PaperService, section: string, ...questions: string[]) =>
+  service.addQuestions(TEST, {
+    baseConfigSectionId: idFor(section),
+    questionIds: questions.map(idFor),
+  });
+
 async function pickWholePaper(service: PaperService): Promise<void> {
-  await service.addQuestions(TEST, {
-    baseConfigSectionId: idFor('sec_1'),
-    questionIds: [idFor('r1'), idFor('r2'), idFor('r3')],
-  });
-  await service.addQuestions(TEST, {
-    baseConfigSectionId: idFor('sec_2'),
-    questionIds: [idFor('q1'), idFor('q2')],
-  });
+  await pickInto(service, 'sec_1', 'r1', 'r2', 'r3');
+  await pickInto(service, 'sec_2', 'q1', 'q2');
 }
 
 describe('PaperService — picking a draft paper by hand', () => {
-  it('fills each section to the count its config asks for', async () => {
+  it('fills each section to the count its config asks for, pinning each row’s current version and the section’s marks', async () => {
     const service = await serviceWith();
 
     await pickWholePaper(service);
@@ -242,14 +242,6 @@ describe('PaperService — picking a draft paper by hand', () => {
       ],
     );
     assert.equal((await rows()).length, 5);
-  });
-
-  it('pins the version each row serves and copies the section’s marks', async () => {
-    const service = await serviceWith();
-
-    await pickWholePaper(service);
-    const paper = await service.read(TEST);
-
     for (const row of paper.sections.flatMap((section) => section.questions)) {
       const question = await prisma.question.findUniqueOrThrow({
         where: { id: row.questionId },
@@ -261,31 +253,12 @@ describe('PaperService — picking a draft paper by hand', () => {
     }
   });
 
-  it('puts one on the paper in the next free place', async () => {
-    const service = await serviceWith();
-
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1')],
-    });
-
-    const [added] = await rows();
-    assert.equal(added?.questionId, idFor('q1'));
-    assert.equal(added?.baseConfigSectionId, idFor('sec_2'));
-    assert.equal(Number(added?.marks), 2);
-  });
-
   /** The failure this prevents: a section quietly holding more questions than its config asks for. */
   it('refuses one more than the section holds', async () => {
     const service = await serviceWith();
     await pickWholePaper(service);
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_2'),
-        questionIds: [idFor('q3')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_2', 'q3'));
 
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /already holds/);
@@ -294,66 +267,35 @@ describe('PaperService — picking a draft paper by hand', () => {
   it('refuses a question from another subject than the section draws', async () => {
     const service = await serviceWith();
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_1'),
-        questionIds: [idFor('q1')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_1', 'q1'));
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
   });
 
   /** The failure this prevents: a candidate shown a passage with nothing to answer, or options in a typing test. */
-  it('lets a typing section hold a typing passage and nothing else, and no other section hold one', async () => {
-    const service = await serviceWith();
-    await prisma.baseConfigSection.update({
-      where: { id: idFor('sec_2') },
-      data: { typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN },
-    });
-    await prisma.question.updateMany({
-      where: { id: { in: [idFor('q1'), idFor('r1')] } },
-      data: { type: QUESTION_TYPE.TYPING },
-    });
-    const add = (section: string, question: string) =>
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor(section),
-        questionIds: [idFor(question)],
+  const SPECIAL_SECTIONS = [
+    ['typing', { typingPreset: TYPING_PRESET_KEY.SSC_CHSL_TYPING_EN }, QUESTION_TYPE.TYPING],
+    ['descriptive', { descriptive: true }, QUESTION_TYPE.DESCRIPTIVE],
+  ] as const;
+
+  for (const [kind, section, type] of SPECIAL_SECTIONS) {
+    it(`lets a ${kind} section hold a ${kind} question and nothing else, and no other section hold one`, async () => {
+      const service = await serviceWith();
+      await prisma.baseConfigSection.update({ where: { id: idFor('sec_2') }, data: section });
+      await prisma.question.updateMany({
+        where: { id: { in: [idFor('q1'), idFor('r1')] } },
+        data: { type },
       });
 
-    const passageElsewhere = await refused(add('sec_1', 'r1'));
-    const choiceInTyping = await refused(add('sec_2', 'q2'));
-    await add('sec_2', 'q1');
+      const elsewhere = await refused(pickInto(service, 'sec_1', 'r1'));
+      const choiceInside = await refused(pickInto(service, 'sec_2', 'q2'));
+      await pickInto(service, 'sec_2', 'q1');
 
-    assert.equal(passageElsewhere.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal(choiceInTyping.code, ErrorCodes.VALIDATION_ERROR);
-    assert.deepEqual(await heldIds(), [idFor('q1')]);
-  });
-
-  it('lets a descriptive section hold a descriptive question and nothing else, and no other section hold one', async () => {
-    const service = await serviceWith();
-    await prisma.baseConfigSection.update({
-      where: { id: idFor('sec_2') },
-      data: { descriptive: true },
+      assert.equal(elsewhere.code, ErrorCodes.VALIDATION_ERROR);
+      assert.equal(choiceInside.code, ErrorCodes.VALIDATION_ERROR);
+      assert.deepEqual(await heldIds(), [idFor('q1')]);
     });
-    await prisma.question.updateMany({
-      where: { id: { in: [idFor('q1'), idFor('r1')] } },
-      data: { type: QUESTION_TYPE.DESCRIPTIVE },
-    });
-    const add = (section: string, question: string) =>
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor(section),
-        questionIds: [idFor(question)],
-      });
-
-    const essayElsewhere = await refused(add('sec_1', 'r1'));
-    const choiceInWriting = await refused(add('sec_2', 'q2'));
-    await add('sec_2', 'q1');
-
-    assert.equal(essayElsewhere.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal(choiceInWriting.code, ErrorCodes.VALIDATION_ERROR);
-    assert.deepEqual(await heldIds(), [idFor('q1')]);
-  });
+  }
 
   /** A paper pins a version, so a question with none has nothing to pin. */
   it('refuses a question that is not live in the bank', async () => {
@@ -364,12 +306,7 @@ describe('PaperService — picking a draft paper by hand', () => {
       ],
     });
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_2'),
-        questionIds: [idFor('unversioned')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_2', 'unversioned'));
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.match(error.fieldErrors?.questionId?.[0] ?? '', /archived/);
@@ -379,12 +316,7 @@ describe('PaperService — picking a draft paper by hand', () => {
   it('says a question that is not in the bank is missing, not archived', async () => {
     const service = await serviceWith();
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_2'),
-        questionIds: [idFor('gone')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_2', 'gone'));
 
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });
@@ -394,10 +326,7 @@ describe('PaperService — putting several questions on a section in one request
   it('lands every question, numbered from the current highest order, in the order sent', async () => {
     const service = await serviceWith();
 
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r2'), idFor('r1'), idFor('r3')],
-    });
+    await pickInto(service, 'sec_1', 'r2', 'r1', 'r3');
 
     const held = await rows();
     assert.deepEqual(
@@ -415,10 +344,7 @@ describe('PaperService — putting several questions on a section in one request
     const reads: string[] = [];
     const service = await serviceWith({ client: countingReads(prisma, reads) });
 
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r1'), idFor('r2'), idFor('r3')],
-    });
+    await pickInto(service, 'sec_1', 'r1', 'r2', 'r3');
 
     // One section, one read of the questions, one of what is drawable, one of what the paper holds.
     assert.equal(reads.filter((call) => call === 'question.findMany').length, 2);
@@ -431,12 +357,7 @@ describe('PaperService — putting several questions on a section in one request
   it('refuses a batch that would take a section past its count, and writes none of it', async () => {
     const service = await serviceWith();
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_2'),
-        questionIds: [idFor('q1'), idFor('q2'), idFor('q3')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_2', 'q1', 'q2', 'q3'));
 
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /Quant already holds the 2 it needs/);
@@ -450,12 +371,7 @@ describe('PaperService — putting several questions on a section in one request
       test: { questionPoolFilter: oneOfEach },
     });
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_1'),
-        questionIds: [idFor('high1'), idFor('high2')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_1', 'high1', 'high2'));
 
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /more of one difficulty than its split allows/);
@@ -464,17 +380,9 @@ describe('PaperService — putting several questions on a section in one request
 
   it('refuses a batch naming a question already on the paper, and writes none of it', async () => {
     const service = await serviceWith();
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1')],
-    });
+    await pickInto(service, 'sec_2', 'q1');
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_2'),
-        questionIds: [idFor('q2'), idFor('q1')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_2', 'q2', 'q1'));
 
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.deepEqual(await heldIds(), [idFor('q1')]);
@@ -500,19 +408,14 @@ describe('PaperService — putting several questions on a section in one request
 describe('PaperService — filling a section’s remainder from its own spec', () => {
   it('tops the section up to its count and leaves the hand-picked row where it was', async () => {
     const service = await serviceWith();
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r2')],
-    });
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1')],
-    });
+    await pickInto(service, 'sec_1', 'r2');
+    await pickInto(service, 'sec_2', 'q1');
 
     const paper = await service.fillSection(TEST, idFor('sec_1'));
 
     assert.equal(idsOf(paper, idFor('sec_1')).length, 3);
     assert.equal(idsOf(paper, idFor('sec_1'))[0], idFor('r2'));
+    assert.equal(new Set(idsOf(paper, idFor('sec_1'))).size, 3, 'a pin is not written twice');
     // The other section is not this draw's business, and keeps exactly what it held.
     assert.deepEqual(idsOf(paper, idFor('sec_2')), [idFor('q1')]);
   });
@@ -537,32 +440,11 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     );
   });
 
-  /** The failure this prevents: the engine hands the pins back, so a fill writes them a second time. */
-  it('writes a row only for what it drew, never for what was already on the paper', async () => {
-    const service = await serviceWith();
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r2')],
-    });
-
-    await service.fillSection(TEST, idFor('sec_1'));
-
-    const held = await heldIds();
-    assert.equal(held.length, 3);
-    assert.equal(new Set(held).size, 3);
-  });
-
   /** `@@unique([testId, order])`: the engine numbers what it drew from 1, this paper cannot. */
   it('numbers what it adds from the paper’s highest order', async () => {
     const service = await serviceWith();
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1'), idFor('q2')],
-    });
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r2')],
-    });
+    await pickInto(service, 'sec_2', 'q1', 'q2');
+    await pickInto(service, 'sec_1', 'r2');
 
     await service.fillSection(TEST, idFor('sec_1'));
 
@@ -590,10 +472,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
         },
       },
     });
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_b'),
-      questionIds: [idFor('hard1')],
-    });
+    await pickInto(service, 'sec_b', 'hard1');
 
     const error = await refused(service.fillSection(TEST, idFor('sec_a')));
 
@@ -606,10 +485,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
       questions: gradedBank(),
       test: { questionPoolFilter: oneOfEach },
     });
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('high1')],
-    });
+    await pickInto(service, 'sec_1', 'high1');
 
     const held = idsOf(await service.fillSection(TEST, idFor('sec_1')), idFor('sec_1'));
 
@@ -632,10 +508,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
         },
       },
     });
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('high1'), idFor('high2')],
-    });
+    await pickInto(service, 'sec_1', 'high1', 'high2');
     await prisma.test.update({ where: { id: TEST }, data: { questionPoolFilter: oneOfEach } });
     return service;
   };
@@ -656,10 +529,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
 
   it('adds nothing at all to a section already holding its count', async () => {
     const service = await serviceWith();
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1'), idFor('q2')],
-    });
+    await pickInto(service, 'sec_2', 'q1', 'q2');
 
     await service.fillSection(TEST, idFor('sec_2'));
 
@@ -671,10 +541,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     const service = await serviceWith({
       questions: [...bank(2, BUILDER.REASONING, 'r'), ...bank(6, BUILDER.QUANT, 'q')],
     });
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r1')],
-    });
+    await pickInto(service, 'sec_1', 'r1');
 
     const error = await refused(service.fillSection(TEST, idFor('sec_1')));
 
@@ -688,10 +555,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
 
   it('refuses a test a student has already sat', async () => {
     const service = await serviceWith();
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r2')],
-    });
+    await pickInto(service, 'sec_1', 'r2');
     await sat();
 
     const error = await refused(service.fillSection(TEST, idFor('sec_1')));
@@ -777,10 +641,7 @@ describe('PaperService — one row at a time', () => {
       questions: gradedBank(),
       test: { questionPoolFilter: oneOfEach },
     });
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('low1'), idFor('med1'), idFor('high1')],
-    });
+    await pickInto(service, 'sec_1', 'low1', 'med1', 'high1');
     const low = (await rows()).find((candidate) => candidate.questionId === idFor('low1'));
     assert.ok(low);
 
@@ -865,12 +726,7 @@ describe('PaperService — a test only has the sections its scope covers', () =>
   it('refuses a question added to, or a fill of, a section outside the scope', async () => {
     const service = await sectional();
 
-    const added = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_2'),
-        questionIds: [idFor('q1')],
-      }),
-    );
+    const added = await refused(pickInto(service, 'sec_2', 'q1'));
     const filled = await refused(service.fillSection(TEST, idFor('sec_2')));
 
     assert.equal(added.code, ErrorCodes.NOT_FOUND);
@@ -881,10 +737,7 @@ describe('PaperService — a test only has the sections its scope covers', () =>
   it('still takes a question into the one section it does cover', async () => {
     const service = await sectional();
 
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r1')],
-    });
+    await pickInto(service, 'sec_1', 'r1');
 
     assert.deepEqual(await heldIds(), [idFor('r1')]);
   });
@@ -907,12 +760,7 @@ describe('PaperService — where the questions come from', () => {
   it('refuses a pick until the test says where its questions come from, then allows it', async () => {
     const service = await serviceWith({ test: { paperSource: null } });
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_1'),
-        questionIds: [idFor('r1')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_1', 'r1'));
     assert.equal(error.code, ErrorCodes.CONFLICT);
 
     // Not a gate a super admin overrides: there is no decision to override, only one to make.
@@ -929,10 +777,7 @@ describe('PaperService — where the questions come from', () => {
       where: { id: TEST },
       data: { paperSource: PAPER_SOURCES.PICKED },
     });
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r1')],
-    });
+    await pickInto(service, 'sec_1', 'r1');
 
     assert.deepEqual(await heldIds(), [idFor('r1')]);
   });
@@ -952,44 +797,56 @@ describe('PaperService — where the questions come from', () => {
   });
 });
 
-describe("PaperService — a typed section is placed by its typist's Done", () => {
-  /** A framed test whose Quant section (two questions) is Priya's, holding what she has typed. */
-  async function typed(
-    written: readonly string[],
-    test: Bench['test'] = {},
-    client?: PrismaService,
-  ) {
-    const service = await serviceWith({
-      test: { paperSource: PAPER_SOURCES.FRAMED, ...test },
-      client,
-    });
-    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
-    const assignment = await prisma.questionAssignment.create({
-      data: {
-        id: randomUUID(),
-        testId: TEST,
-        baseConfigId: BUILDER.CONFIG,
-        baseConfigSectionId: idFor('sec_2'),
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      },
-      select: { id: true },
-    });
-    await prisma.question.updateMany({
-      where: { id: { in: written.map(idFor) } },
-      data: { assignmentId: assignment.id },
-    });
-    const done = (selected: string[], discard: string[] = []) =>
-      service.typistDone(assignment.id, {
-        selected: selected.map(idFor),
-        discard: discard.map(idFor),
-      });
-    const typingDone = async () =>
-      (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: assignment.id } }))
-        .finalizedAt;
-    return { service, assignment, done, typingDone };
-  }
+/** A proof-reader's seat on Quant, Ravi's unless the case says otherwise. */
+async function readerSeat(over: Partial<Prisma.QuestionAssignmentUncheckedCreateInput> = {}) {
+  const admin = await makeAdmin(prisma, { fullName: 'Ravi' });
+  return prisma.questionAssignment.create({
+    data: {
+      id: randomUUID(),
+      testId: TEST,
+      baseConfigId: BUILDER.CONFIG,
+      baseConfigSectionId: idFor('sec_2'),
+      assigneeId: admin.id,
+      role: ASSIGNMENT_ROLES.PROOFREADER,
+      ...over,
+    },
+  });
+}
 
+/** A framed test whose Quant section (two questions) is Priya's, holding what she has typed. */
+async function typed(written: readonly string[], test: Bench['test'] = {}, client?: PrismaService) {
+  const service = await serviceWith({
+    test: { paperSource: PAPER_SOURCES.FRAMED, ...test },
+    client,
+  });
+  const typist = await makeAdmin(prisma, { fullName: 'Priya' });
+  const assignment = await prisma.questionAssignment.create({
+    data: {
+      id: randomUUID(),
+      testId: TEST,
+      baseConfigId: BUILDER.CONFIG,
+      baseConfigSectionId: idFor('sec_2'),
+      assigneeId: typist.id,
+      role: ASSIGNMENT_ROLES.TYPIST,
+    },
+    select: { id: true },
+  });
+  await prisma.question.updateMany({
+    where: { id: { in: written.map(idFor) } },
+    data: { assignmentId: assignment.id },
+  });
+  const done = (selected: string[], discard: string[] = []) =>
+    service.typistDone(assignment.id, {
+      selected: selected.map(idFor),
+      discard: discard.map(idFor),
+    });
+  const typingDone = async () =>
+    (await prisma.questionAssignment.findUniqueOrThrow({ where: { id: assignment.id } }))
+      .finalizedAt;
+  return { service, assignment, done, typingDone };
+}
+
+describe("PaperService — a typed section is placed by its typist's Done", () => {
   it('places exactly the chosen, sends the rest to the bank, and deletes what was discarded', async () => {
     const { done, typingDone } = await typed(['q1', 'q2', 'q3', 'q4']);
 
@@ -1114,43 +971,16 @@ describe("PaperService — a typed section is placed by its typist's Done", () =
 });
 
 describe('PaperService — a section reaches its proof-reader', () => {
-  const reader = async () => {
-    const admin = await makeAdmin(prisma, { fullName: 'Ravi' });
-    return prisma.questionAssignment.create({
-      data: {
-        id: randomUUID(),
-        testId: TEST,
-        baseConfigId: BUILDER.CONFIG,
-        baseConfigSectionId: idFor('sec_2'),
-        assigneeId: admin.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      },
-    });
-  };
+  const reader = () => readerSeat();
   const handedAt = async (id: string) =>
     (await prisma.questionAssignment.findUniqueOrThrow({ where: { id } })).handedAt;
 
   it('at the typist’s Done, on a typed section', async () => {
-    const service = await serviceWith({ test: { paperSource: PAPER_SOURCES.FRAMED } });
+    const { done } = await typed(['q1', 'q2']);
     const reading = await reader();
-    const typist = await makeAdmin(prisma, { fullName: 'Priya' });
-    const typing = await prisma.questionAssignment.create({
-      data: {
-        id: randomUUID(),
-        testId: TEST,
-        baseConfigId: BUILDER.CONFIG,
-        baseConfigSectionId: idFor('sec_2'),
-        assigneeId: typist.id,
-        role: ASSIGNMENT_ROLES.TYPIST,
-      },
-    });
-    await prisma.question.updateMany({
-      where: { id: { in: [idFor('q1'), idFor('q2')] } },
-      data: { assignmentId: typing.id },
-    });
 
     assert.equal(await handedAt(reading.id), null);
-    await service.typistDone(typing.id, { selected: [idFor('q1'), idFor('q2')], discard: [] });
+    await done(['q1', 'q2']);
 
     assert.notEqual(await handedAt(reading.id), null);
   });
@@ -1159,16 +989,10 @@ describe('PaperService — a section reaches its proof-reader', () => {
   it('at the owner’s hand-over, on a picked section, and only once it is full', async () => {
     const service = await serviceWith();
     const reading = await reader();
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1')],
-    });
+    await pickInto(service, 'sec_2', 'q1');
 
     assert.equal((await refused(service.handOver(TEST, idFor('sec_2')))).code, ErrorCodes.CONFLICT);
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q2')],
-    });
+    await pickInto(service, 'sec_2', 'q2');
     await service.handOver(TEST, idFor('sec_2'));
 
     assert.notEqual(await handedAt(reading.id), null);
@@ -1216,20 +1040,14 @@ describe('PaperService — a section reaches its proof-reader', () => {
       (await service.read(TEST)).sections.find(
         (section) => section.baseConfigSectionId === idFor('sec_2'),
       )?.canHandOver;
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q1'), idFor('q2')],
-    });
+    await pickInto(service, 'sec_2', 'q1', 'q2');
 
     assert.equal(await offered(), false, 'nobody reads it yet');
     const reading = await reader();
     assert.equal(await offered(), true);
     await service.removeQuestions(TEST, [(await rows())[1]?.id ?? '']);
     assert.equal(await offered(), false, 'the section is short');
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q3')],
-    });
+    await pickInto(service, 'sec_2', 'q3');
     const paper = await service.handOver(TEST, idFor('sec_2'));
 
     assert.equal(
@@ -1263,26 +1081,14 @@ describe('PaperService — a released section changed after its reading', () => 
   async function released() {
     const service = await serviceWith();
     await pickWholePaper(service);
-    const admin = await makeAdmin(prisma, { fullName: 'Ravi' });
-    const reading = await prisma.questionAssignment.create({
-      data: {
-        id: randomUUID(),
-        testId: TEST,
-        baseConfigId: BUILDER.CONFIG,
-        baseConfigSectionId: idFor('sec_2'),
-        assigneeId: admin.id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-        handedAt: new Date(),
-        finalizedAt: new Date(),
-      },
-    });
+    const reading = await readerSeat({ handedAt: new Date(), finalizedAt: new Date() });
     await prisma.questionReview.createMany({
       data: [idFor('q1'), idFor('q2')].map((questionId) => ({
         testId: TEST,
         baseConfigSectionId: idFor('sec_2'),
         questionId,
         checkedAt: new Date(),
-        checkedById: admin.id,
+        checkedById: reading.assigneeId,
       })),
     });
     const releasedAt = async () =>
@@ -1304,11 +1110,7 @@ describe('PaperService — a released section changed after its reading', () => 
 
   it('goes back to its reader when an unchecked question is added or drawn', async () => {
     for (const refill of [
-      (service: PaperService) =>
-        service.addQuestions(TEST, {
-          baseConfigSectionId: idFor('sec_2'),
-          questionIds: [idFor('q3')],
-        }),
+      (service: PaperService) => pickInto(service, 'sec_2', 'q3'),
       (service: PaperService) => service.fillSection(TEST, idFor('sec_2')),
     ]) {
       await resetDatabase(prisma);
@@ -1345,10 +1147,7 @@ describe('PaperService — a released section changed after its reading', () => 
     const { service, releasedAt, rowOf } = await released();
     await service.removeQuestions(TEST, [await rowOf(idFor('q2'))]);
 
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_2'),
-      questionIds: [idFor('q2')],
-    });
+    await pickInto(service, 'sec_2', 'q2');
 
     assert.notEqual(await releasedAt(), null);
   });
@@ -1445,10 +1244,7 @@ describe('PaperService — one lock order, Test before its paper', () => {
     const order: string[] = [];
     const service = await serviceWith({ client: watchingLocks(order) });
 
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r1')],
-    });
+    await pickInto(service, 'sec_1', 'r1');
 
     assert.deepEqual(order, [LOCK_ORDER.TEST, LOCK_ORDER.PAPER]);
   });
@@ -1459,11 +1255,7 @@ describe('PaperService — every paper edit moves the test’s version', () => {
     const service = await serviceWith();
     const first = async () => (await rows())[0]?.id ?? '';
     const edits = [
-      () =>
-        service.addQuestions(TEST, {
-          baseConfigSectionId: idFor('sec_1'),
-          questionIds: [idFor('r1')],
-        }),
+      () => pickInto(service, 'sec_1', 'r1'),
       async () => service.replaceQuestion(TEST, await first(), { questionId: idFor('r2') }),
       () => service.fillSection(TEST, idFor('sec_1')),
       async () => service.removeQuestions(TEST, [await first()]),
@@ -1506,17 +1298,11 @@ describe('PaperService — every paper edit moves the test’s version', () => {
 });
 
 describe('PaperService — two writes to one paper at once', () => {
-  const add = (service: PaperService, sectionId: string, questions: readonly string[]) =>
-    service.addQuestions(TEST, {
-      baseConfigSectionId: sectionId,
-      questionIds: questions.map(idFor),
-    });
-
   /** The failure this prevents: both reading one highest order, and the loser dying on the unique index. */
   it('lands two adds in places of their own when the section has room', async () => {
     const service = await serviceWith();
 
-    await Promise.all([add(service, idFor('sec_1'), ['r1']), add(service, idFor('sec_1'), ['r2'])]);
+    await Promise.all([pickInto(service, 'sec_1', 'r1'), pickInto(service, 'sec_1', 'r2')]);
 
     assert.deepEqual(
       (await rows()).map((row) => row.order),
@@ -1529,8 +1315,8 @@ describe('PaperService — two writes to one paper at once', () => {
     const service = await serviceWith();
 
     const settled = await Promise.allSettled([
-      add(service, idFor('sec_2'), ['q1', 'q2']),
-      add(service, idFor('sec_2'), ['q3']),
+      pickInto(service, 'sec_2', 'q1', 'q2'),
+      pickInto(service, 'sec_2', 'q3'),
     ]);
 
     const errors = settled.flatMap((result) =>
@@ -1567,12 +1353,7 @@ describe('PaperService — a paper change says what it moved', () => {
       });
     const section = { from: null, to: 'Reasoning' };
 
-    const added = await changedBy(() =>
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_1'),
-        questionIds: [idFor('r1')],
-      }),
-    );
+    const added = await changedBy(() => pickInto(service, 'sec_1', 'r1'));
     const [row] = await rows();
     const swapped = await changedBy(() =>
       service.replaceQuestion(TEST, row?.id ?? '', { questionId: idFor('r2') }),
@@ -1591,10 +1372,7 @@ describe('PaperService — the paper reads as it is served', () => {
   /** The failure this prevents: the screen showing words the paper does not serve once the bank moved on. */
   it('previews the version each row pins, not the one the question now carries', async () => {
     const service = await serviceWith();
-    await service.addQuestions(TEST, {
-      baseConfigSectionId: idFor('sec_1'),
-      questionIds: [idFor('r1')],
-    });
+    await pickInto(service, 'sec_1', 'r1');
     const reworded = await prisma.questionVersion.create({
       data: {
         id: randomUUID(),
@@ -1621,12 +1399,7 @@ describe('PaperService — an offered paper no longer moves', () => {
   it('refuses to add to it, and says a question on it may still be dropped', async () => {
     const service = await serviceWith({ test: { finalizedAt: new Date() } });
 
-    const error = await refused(
-      service.addQuestions(TEST, {
-        baseConfigSectionId: idFor('sec_1'),
-        questionIds: [idFor('r1')],
-      }),
-    );
+    const error = await refused(pickInto(service, 'sec_1', 'r1'));
 
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.equal(error.message, OFFERED_TEST_MESSAGE);
@@ -1636,11 +1409,7 @@ describe('PaperService — an offered paper no longer moves', () => {
   /** The failure this prevents: an edit that checked a draft landing on the paper an offer froze meanwhile. */
   it('refuses an edit whose test was offered between its check and its write', async () => {
     for (const edit of [
-      (service: PaperService) =>
-        service.addQuestions(TEST, {
-          baseConfigSectionId: idFor('sec_1'),
-          questionIds: [idFor('r4')],
-        }),
+      (service: PaperService) => pickInto(service, 'sec_1', 'r4'),
       (service: PaperService) => service.fillSection(TEST, idFor('sec_1')),
       async (service: PaperService) => {
         const [row] = await rows();

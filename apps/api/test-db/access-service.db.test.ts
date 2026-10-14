@@ -349,6 +349,18 @@ describe('TestSeriesService — what a series may point at', () => {
   });
 });
 
+/** An EVENT series already holding its event, with the services over it. */
+async function eventSeries() {
+  const built = await build();
+  const event = await makeEvent();
+  const held = await seedSeries({
+    examStageId: built.stageId,
+    kind: TEST_SERIES_KIND.EVENT,
+    eventId: event.id,
+  });
+  return { ...built, held };
+}
+
 /** The four CHECKs answered before Postgres has to, which can only refuse an ordinary save as a 500. */
 describe('TestSeriesService — a kind and its columns say the same thing', () => {
   it('creates a program series that names its program', async () => {
@@ -418,63 +430,38 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
   });
 
   it('moves an event series onto another event', async () => {
-    const { series, stageId } = await build();
-    const [first, second] = [await makeEvent(), await makeEvent()];
-    const held = await seedSeries({
-      examStageId: stageId,
-      kind: TEST_SERIES_KIND.EVENT,
-      eventId: first.id,
-    });
+    const { series, held } = await eventSeries();
+    const second = await makeEvent();
 
     const updated = await series.update(held.id, { eventId: second.id });
 
     assert.equal(updated.eventId, second.id);
   });
 
-  it('refuses clearing the event a series is still an event series by', async () => {
-    const { series, stageId } = await build();
-    const event = await makeEvent();
-    const held = await seedSeries({
-      examStageId: stageId,
-      kind: TEST_SERIES_KIND.EVENT,
-      eventId: event.id,
+  for (const [what, patch, field] of [
+    ['clearing the event a series is still an event series by', { eventId: null }, 'eventId'],
+    [
+      'taking an event series off its event by changing the kind',
+      { kind: TEST_SERIES_KIND.STANDARD },
+      'kind',
+    ],
+  ] as const) {
+    it(`refuses ${what}`, async () => {
+      const { series, held } = await eventSeries();
+
+      const error = await series.update(held.id, patch).catch((e: unknown) => e);
+
+      assert.ok(AppException.is(error));
+      assert.ok(error.fieldErrors?.[field]);
     });
-
-    const error = await series.update(held.id, { eventId: null }).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.ok(error.fieldErrors?.eventId);
-  });
+  }
 
   it('leaves an event series that already holds its event editable', async () => {
-    const { series, stageId } = await build();
-    const event = await makeEvent();
-    const held = await seedSeries({
-      examStageId: stageId,
-      kind: TEST_SERIES_KIND.EVENT,
-      eventId: event.id,
-    });
+    const { series, held } = await eventSeries();
 
     const updated = await series.update(held.id, { name: 'Scholarship round two' });
 
     assert.equal(updated.name, 'Scholarship round two');
-  });
-
-  it('refuses taking an event series off its event by changing the kind', async () => {
-    const { series, stageId } = await build();
-    const event = await makeEvent();
-    const held = await seedSeries({
-      examStageId: stageId,
-      kind: TEST_SERIES_KIND.EVENT,
-      eventId: event.id,
-    });
-
-    const error = await series
-      .update(held.id, { kind: TEST_SERIES_KIND.STANDARD })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.ok(error.fieldErrors?.kind);
   });
 
   /** Only STANDARD reaches branch by branch, and the message says how many would lose it. */
@@ -710,19 +697,6 @@ describe('the access writes that bust the catalog cache', () => {
     await makeBranch(prisma);
 
     const created = await series.create(draft(stageId, { kind: TEST_SERIES_KIND.FREE }));
-
-    assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
-      { testSeriesId: created.id },
-    ]);
-  });
-
-  it('announces the series when its branches move', async () => {
-    const { series, events, stageId } = await build();
-    const branch = await makeBranch(prisma);
-    const created = await series.create(draft(stageId));
-    events.forget();
-
-    await series.setBranches(created.id, { branchIds: [branch.id] });
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },

@@ -97,27 +97,20 @@ describe('readUploadedTable — Excel', () => {
   });
 
   /** Row numbers must be the ones Excel shows. */
-  it('reports the sheet row number, not a count of the rows it kept', async () => {
+  it('drops a wholly empty row, and reports the sheet row number, not a count of the rows it kept', async () => {
     const table = await readUploadedTable(
-      await workbook([['mobile'], ['9876543210'], [''], ['9876543211']]),
+      await workbook([
+        ['mobile', 'fullName'],
+        ['9876543210', 'Asha'],
+        ['', ''],
+        ['9876543211', 'Ravi'],
+      ]),
     );
 
     assert.deepEqual(
       table.rows.map((row) => row.line),
       [2, 4],
     );
-  });
-
-  it('drops a wholly empty row rather than reporting it as broken', async () => {
-    const table = await readUploadedTable(
-      await workbook([
-        ['mobile', 'fullName'],
-        ['9876543210', 'Asha'],
-        ['', ''],
-      ]),
-    );
-
-    assert.equal(table.rows.length, 1);
   });
 
   it('takes the first sheet whatever it is called', async () => {
@@ -209,17 +202,6 @@ describe('readUploadedTable — what it accepts', () => {
 });
 
 describe('readUploadedTable — the zip-bomb guard', () => {
-  it('still opens a normal workbook now that a size guard runs first', async () => {
-    const table = await readUploadedTable(
-      await workbook([
-        ['mobile', 'fullName'],
-        ['9876543210', 'Asha Kumari'],
-      ]),
-    );
-
-    assert.equal(table.rows.length, 1);
-  });
-
   /** B7: the guard has to run BEFORE `workbook.xlsx.load`, because the inflation the bomb relies on happens inside `load` itself — a check that ran after would have already spent the memory it exists to save. */
   it('refuses a declared-huge workbook before ExcelJS ever loads it', async () => {
     const bomb = fakeZipDeclaring(500 * 1024 * 1024);

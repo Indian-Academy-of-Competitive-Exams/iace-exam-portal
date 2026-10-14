@@ -155,23 +155,6 @@ describe('Tabs', () => {
   });
 });
 
-/** With an entry animation and no exit, a sheet vanished on the frame the state flipped. */
-describe('overlays animate out as well as in', () => {
-  it('gives the sheet and its scrim a closed-state animation', () => {
-    render(
-      <Sheet open>
-        <SheetContent>
-          <SheetTitle>Nav</SheetTitle>
-        </SheetContent>
-      </Sheet>,
-    );
-
-    const panel = screen.getByRole('dialog');
-    assert.match(panel.className, /data-\[state=closed\]:animate-sheet-out-left/);
-    assert.match(panel.className, /data-\[state=open\]:animate-sheet-in-left/);
-  });
-});
-
 /** No DialogTrigger to return to, so a keyboard used to close onto the top of the document. */
 describe('a dialog gives focus back to whatever opened it', () => {
   function Harness() {

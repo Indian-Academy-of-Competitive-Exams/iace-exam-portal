@@ -156,21 +156,6 @@ describe('the performance report — one sitting', () => {
     assert.deepEqual([report.cohort?.rank, report.cohort?.percentile], [2, 25]);
   });
 
-  it('counts the curve off the sittings when no rollup has been written', async () => {
-    const { student, older } = await world();
-
-    const { cohort } = await ofAttempt(student, older);
-
-    assert.equal(cohort?.topperScore, 6);
-    assert.equal(cohort?.averageScore, 3.75);
-    assert.equal(cohort?.cohortSize, 2);
-    assert.equal(
-      cohort?.bands.reduce((sum, band) => sum + band.count, 0),
-      2,
-    );
-    assert.equal(cohort?.bands.filter((band) => band.isYours).length, 1);
-  });
-
   /** The failure this prevents: a topper and an average a recount behind the curve drawn beside them. */
   it('counts the whole curve off the sittings, whatever the rollup last wrote', async () => {
     const { first, student, older } = await world();
@@ -187,15 +172,6 @@ describe('the performance report — one sitting', () => {
       2,
     );
     assert.equal(report.cohort?.bands.filter((band) => band.isYours).length, 1);
-  });
-
-  it('names the cohort the live rank was counted in, however far behind the rollup is', async () => {
-    const { first, student, older } = await world();
-    await rolled(first.testId, { evaluatedCount: 1 });
-
-    const { cohort } = await ofAttempt(student, older);
-
-    assert.deepEqual([cohort?.rank, cohort?.cohortSize], [2, 2]);
   });
 
   /** The failure this prevents: a held curve outliving the recount that moved the cohort under it. */

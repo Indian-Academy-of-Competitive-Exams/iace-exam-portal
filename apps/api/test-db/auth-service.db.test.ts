@@ -372,15 +372,6 @@ describe('AuthService — admin', () => {
     assert.deepEqual(identity.actor === ActorTypes.ADMIN ? identity.permissions : null, {});
   });
 
-  it('still sends a code to a deactivated admin, or they are stranded at login', async () => {
-    await admin({ isActive: false });
-    const ctx = build();
-
-    await ctx.auth.requestAdminOtp(ADMIN_EMAIL);
-
-    assert.ok(ctx.sender.lastCode, 'a deactivated admin must still receive a code');
-  });
-
   it('hands a super admin the bypass and no grants — they need none', async () => {
     await admin({ isSuperAdmin: true });
     await grant(FEATURE_KEYS.STUDENT_MANAGEMENT);

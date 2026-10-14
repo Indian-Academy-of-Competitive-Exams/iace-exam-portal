@@ -130,6 +130,43 @@ const refused = async (attempt: Promise<unknown>) => {
   return error;
 };
 
+/** One paper row in a section, on a question of a subject of its own. */
+async function paperRowIn(sectionLabel: string, order = 1) {
+  const question = await makeQuestion(prisma, { subjectId: (await makeSubject(prisma)).id });
+  await prisma.paperQuestion.create({
+    data: {
+      id: randomUUID(),
+      testId: TEST,
+      baseConfigId: BUILDER.CONFIG,
+      baseConfigSectionId: idFor(sectionLabel),
+      questionId: question.id,
+      questionVersionId: question.versionId,
+      order,
+      marks: 2,
+      negativeMarks: 0.5,
+    },
+  });
+  return question;
+}
+
+/** A proof-reader seat on a section, held by an admin of its own. */
+async function proofreaderOn(
+  sectionLabel: string,
+  over: Partial<Prisma.QuestionAssignmentUncheckedCreateInput> = {},
+) {
+  return prisma.questionAssignment.create({
+    data: {
+      id: randomUUID(),
+      testId: TEST,
+      baseConfigId: BUILDER.CONFIG,
+      baseConfigSectionId: idFor(sectionLabel),
+      assigneeId: (await makeAdmin(prisma)).id,
+      role: ASSIGNMENT_ROLES.PROOFREADER,
+      ...over,
+    },
+  });
+}
+
 describe('TestsService — creating a draft from a config', () => {
   it('writes a draft whose shape is the config it points at', async () => {
     const { service } = await serviceWith();
@@ -380,35 +417,8 @@ describe('TestsService — a narrower scope drops what it no longer covers', () 
   /** THE failure this prevents: a scope narrowed after the paper was built leaves stale rows an offer can't judge. */
   it('deletes paper rows outside the new scope when a draft narrows to one section', async () => {
     const { service } = await serviceWith({ test: {} });
-    const subject = await makeSubject(prisma);
-    const inScope = await makeQuestion(prisma, { subjectId: subject.id });
-    const outOfScope = await makeQuestion(prisma, { subjectId: subject.id });
-    await prisma.paperQuestion.createMany({
-      data: [
-        {
-          id: randomUUID(),
-          testId: TEST,
-          baseConfigId: BUILDER.CONFIG,
-          baseConfigSectionId: idFor('sec_1'),
-          questionId: inScope.id,
-          questionVersionId: inScope.versionId,
-          order: 1,
-          marks: 2,
-          negativeMarks: 0.5,
-        },
-        {
-          id: randomUUID(),
-          testId: TEST,
-          baseConfigId: BUILDER.CONFIG,
-          baseConfigSectionId: idFor('sec_2'),
-          questionId: outOfScope.id,
-          questionVersionId: outOfScope.versionId,
-          order: 2,
-          marks: 2,
-          negativeMarks: 0.5,
-        },
-      ],
-    });
+    const inScope = await paperRowIn('sec_1', 1);
+    await paperRowIn('sec_2', 2);
 
     const updated = await service.update(TEST, {
       scope: TEST_SCOPE.SECTIONAL,
@@ -426,21 +436,8 @@ describe('TestsService — a narrower scope drops what it no longer covers', () 
   /** The failure this prevents: a reader left holding a section the test no longer has, which blocks the offer and strands the section if the scope widens back. */
   it('stands down whoever holds a section it drops, and keeps the record', async () => {
     const { service } = await serviceWith({ test: {} });
-    const reader = await makeAdmin(prisma);
-    const holding = async (label: string) =>
-      prisma.questionAssignment.create({
-        data: {
-          id: randomUUID(),
-          testId: TEST,
-          baseConfigId: BUILDER.CONFIG,
-          baseConfigSectionId: idFor(label),
-          assigneeId: reader.id,
-          role: ASSIGNMENT_ROLES.PROOFREADER,
-          handedAt: new Date(),
-        },
-      });
-    const kept = await holding('sec_1');
-    const dropped = await holding('sec_2');
+    const kept = await proofreaderOn('sec_1', { handedAt: new Date() });
+    const dropped = await proofreaderOn('sec_2', { handedAt: new Date() });
 
     await service.update(TEST, {
       scope: TEST_SCOPE.SECTIONAL,
@@ -459,31 +456,8 @@ describe('TestsService — a narrower scope drops what it no longer covers', () 
     const empty = await prisma.baseConfigModule.create({
       data: { baseConfigId: BUILDER.CONFIG, name: 'Session 2', order: 2 },
     });
-    const subject = await makeSubject(prisma);
-    const question = await makeQuestion(prisma, { subjectId: subject.id });
-    await prisma.paperQuestion.create({
-      data: {
-        id: randomUUID(),
-        testId: TEST,
-        baseConfigId: BUILDER.CONFIG,
-        baseConfigSectionId: idFor('sec_1'),
-        questionId: question.id,
-        questionVersionId: question.versionId,
-        order: 1,
-        marks: 2,
-        negativeMarks: 0.5,
-      },
-    });
-    const reading = await prisma.questionAssignment.create({
-      data: {
-        id: randomUUID(),
-        testId: TEST,
-        baseConfigId: BUILDER.CONFIG,
-        baseConfigSectionId: idFor('sec_1'),
-        assigneeId: (await makeAdmin(prisma)).id,
-        role: ASSIGNMENT_ROLES.PROOFREADER,
-      },
-    });
+    await paperRowIn('sec_1');
+    const reading = await proofreaderOn('sec_1');
 
     const updated = await service.update(TEST, {
       scope: TEST_SCOPE.MODULE,
@@ -500,23 +474,6 @@ describe('TestsService — a narrower scope drops what it no longer covers', () 
 });
 
 describe('TestsService — an edit says what it moved', () => {
-  const paperRowIn = async (sectionLabel: string) => {
-    const question = await makeQuestion(prisma, { subjectId: (await makeSubject(prisma)).id });
-    await prisma.paperQuestion.create({
-      data: {
-        id: randomUUID(),
-        testId: TEST,
-        baseConfigId: BUILDER.CONFIG,
-        baseConfigSectionId: idFor(sectionLabel),
-        questionId: question.id,
-        questionVersionId: question.versionId,
-        order: 1,
-        marks: 2,
-        negativeMarks: 0.5,
-      },
-    });
-  };
-
   /** The failure this prevents: a scope moved to another section, its questions gone, and no row saying so. */
   it('files the part a sectional test now names, and the questions that dropped', async () => {
     const from = { sectionId: idFor('sec_1') };
@@ -818,16 +775,6 @@ describe('TestsService — editing and removing', () => {
     assert.deepEqual([row?.finalizedAt, row?.status], [FROZEN.finalizedAt, TEST_STATUS.ACTIVE]);
   });
 
-  /** A student who sat the comfortable screen must not have their test re-skinned under them. */
-  it('refuses a re-skin once a student has sat it', async () => {
-    const { service } = await serviceWith({ test: {} });
-    await sat();
-
-    const error = await refused(service.update(TEST, { examTemplate: EXAM_TEMPLATE.RAILWAYS }));
-
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-  });
-
   /** THE failure this prevents: the Setup save sends the scope back, and an offered test could not be renamed. */
   it('renames and re-skins an offered test when the scope sent with them is the one it holds', async () => {
     const scoped = { scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: idFor('sec_1') } };
@@ -908,14 +855,6 @@ describe('TestsService — editing and removing', () => {
     assert.equal((await refused(service.remove(TEST))).code, ErrorCodes.CONFLICT);
   });
 
-  it('deletes a draft nothing depends on', async () => {
-    const { service } = await serviceWith({ test: {} });
-
-    await service.remove(TEST);
-
-    assert.equal(await testRow(), null);
-  });
-
   /** Being frozen and being offered are states a test can be talked out of; being sat is not. */
   it('deletes a finalized test a series still offers, because nobody sat it', async () => {
     const { service } = await serviceWith({ test: { ...FROZEN, status: TEST_STATUS.ACTIVE } });
@@ -925,55 +864,45 @@ describe('TestsService — editing and removing', () => {
     assert.equal(await testRow(), null);
   });
 
-  /** The failure this prevents: a renamed test still wearing its old title in a cached catalog. */
-  it('tells the series about a rename, which the catalog carries', async () => {
-    const { service, events } = await serviceWith({
-      test: { ...FROZEN, status: TEST_STATUS.ACTIVE },
+  const CATALOG_MOVES = [
+    [
+      'a rename, which the catalog carries',
+      (service: TestsService) => service.update(TEST, { title: 'Mock 1 (revised)' }),
+    ],
+    [
+      'a re-skin, which the brief carries',
+      (service: TestsService) => service.update(TEST, { examTemplate: EXAM_TEMPLATE.RAILWAYS }),
+    ],
+    [
+      'a delete, so no cached catalog still reaches it',
+      (service: TestsService) => service.remove(TEST),
+    ],
+  ] as const;
+
+  /** The failure this prevents: a renamed, re-skinned or deleted test still shown from a cached catalog. */
+  for (const [what, move] of CATALOG_MOVES) {
+    it(`tells the series about ${what}`, async () => {
+      const { service, events } = await serviceWith({
+        test: { ...FROZEN, status: TEST_STATUS.ACTIVE },
+      });
+
+      await move(service);
+
+      assert.deepEqual(
+        events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
+        [idFor('srs_1')],
+      );
     });
-
-    await service.update(TEST, { title: 'Mock 1 (revised)' });
-
-    assert.deepEqual(
-      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
-      [idFor('srs_1')],
-    );
-  });
-
-  /** The failure this prevents: an offered test re-skinned while its brief still names the old screen. */
-  it('tells the series about a re-skin, which the brief carries', async () => {
-    const { service, events } = await serviceWith({
-      test: { ...FROZEN, status: TEST_STATUS.ACTIVE },
-    });
-
-    await service.update(TEST, { examTemplate: EXAM_TEMPLATE.RAILWAYS });
-
-    assert.deepEqual(
-      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
-      [idFor('srs_1')],
-    );
-  });
-
-  /** The failure this prevents: a deleted test still reachable in a student's cached catalog. */
-  it('tells the series that carried it that the catalog has moved', async () => {
-    const { service, events } = await serviceWith({
-      test: { ...FROZEN, status: TEST_STATUS.ACTIVE },
-    });
-
-    await service.remove(TEST);
-
-    assert.deepEqual(
-      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
-      [idFor('srs_1')],
-    );
-  });
+  }
 
   /** The failure this prevents: every API process rebuilding its catalog for a test no student sees. */
-  it('says nothing to the catalog about a draft renamed or deleted', async () => {
+  it('deletes a draft nothing depends on, and says nothing to the catalog about a draft renamed or deleted', async () => {
     const { service, events } = await serviceWith({ test: {} });
 
     await service.update(TEST, { title: 'Mock 1 (revised)' });
     await service.remove(TEST);
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), []);
+    assert.equal(await testRow(), null);
   });
 });

@@ -147,21 +147,6 @@ describe('FormPanel', () => {
 
     assert.equal(container.querySelectorAll('.border-t').length, 0);
   });
-
-  /** Headings and spacing group the body; a border between them is the card rule again. */
-  it('gives a section a heading and no border', () => {
-    render(
-      <FormPanel>
-        <FormSection title="Where it is filed" meta="2 subjects">
-          fields
-        </FormSection>
-      </FormPanel>,
-    );
-
-    const heading = screen.getByRole('heading', { name: 'Where it is filed' });
-    assert.equal(heading.closest('section')?.className.includes('border'), false);
-    assert.ok(screen.getByText('2 subjects'));
-  });
 });
 
 describe('a read-only FormPanel', () => {

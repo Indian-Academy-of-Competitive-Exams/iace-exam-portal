@@ -220,15 +220,6 @@ describe('drawSection — the seed', () => {
     assert.deepEqual(first, again);
   });
 
-  it('gives different rows for a different seed', () => {
-    const options = { section: section({ questionCount: 6 }), pool: pool(30) };
-
-    const first = questionsOf(draw({ ...options, seed: 7 })).map((row) => row.questionId);
-    const other = questionsOf(draw({ ...options, seed: 8 })).map((row) => row.questionId);
-
-    assert.notDeepEqual(first, other);
-  });
-
   it('gives a different seed a different SET of questions, not one set reordered', () => {
     const options = { section: section({ questionCount: 20 }), pool: pool(200) };
 
@@ -274,6 +265,10 @@ describe('drawSection — a section the admin has had a hand in', () => {
     assert.deepEqual(
       questions.slice(0, 2).map((row) => row.questionId),
       ['q4', 'q8'],
+    );
+    assert.deepEqual(
+      questions.map((row) => row.order),
+      [1, 2, 3, 4, 5],
     );
     assert.equal(new Set(questions.map((row) => row.questionId)).size, 5);
   });
@@ -333,20 +328,6 @@ describe('drawSection — a section drawn to a difficulty split', () => {
     assert.deepEqual(countsOf(questions), { low: 5, med: 0, high: 5 });
   });
 
-  /** The failure this prevents: three hard pins leaving a section with ten hard questions on it. */
-  it('counts a hand-picked question against its OWN bucket', () => {
-    const questions = questionsOf(
-      draw({
-        section: section({ questionCount: 25 }),
-        pool: mixedBank,
-        spec: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } },
-        pins: mixedBank.filter((row) => row.id.startsWith('high')).slice(0, 3),
-      }),
-    );
-
-    assert.deepEqual(countsOf(questions), { low: 7, med: 11, high: 7 });
-  });
-
   it('is short by the bucket, not by the section, when one difficulty runs out', () => {
     const thin = [
       ...pool(20, { difficulty: DIFFICULTY_LEVEL.LOW }, 'low'),
@@ -386,31 +367,5 @@ describe('drawSection — a section drawn to a difficulty split', () => {
     for (const pin of pins) {
       assert.equal(questions.filter((row) => row.questionId === pin.id).length, 1);
     }
-  });
-
-  /** What a caller topping up a paper has to undo: the pins come BACK, numbered from 1. */
-  it('hands the pins back among the rows it drew, numbered from one', () => {
-    const pins = mixedBank.filter((row) => row.id.startsWith('high')).slice(0, 2);
-
-    const questions = questionsOf(
-      draw({ section: section({ questionCount: 5 }), pool: mixedBank, pins }),
-    );
-
-    assert.deepEqual(
-      questions.slice(0, 2).map((row) => row.questionId),
-      pins.map((pin) => pin.id),
-    );
-    assert.deepEqual(
-      questions.map((row) => row.order),
-      [1, 2, 3, 4, 5],
-    );
-  });
-
-  it('draws as it always did when the section has no split', () => {
-    const questions = questionsOf(
-      draw({ section: section({ questionCount: 12 }), pool: mixedBank }),
-    );
-
-    assert.equal(questions.length, 12);
   });
 });

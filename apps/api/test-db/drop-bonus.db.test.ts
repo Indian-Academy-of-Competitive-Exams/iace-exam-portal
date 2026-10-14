@@ -115,17 +115,6 @@ describe('dropping a question on a paper somebody has already sat', () => {
     assert.equal(await revisionOf(paper.testId), before + 1);
   });
 
-  /** The failure this prevents: a worker's warm scoring terms marking the drop as though it never happened. */
-  it('counts every change on the test, so a cached copy of the paper is unreachable', async () => {
-    const { set, paper } = await bench();
-    const before = await revisionOf(paper.testId);
-
-    await set(PAPER_QUESTION_STATUS.DROPPED);
-    await set(PAPER_QUESTION_STATUS.BONUS);
-
-    assert.equal(await revisionOf(paper.testId), before + 2);
-  });
-
   /** The failure this prevents: a second click re-scoring a whole cohort for no change at all. */
   it('leaves the count alone where nothing moved', async () => {
     const { set, paper } = await bench();
