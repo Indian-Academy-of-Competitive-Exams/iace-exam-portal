@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFieldArray, useForm, useWatch, type Path, type UseFormReturn } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   AppException,
@@ -9,52 +9,25 @@ import {
   EXAM_TEMPLATE,
   EXAM_TEMPLATES,
   FEATURE_KEYS,
-  LANGUAGE_CODE,
-  LANGUAGE_CODES,
-  LANGUAGE_MODE,
   LANGUAGE_MODES,
-  MERIT_TYPE,
-  MERIT_TYPES,
   NAVIGATION_POLICIES,
-  NAVIGATION_POLICY,
   PERMISSION_LEVELS,
   TEST_UI,
   TEST_UIS,
   TIMER_TEMPLATE,
   TIMER_TEMPLATES,
-  configTotalsOf,
   type BaseConfigDetail,
-  type BaseConfigSection,
-  type BaseConfigSectionDraft,
-  type ExamTemplate,
-  type LanguageCode,
-  type LanguageMode,
-  type MeritType,
-  type NavigationPolicy,
-  type TestUi,
-  type TimerTemplate,
-  TYPING_PRESETS,
-  TYPING_PRESET_KEYS,
-  typingPresetKeySchema,
 } from '@iace/contracts';
-import {
-  applyFieldErrors,
-  bannerMessage,
-  isNumberOrBlank,
-  numberOr,
-  optionalNumber,
-} from '@iace/app-kit';
+import { bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
   Card,
-  Checkbox,
   ConfirmDialog,
   EMPTY_STATE_KINDS,
   EmptyState,
   FieldRow,
-  Combobox,
   FormCombobox,
   FormField,
   FormPanel,
@@ -65,18 +38,14 @@ import {
   ReadOnlyField,
   Skeleton,
   SkeletonParagraph,
-  StatRow,
   toast,
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import {
   EXAM_TEMPLATE_HINTS,
   EXAM_TEMPLATE_LABELS,
-  LANGUAGE_CODE_LABELS,
   LANGUAGE_MODE_HINTS,
   LANGUAGE_MODE_LABELS,
-  MERIT_TYPE_HINTS,
-  MERIT_TYPE_LABELS,
   NAVIGATION_POLICY_HINTS,
   NAVIGATION_POLICY_LABELS,
   NAV_ITEMS,
@@ -88,266 +57,23 @@ import {
   baseConfigQueryKey,
   defaultBaseConfigQueryKey,
 } from '../../lib/constants';
-import { minutesFieldOf, secondsFromMinutes } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 import { ExamStagePicker } from '../../components/exam-picker';
-import { SubjectPicker } from '../../components/taxonomy-picker';
 import { sectionsAfterSessionRemoved, sectionsInSession } from './base-config-sessions';
-import { useSubjectLanguage } from '../authoring/subject-languages';
+import {
+  type ConfigFormValues,
+  emptySection,
+  valuesOf,
+  shapeOf,
+  NUMBER_FIELD,
+  serverFields,
+  sectionIssuesOf,
+  applyServerErrors,
+  shownElsewhere,
+} from './base-config-values';
+import { ToggleField, LanguageChoice, SectionCard, Totals } from './base-config-fields';
 
 // One stage blueprint; totalQuestions/totalMarks are never typed — the server sums them, and configTotalsOf mirrors that while editing.
-
-interface SectionValues {
-  name: string;
-  subjectId: string;
-  /** The index of the module this sits in — a session paper's only. */
-  moduleOrder: string;
-  questionCount: string;
-  marksPerQuestion: string;
-  negativeMarks: string;
-  durationMin: string;
-  perQuestionSec: string;
-  mandatory: boolean;
-  meritOrQualifying: MeritType;
-  qualifyingCutoff: string;
-  patternNote: string;
-  /** A typing standard's key, or empty for an ordinary section. */
-  typingPreset: string;
-  /** Written answers: essays, letters, précis. */
-  descriptive: boolean;
-  /** One language of the paper's that the section is sat in alone, or empty for all of them. */
-  language: string;
-}
-
-interface ModuleValues {
-  name: string;
-  durationMin: string;
-}
-
-interface ConfigFormValues {
-  examStageId: string;
-  name: string;
-  isDefault: boolean;
-  isActive: boolean;
-  durationMin: string;
-  timerTemplate: TimerTemplate;
-  navigation: NavigationPolicy;
-  optionalSectionCount: string;
-  defaultTestUi: TestUi;
-  examTemplate: ExamTemplate;
-  languageMode: LanguageMode;
-  languages: LanguageCode[];
-  shuffleQuestions: boolean;
-  shuffleOptions: boolean;
-  calculatorEnabled: boolean;
-  modules: ModuleValues[];
-  sections: SectionValues[];
-}
-
-function emptySection(): SectionValues {
-  return {
-    name: '',
-    subjectId: '',
-    moduleOrder: '',
-    questionCount: '',
-    marksPerQuestion: '1',
-    patternNote: '',
-    negativeMarks: '0',
-    durationMin: '',
-    perQuestionSec: '',
-    mandatory: true,
-    meritOrQualifying: MERIT_TYPE.MERIT,
-    qualifyingCutoff: '',
-    typingPreset: '',
-    descriptive: false,
-    language: '',
-  };
-}
-
-function emptyValues(): ConfigFormValues {
-  return {
-    examStageId: '',
-    name: '',
-    isDefault: false,
-    isActive: true,
-    durationMin: '',
-    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
-    navigation: NAVIGATION_POLICY.FREE,
-    optionalSectionCount: '',
-    defaultTestUi: TEST_UI.CBT,
-    examTemplate: EXAM_TEMPLATE.DEFAULT,
-    languageMode: LANGUAGE_MODE.SINGLE,
-    languages: [LANGUAGE_CODE.EN],
-    shuffleQuestions: false,
-    shuffleOptions: false,
-    calculatorEnabled: false,
-    modules: [],
-    sections: [emptySection()],
-  };
-}
-
-/** A section names its module by order, and the modules are new rows on every save. */
-function moduleFieldOf(detail: BaseConfigDetail, section: BaseConfigSection): string {
-  const index = detail.modules.findIndex((module) => module.id === section.moduleId);
-  return index < 0 ? '' : String(index);
-}
-
-function valuesOf(detail: BaseConfigDetail | null): ConfigFormValues {
-  if (detail === null) return emptyValues();
-
-  return {
-    examStageId: detail.examStageId,
-    name: detail.name,
-    isDefault: detail.isDefault,
-    isActive: detail.isActive,
-    durationMin: minutesFieldOf(detail.durationSec),
-    timerTemplate: detail.timerTemplate,
-    navigation: detail.navigation,
-    optionalSectionCount:
-      detail.optionalSectionCount === null ? '' : String(detail.optionalSectionCount),
-    defaultTestUi: detail.defaultTestUi,
-    examTemplate: detail.examTemplate,
-    languageMode: detail.languageMode,
-    languages: [...detail.languages],
-    shuffleQuestions: detail.shuffleQuestions,
-    shuffleOptions: detail.shuffleOptions,
-    calculatorEnabled: detail.calculatorEnabled,
-    modules: detail.modules.map((module) => ({
-      name: module.name,
-      durationMin: minutesFieldOf(module.durationSec),
-    })),
-    sections: detail.sections.map((section) => ({
-      name: section.name,
-      subjectId: section.subjectId ?? '',
-      moduleOrder: moduleFieldOf(detail, section),
-      questionCount: String(section.questionCount),
-      marksPerQuestion: String(section.marksPerQuestion),
-      negativeMarks: String(section.negativeMarks),
-      patternNote: section.patternNote ?? '',
-      durationMin: minutesFieldOf(section.durationSec),
-      perQuestionSec: section.perQuestionSec === null ? '' : String(section.perQuestionSec),
-      mandatory: section.mandatory,
-      meritOrQualifying: section.meritOrQualifying,
-      qualifyingCutoff: section.qualifyingCutoff === null ? '' : String(section.qualifyingCutoff),
-      typingPreset: section.typingPreset ?? '',
-      descriptive: section.descriptive,
-      language: section.languages[0] ?? '',
-    })),
-  };
-}
-
-function toSectionDraft(section: SectionValues, index: number): BaseConfigSectionDraft {
-  return {
-    name: section.name,
-    // The list order IS the paper's order: nothing types a position two sections could share.
-    order: index,
-    moduleOrder: optionalNumber(section.moduleOrder),
-    subjectId: section.subjectId || null,
-    questionCount: numberOr(section.questionCount, 0),
-    marksPerQuestion: numberOr(section.marksPerQuestion, 0),
-    negativeMarks: numberOr(section.negativeMarks, 0),
-    patternNote: section.patternNote.trim() || null,
-    durationSec: secondsFromMinutes(section.durationMin),
-    perQuestionSec: optionalNumber(section.perQuestionSec),
-    mandatory: section.mandatory,
-    meritOrQualifying: section.meritOrQualifying,
-    qualifyingCutoff:
-      section.meritOrQualifying === MERIT_TYPE.QUALIFYING
-        ? optionalNumber(section.qualifyingCutoff)
-        : null,
-    typingPreset: typingPresetKeySchema.safeParse(section.typingPreset).data ?? null,
-    descriptive: section.descriptive,
-    languages: section.language ? [section.language as LanguageCode] : [],
-  };
-}
-
-function shapeOf(values: ConfigFormValues) {
-  const sessionPaper = values.timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
-
-  return {
-    durationSec: secondsFromMinutes(values.durationMin) ?? 0,
-    timerTemplate: values.timerTemplate,
-    navigation: values.navigation,
-    optionalSectionCount: optionalNumber(values.optionalSectionCount),
-    defaultTestUi: values.defaultTestUi,
-    examTemplate: values.examTemplate,
-    languageMode: values.languageMode,
-    languages: values.languages,
-    shuffleQuestions: values.shuffleQuestions,
-    shuffleOptions: values.shuffleOptions,
-    calculatorEnabled: values.calculatorEnabled,
-    sections: values.sections.map((section, index) => toSectionDraft(section, index)),
-    // Only a session paper has modules; the server refuses a paper that carries them otherwise.
-    modules: sessionPaper
-      ? values.modules.map((module, index) => ({
-          name: module.name,
-          order: index,
-          durationSec: secondsFromMinutes(module.durationMin),
-        }))
-      : [],
-  };
-}
-
-/** Refused before the save: read as blank, text in a number field would be stored as "not set" or zero. */
-const NUMBER_FIELD = {
-  validate: (raw: string) => isNumberOrBlank(raw) || 'Enter a number',
-} as const;
-
-const CONFIG_SERVER_FIELDS = ['examStageId', 'name', 'optionalSectionCount', 'languages'] as const;
-const SECTION_SERVER_FIELDS = [
-  'name',
-  'questionCount',
-  'marksPerQuestion',
-  'negativeMarks',
-  'perQuestionSec',
-  'qualifyingCutoff',
-  'patternNote',
-] as const;
-const SESSION_SERVER_FIELDS = ['name'] as const;
-
-function rowFields(rows: 'sections' | 'modules', count: number, fields: readonly string[]) {
-  return Array.from({ length: count }, (_, index) =>
-    fields.map((field) => `${rows}.${index}.${field}` as Path<ConfigFormValues>),
-  ).flat();
-}
-
-/** Every path the server can name that this form registers, so a failure lands on its own input. */
-function serverFields(sectionCount: number, sessionCount: number): Path<ConfigFormValues>[] {
-  return [
-    ...CONFIG_SERVER_FIELDS,
-    ...rowFields('sections', sectionCount, SECTION_SERVER_FIELDS),
-    ...rowFields('modules', sessionCount, SESSION_SERVER_FIELDS),
-  ];
-}
-
-/** The whole-paper rules. They name no single input, so they are listed above the sections. */
-function sectionIssuesOf(error: unknown): string[] {
-  return AppException.is(error) ? (error.fieldErrors?.sections ?? []) : [];
-}
-
-/** The API names its clocks in seconds and the form asks for minutes — the same input either way. */
-function minutesFieldFor(key: string): Path<ConfigFormValues> | null {
-  if (key === 'durationSec') return 'durationMin';
-  const row = /^(sections|modules)\.(\d+)\.durationSec$/.exec(key);
-  return row ? (`${row[1]}.${row[2]}.durationMin` as Path<ConfigFormValues>) : null;
-}
-
-function applyServerErrors(error: unknown, form: UseFormReturn<ConfigFormValues>): void {
-  const { sections, modules } = form.getValues();
-  applyFieldErrors(error, form.setError, serverFields(sections.length, modules.length));
-  if (!AppException.is(error) || !error.fieldErrors) return;
-
-  for (const [key, messages] of Object.entries(error.fieldErrors)) {
-    const field = minutesFieldFor(key);
-    if (field && messages[0]) form.setError(field, { type: 'server', message: messages[0] });
-  }
-}
-
-/** What the banner would repeat: `sections` has its own list, and each clock its own Minutes input. */
-function shownElsewhere(error: unknown): string[] {
-  const keys = AppException.is(error) ? Object.keys(error.fieldErrors ?? {}) : [];
-  return ['sections', ...keys.filter((key) => minutesFieldFor(key) !== null)];
-}
 
 export function BaseConfigFormPage() {
   const { id } = useParams();
@@ -914,362 +640,5 @@ function ConfigEditor({
         onConfirm={() => promoting && save.mutate(promoting)}
       />
     </FormPanel>
-  );
-}
-
-/** A boolean the form owns. Controlled, because `register` alone cannot hold a checkbox's state. */
-function ToggleField({
-  form,
-  name,
-  label,
-  hint,
-}: Readonly<{
-  form: UseFormReturn<ConfigFormValues>;
-  name: 'isDefault' | 'isActive' | 'shuffleQuestions' | 'shuffleOptions' | 'calculatorEnabled';
-  label: string;
-  hint?: string;
-}>) {
-  const checked = useWatch({ control: form.control, name });
-
-  return (
-    <Checkbox
-      checked={checked}
-      onChange={(event) => form.setValue(name, event.target.checked)}
-      label={label}
-      /* ui-copy-ok: rule */ hint={hint}
-    />
-  );
-}
-
-/** Which languages the paper is offered in. Three fixed codes, so checkboxes rather than a list. */
-function LanguageChoice({ form }: Readonly<{ form: UseFormReturn<ConfigFormValues> }>) {
-  const languages = useWatch({ control: form.control, name: 'languages' }) ?? [];
-  const error = form.formState.errors.languages?.message;
-
-  const toggle = (code: LanguageCode) => {
-    // Never registered, so nothing re-validates it: an error left here would block every later save.
-    form.clearErrors('languages');
-    form.setValue(
-      'languages',
-      languages.includes(code) ? languages.filter((kept) => kept !== code) : [...languages, code],
-    );
-  };
-
-  return (
-    <fieldset className="flex flex-col gap-1">
-      <legend className="mb-1 text-sm font-medium text-foreground">Languages</legend>
-      <div className="flex flex-wrap gap-1">
-        {LANGUAGE_CODES.map((code) => (
-          <Checkbox
-            key={code}
-            checked={languages.includes(code)}
-            onChange={() => toggle(code)}
-            label={LANGUAGE_CODE_LABELS[code]}
-          />
-        ))}
-      </div>
-      {error ? (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
-    </fieldset>
-  );
-}
-
-/** The first row is the ordinary case, so a section is a typing test only when one is chosen. */
-const TYPING_TEST_ITEMS = [
-  { value: '', label: 'Not a typing test' },
-  ...TYPING_PRESET_KEYS.map((key) => ({ value: key, label: TYPING_PRESETS[key].label })),
-];
-
-function SectionCard({
-  form,
-  index,
-  sectionalClocks,
-  perQuestionClocks,
-  sessionPaper,
-  canRemove,
-  onRemove,
-}: Readonly<{
-  form: UseFormReturn<ConfigFormValues>;
-  index: number;
-  sectionalClocks: boolean;
-  perQuestionClocks: boolean;
-  sessionPaper: boolean;
-  canRemove: boolean;
-  onRemove: () => void;
-}>) {
-  const subjectId = useWatch({ control: form.control, name: `sections.${index}.subjectId` });
-  const merit = useWatch({ control: form.control, name: `sections.${index}.meritOrQualifying` });
-  const mandatory = useWatch({ control: form.control, name: `sections.${index}.mandatory` });
-  const modules = useWatch({ control: form.control, name: 'modules' }) ?? [];
-  const moduleNames = sessionPaper ? modules.map((module) => module.name) : [];
-  const typingPreset = useWatch({ control: form.control, name: `sections.${index}.typingPreset` });
-  const isTyping = typingPreset !== '';
-  const descriptive = useWatch({ control: form.control, name: `sections.${index}.descriptive` });
-  const paperLanguages = useWatch({ control: form.control, name: 'languages' }) ?? [];
-  const language = useWatch({ control: form.control, name: `sections.${index}.language` });
-  const tested = useSubjectLanguage(subjectId || undefined);
-  const testedCode = tested ? (tested.toUpperCase() as LanguageCode) : '';
-  // A section of a language subject is sat in that language alone, so choosing the subject sets it.
-  useEffect(() => {
-    if (testedCode && language !== testedCode) {
-      form.setValue(`sections.${index}.language`, testedCode, { shouldDirty: true });
-    }
-  }, [form, index, language, testedCode]);
-
-  // A typing test is one unmarked passage on its standard's clock, so choosing one fills all four.
-  const chooseTyping = (key: string) => {
-    form.setValue(`sections.${index}.typingPreset`, key, { shouldDirty: true });
-    const preset = typingPresetKeySchema.safeParse(key).data;
-    if (!preset) return;
-    form.setValue(`sections.${index}.questionCount`, '1');
-    form.setValue(`sections.${index}.marksPerQuestion`, '0');
-    form.setValue(`sections.${index}.negativeMarks`, '0');
-    form.setValue(`sections.${index}.perQuestionSec`, '');
-    form.setValue(
-      `sections.${index}.durationMin`,
-      minutesFieldOf(TYPING_PRESETS[preset].durationSec),
-    );
-  };
-
-  return (
-    <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-foreground">Section {index + 1}</span>
-        {canRemove ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={`Remove section ${index + 1}`}
-            onClick={onRemove}
-          >
-            <Trash2 aria-hidden />
-            Remove
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <FormField form={form} name={`sections.${index}.name`} label="Name">
-          {(control) => <Input {...control} placeholder="General Intelligence" />}
-        </FormField>
-
-        <FormField
-          form={form}
-          name={`sections.${index}.subjectId`}
-          label="Subject"
-          /* ui-copy-ok: rule */ hint="Optional"
-        >
-          {(control) => (
-            <SubjectPicker
-              id={control.id}
-              value={subjectId}
-              clearable
-              placeholder="Any subject"
-              onChange={(value) => form.setValue(`sections.${index}.subjectId`, value)}
-            />
-          )}
-        </FormField>
-
-        <FormField form={form} name={`sections.${index}.typingPreset`} label="Typing test">
-          {(control) => (
-            <Combobox
-              id={control.id}
-              value={typingPreset}
-              clearable={false}
-              items={TYPING_TEST_ITEMS}
-              onChange={chooseTyping}
-            />
-          )}
-        </FormField>
-
-        {isTyping ? null : (
-          <>
-            <FormField form={form} name={`sections.${index}.questionCount`} label="Questions">
-              {(control) => (
-                <Input
-                  {...control}
-                  {...form.register(`sections.${index}.questionCount`, NUMBER_FIELD)}
-                  inputMode="numeric"
-                  placeholder="25"
-                />
-              )}
-            </FormField>
-
-            <FormField
-              form={form}
-              name={`sections.${index}.marksPerQuestion`}
-              label="Marks per question"
-            >
-              {(control) => (
-                <Input
-                  {...control}
-                  {...form.register(`sections.${index}.marksPerQuestion`, NUMBER_FIELD)}
-                  inputMode="decimal"
-                  placeholder="2"
-                />
-              )}
-            </FormField>
-
-            <FormField
-              form={form}
-              name={`sections.${index}.negativeMarks`}
-              label="Negative marks"
-              /* ui-copy-ok: unit */ hint="Per wrong answer"
-            >
-              {(control) => (
-                <Input
-                  {...control}
-                  {...form.register(`sections.${index}.negativeMarks`, NUMBER_FIELD)}
-                  inputMode="decimal"
-                  placeholder="0.5"
-                />
-              )}
-            </FormField>
-          </>
-        )}
-
-        <FormField
-          form={form}
-          name={`sections.${index}.durationMin`}
-          label="Minutes"
-          /* ui-copy-ok: rule */ hint={
-            sectionalClocks ? 'Required: this paper has a clock per section' : 'Optional'
-          }
-        >
-          {(control) => (
-            <Input
-              {...control}
-              {...form.register(`sections.${index}.durationMin`, NUMBER_FIELD)}
-              inputMode="decimal"
-            />
-          )}
-        </FormField>
-
-        {isTyping ? null : (
-          <FormField
-            form={form}
-            name={`sections.${index}.perQuestionSec`}
-            label="Seconds per question"
-            /* ui-copy-ok: rule */ hint={
-              perQuestionClocks ? 'Required: this paper has a countdown per question' : 'Optional'
-            }
-          >
-            {(control) => (
-              <Input
-                {...control}
-                {...form.register(`sections.${index}.perQuestionSec`, NUMBER_FIELD)}
-                inputMode="numeric"
-              />
-            )}
-          </FormField>
-        )}
-
-        <FormField
-          form={form}
-          name={`sections.${index}.patternNote`}
-          label="Pattern note"
-          /* ui-copy-ok: rule */ hint="Reference only; nothing draws on it"
-        >
-          {(control) => <Input {...control} placeholder="Moderate-Difficult" />}
-        </FormField>
-
-        <FormCombobox
-          form={form}
-          name={`sections.${index}.meritOrQualifying`}
-          label="Merit or qualifying"
-          items={MERIT_TYPES.map((value) => ({
-            value,
-            label: MERIT_TYPE_LABELS[value],
-            hint: MERIT_TYPE_HINTS[value],
-          }))}
-        />
-
-        {merit === MERIT_TYPE.QUALIFYING ? (
-          <FormField
-            form={form}
-            name={`sections.${index}.qualifyingCutoff`}
-            label="Qualifying cutoff"
-          >
-            {(control) => (
-              <Input
-                {...control}
-                {...form.register(`sections.${index}.qualifyingCutoff`, NUMBER_FIELD)}
-                inputMode="decimal"
-              />
-            )}
-          </FormField>
-        ) : null}
-
-        {paperLanguages.length > 1 ? (
-          <FormCombobox
-            form={form}
-            name={`sections.${index}.language`}
-            label="Language"
-            /* ui-copy-ok: rule */ hint="English Language is sat in English, whatever a student picks"
-            items={[
-              { value: '', label: "The paper's languages" },
-              ...paperLanguages.map((code) => ({
-                value: code,
-                label: `${LANGUAGE_CODE_LABELS[code]} only`,
-              })),
-            ]}
-          />
-        ) : null}
-
-        {moduleNames.length > 0 ? (
-          <FormCombobox
-            form={form}
-            name={`sections.${index}.moduleOrder`}
-            label="Session"
-            items={[
-              { value: '', label: 'The first session' },
-              ...moduleNames.map((name, moduleIndex) => ({
-                value: String(moduleIndex),
-                label: name || `Session ${moduleIndex + 1}`,
-              })),
-            ]}
-          />
-        ) : null}
-      </div>
-
-      {isTyping ? null : (
-        <Checkbox
-          checked={descriptive}
-          // A written answer is never charged for, so the negative goes as the section becomes one.
-          onChange={(event) => {
-            form.setValue(`sections.${index}.descriptive`, event.target.checked, {
-              shouldDirty: true,
-            });
-            if (event.target.checked) form.setValue(`sections.${index}.negativeMarks`, '0');
-          }}
-          label="Descriptive: essays, letters and précis"
-        />
-      )}
-      <Checkbox
-        checked={mandatory}
-        onChange={(event) => form.setValue(`sections.${index}.mandatory`, event.target.checked)}
-        label="Every student must attempt this section"
-      />
-    </div>
-  );
-}
-
-/** The cache the server keeps on the config, summed live so it is never typed. */
-function Totals({ form }: Readonly<{ form: UseFormReturn<ConfigFormValues> }>) {
-  const sections = useWatch({ control: form.control, name: 'sections' }) ?? [];
-  const totals = configTotalsOf(sections.map((section, index) => toSectionDraft(section, index)));
-
-  return (
-    <FormSection title="Totals">
-      <div className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
-        <StatRow label="Sections" value={sections.length} />
-        <StatRow label="Questions" value={totals.totalQuestions} />
-        <StatRow label="Marks" value={totals.totalMarks} />
-      </div>
-    </FormSection>
   );
 }
