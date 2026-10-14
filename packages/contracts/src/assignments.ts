@@ -357,8 +357,10 @@ export const ADMIN_ASSIGNMENTS_ROUTES = {
 } as const;
 
 /** "1 section has" / "2 sections have", named after the colon as the server's refusal names them. */
-const sectionsSay = (names: readonly string[], one: string, many: string, what: string): string =>
-  `${names.length} section${names.length === 1 ? ` ${one}` : `s ${many}`} ${what}: ${names.join(', ')}`;
+function sectionsSay(names: readonly string[], one: string, many: string, what: string): string {
+  const counted = names.length === 1 ? `1 section ${one}` : `${names.length} sections ${many}`;
+  return `${counted} ${what}: ${names.join(', ')}`;
+}
 
 /** What still keeps a paper from being offered, in the server's own words; null when nothing does. */
 export function paperBlockerOf(input: {
