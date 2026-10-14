@@ -107,3 +107,22 @@ describe('MultiCombobox', () => {
     assert.equal(screen.queryByRole('listbox'), null);
   });
 });
+
+/** THE failure this prevents: a search that no longer lists a choice left its raw value in the trigger. */
+describe('MultiCombobox labels after a search', () => {
+  it('keeps naming every chosen item once a search leaves them out of the list', () => {
+    const named = [
+      { value: 'exm_1', label: 'SSC CGL' },
+      { value: 'exm_2', label: 'RRB JE' },
+    ];
+    const { rerender } = show(box({ value: ['exm_1', 'exm_2'], items: named, chips: false }));
+
+    rerender(
+      <TooltipProvider>
+        {box({ value: ['exm_1', 'exm_2'], items: [], chips: false })}
+      </TooltipProvider>,
+    );
+
+    assert.ok(screen.getByRole('button', { name: 'SSC CGL, RRB JE' }));
+  });
+});

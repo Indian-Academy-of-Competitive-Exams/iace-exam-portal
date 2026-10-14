@@ -1,5 +1,10 @@
 import * as React from 'react';
-import { ComboboxOption, ComboboxShell, type ComboboxListProps } from './combobox-shell';
+import {
+  ComboboxOption,
+  ComboboxShell,
+  useHeldLabels,
+  type ComboboxListProps,
+} from './combobox-shell';
 
 export type { ComboboxItem } from './combobox-shell';
 
@@ -25,8 +30,9 @@ export function Combobox({
   const [open, setOpen] = React.useState(false);
   const placeholder = list.placeholder ?? 'Choose…';
 
+  const held = useHeldLabels(list.items, [value]);
   const selected = list.items.find((item) => item.value === value);
-  const chosen = selected?.label ?? selectedLabel ?? (value || null);
+  const chosen = selected?.label ?? held[value] ?? selectedLabel ?? (value || null);
 
   return (
     <ComboboxShell

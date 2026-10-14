@@ -206,3 +206,15 @@ describe('the combobox trigger tooltip', () => {
     assert.equal((await screen.findByRole('tooltip')).textContent, LONG);
   });
 });
+
+/** THE failure this prevents: a search that no longer lists the choice left its raw id on the trigger. */
+describe('Combobox label after a search', () => {
+  it('keeps naming the chosen item once a search leaves it out of the list', () => {
+    const { rerender } = show(box({ value: 'ext_2' }));
+
+    rerender(<TooltipProvider>{box({ value: 'ext_2', items: [items[0]!] })}</TooltipProvider>);
+
+    assert.ok(screen.getByRole('button', { name: 'RRB JE' }));
+    assert.equal(screen.queryByRole('button', { name: 'ext_2' }), null);
+  });
+});

@@ -2,7 +2,12 @@ import * as React from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Badge } from './badge';
-import { ComboboxOption, ComboboxShell, type ComboboxListProps } from './combobox-shell';
+import {
+  ComboboxOption,
+  ComboboxShell,
+  useHeldLabels,
+  type ComboboxListProps,
+} from './combobox-shell';
 
 export interface MultiComboboxProps extends ComboboxListProps {
   value: readonly string[];
@@ -26,8 +31,12 @@ export function MultiCombobox({
   const [open, setOpen] = React.useState(false);
   const placeholder = list.placeholder ?? 'Choose…';
 
+  const held = useHeldLabels(list.items, value);
   const labelFor = (item: string) =>
-    list.items.find((option) => option.value === item)?.label ?? selectedLabels?.[item] ?? item;
+    list.items.find((option) => option.value === item)?.label ??
+    held[item] ??
+    selectedLabels?.[item] ??
+    item;
 
   const toggle = (item: string) =>
     onChange(value.includes(item) ? value.filter((chosen) => chosen !== item) : [...value, item]);

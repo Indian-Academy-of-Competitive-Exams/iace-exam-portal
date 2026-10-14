@@ -29,6 +29,25 @@ export interface ComboboxItem {
 }
 
 /** Everything a combobox takes that is about the LIST rather than the selection. */
+/** The label of every chosen value seen in a page, kept: a search that no longer lists it must not leave its raw value on the trigger. */
+export function useHeldLabels(
+  items: readonly ComboboxItem[],
+  chosen: readonly string[],
+): Readonly<Record<string, string>> {
+  const [held, setHeld] = React.useState<Readonly<Record<string, string>>>({});
+  const fresh = items.filter(
+    (item) => chosen.includes(item.value) && held[item.value] !== item.label,
+  );
+  // Set during render, as derived state: an effect would paint the raw value for one frame first.
+  if (fresh.length > 0) {
+    setHeld((before) => ({
+      ...before,
+      ...Object.fromEntries(fresh.map((item) => [item.value, item.label])),
+    }));
+  }
+  return held;
+}
+
 export interface ComboboxListProps {
   items: readonly ComboboxItem[];
 
