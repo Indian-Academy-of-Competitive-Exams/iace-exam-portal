@@ -22,6 +22,18 @@ export function CardLead({
   );
 }
 
+type CardChromeProps = Readonly<{
+  lead: React.ReactNode;
+  actions: React.ReactNode;
+  status?: React.ReactNode;
+  view: View;
+  romanised: boolean;
+  duplicate: string | null;
+  onEdit: (change: (current: Held) => Held) => void;
+  onView: (change: (current: View) => View) => void;
+  onSave: () => void;
+}>;
+
 export function CardBody({
   questionKey,
   source,
@@ -37,22 +49,14 @@ export function CardBody({
   onEdit,
   onView,
   onSave,
-}: Readonly<{
-  questionKey: string;
-  source: WorkspaceSource;
-  blank: Held;
-  held: Held | undefined;
-  editable: boolean;
-  lead: React.ReactNode;
-  actions: React.ReactNode;
-  status?: React.ReactNode;
-  view: View;
-  romanised: boolean;
-  duplicate: string | null;
-  onEdit: (change: (current: Held) => Held) => void;
-  onView: (change: (current: View) => View) => void;
-  onSave: () => void;
-}>) {
+}: CardChromeProps &
+  Readonly<{
+    questionKey: string;
+    source: WorkspaceSource;
+    blank: Held;
+    held: Held | undefined;
+    editable: boolean;
+  }>) {
   const isNew = questionKey === NEW_CARD;
   const base = useQuery({ ...source.query(questionKey), enabled: !isNew });
   const saved = isNew ? blank : base.data;
@@ -106,21 +110,13 @@ function EditBody({
   onView,
   onSave,
   languages,
-}: Readonly<{
-  questionKey: string;
-  shown: Held;
-  readOnly: boolean;
-  lead: React.ReactNode;
-  actions: React.ReactNode;
-  status?: React.ReactNode;
-  view: View;
-  romanised: boolean;
-  duplicate: string | null;
-  onEdit: (change: (current: Held) => Held) => void;
-  onView: (change: (current: View) => View) => void;
-  onSave: () => void;
-  languages?: readonly LanguageCode[];
-}>) {
+}: CardChromeProps &
+  Readonly<{
+    questionKey: string;
+    shown: Held;
+    readOnly: boolean;
+    languages?: readonly LanguageCode[];
+  }>) {
   const draft = useMemo(() => toDraft(shown.state, shown.header), [shown]);
   const { checks } = useChecked(draft, shown.header, shown.state, duplicate, languages);
   const switchTo = (language: QuestionLanguage) =>

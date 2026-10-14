@@ -289,6 +289,18 @@ function typedAnswers(state: AuthoringState): LocalizedText {
   return localized((language) => (hasText(state.content[language].stem) ? answer : ''));
 }
 
+function draftHeaderOf(header: AuthoringHeader) {
+  return {
+    subjectId: header.subjectId,
+    topicId: header.topicId || null,
+    difficulty: header.difficulty,
+    ...(header.questionCode === undefined
+      ? {}
+      : { questionCode: header.questionCode.trim() || null }),
+    tags: tagsIn(header.tags),
+  };
+}
+
 export function toDraft(state: AuthoringState, header: AuthoringHeader): QuestionDraft {
   const isMcq = state.type === QUESTION_TYPE.SINGLE_MCQ;
   const correct = isMcq ? answerIndexOf(state.answer, state.optionCount) : null;
@@ -298,13 +310,7 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
   if (state.type === QUESTION_TYPE.TYPING) {
     return {
       type: state.type,
-      subjectId: header.subjectId,
-      topicId: header.topicId || null,
-      difficulty: header.difficulty,
-      ...(header.questionCode === undefined
-        ? {}
-        : { questionCode: header.questionCode.trim() || null }),
-      tags: tagsIn(header.tags),
+      ...draftHeaderOf(header),
       stem: localized((language) => state.content[language].stem),
       options: [],
       answerKey: null,
@@ -313,13 +319,7 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
 
   return {
     type: state.type,
-    subjectId: header.subjectId,
-    topicId: header.topicId || null,
-    difficulty: header.difficulty,
-    ...(header.questionCode === undefined
-      ? {}
-      : { questionCode: header.questionCode.trim() || null }),
-    tags: tagsIn(header.tags),
+    ...draftHeaderOf(header),
     stem: localized((language) => state.content[language].stem),
     ...(Object.keys(passage).length > 0 ? { passage } : {}),
     solution: localized((language) => state.content[language].solution),

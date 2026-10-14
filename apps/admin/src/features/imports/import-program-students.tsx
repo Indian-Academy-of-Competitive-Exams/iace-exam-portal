@@ -10,17 +10,16 @@ import {
   ImportView,
   PageHeader,
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableRow,
-  TableState,
   TruncatedText,
   plural,
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
 import { useErrorRows } from './use-error-rows';
+import { PreviewRows } from './preview-rows';
 import { NAV_ITEMS } from '../../lib/constants';
 
 export function ImportProgramStudentsPage() {
@@ -94,25 +93,11 @@ export function ImportProgramStudentsPage() {
             <TableHead>What happens</TableHead>
           </TableRow>
         </thead>
-        <TableBody>
-          <TableState
-            isLoading={false}
-            isEmpty={plan === null || plan.rows.length === 0}
-            colSpan={4}
-            empty={
-              plan === null
-                ? {
-                    title: 'Nothing to preview yet',
-                    hint: 'Choose a file. Nothing is written until you press Import.',
-                  }
-                : 'No rows in that file'
-            }
-          >
-            {plan?.rows.map((row) => (
-              <ImportRow key={row.line} row={row} />
-            ))}
-          </TableState>
-        </TableBody>
+        <PreviewRows rows={plan?.rows} colSpan={4}>
+          {plan?.rows.map((row) => (
+            <ImportRow key={row.line} row={row} />
+          ))}
+        </PreviewRows>
       </Table>
     </ImportView>
   );

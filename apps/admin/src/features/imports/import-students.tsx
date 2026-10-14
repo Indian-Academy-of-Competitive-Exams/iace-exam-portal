@@ -11,11 +11,9 @@ import {
   ImportView,
   PageHeader,
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableRow,
-  TableState,
   TruncatedText,
   linkVariants,
   plural,
@@ -24,6 +22,7 @@ import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
 import { NAV_ITEMS, ROUTES } from '../../lib/constants';
 import { useErrorRows } from './use-error-rows';
+import { PreviewRows } from './preview-rows';
 
 /** Preview, then commit. Three bad rows still import the other 397. */
 export function ImportStudentsPage() {
@@ -99,25 +98,11 @@ export function ImportStudentsPage() {
             <TableHead>What happens</TableHead>
           </TableRow>
         </thead>
-        <TableBody>
-          <TableState
-            isLoading={false}
-            isEmpty={plan === null || plan.rows.length === 0}
-            colSpan={7}
-            empty={
-              plan === null
-                ? {
-                    title: 'Nothing to preview yet',
-                    hint: 'Choose a file. Nothing is written until you press Import.',
-                  }
-                : 'No rows in that file'
-            }
-          >
-            {plan?.rows.map((row) => (
-              <ImportRow key={row.line} row={row} />
-            ))}
-          </TableState>
-        </TableBody>
+        <PreviewRows rows={plan?.rows} colSpan={7}>
+          {plan?.rows.map((row) => (
+            <ImportRow key={row.line} row={row} />
+          ))}
+        </PreviewRows>
       </Table>
     </ImportView>
   );

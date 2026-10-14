@@ -11,17 +11,16 @@ import {
   ImportView,
   PageHeader,
   Table,
-  TableBody,
   TableCell,
   TableHead,
   TableRow,
-  TableState,
   TruncatedText,
   plural,
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
 import { useErrorRows } from './use-error-rows';
+import { PreviewRows } from './preview-rows';
 import { NAV_ITEMS, eventQueryKey } from '../../lib/constants';
 
 const ACTION_LABELS: Readonly<Record<CandidateImportRow['action'], string>> = {
@@ -106,47 +105,33 @@ export function ImportEventCandidatesPage() {
             <TableHead>What happens</TableHead>
           </TableRow>
         </thead>
-        <TableBody>
-          <TableState
-            isLoading={false}
-            isEmpty={plan === null || plan.rows.length === 0}
-            colSpan={4}
-            empty={
-              plan === null
-                ? {
-                    title: 'Nothing to preview yet',
-                    hint: 'Choose a file. Nothing is written until you press Import.',
-                  }
-                : 'No rows in that file'
-            }
-          >
-            {plan?.rows.map((row) => (
-              <TableRow key={row.line}>
-                <TableCell numeric className="text-muted-foreground">
-                  {row.line}
-                </TableCell>
-                <TableCell className="max-w-36 tabular-nums">
-                  <TruncatedText>{row.mobile}</TruncatedText>
-                </TableCell>
-                <TableCell className="max-w-56">
-                  <TruncatedText>{row.fullName}</TruncatedText>
-                </TableCell>
-                <TableCell className="max-w-72">
-                  {row.action === 'skip' ? (
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant="danger">Skip</Badge>
-                      <span className="text-xs text-destructive">{row.errors.join('; ')}</span>
-                    </span>
-                  ) : (
-                    <Badge variant={row.action === 'create' ? 'success' : 'info'}>
-                      {ACTION_LABELS[row.action]}
-                    </Badge>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableState>
-        </TableBody>
+        <PreviewRows rows={plan?.rows} colSpan={4}>
+          {plan?.rows.map((row) => (
+            <TableRow key={row.line}>
+              <TableCell numeric className="text-muted-foreground">
+                {row.line}
+              </TableCell>
+              <TableCell className="max-w-36 tabular-nums">
+                <TruncatedText>{row.mobile}</TruncatedText>
+              </TableCell>
+              <TableCell className="max-w-56">
+                <TruncatedText>{row.fullName}</TruncatedText>
+              </TableCell>
+              <TableCell className="max-w-72">
+                {row.action === 'skip' ? (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant="danger">Skip</Badge>
+                    <span className="text-xs text-destructive">{row.errors.join('; ')}</span>
+                  </span>
+                ) : (
+                  <Badge variant={row.action === 'create' ? 'success' : 'info'}>
+                    {ACTION_LABELS[row.action]}
+                  </Badge>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </PreviewRows>
       </Table>
     </ImportView>
   );
