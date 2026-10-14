@@ -653,6 +653,14 @@ letter-based answer key are why real uploads were rejected wholesale.
 - **A sheet is bounded by where it lands**: `QUESTION_IMPORT_MAX_ROWS` (100) into the bank and
   `SECTION_IMPORT_MAX_ROWS` (50) into a section of a test, where every row is read again by a
   proof-reader. A longer file is refused whole, before any row is judged.
+- **A whole typed test takes one sheet**, from whoever manages tests (a Section column names each
+  row's section). Each row is judged by its section's rules and written as that section typist's
+  draft, exactly as the typist's own import would; Done and reading do not change. A section with no
+  typist, or whose typist is done, takes nothing. Imports add up to each section's count: a row past
+  the room its typist's drafts leave is not imported and is **never saved** — a leftover must not
+  claim a test it is not on — so extras go through the bank's own import. A picked test does not take
+  one (import into the bank, then pick); an offered test takes nothing. The preview collapses a
+  reason held against several rows into one line with its count.
 - **A row repeating an earlier line of the same file is told apart from one already in the bank.**
   Both are skipped as duplicates, but `duplicateOf` names the line for the first and a question id
   for the second (`repeatedLineOf`), and the preview says which.

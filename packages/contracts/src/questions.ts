@@ -471,6 +471,12 @@ export const QUESTION_VALIDATION_CODE = {
   SUBJECT_OUTSIDE_SECTION: 'SUBJECT_OUTSIDE_SECTION',
   /** The same, by kind: a typing section takes typing passages, and no other section takes one. */
   TYPE_OUTSIDE_SECTION: 'TYPE_OUTSIDE_SECTION',
+  /** A whole-test sheet's row naming no section of the test, or one that is not there. */
+  SECTION_UNKNOWN: 'SECTION_UNKNOWN',
+  /** A whole-test sheet's row for a section with no typist to hold it, or one already done. */
+  SECTION_NOT_OPEN: 'SECTION_NOT_OPEN',
+  /** A whole-test sheet's row past the room its section has left; discarded, never saved. */
+  SECTION_FULL: 'SECTION_FULL',
 } as const;
 const questionValidationCodeSchema = z.enum(QUESTION_VALIDATION_CODE);
 
@@ -486,6 +492,9 @@ export const SHEET_ONLY_VALIDATION_CODES: ReadonlySet<string> = new Set([
   QUESTION_VALIDATION_CODE.TOPIC_UNKNOWN,
   QUESTION_VALIDATION_CODE.SUBJECT_OUTSIDE_SECTION,
   QUESTION_VALIDATION_CODE.TYPE_OUTSIDE_SECTION,
+  QUESTION_VALIDATION_CODE.SECTION_UNKNOWN,
+  QUESTION_VALIDATION_CODE.SECTION_NOT_OPEN,
+  QUESTION_VALIDATION_CODE.SECTION_FULL,
 ]);
 
 /** One problem with one question: `field` is the draft path the form focuses (`stem.en`, `options.2.text.hi`); `column` is what the sheet calls the same thing. */
@@ -722,6 +731,15 @@ export const QUESTION_IMPORT_COLUMNS = [
   },
 ] as const;
 
+/** Only a whole-test sheet carries it: which of the test's sections the row is typed into. */
+export const QUESTION_IMPORT_SECTION_COLUMN = {
+  key: 'section',
+  header: 'Section',
+  width: 24,
+  required: true,
+  aliases: ['section'],
+} as const;
+
 type QuestionImportColumn = (typeof QUESTION_IMPORT_COLUMNS)[number];
 export type QuestionImportColumnKey = QuestionImportColumn['key'];
 
@@ -786,6 +804,8 @@ const questionImportRowSchema = z.object({
   edited: z.boolean(),
   /** The question this row repeats: an id from the bank, or a line in this file. */
   duplicateOf: z.string().nullable(),
+  /** A whole-test sheet's section for the row, as the sheet names it. */
+  sectionName: z.string().nullish(),
 });
 export type QuestionImportRow = z.infer<typeof questionImportRowSchema>;
 
@@ -803,6 +823,8 @@ export const questionImportPlanSchema = importPlanSchema(
 ).extend({
   /** The run this preview opened. Commit names it rather than re-uploading the file. */
   importLogId: z.string(),
+  /** Each reason a row is not imported, once, with how many rows it holds back; most first. */
+  causes: z.array(z.object({ message: z.string(), count: z.number().int() })).optional(),
 });
 export type QuestionImportPlan = z.infer<typeof questionImportPlanSchema>;
 

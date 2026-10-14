@@ -239,6 +239,7 @@ export function App() {
             <AssignmentQueuePage role={ASSIGNMENT_ROLES.TYPIST} />,
           )}
           {screen(ROUTES.AUTHORING_IMPORT_PATTERN, <ImportQuestionsPage />)}
+          {screen(ROUTES.TEST_IMPORT_PATTERN, <ImportQuestionsPage />)}
           {screen(ROUTES.AUTHORING_EDITOR_PATTERN, <AuthoringEditorPage />)}
           {screen(ROUTES.BASE_CONFIGS, <BaseConfigsPage />)}
           {/* Before the :id route, or "new" would be read as a config id. */}

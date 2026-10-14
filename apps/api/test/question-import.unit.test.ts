@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_IMPORT_SECTION_COLUMN,
   QUESTION_IMPORT_MAX_ROWS,
   QUESTION_IMPORT_TAG,
   QUESTION_TYPE,
@@ -21,8 +22,9 @@ import {
   type ImportDedupContext,
   type ImportScope,
   type QuestionImportPlanning,
+  type TestImportScope,
 } from '../src/questions/question-import';
-import { topicKey, type TaxonomyCatalog } from '../src/questions/taxonomy-context';
+import { lookupName, topicKey, type TaxonomyCatalog } from '../src/questions/taxonomy-context';
 import { rowAt } from './support/fakes';
 
 const CODE = QUESTION_VALIDATION_CODE;
@@ -157,6 +159,87 @@ describe('a sheet imported into one section of a test', () => {
       plan(sheetOf(QUESTION_IMPORT_MAX_ROWS + 1)).fileErrors[0] ?? '',
       new RegExp(`Import at most ${QUESTION_IMPORT_MAX_ROWS} at a time\\.`),
     );
+  });
+});
+
+describe('a sheet imported into a whole typed test', () => {
+  const QUANT = { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' };
+  const section = (name: string, room: number, closed: string | null = null) =>
+    [
+      lookupName(name),
+      {
+        id: `sec_${name}`,
+        sectionName: name,
+        subject: QUANT,
+        kind: SECTION_ANSWER_KIND.CHOICE,
+        room,
+        closed,
+        assignmentId: `typist_${name}`,
+      },
+    ] as const;
+  const TEST: TestImportScope = {
+    sections: new Map([section('Quant', 2), section('Arithmetic', 5, 'Arithmetic has no typist')]),
+  };
+  const row = (sectionName: string, at: number) => ({
+    ...MCQ_ROW,
+    section: sectionName,
+    stem_en: `What is ${at}% of 9731?`,
+  });
+  /** The section sheet's table with the Section column the whole-test sheet adds. */
+  const withSection = (rows: ReturnType<typeof row>[]): CsvTable => {
+    const base = table(...rows);
+    const header = normaliseHeader(QUESTION_IMPORT_SECTION_COLUMN.header);
+    return {
+      headers: [...base.headers, header],
+      rows: base.rows.map((one, at) => ({
+        ...one,
+        values: { ...one.values, [header]: rows[at]?.section ?? '' },
+      })),
+    };
+  };
+  const planTest = (rows: ReturnType<typeof row>[], leftOut: ReadonlySet<number> = new Set()) =>
+    planQuestionImport(withSection(rows), catalog(), noDedup(), undefined, leftOut, TEST);
+  const outcome = (planning: QuestionImportPlanning) =>
+    planning.rows.map((one) => [one.sectionName, one.issues[0]?.code ?? one.action]);
+
+  /** THE failure this prevents: rows past a section's count saved to the bank as if imported for this test. */
+  it('takes each section up to its room in sheet order, and not one row past it', () => {
+    assert.deepEqual(outcome(planTest([row('Quant', 1), row('quant', 2), row('Quant', 3)])), [
+      ['Quant', 'create'],
+      ['quant', 'create'],
+      ['Quant', CODE.SECTION_FULL],
+    ]);
+  });
+
+  it('brings the next row in when an earlier one is left out', () => {
+    const planning = planTest([row('Quant', 1), row('Quant', 2), row('Quant', 3)], new Set([2]));
+
+    assert.deepEqual(
+      planning.rows.map((one) => one.action),
+      ['left_out', 'create', 'create'],
+    );
+  });
+
+  it('refuses a row for a section that is not open, or not on the test, by name', () => {
+    const planning = planTest([row('Arithmetic', 1), row('Reasoning', 2), row('', 3)]);
+
+    assert.deepEqual(
+      planning.rows.map((one) => one.issues.map((issue) => issue.message)),
+      [
+        ['Arithmetic has no typist'],
+        ['"Reasoning" is not a section of this test'],
+        ['Name the section'],
+      ],
+    );
+  });
+
+  /** THE failure this prevents: fifty rows reading as fifty problems when they are one. */
+  it('counts a reason repeated over many rows once', () => {
+    const planning = planTest([row('Reasoning', 1), row('Reasoning', 2), row('Quant', 3)]);
+
+    assert.deepEqual(planning.causes, [
+      { message: '"Reasoning" is not a section of this test', count: 2 },
+    ]);
   });
 });
 

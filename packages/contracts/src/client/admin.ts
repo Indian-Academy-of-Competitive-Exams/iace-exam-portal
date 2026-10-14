@@ -627,6 +627,24 @@ export function adminClient(core: ApiCore) {
       handOverSection: (id: string, sectionId: string): Promise<TestPaper> =>
         write('POST', ADMIN_TEST_PAPER_ROUTES.handOver(id, sectionId), testPaperSchema),
 
+      /** The test's own sheet: the bank's columns with a Section dropdown of this test's sections. */
+      importTemplate: (id: string): Promise<Blob> =>
+        requestBlob(ADMIN_TEST_PAPER_ROUTES.importTemplate(id)),
+
+      /** One sheet for the whole typed test, each row into its section's typist's drafts. */
+      previewImport: (id: string, file: File): Promise<QuestionImportPlan> =>
+        write(
+          'POST',
+          ADMIN_TEST_PAPER_ROUTES.importPreview(id),
+          questionImportPlanSchema,
+          fileBody(file),
+        ),
+
+      commitImport: (id: string, importLogId: string): Promise<QuestionImportResult> =>
+        write('POST', ADMIN_TEST_PAPER_ROUTES.importCommit(id), questionImportResultSchema, {
+          importLogId,
+        }),
+
       /** Drops a question or makes it a bonus, and re-scores every sitting that served it. */
       setPaperQuestionStatus: (
         id: string,

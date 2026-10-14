@@ -5,7 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
 import { AuthoringController } from './authoring.controller';
 import { AuthoringService } from './authoring.service';
-import { QuestionImportController } from './question-import.controller';
+import { QuestionImportController, TestImportController } from './question-import.controller';
 import { StemRehashService } from './stem-rehash.service';
 import { QuestionImportService } from './question-import.service';
 import { SectionWorkController } from './section-work.controller';
@@ -34,6 +34,7 @@ import { API_ROLES, onRole } from '../config/api-role';
       QuestionsController,
       TaxonomyController,
       QuestionImportController,
+      TestImportController,
       AuthoringController,
       SectionWorkController,
     ],

@@ -45,7 +45,11 @@ import { sendErrorRows } from '../common/importing';
 import { QuestionImportService } from './question-import.service';
 
 /** The bank's importer and a section's read one sheet; a run is its previewer's, whichever key they held. */
-const RUN_KEYS = [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.QUESTION_AUTHORING] as const;
+const RUN_KEYS = [
+  FEATURE_KEYS.QUESTION_MANAGEMENT,
+  FEATURE_KEYS.QUESTION_AUTHORING,
+  FEATURE_KEYS.TEST_MANAGEMENT,
+] as const;
 
 @Controller('imports/questions')
 @Actors(ActorTypes.ADMIN)
@@ -125,5 +129,47 @@ export class QuestionImportController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionImportResult> {
     return this.imports.commit(body.importLogId, { actorId: user.id });
+  }
+}
+
+/** A whole typed test in one sheet, each row under its section's typist; the review window is the bank's. */
+@Controller('admin/tests/:testId/import')
+@Actors(ActorTypes.ADMIN)
+export class TestImportController {
+  constructor(private readonly imports: QuestionImportService) {}
+
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Get('template')
+  @Header('Content-Type', XLSX_CONTENT_TYPE)
+  @Header('Content-Disposition', `attachment; filename="${QUESTION_IMPORT_TEMPLATE_FILENAME}"`)
+  @Header('Cache-Control', 'no-store')
+  async template(@Param('testId') testId: string, @Res() response: Response): Promise<void> {
+    response.send(await this.imports.testTemplate(testId));
+  }
+
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post('preview')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  preview(
+    @Param('testId') testId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: UploadedSheet,
+  ): Promise<QuestionImportPlan> {
+    return this.imports.preview(requireFile(file), user.id, { testId, wholeTest: true });
+  }
+
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post('commit')
+  @HttpCode(HttpStatus.OK)
+  commit(
+    @Param('testId') testId: string,
+    @Body(new ZodBody(questionImportCommitSchema)) body: QuestionImportCommitBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuestionImportResult> {
+    return this.imports.commit(body.importLogId, {
+      actorId: user.id,
+      test: { testId, wholeTest: true },
+    });
   }
 }

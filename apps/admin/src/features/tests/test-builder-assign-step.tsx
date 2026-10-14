@@ -4,7 +4,9 @@ import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ASSIGNMENT_ROLES,
+  FEATURE_KEYS,
   PAPER_SOURCES,
+  PERMISSION_LEVELS,
   PAPER_SOURCE_LABELS,
   civilDate,
   scopedSections,
@@ -18,7 +20,7 @@ import {
   type TestDetail,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { UserPlus, UserRoundPen } from 'lucide-react';
+import { Upload, UserPlus, UserRoundPen } from 'lucide-react';
 import {
   Alert,
   Badge,
@@ -106,7 +108,7 @@ export function AssignStep({
   detail,
   config,
 }: Readonly<{ detail: TestDetail | null; config: BaseConfigDetail | null }>) {
-  const { identity } = useAuth();
+  const { identity, can } = useAuth();
   const assignments = useQuery({
     queryKey: testAssignmentsQueryKey(detail?.id ?? ''),
     queryFn: () => api.admin.assignments.forTest(detail?.id ?? ''),
@@ -204,6 +206,18 @@ export function AssignStep({
   });
   return (
     <FormSection title="Sections" meta={PAPER_SOURCE_LABELS[detail.paperSource]}>
+      {detail.paperSource === PAPER_SOURCES.FRAMED &&
+      !detail.finalizedAt &&
+      can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE) ? (
+        <div className="flex justify-end">
+          <Button asChild size="sm" variant="outline">
+            <Link to={ROUTES.TEST_IMPORT(detail.id)}>
+              <Upload aria-hidden />
+              Import questions
+            </Link>
+          </Button>
+        </div>
+      ) : null}
       <DataTable
         columns={columns}
         rows={sections.map(rowOf)}

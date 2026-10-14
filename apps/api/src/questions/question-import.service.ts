@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ImportSource, Prisma } from '@prisma/client';
 import {
+  ASSIGNMENT_ROLES,
   AUDIT_FEATURE,
   AppException,
   AUDIT_ACTION,
   ErrorCodes,
   IMPORT_LOG_STATUS,
   IMPORT_TARGET_BANK,
+  PAPER_SOURCES,
   QUESTION_IMPORT_SHEETS,
+  scopedSections,
   imageKeysIn,
   type QuestionDraft,
   type QuestionImportDraft,
@@ -26,6 +29,7 @@ import {
 } from '../common/importing';
 import { type ExportSheet } from '../common/exporting';
 import { formRefusal } from '../common/form-refusal';
+import { scopeRefOf } from '../common/prisma-json';
 import { assertJobOpen } from '../assignments';
 import { AuditService } from '../audit';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
@@ -39,15 +43,22 @@ import {
   type ImportScope,
   type PlannedRow,
   type QuestionImportPlanning,
+  type TestImportScope,
 } from './question-import';
 import { buildQuestionTemplate } from './question-workbook';
 import { IMMUTABLE_CACHE_CONTROL, applyImageUrls, stripImageSrc } from './question-images';
 import { rewriteDraftHtml } from './question-content';
-import { loadTaxonomyCatalog } from './taxonomy-context';
+import { loadTaxonomyCatalog, lookupName } from './taxonomy-context';
 
 const UPLOAD_GONE = 'That upload is no longer available';
 const ALREADY_IMPORTED = 'That file has already been imported';
 const PREVIEWED_ELSEWHERE = 'That file was previewed for somewhere else. Upload it again here.';
+const NOT_A_TYPED_TEST =
+  'Only a typed test takes a whole sheet. Import into the bank, then pick from it.';
+const TEST_OFFERED = 'This test has been offered, so its paper takes nothing more';
+
+/** A whole test's run is kept under this and the test's id; a section's under the test and section. */
+const IMPORT_TARGET_TEST = 'test:';
 
 /** A file-level refusal opens no run, so the plan it hands back names none. */
 const NO_RUN = '';
@@ -77,11 +88,17 @@ export class QuestionImportService {
     return buildQuestionTemplate(await loadTaxonomyCatalog(this.prisma));
   }
 
-  async preview(
-    file: Buffer,
-    actorId: string,
-    section?: ImportSection,
-  ): Promise<QuestionImportPlan> {
+  /** The whole test's sheet: the bank's columns led by a dropdown of the test's own sections. */
+  async testTemplate(testId: string): Promise<Buffer> {
+    const sections = await this.openSectionsOf(testId);
+    return buildQuestionTemplate(
+      await loadTaxonomyCatalog(this.prisma),
+      sections.map((section) => section.name),
+    );
+  }
+
+  async preview(file: Buffer, actorId: string, section?: ImportInto): Promise<QuestionImportPlan> {
+    if (section && isWholeTest(section)) await this.openSectionsOf(section.testId);
     const planning = await this.plan(file, undefined, targetOf(section));
     // Judged before the run exists: a file nothing can be planned from would leave a total-0 row and a sheet in storage nothing ever fetches.
     if (planning.fileErrors.length > 0) return withoutDrafts(planning, NO_RUN);
@@ -130,9 +147,11 @@ export class QuestionImportService {
 
   async commit(importLogId: string, into: ImportTarget): Promise<QuestionImportResult> {
     const { log, file } = await this.openRun(importLogId, into.actorId);
-    if (log.target !== null && log.target !== targetOf(into.section)) {
+    const where = into.section ?? into.test;
+    if (log.target !== null && log.target !== targetOf(where)) {
       throw formRefusal(ErrorCodes.CONFLICT, PREVIEWED_ELSEWHERE);
     }
+    if (into.test) await this.openSectionsOf(into.test.testId);
     const planning = await this.plan(file, await this.overlayOf(log.id), log.target);
     const creatable = planning.rows.filter(
       (row): row is PlannedRow & { draft: NonNullable<PlannedRow['draft']> } =>
@@ -151,7 +170,10 @@ export class QuestionImportService {
 
       // Interactive, not an array of promises: every question is three statements — the row, its first version, and the pointer between them — and all of them share one transaction.
       created = await this.prisma.$transaction(async (tx) => {
-        if (into.section) await assertJobOpen(tx, into.section.assignmentId);
+        const jobs = into.section
+          ? [into.section.assignmentId]
+          : [...new Set(creatable.flatMap((row) => (row.assignmentId ? [row.assignmentId] : [])))];
+        for (const job of jobs) await assertJobOpen(tx, job);
         // Claimed before any row is written: of two commits that both read the run open, the second waits here and finds it taken.
         const claimed = await tx.importLog.updateMany({
           where: { id: log.id, status: { not: IMPORT_LOG_STATUS.COMMITTED } },
@@ -173,7 +195,7 @@ export class QuestionImportService {
           const question = await tx.question.create({
             data: {
               ...questionData(row.draft, built, log.actorId),
-              assignmentId: into.section?.assignmentId,
+              assignmentId: into.section?.assignmentId ?? row.assignmentId ?? undefined,
             },
           });
           const version = await tx.questionVersion.create({
@@ -345,9 +367,88 @@ export class QuestionImportService {
     return planQuestionImport(table, catalog, dedup, drafts, leftOut, scope);
   }
 
+  /** A typed test that has not been offered, and its sections in scope; anything else is refused. */
+  private async openSectionsOf(testId: string) {
+    const test = await this.prisma.test.findUnique({
+      where: { id: testId },
+      select: {
+        paperSource: true,
+        finalizedAt: true,
+        scope: true,
+        scopeRef: true,
+        baseConfig: {
+          select: {
+            sections: {
+              select: {
+                id: true,
+                name: true,
+                questionCount: true,
+                moduleId: true,
+                typingPreset: true,
+                descriptive: true,
+                subject: { select: { id: true, name: true } },
+              },
+              orderBy: { order: 'asc' },
+            },
+          },
+        },
+      },
+    });
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    if (test.paperSource !== PAPER_SOURCES.FRAMED) {
+      throw new AppException(ErrorCodes.CONFLICT, NOT_A_TYPED_TEST);
+    }
+    if (test.finalizedAt) throw new AppException(ErrorCodes.CONFLICT, TEST_OFFERED);
+    return scopedSections(test.baseConfig.sections, test.scope, scopeRefOf(test));
+  }
+
+  /** Each section with its typist and the room their drafts leave; a section nobody is typing is shut. */
+  private async testScopeOf(testId: string): Promise<TestImportScope> {
+    const sections = await this.openSectionsOf(testId);
+    const typists = await this.prisma.questionAssignment.findMany({
+      where: { testId, role: ASSIGNMENT_ROLES.TYPIST, replacedAt: null },
+      select: { id: true, baseConfigSectionId: true, finalizedAt: true },
+    });
+    const held = await this.prisma.question.groupBy({
+      by: ['assignmentId'],
+      where: { assignmentId: { in: typists.map((row) => row.id) } },
+      _count: { _all: true },
+    });
+    const heldBy = new Map(held.map((row) => [row.assignmentId, row._count._all]));
+
+    return {
+      sections: new Map(
+        sections.map((section) => {
+          const typist = typists.find((row) => row.baseConfigSectionId === section.id);
+          let closed: string | null = null;
+          if (!typist) closed = `${section.name} has no typist — not imported`;
+          else if (typist.finalizedAt) closed = `${section.name}'s typist is done — not imported`;
+          return [
+            lookupName(section.name),
+            {
+              id: section.id,
+              sectionName: section.name,
+              subject: section.subject,
+              kind: sectionAnswerKindOf(section),
+              room: Math.max(
+                0,
+                section.questionCount - (typist ? (heldBy.get(typist.id) ?? 0) : 0),
+              ),
+              closed,
+              assignmentId: typist?.id ?? null,
+            },
+          ] as const;
+        }),
+      ),
+    };
+  }
+
   /** What a section's own run is judged against; the bank's has no such bounds. */
-  private async scopeOf(target: string | null): Promise<ImportScope | null> {
+  private async scopeOf(target: string | null): Promise<ImportScope | TestImportScope | null> {
     if (target === null || target === IMPORT_TARGET_BANK) return null;
+    if (target.startsWith(IMPORT_TARGET_TEST)) {
+      return this.testScopeOf(target.slice(IMPORT_TARGET_TEST.length));
+    }
     const [, baseConfigSectionId = ''] = target.split('/');
     const section = await this.prisma.baseConfigSection.findUnique({
       where: { id: baseConfigSectionId },
@@ -443,13 +544,27 @@ export interface ImportSection {
   baseConfigSectionId: string;
 }
 
+/** A whole typed test: each row goes to the section it names. */
+export interface ImportWholeTest {
+  testId: string;
+  wholeTest: true;
+}
+
+type ImportInto = ImportSection | ImportWholeTest;
+
+const isWholeTest = (into: ImportInto): into is ImportWholeTest => 'wholeTest' in into;
+
 /** Where an imported sheet lands: the bank by default, or one section's own authoring. */
 export interface ImportTarget {
   section?: ImportSection & { assignmentId: string };
+  /** A whole typed test, every row under the typist of the section it names. */
+  test?: ImportWholeTest;
   /** Whose upload it has to be: a run is committed by the admin who previewed it, nobody else. */
   actorId: string;
 }
 
-function targetOf(section: ImportSection | undefined): string {
-  return section ? `${section.testId}/${section.baseConfigSectionId}` : IMPORT_TARGET_BANK;
+function targetOf(into: ImportInto | undefined): string {
+  if (!into) return IMPORT_TARGET_BANK;
+  if (isWholeTest(into)) return `${IMPORT_TARGET_TEST}${into.testId}`;
+  return `${into.testId}/${into.baseConfigSectionId}`;
 }

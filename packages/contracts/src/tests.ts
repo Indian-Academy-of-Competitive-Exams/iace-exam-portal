@@ -659,6 +659,10 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   /** Draws the rest of one section from its own spec, around the rows already on it. */
   fillSection: (id: string, sectionId: string) =>
     `/admin/tests/${id}/paper/sections/${sectionId}/fill`,
+  /** A whole typed test's sheet, every row into the section it names, under that section's typist. */
+  importTemplate: (id: string) => `/admin/tests/${id}/import/template`,
+  importPreview: (id: string) => `/admin/tests/${id}/import/preview`,
+  importCommit: (id: string) => `/admin/tests/${id}/import/commit`,
   /** A picked section, full, handed to its proof-reader. */
   handOver: (id: string, sectionId: string) =>
     `/admin/tests/${id}/paper/sections/${sectionId}/hand-over`,

@@ -7,6 +7,7 @@ import {
   MCQ_OPTION_COUNT,
   MCQ_OPTION_MAX,
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_IMPORT_SECTION_COLUMN,
   QUESTION_IMPORT_SHEETS,
   QUESTION_IMPORT_TAG,
   QUESTION_TYPES,
@@ -28,11 +29,24 @@ const TYPES_RANGE = 'QTYPES';
 const DIFFICULTIES_RANGE = 'DIFFICULTIES';
 const ANSWER_MODES_RANGE = 'ANSWERMODES';
 const CORRECT_OPTIONS_RANGE = 'CORRECTOPTIONS';
+const SECTIONS_RANGE = 'SECTIONS';
 
 const HEADER_FILL = 'FFF3F4F6';
 const REQUIRED_FILL = 'FFFDE8E8';
 
-export async function buildQuestionTemplate(catalog: TaxonomyCatalog): Promise<Buffer> {
+type TemplateColumn =
+  (typeof QUESTION_IMPORT_COLUMNS)[number] | typeof QUESTION_IMPORT_SECTION_COLUMN;
+type TemplateKey = TemplateColumn['key'];
+
+/** A whole test's sheet leads with a Section column whose dropdown is that test's sections. */
+export async function buildQuestionTemplate(
+  catalog: TaxonomyCatalog,
+  sections: readonly string[] = [],
+): Promise<Buffer> {
+  const columns: readonly TemplateColumn[] =
+    sections.length > 0
+      ? [QUESTION_IMPORT_SECTION_COLUMN, ...QUESTION_IMPORT_COLUMNS]
+      : QUESTION_IMPORT_COLUMNS;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'IACE';
 
@@ -40,17 +54,17 @@ export async function buildQuestionTemplate(catalog: TaxonomyCatalog): Promise<B
   const instructions = workbook.addWorksheet(QUESTION_IMPORT_SHEETS.INSTRUCTIONS);
   const lists = workbook.addWorksheet(QUESTION_IMPORT_SHEETS.LISTS);
 
-  writeHeader(sheet);
-  writeExamples(sheet, catalog);
-  writeLists(workbook, lists, catalog);
-  writeValidations(sheet, catalog);
+  writeHeader(sheet, columns);
+  writeExamples(sheet, catalog, columns, sections[0]);
+  writeLists(workbook, lists, catalog, sections);
+  writeValidations(sheet, catalog, sections.length > 0);
   writeInstructions(instructions);
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
-function writeHeader(sheet: ExcelJS.Worksheet): void {
-  sheet.columns = QUESTION_IMPORT_COLUMNS.map((column) => ({
+function writeHeader(sheet: ExcelJS.Worksheet, columns: readonly TemplateColumn[]): void {
+  sheet.columns = columns.map((column) => ({
     header: column.header,
     key: column.key,
     width: column.width,
@@ -59,7 +73,7 @@ function writeHeader(sheet: ExcelJS.Worksheet): void {
   const header = sheet.getRow(1);
   header.font = { bold: true };
   header.eachCell((cell, columnNumber) => {
-    const column = QUESTION_IMPORT_COLUMNS[columnNumber - 1];
+    const column = columns[columnNumber - 1];
     cell.fill = {
       type: 'pattern',
       pattern: 'solid',
@@ -70,11 +84,17 @@ function writeHeader(sheet: ExcelJS.Worksheet): void {
 }
 
 /** Two rows an admin can read the format off, using taxonomy that really exists. */
-function writeExamples(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void {
+function writeExamples(
+  sheet: ExcelJS.Worksheet,
+  catalog: TaxonomyCatalog,
+  columns: readonly TemplateColumn[],
+  section: string | undefined,
+): void {
   const first = catalog.subjects[0];
   const topic = first?.topics[0];
 
-  const mcq: Partial<Record<QuestionImportColumnKey, string | number>> = {
+  const mcq: Partial<Record<TemplateKey, string | number>> = {
+    section,
     type: 'SINGLE_MCQ',
     subject: first?.name ?? 'QUANTITATIVE APTITUDE',
     topic: topic?.name ?? 'ARITHMETIC',
@@ -99,7 +119,8 @@ function writeExamples(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void
     tags: `ssc cgl${TAG_SEPARATOR} percentages`,
   };
 
-  const typed: Partial<Record<QuestionImportColumnKey, string | number>> = {
+  const typed: Partial<Record<TemplateKey, string | number>> = {
+    section,
     type: 'TEXT_FIELD',
     subject: first?.name ?? 'QUANTITATIVE APTITUDE',
     topic: topic?.name ?? 'ARITHMETIC',
@@ -111,9 +132,7 @@ function writeExamples(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void
   };
 
   for (const example of [mcq, typed]) {
-    sheet.addRow(
-      QUESTION_IMPORT_COLUMNS.map((column) => example[column.key as QuestionImportColumnKey] ?? ''),
-    );
+    sheet.addRow(columns.map((column) => example[column.key] ?? ''));
   }
 }
 
@@ -122,6 +141,7 @@ function writeLists(
   workbook: ExcelJS.Workbook,
   lists: ExcelJS.Worksheet,
   catalog: TaxonomyCatalog,
+  sections: readonly string[],
 ): void {
   let column = 1;
 
@@ -144,6 +164,7 @@ function writeLists(
     column += 1;
   };
 
+  if (sections.length > 0) addList('Sections', sections, SECTIONS_RANGE);
   addList(
     'Subjects',
     catalog.subjects.map((subject) => subject.name),
@@ -172,8 +193,12 @@ const rangeToken = (name: string) => name.replace(/\s+/g, '_');
 const topicRangeName = (subject: string) => `${TOPIC_RANGE_PREFIX}${rangeToken(subject)}`;
 
 /** The cascade. INDIRECT builds the range NAME from the cell beside it, so the topic list follows the subject on that row. A row whose subject is not in the bank simply offers nothing, which is the right answer — the importer reports it by name either way. */
-function writeValidations(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void {
-  const letterOf = (key: QuestionImportColumnKey) => sheet.getColumn(key).letter;
+function writeValidations(
+  sheet: ExcelJS.Worksheet,
+  catalog: TaxonomyCatalog,
+  bySection: boolean,
+): void {
+  const letterOf = (key: TemplateKey) => sheet.getColumn(key).letter;
   const subject = letterOf('subject');
   const topic = letterOf('topic');
 
@@ -184,6 +209,9 @@ function writeValidations(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): v
   });
 
   for (let row = 2; row <= VALIDATED_ROWS + 1; row += 1) {
+    if (bySection) {
+      sheet.getCell(`${letterOf('section')}${row}`).dataValidation = listOf(`=${SECTIONS_RANGE}`);
+    }
     sheet.getCell(`${letterOf('type')}${row}`).dataValidation = listOf(`=${TYPES_RANGE}`);
     sheet.getCell(`${letterOf('difficulty')}${row}`).dataValidation = listOf(
       `=${DIFFICULTIES_RANGE}`,

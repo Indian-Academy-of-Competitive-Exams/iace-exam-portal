@@ -42,24 +42,46 @@ import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../../lib/tours';
 import { useErrorRows } from './use-error-rows';
 import { ImportWorkspace } from '../authoring/import-workspace';
 
-/** The section a typist's import lands in; null for the bank. */
+/** Where the sheet lands: one section's typist, a whole typed test (no section), or the bank (null). */
 interface IntoSection {
   testId: string;
-  sectionId: string;
+  sectionId?: string;
 }
 
-/** The same sheet either way; a section's typist previews and commits through the section. */
+/** The same sheet every way; a section and a whole test preview and commit through their own routes. */
 function intakeFor(into: IntoSection | null) {
+  const { testId = '', sectionId } = into ?? {};
+  if (sectionId) {
+    return {
+      preview: (file: File) => api.admin.sectionWork.previewImport(testId, sectionId, file),
+      commit: (_file: File | null, plan: QuestionImportPlan) =>
+        api.admin.sectionWork.commitImport(testId, sectionId, plan.importLogId),
+      template: () => api.admin.imports.questionTemplate(),
+    };
+  }
+  if (into) {
+    return {
+      preview: (file: File) => api.admin.tests.previewImport(testId, file),
+      commit: (_file: File | null, plan: QuestionImportPlan) =>
+        api.admin.tests.commitImport(testId, plan.importLogId),
+      template: () => api.admin.tests.importTemplate(testId),
+    };
+  }
   return {
-    preview: (file: File) =>
-      into
-        ? api.admin.sectionWork.previewImport(into.testId, into.sectionId, file)
-        : api.admin.imports.previewQuestions(file),
+    preview: (file: File) => api.admin.imports.previewQuestions(file),
     commit: (_file: File | null, plan: QuestionImportPlan) =>
-      into
-        ? api.admin.sectionWork.commitImport(into.testId, into.sectionId, plan.importLogId)
-        : api.admin.imports.commitQuestions(plan.importLogId),
+      api.admin.imports.commitQuestions(plan.importLogId),
+    template: () => api.admin.imports.questionTemplate(),
   };
+}
+
+/** Where Import sends the reader afterwards, and what the link says. */
+function backTo(into: IntoSection | null): { to: string; label: string } {
+  if (into?.sectionId) {
+    return { to: ROUTES.TYPING_SECTION(into.testId, into.sectionId), label: 'Back to the section' };
+  }
+  if (into) return { to: ROUTES.TEST(into.testId), label: 'Back to the test' };
+  return { to: ROUTES.QUESTIONS, label: 'View questions' };
 }
 
 function importedText({ created, duplicates, invalid, leftOut }: QuestionImportResult): string {
@@ -71,14 +93,12 @@ function ImportOutcome({
   result,
   into,
 }: Readonly<{ result: QuestionImportResult; into: IntoSection | null }>) {
+  const back = backTo(into);
   return (
     <>
       {importedText(result)}{' '}
-      <Link
-        to={into ? ROUTES.TYPING_SECTION(into.testId, into.sectionId) : ROUTES.QUESTIONS}
-        className={linkVariants({ variant: 'inline' })}
-      >
-        {into ? 'Back to the section' : 'View questions'}
+      <Link to={back.to} className={linkVariants({ variant: 'inline' })}>
+        {back.label}
       </Link>
     </>
   );
@@ -89,6 +109,20 @@ function BlurryNotice({ count }: Readonly<{ count: number }>) {
   return (
     <Alert variant="warning">
       {String.raw`${count} ${count === 1 ? 'picture looks' : 'pictures look'} like a formula saved at text size. They import, but read blurry: type each as \( … \) in the sheet to make it a real equation.`}
+    </Alert>
+  );
+}
+
+/** One line per reason that holds back several rows, so fifty rows of one mistake read as one. */
+function CausesNotice({ causes }: Readonly<{ causes: QuestionImportPlan['causes'] }>) {
+  if (!causes?.length) return null;
+  return (
+    <Alert variant="warning">
+      <ul className="flex flex-col gap-1">
+        {causes.map((cause) => (
+          <li key={cause.message}>{`${cause.message} — ${plural(cause.count, 'row')}`}</li>
+        ))}
+      </ul>
     </Alert>
   );
 }
@@ -151,13 +185,14 @@ export function ImportQuestionsPage() {
   const { testId, sectionId } = useParams<{ testId?: string; sectionId?: string }>();
   const queryClient = useQueryClient();
   // The same sheet either way; the section is only where the questions land.
-  const into = testId && sectionId ? { testId, sectionId } : null;
+  const into = testId ? { testId, sectionId } : null;
+  const { template, ...routes } = intakeFor(into);
 
   const intake = useImportScreen({
-    ...intakeFor(into),
+    ...routes,
     writes: (plan) => plan.summary.willCreate,
     template: {
-      fetch: () => api.admin.imports.questionTemplate(),
+      fetch: template,
       filename: QUESTION_IMPORT_TEMPLATE_FILENAME,
     },
     success: importedText,
@@ -169,6 +204,7 @@ export function ImportQuestionsPage() {
       for (const queryKey of [QUERY_KEYS.AUTHORING, QUERY_KEYS.ASSIGNMENTS]) {
         void queryClient.invalidateQueries({ queryKey });
       }
+      if (!into.sectionId) return;
       // Exact: the section's list gained questions; no card's own read changed.
       const section = sectionWorkQueryKey(into.testId, into.sectionId);
       void queryClient.invalidateQueries({ queryKey: section, exact: true });
@@ -259,7 +295,9 @@ export function ImportQuestionsPage() {
         <>
           {into ? (
             <Alert variant="info">
-              These questions land in the section you were assigned, not loose in the bank.
+              {into.sectionId
+                ? 'These questions land in the section you were assigned, not loose in the bank.'
+                : "Each row lands in the section it names, as that section's typist's drafts. Rows past a section's count are not imported."}
             </Alert>
           ) : null}
           {reviewable ? (
@@ -292,6 +330,7 @@ export function ImportQuestionsPage() {
       stats={plan ? statsOf(plan, repeated) : undefined}
     >
       <BlurryNotice count={blurry} />
+      <CausesNotice causes={plan?.causes} />
 
       <Table>
         <thead>
@@ -347,7 +386,7 @@ function ImportRow({
   /** Sets the row aside from Import or brings it back; absent once there is nothing left to import. */
   onLeaveOut: ((leftOut: boolean) => void) | undefined;
 }>) {
-  const filedUnder = [row.subjectName, row.topicName].filter(Boolean).join(' / ');
+  const filedUnder = [row.sectionName, row.subjectName, row.topicName].filter(Boolean).join(' / ');
   const leftOut = row.action === 'left_out';
 
   return (

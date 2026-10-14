@@ -137,6 +137,9 @@ export const ROUTES = {
   TEST_NEW: '/tests/new',
   TEST: (id: string) => `/tests/${id}`,
   TEST_PATTERN: '/tests/:id',
+  /** One sheet for a whole typed test, each row into its section's typist's drafts. */
+  TEST_IMPORT: (id: string) => `/tests/${id}/import`,
+  TEST_IMPORT_PATTERN: '/tests/:testId/import',
   /** The paper on its own screen: the extra segment outranks `/tests/:id`. */
   TEST_PAPER: (id: string) => `/tests/${id}/paper`,
   TEST_PAPER_PATTERN: '/tests/:id/paper',
@@ -707,6 +710,7 @@ export const ROUTE_ACCESS: Readonly<Partial<Record<string, RouteAccess>>> = {
   [ROUTES.BASE_CONFIG_NEW]: writes(FEATURE_KEYS.TEST_MANAGEMENT),
   [ROUTES.TESTS]: reads(FEATURE_KEYS.TEST_MANAGEMENT),
   [ROUTES.TEST_PATTERN]: reads(FEATURE_KEYS.TEST_MANAGEMENT),
+  [ROUTES.TEST_IMPORT_PATTERN]: writes(FEATURE_KEYS.TEST_MANAGEMENT),
   [ROUTES.TEST_NEW]: writes(FEATURE_KEYS.TEST_MANAGEMENT),
   [ROUTES.TEST_PAPER_PATTERN]: reads(FEATURE_KEYS.TEST_MANAGEMENT),
   [ROUTES.TEST_PAPER_PRINT_PATTERN]: reads(FEATURE_KEYS.TEST_MANAGEMENT),

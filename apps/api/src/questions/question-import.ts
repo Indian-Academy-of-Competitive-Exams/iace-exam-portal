@@ -8,6 +8,7 @@ import {
   previewTextOf,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_MAX_ROWS,
+  QUESTION_IMPORT_SECTION_COLUMN,
   SECTION_IMPORT_MAX_ROWS,
   fileDuplicateOf,
   QUESTION_IMPORT_TAG,
@@ -61,6 +62,8 @@ export interface PlannedRow extends QuestionImportRow {
   pictures: Map<string, CheckedImage>;
   /** The question this row reads as, whatever its action: what the review window opens. */
   editable: QuestionDraft;
+  /** A whole-test row's typist, whose draft it becomes; null everywhere else. */
+  assignmentId: string | null;
 }
 
 /** The one section a sheet is imported into, and the subject it takes. */
@@ -70,6 +73,27 @@ export interface ImportScope {
   /** How the section is answered, which names the one kind of question it takes. */
   kind: SectionAnswerKind;
 }
+
+/** One section of a whole typed test, as a row naming it is judged. */
+export interface TestImportSection extends ImportScope {
+  id: string;
+  /** How many more drafts its typist can take: its count less those they hold. */
+  room: number;
+  /** Why it takes no rows — no typist, or theirs is done — or null when it does. */
+  closed: string | null;
+  /** The typist whose drafts its rows become. */
+  assignmentId: string | null;
+}
+
+/** A whole typed test: each row goes to the section its Section cell names, by name however typed. */
+export interface TestImportScope {
+  sections: ReadonlyMap<string, TestImportSection>;
+}
+
+type SheetScope = ImportScope | TestImportScope;
+
+const isTestScope = (scope: SheetScope | null): scope is TestImportScope =>
+  scope !== null && 'sections' in scope;
 
 /** No row corrected yet: the sheet speaks for every line. */
 const NO_EDITS: ReadonlyMap<number, QuestionDraft> = new Map();
@@ -86,17 +110,19 @@ export interface QuestionImportPlanning extends Omit<QuestionImportPlan, 'import
   rows: PlannedRow[];
 }
 
+const READ_COLUMNS = [...QUESTION_IMPORT_COLUMNS, QUESTION_IMPORT_SECTION_COLUMN];
+
 /** Column key -> the normalised header the parser will find it under. */
 const HEADER_BY_KEY = new Map<string, string>(
-  QUESTION_IMPORT_COLUMNS.map((column) => [column.key, normaliseHeader(column.header)]),
+  READ_COLUMNS.map((column) => [column.key, normaliseHeader(column.header)]),
 );
 
 const ALIASES_BY_KEY = new Map<string, readonly string[]>(
-  QUESTION_IMPORT_COLUMNS.map((column) => [column.key, column.aliases as readonly string[]]),
+  READ_COLUMNS.map((column) => [column.key, column.aliases as readonly string[]]),
 );
 
 const LABEL_BY_KEY = new Map<string, string>(
-  QUESTION_IMPORT_COLUMNS.map((column) => [column.key, column.header]),
+  READ_COLUMNS.map((column) => [column.key, column.header]),
 );
 
 /** What a candidate reads may carry a picture; a subject, a code or a typed answer is only ever text. */
@@ -185,7 +211,7 @@ export function planQuestionImport(
   dedup: ImportDedupContext,
   edits: ReadonlyMap<number, QuestionDraft> = NO_EDITS,
   leftOut: ReadonlySet<number> = NO_LINES,
-  scope: ImportScope | null = null,
+  scope: SheetScope | null = null,
 ): QuestionImportPlanning {
   const fileErrors = fileLevelErrors(table, scope);
   if (fileErrors.length > 0) {
@@ -200,16 +226,19 @@ export function planQuestionImport(
   const lineByHash = new Map<string, number>();
   const codesInFile = new Set<string>();
 
+  const taken = new Map<string, number>();
+
   const rows = table.rows.map((row) =>
     planRow(row, catalog, dedup, lineByHash, codesInFile, {
       edit: edits.get(row.line),
       leftOut: leftOut.has(row.line),
-      scope,
+      ...(isTestScope(scope) ? placeRow(row, scope, taken) : { scope }),
     }),
   );
 
   return {
     rows,
+    causes: causesOf(rows),
     summary: {
       total: rows.length,
       willCreate: rows.filter((row) => row.action === 'create').length,
@@ -221,7 +250,7 @@ export function planQuestionImport(
   };
 }
 
-function fileLevelErrors(table: CsvTable, scope: ImportScope | null): string[] {
+function fileLevelErrors(table: CsvTable, scope: SheetScope | null): string[] {
   const errors: string[] = [];
 
   if (table.rows.length === 0) {
@@ -229,16 +258,17 @@ function fileLevelErrors(table: CsvTable, scope: ImportScope | null): string[] {
     return errors;
   }
 
-  const most = scope ? SECTION_IMPORT_MAX_ROWS : QUESTION_IMPORT_MAX_ROWS;
+  const most = mostRowsFor(scope);
   if (table.rows.length > most) {
-    const where = scope ? ` into ${scope.sectionName}` : '';
+    const where = scope && !isTestScope(scope) ? ` into ${scope.sectionName}` : '';
     errors.push(
       `That file has ${table.rows.length} rows. Import at most ${most} at a time${where}.`,
     );
   }
 
   const headers = new Set(table.headers);
-  for (const column of QUESTION_IMPORT_COLUMNS) {
+  const columns = isTestScope(scope) ? READ_COLUMNS : QUESTION_IMPORT_COLUMNS;
+  for (const column of columns) {
     if (!column.required) continue;
     const header = normaliseHeader(column.header);
     const found = headers.has(header) || column.aliases.some((alias: string) => headers.has(alias));
@@ -248,15 +278,82 @@ function fileLevelErrors(table: CsvTable, scope: ImportScope | null): string[] {
   return errors;
 }
 
+/** The bank's hundred, a section's fifty, and a whole test fifty for each of its sections. */
+function mostRowsFor(scope: SheetScope | null): number {
+  if (scope === null) return QUESTION_IMPORT_MAX_ROWS;
+  if (isTestScope(scope)) return SECTION_IMPORT_MAX_ROWS * Math.max(scope.sections.size, 1);
+  return SECTION_IMPORT_MAX_ROWS;
+}
+
+/** Which section a whole-test row is for, and what keeps it out: a name that is not there, a section shut, or no room left. */
+function placeRow(
+  row: CsvRow,
+  test: TestImportScope,
+  taken: Map<string, number>,
+): Pick<RowJudgement, 'scope' | 'sectionName' | 'sectionIssue' | 'claimRoom' | 'assignmentId'> {
+  const sectionName = cellOf(row, QUESTION_IMPORT_SECTION_COLUMN.key);
+  const section = test.sections.get(lookupName(sectionName));
+  const refused = (code: ValidationIssue['code'], message: string): ValidationIssue => ({
+    code,
+    message,
+    column: QUESTION_IMPORT_SECTION_COLUMN.key,
+  });
+
+  if (!section) {
+    const message = blank(sectionName)
+      ? 'Name the section'
+      : `"${sectionName}" is not a section of this test`;
+    return { scope: null, sectionName, sectionIssue: refused(CODE.SECTION_UNKNOWN, message) };
+  }
+  if (section.closed) {
+    return {
+      scope: section,
+      sectionName,
+      sectionIssue: refused(CODE.SECTION_NOT_OPEN, section.closed),
+    };
+  }
+  return {
+    scope: section,
+    sectionName,
+    assignmentId: section.assignmentId,
+    claimRoom: () => {
+      const used = taken.get(section.id) ?? 0;
+      if (used >= section.room) {
+        return refused(
+          CODE.SECTION_FULL,
+          `Over ${section.sectionName}'s room of ${section.room} — not imported`,
+        );
+      }
+      taken.set(section.id, used + 1);
+      return null;
+    },
+  };
+}
+
+/** Each reason held against more than one row, once, with its count; most first. */
+function causesOf(rows: readonly PlannedRow[]): { message: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.action !== 'skip') continue;
+    for (const message of new Set(row.issues.map((issue) => issue.message))) {
+      counts.set(message, (counts.get(message) ?? 0) + 1);
+    }
+  }
+  return [...counts]
+    .filter(([, count]) => count > 1)
+    .map(([message, count]) => ({ message, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 function planRow(
   row: CsvRow,
   catalog: TaxonomyCatalog,
   dedup: ImportDedupContext,
   lineByHash: Map<string, number>,
   codesInFile: Set<string>,
-  { edit, leftOut, scope }: RowJudgement,
+  { edit, leftOut, scope, sectionName, sectionIssue, claimRoom, assignmentId }: RowJudgement,
 ): PlannedRow {
-  const issues: ValidationIssue[] = [];
+  const issues: ValidationIssue[] = sectionIssue ? [sectionIssue] : [];
   const warnings: ImportWarning[] = [];
   const { content, names, draft } = readRow(row, catalog, edit, issues, warnings);
 
@@ -281,9 +378,15 @@ function planRow(
 
   const reported = dedupeIssues(issues);
 
-  const action: QuestionImportAction = leftOut
+  let action: QuestionImportAction = leftOut
     ? 'left_out'
     : actionFor(reported.length > 0, duplicateOf);
+  // Room is spent only by a row that would really be written, so a skipped or repeated row frees it for the next.
+  const full = action === 'create' ? (claimRoom?.() ?? null) : null;
+  if (full) {
+    reported.push(full);
+    action = 'skip';
+  }
 
   // Only a row that will really be written claims its stem. A skipped row that held the hash would make the next good copy of the same question a duplicate of a line nothing was ever created from.
   if (stemHash && action === 'create') lineByHash.set(stemHash, row.line);
@@ -303,7 +406,9 @@ function planRow(
     questionCode: code ?? null,
     pictures: content.pictures,
     editable: draft,
+    assignmentId: assignmentId ?? null,
     edited: edit !== undefined,
+    ...(sectionName === undefined ? {} : { sectionName }),
   };
 }
 
@@ -385,6 +490,13 @@ interface RowJudgement {
   edit: QuestionDraft | undefined;
   leftOut: boolean;
   scope: ImportScope | null;
+  /** A whole-test row's section as its sheet names it. */
+  sectionName?: string;
+  /** Why a whole-test row cannot go into the section it names. */
+  sectionIssue?: ValidationIssue;
+  /** Takes one of the section's places for a row about to be written; the issue when none is left. */
+  claimRoom?: () => ValidationIssue | null;
+  assignmentId?: string | null;
 }
 
 /** A row filed under a subject the section it is going into does not take. */
@@ -709,10 +821,17 @@ export function withoutDrafts(
   return {
     importLogId,
     rows: planning.rows.map(
-      ({ draft: _draft, stemHash: _stemHash, pictures: _pictures, editable: _editable, ...row }) =>
-        row,
+      ({
+        draft: _draft,
+        stemHash: _stemHash,
+        pictures: _pictures,
+        editable: _editable,
+        assignmentId: _assignmentId,
+        ...row
+      }) => row,
     ),
     summary: planning.summary,
     fileErrors: planning.fileErrors,
+    ...(planning.causes ? { causes: planning.causes } : {}),
   };
 }
