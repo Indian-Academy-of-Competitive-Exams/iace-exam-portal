@@ -125,9 +125,10 @@ export function AssignStep({
   // The server refuses anybody else, so a box they cannot post from is not shown at all.
   const mayComment = useCallback(
     (row: SectionRow): boolean =>
-      (identity?.isSuperAdmin ?? false) ||
-      [row.typist, row.proofreader].some((held) => held?.assigneeId === identity?.id),
-    [identity],
+      (detail?.attemptCount ?? 0) === 0 &&
+      ((identity?.isSuperAdmin ?? false) ||
+        [row.typist, row.proofreader].some((held) => held?.assigneeId === identity?.id)),
+    [identity, detail?.attemptCount],
   );
 
   const held = useMemo(() => (paper.data ? heldBySection(paper.data) : null), [paper.data]);

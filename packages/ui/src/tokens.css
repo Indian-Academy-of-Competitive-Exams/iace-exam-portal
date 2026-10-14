@@ -237,9 +237,9 @@
   --info-ink: #1e40af;
 
   /* Disabled — v0.1's opacity:.5 dragged label text to ~2.3:1 (fails WCAG). */
-  --disabled-bg: var(--slate-100);
-  --disabled-fg: var(--slate-400);
-  --disabled-border: var(--slate-200);
+  --disabled-bg: var(--slate-200);
+  --disabled-fg: var(--slate-500);
+  --disabled-border: var(--slate-300);
 
   /* ==========================================================================
      6. CHARTS

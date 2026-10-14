@@ -177,11 +177,12 @@ export class SectionWorkService {
   /** A review write changes nothing `load` read, so an action answers from the context it checked. */
   private async workOf(context: Context): Promise<SectionWork> {
     const { pair } = context;
-    const [scoped, editingBy, canRelease, times] = await Promise.all([
+    const [scoped, editingBy, canRelease, times, sitting] = await Promise.all([
       this.scoped(context),
       sectionEditingBy(this.redis, this.prisma, pair),
       this.canRelease(context),
       this.timesOf(context),
+      this.prisma.attempt.findFirst({ where: { testId: pair.testId }, select: { id: true } }),
     ]);
     const history = context.rows.filter((row) => row.replacedAt !== null);
     return {
@@ -195,6 +196,7 @@ export class SectionWorkService {
       typingPreset: context.section.typingPreset as TypingPresetKey | null,
       answerKind: sectionAnswerKindOf(context.section),
       offered: context.test.finalizedAt !== null,
+      sat: sitting !== null,
       typist: context.typist,
       reader: context.reader,
       history,

@@ -19,6 +19,7 @@ type CommentRow = Prisma.SectionCommentGetPayload<{ include: typeof COMMENT_INCL
 
 const NOT_YOURS_TO_WRITE = 'Only this section’s typist and proof-reader can add to its thread.';
 const NOT_YOURS_TO_REWORD = 'You can only reword what you wrote yourself.';
+const SAT_THREAD_CLOSED = 'This test has been sat, so its thread takes no more comments.';
 
 /** Who asks to read a thread: the controller knows their grants, the service knows the section. */
 export interface ThreadReader {
@@ -134,6 +135,10 @@ export class SectionThreadService {
     authorId: string,
     isSuperAdmin: boolean,
   ): Promise<void> {
+    // Once a student has answered the paper, a comment can change nothing they were given.
+    const sat = await this.prisma.attempt.findFirst({ where: { testId }, select: { id: true } });
+    if (sat) throw new AppException(ErrorCodes.CONFLICT, SAT_THREAD_CLOSED);
+
     // Whoever the role has passed from still reads the thread, but writes nothing more to it.
     const assignments = await this.prisma.questionAssignment.findMany({
       where: { testId, baseConfigSectionId, replacedAt: null },

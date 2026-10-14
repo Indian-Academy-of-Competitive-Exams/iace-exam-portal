@@ -8,6 +8,8 @@ import {
   makeCatalog,
   makeQuestionBank,
   makeSection,
+  makeSitting,
+  makeStudent,
   makeTest,
   resetDatabase,
   testPrisma,
@@ -201,6 +203,30 @@ describe('SectionThreadService', () => {
       () => thread.comment(testId, uid(), { body: 'Into the void.', images: [] }, BOSS, true),
       refusedWith(ErrorCodes.NOT_FOUND),
     );
+  });
+});
+
+describe('SectionThreadService — a sat test', () => {
+  /** THE failure this prevents: a question argued over after students have already answered it. */
+  it('takes no new comment and no reword once a student has sat the test, super admin or not', async () => {
+    const { thread, testId, sectionId } = await aSection();
+    const said = await thread.comment(testId, sectionId, { body: 'Before.', images: [] }, READER);
+    const student = await makeStudent(prisma);
+    await makeSitting(prisma, { testId, studentId: student.id, score: 0 });
+
+    await assert.rejects(
+      () => thread.comment(testId, sectionId, { body: 'After.', images: [] }, READER),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await assert.rejects(
+      () => thread.comment(testId, sectionId, { body: 'After.', images: [] }, BOSS, true),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    await assert.rejects(
+      () => thread.editComment(testId, sectionId, said.id, { body: 'Reworded.' }, READER),
+      refusedWith(ErrorCodes.CONFLICT),
+    );
+    assert.equal((await thread.forSection(testId, sectionId, reader(READER))).length, 1);
   });
 });
 

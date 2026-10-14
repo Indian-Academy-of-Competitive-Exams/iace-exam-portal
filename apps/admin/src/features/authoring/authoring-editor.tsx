@@ -15,7 +15,7 @@ import {
   type QuestionDetail,
   type QuestionLanguage,
 } from '@iace/contracts';
-import { Button, LoadingState, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
+import { Button, LoadingState, Tooltip, TooltipContent, TooltipTrigger, cn } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { usePageTour } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
@@ -124,7 +124,12 @@ function Editor({ id }: Readonly<{ id: string | undefined }>) {
   // A question that was not read leaves the box blank on its id, and a save from there would overwrite it.
   const loaded = editingId === '' || editing.data !== undefined;
   const typing = canWrite && loaded;
-  const canSave = typing && issues.length === 0 && duplicate === null && !save.isPending;
+  const canSave =
+    typing &&
+    (editingId === '' || unsaved) &&
+    issues.length === 0 &&
+    duplicate === null &&
+    !save.isPending;
   const saveNow = () => {
     // The button reads issues that lag the last keystroke, so the save judges what it is about to send.
     if (issuesOf(draft, header).length === 0) save.mutate({ header, state });
@@ -175,7 +180,12 @@ function Editor({ id }: Readonly<{ id: string | undefined }>) {
       />
 
       <div data-tour={TOUR_TARGETS.AUTHORING_CARD} className="flex min-h-0 flex-1 bg-muted/40 p-4">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-surface shadow-sm',
+            unsaved ? 'border-warning' : 'border-border',
+          )}
+        >
           {loaded ? (
             <QuestionPanes
               questionId={editingId}

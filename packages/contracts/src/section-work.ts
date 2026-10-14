@@ -86,6 +86,8 @@ export const sectionWorkSchema = z.object({
   answerKind: sectionAnswerKindSchema,
   /** The test has been offered: its paper no longer moves, and nobody but a super admin edits. */
   offered: z.boolean(),
+  /** A student has sat the test: its thread is closed to every comment. */
+  sat: z.boolean(),
   typist: assignmentSchema.nullable(),
   reader: assignmentSchema.nullable(),
   /** Whoever held a role before it passed on, oldest first. */

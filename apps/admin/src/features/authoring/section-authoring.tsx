@@ -52,6 +52,7 @@ import {
   TruncatedText,
   cn,
   type BadgeProps,
+  toast,
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import {
@@ -327,7 +328,7 @@ function SectionWorkspace({
     <SectionThreadButton
       testId={testId}
       sectionId={sectionId}
-      canWrite={seated || Boolean(identity?.isSuperAdmin)}
+      canWrite={!work.sat && (seated || Boolean(identity?.isSuperAdmin))}
     />
   );
 
@@ -435,15 +436,17 @@ function EditingElsewhere({ name, blocked }: Readonly<{ name: string; blocked: b
   );
 }
 
-/** Where the section stands, in the words each seat reads it by — only when there is something to say. */
+/** Where the section stands, said once as a toast when it changes, so it takes no room from the editor. */
 function SectionState({ work }: Readonly<{ work: SectionWork }>) {
   const state = contextOf(work);
-  if (!state) return null;
-  return (
-    <div className="flex flex-none flex-col gap-2 border-b border-border bg-surface px-4 py-2">
-      <Alert variant={state.variant}>{state.text}</Alert>
-    </div>
-  );
+  const text = state?.text;
+  const success = state?.variant === 'success';
+  useEffect(() => {
+    if (!text) return;
+    if (success) toast.success(text);
+    else toast.info(text);
+  }, [text, success]);
+  return null;
 }
 
 /** Who else holds this section right now, by name; nobody when it is free or the viewer's own. */

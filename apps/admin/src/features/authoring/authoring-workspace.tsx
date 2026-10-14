@@ -307,8 +307,9 @@ export function AuthoringWorkspace({
   const resting = restingCard(atRest, shown !== null, active);
   useEffect(() => onResting?.(resting, dirty), [resting, dirty, onResting]);
   useUnsavedPrompt(unsaved > 0);
+  // An editable card with nothing changed has nothing to save; moving on is the palette's or the scroll's.
   const canSave =
-    !editable || !dirty || (issues.length === 0 && duplicate === null && !save.isPending);
+    !editable || (dirty && issues.length === 0 && duplicate === null && !save.isPending);
 
   const saveAndNext = () => {
     const held = edits[active];
@@ -385,7 +386,12 @@ export function AuthoringWorkspace({
                 aria-label={key === NEW_CARD ? 'New question' : `Question ${index + 1}`}
                 className="flex h-full snap-start p-4"
               >
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+                <div
+                  className={cn(
+                    'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-surface shadow-sm',
+                    key in edits ? 'border-warning' : 'border-border',
+                  )}
+                >
                   {Math.abs(index - Math.max(activeIndex, 0)) <= LIVE_AROUND ? (
                     <>
                       {card?.notice}
