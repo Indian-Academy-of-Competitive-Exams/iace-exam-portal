@@ -390,7 +390,7 @@ function SittingFoot({
                 </Button>
               )}
               <Button
-                variant="ghost"
+                variant="secondary"
                 icon={Eraser}
                 disabled={off || answersByKeyboard(view.question)}
                 onPress={view.clearResponse}
