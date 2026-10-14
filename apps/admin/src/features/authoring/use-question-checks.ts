@@ -72,15 +72,14 @@ export function useIssues(draft: QuestionDraft | null, header: AuthoringHeader |
 
 /** The rules the save and the sheet are judged by, debounced so the panel settles as you type. */
 export function useChecked(
-  draft: QuestionDraft | null,
-  header: AuthoringHeader | undefined,
-  state: AuthoringState | undefined,
+  draft: QuestionDraft,
+  header: AuthoringHeader,
+  state: AuthoringState,
   duplicate: string | null,
 ) {
   const issues = useIssues(draft, header);
 
   const checks = useMemo(() => {
-    if (!state) return [];
     const missing = LANGUAGE_ORDER.filter(
       (code) => code !== DEFAULT_LANGUAGE && !hasText(state.content[code].stem),
     );

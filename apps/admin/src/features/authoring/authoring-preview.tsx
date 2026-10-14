@@ -1,4 +1,5 @@
-import { Check, CircleAlert, CircleDot, Circle, TriangleAlert } from 'lucide-react';
+import { useState } from 'react';
+import { Check, ChevronUp, CircleAlert, CircleDot, Circle, TriangleAlert } from 'lucide-react';
 import { QUESTION_TYPE, hasText, previewTextOf, type QuestionLanguage } from '@iace/contracts';
 import { Badge, RichContent, cn } from '@iace/ui';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
@@ -127,3 +128,36 @@ export function ChecksList({ checks }: Readonly<{ checks: readonly Check[] }>) {
     </ul>
   );
 }
+
+/** The foot of the preview pane: badges say whether it can be saved, and the list unfolds upward. */
+export function ValidationFooter({ checks }: Readonly<{ checks: readonly Check[] }>) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-none flex-col border-t border-border bg-surface">
+      {open ? (
+        <div
+          id={VALIDATION_PANEL}
+          className="relative max-h-64 overflow-y-auto border-b border-border px-4 py-3"
+        >
+          <ChecksList checks={checks} />
+        </div>
+      ) : null}
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={VALIDATION_PANEL}
+        onClick={() => setOpen((was) => !was)}
+        className="flex min-h-10 items-center gap-2 px-4 text-sm font-semibold hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none"
+      >
+        <ChevronUp
+          className={cn('size-4 text-muted-foreground transition-transform', open && 'rotate-180')}
+          aria-hidden
+        />
+        <span className="flex-1 text-left">Validation</span>
+        <ChecksStatus checks={checks} />
+      </button>
+    </div>
+  );
+}
+
+const VALIDATION_PANEL = 'authoring-validation';

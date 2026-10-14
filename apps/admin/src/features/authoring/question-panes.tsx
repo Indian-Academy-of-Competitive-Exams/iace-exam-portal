@@ -18,7 +18,7 @@ import {
 import { ScaffoldEditor, type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { uploadQuestionImage } from '../../lib/upload-question-image';
 import { openCandidateView } from './candidate-view-store';
-import { AuthoringPreview } from './authoring-preview';
+import { AuthoringPreview, ValidationFooter, type Check } from './authoring-preview';
 import { REGION_KEYS, SCRIPT_OF, regionsFor, type AuthoringState } from './question-scaffold';
 
 const IMAGE_LIMITS = {
@@ -37,6 +37,7 @@ export function QuestionPanes({
   romanised,
   canSave,
   boxVersion,
+  checks,
   onRegions,
   onCycleLanguage,
   onLanguageChange,
@@ -51,6 +52,7 @@ export function QuestionPanes({
   romanised: boolean;
   canSave: boolean;
   boxVersion: number;
+  checks: readonly Check[];
   onRegions: (regions: ScaffoldRegion[]) => void;
   onCycleLanguage: () => void;
   onLanguageChange: (next: QuestionLanguage) => void;
@@ -136,6 +138,7 @@ export function QuestionPanes({
         <div className={cn(SCROLLS, 'gap-4 p-4')}>
           <AuthoringPreview state={state} language={language} />
         </div>
+        <ValidationFooter checks={checks} />
       </section>
     </div>
   );

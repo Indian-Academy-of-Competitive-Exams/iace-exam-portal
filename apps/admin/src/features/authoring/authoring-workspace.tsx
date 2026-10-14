@@ -28,7 +28,7 @@ import {
   type AuthoringState,
 } from './question-scaffold';
 import { useUnsavedPrompt } from './use-unsaved-prompt';
-import { issuesOf, useChecked, useDuplicate } from './use-question-checks';
+import { issuesOf, useChecked, useDuplicate, useIssues } from './use-question-checks';
 
 /** What the box says. Held as an edit only while it differs from the saved one: that is what "unsaved" means. */
 export interface Held {
@@ -301,7 +301,7 @@ export function AuthoringWorkspace({
   const codeError = codeErrorOf(save.error);
   const draft = useMemo(() => (shown ? toDraft(shown.state, shown.header) : null), [shown]);
   const duplicate = useDuplicate(source.checkDuplicates ? draft : null, isNew ? '' : active);
-  const { issues, checks } = useChecked(draft, shown?.header, shown?.state, duplicate);
+  const issues = useIssues(draft, shown?.header);
   const dirty = active in edits;
   const unsaved = Object.keys(edits).length;
   useEffect(() => onUnsavedChange?.(unsaved), [unsaved, onUnsavedChange]);
@@ -408,6 +408,7 @@ export function AuthoringWorkspace({
                         actions={card?.actions}
                         view={views[key] ?? FIRST_VIEW}
                         romanised={romanised}
+                        duplicate={key === active ? duplicate : null}
                         onEdit={(change) => edit(key, change)}
                         onView={(change) => view(key, change)}
                         onSave={saveAndNext}
@@ -435,7 +436,6 @@ export function AuthoringWorkspace({
 
       <Legend
         questions
-        checks={shown ? checks : undefined}
         actions={
           <>
             {extraActions}
@@ -562,6 +562,7 @@ function CardBody({
   actions,
   view,
   romanised,
+  duplicate,
   onEdit,
   onView,
   onSave,
@@ -575,6 +576,7 @@ function CardBody({
   actions: React.ReactNode;
   view: View;
   romanised: boolean;
+  duplicate: string | null;
   onEdit: (change: (current: Held) => Held) => void;
   onView: (change: (current: View) => View) => void;
   onSave: () => void;
@@ -607,6 +609,7 @@ function CardBody({
       actions={actions}
       view={view}
       romanised={romanised}
+      duplicate={duplicate}
       onEdit={onEdit}
       onView={onView}
       onSave={onSave}
@@ -623,6 +626,7 @@ function EditBody({
   actions,
   view,
   romanised,
+  duplicate,
   onEdit,
   onView,
   onSave,
@@ -634,10 +638,13 @@ function EditBody({
   actions: React.ReactNode;
   view: View;
   romanised: boolean;
+  duplicate: string | null;
   onEdit: (change: (current: Held) => Held) => void;
   onView: (change: (current: View) => View) => void;
   onSave: () => void;
 }>) {
+  const draft = useMemo(() => toDraft(shown.state, shown.header), [shown]);
+  const { checks } = useChecked(draft, shown.header, shown.state, duplicate);
   const switchTo = (language: QuestionLanguage) =>
     onView((current) => ({ language, box: current.box + 1 }));
 
@@ -652,6 +659,7 @@ function EditBody({
       canSave={!readOnly}
       readOnly={readOnly}
       boxVersion={view.box}
+      checks={checks}
       onRegions={(regions: ScaffoldRegion[]) =>
         onEdit((current) => ({
           ...current,
