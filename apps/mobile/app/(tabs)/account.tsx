@@ -9,6 +9,7 @@ import { ActiveDevices } from '../../src/components/account/active-devices';
 import { Badge } from '../../src/components/ui/badge';
 import { Button } from '../../src/components/ui/button';
 import { Card } from '../../src/components/ui/card';
+import { ChipRow } from '../../src/components/ui/chip-row';
 import { ConfirmDialog } from '../../src/components/ui/confirm-dialog';
 import { api } from '../../src/lib/api';
 import { ACCOUNT_ROUTES } from '../../src/lib/nav';
@@ -16,6 +17,7 @@ import { dropPushDevice } from '../../src/lib/push-device';
 import { UNREAD_QUERY_KEY } from '../../src/lib/constants';
 import { useTokenColor } from '../../src/lib/use-token-color';
 import { cn } from '../../src/lib/cn';
+import { chooseTheme, savedTheme, THEMES, type Theme } from '../../src/lib/theme';
 import { useAuth } from '../../src/providers/auth';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
@@ -26,6 +28,7 @@ export default function AccountScreen() {
   const [confirming, setConfirming] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const chevron = useTokenColor('--muted-foreground');
+  const [theme, setTheme] = useState(savedTheme);
 
   const unread = useQuery({
     queryKey: UNREAD_QUERY_KEY,
@@ -60,6 +63,19 @@ export default function AccountScreen() {
         ))}
       </Card>
 
+      <Card className="p-4">
+        <ChipRow
+          label="Appearance"
+          options={THEME_OPTIONS}
+          value={theme}
+          onChange={(value) => {
+            const next = value as Theme;
+            setTheme(next);
+            chooseTheme(next);
+          }}
+        />
+      </Card>
+
       <ActiveDevices />
 
       <Button variant="outline" onPress={() => setConfirming(true)}>
@@ -83,6 +99,12 @@ export default function AccountScreen() {
     </ScrollView>
   );
 }
+
+const THEME_OPTIONS = [
+  { value: THEMES.SYSTEM, label: 'System' },
+  { value: THEMES.LIGHT, label: 'Light' },
+  { value: THEMES.DARK, label: 'Dark' },
+];
 
 function MenuRow({
   label,

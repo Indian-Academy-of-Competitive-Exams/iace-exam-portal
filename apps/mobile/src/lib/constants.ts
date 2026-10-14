@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   QUEUED_ANSWERS: 'iace.mobile.queued',
   /** Which page tours this install has been shown; one key holding the set, so a tour added later needs no migration. */
   TOURS: 'iace.mobile.tours',
+  THEME: 'iace.mobile.theme',
 } as const;
 
 /** The keys both student clients cache under, defined once so the two never disagree. */

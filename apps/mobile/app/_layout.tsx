@@ -14,9 +14,11 @@ import { AuthProvider, useAuth } from '../src/providers/auth';
 import { useTokenColor } from '../src/lib/use-token-color';
 import { usePushDevice } from '../src/lib/use-push-device';
 import { TourProvider } from '../src/lib/page-tour';
+import { applyTheme, savedTheme } from '../src/lib/theme';
 import '../global.css';
 
 void SplashScreen.preventAutoHideAsync();
+applyTheme(savedTheme());
 
 // Reported by the button and by the dismissal: Android sends one or the other, never both.
 const raiseAlert = alertOnce((message, onDismiss) =>
