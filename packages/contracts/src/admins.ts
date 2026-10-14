@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { csvIdQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 
 // ============================================================================
@@ -163,6 +164,8 @@ export const adminSchema = z.object({
 export type Admin = z.infer<typeof adminSchema>;
 
 export const adminListQuerySchema = paginationQuerySchema.extend({
+  /** Only these rows: how a picker names a chosen value it has not loaded a page of. */
+  id: csvIdQuery(),
   q: z
     .string()
     .trim()

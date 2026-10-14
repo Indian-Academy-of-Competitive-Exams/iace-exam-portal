@@ -58,6 +58,7 @@ export class ExamsService {
       ]),
       ...(query.course ? { course: { in: query.course } } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),
+      ...(query.id ? { id: { in: query.id } } : {}),
     };
 
     const [rows, total] = await this.prisma.$transaction([

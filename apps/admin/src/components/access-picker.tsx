@@ -9,7 +9,7 @@ import {
   seriesPickerQueryKey,
   studentPickerQueryKey,
 } from '../lib/constants';
-import { type MultiPickerProps, type PickerProps } from './picker-props';
+import { itemsOf, namesOf, type MultiPickerProps, type PickerProps } from './picker-props';
 
 /** A program is picked by its CODE: a student row and a series both store that string with no FK. */
 
@@ -41,18 +41,22 @@ export function EventPicker(props: Readonly<PickerProps>) {
   const events = usePagedPicker({
     queryKey: eventPickerQueryKey(),
     fetchPage: (params) => api.admin.events.list({ ...params, activeOnly: 'true' }),
+    chosen: [props.value],
   });
+
+  const { items, chosen } = itemsOf(events, (event) => ({
+    value: event.id,
+    label: event.name,
+    hint: plural(event.candidateCount, 'candidate'),
+  }));
 
   return (
     <Combobox
       {...props}
+      selectedLabel={props.selectedLabel ?? namesOf(chosen)[props.value]}
       {...events.paging}
       placeholder={props.placeholder ?? 'Any event'}
-      items={events.items.map((event) => ({
-        value: event.id,
-        label: event.name,
-        hint: plural(event.candidateCount, 'candidate'),
-      }))}
+      items={items}
       searchPlaceholder="Search events"
       emptyLabel="No event matches that"
     />
@@ -155,15 +159,19 @@ export function EventMultiPicker({
   const events = usePagedPicker({
     queryKey: eventFilterQueryKey(),
     fetchPage: (params) => api.admin.events.list(params),
+    chosen: props.value,
   });
+
+  const { items, chosen } = itemsOf(events, (event) => ({ value: event.id, label: event.name }));
 
   return (
     <MultiCombobox
       {...props}
+      selectedLabels={{ ...namesOf(chosen), ...props.selectedLabels }}
       {...events.paging}
       chips={false}
       placeholder={placeholder}
-      items={events.items.map((event) => ({ value: event.id, label: event.name }))}
+      items={items}
       searchPlaceholder="Search events"
       emptyLabel="No event matches that"
     />

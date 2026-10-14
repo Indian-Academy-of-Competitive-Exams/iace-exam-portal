@@ -129,3 +129,23 @@ describe('TaxonomyService.updateSubject', () => {
     assert.equal(saved.name, 'QUANTITATIVE APTITUDE');
   });
 });
+
+describe('TaxonomyService.listSubjects', () => {
+  /** How a picker names a subject read from the URL that no loaded page holds. */
+  it('lists only the subjects asked for by id', async () => {
+    const [wanted, other] = [await makeSubject(prisma), await makeSubject(prisma)];
+
+    const page = await taxonomy.listSubjects({
+      page: 1,
+      pageSize: 20,
+      q: undefined,
+      id: [wanted.id],
+    });
+
+    assert.deepEqual(
+      page.items.map((row) => row.id),
+      [wanted.id],
+    );
+    assert.notEqual(wanted.id, other.id);
+  });
+});

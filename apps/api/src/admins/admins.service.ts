@@ -116,6 +116,7 @@ export class AdminsService {
   async list(query: AdminListQuery): Promise<Paginated<AdminDto>> {
     const where = {
       ...(query.activeOnly === undefined ? {} : { isActive: query.activeOnly }),
+      ...(query.id ? { id: { in: query.id } } : {}),
       ...everyTermMatches<Prisma.AdminWhereInput>(query.q, (term) => [
         { email: { contains: term, mode: 'insensitive' } },
         { fullName: { contains: term, mode: 'insensitive' } },

@@ -4,7 +4,7 @@ import { usePagedPicker } from '@iace/app-kit';
 import { Combobox } from '@iace/ui';
 import { api } from '../../lib/api';
 import { assignmentSectionFilterQueryKey, assignmentTestFilterQueryKey } from '../../lib/constants';
-import { type PickerProps } from '../../components/picker-props';
+import { itemsOf, namesOf, type PickerProps } from '../../components/picker-props';
 
 /** Test -> section, the pair an assignment keys on: the tests page and search, the sections do not. */
 
@@ -28,17 +28,21 @@ export function AssignmentTestPicker({
   const tests = usePagedPicker({
     queryKey: assignmentTestFilterQueryKey(scopeKey(scope)),
     fetchPage: (params) => api.admin.assignments.tests({ ...params, ...asQuery(scope) }),
+    chosen: [props.value],
   });
+
+  const { items, chosen } = itemsOf(tests, (test) => ({
+    value: test.id,
+    label: test.title ?? 'Untitled test',
+  }));
 
   return (
     <Combobox
       {...props}
+      selectedLabel={props.selectedLabel ?? namesOf(chosen)[props.value]}
       {...tests.paging}
       placeholder={props.placeholder ?? 'Any test'}
-      items={tests.items.map((test) => ({
-        value: test.id,
-        label: test.title ?? 'Untitled test',
-      }))}
+      items={items}
       searchPlaceholder="Search tests"
       emptyLabel="No test matches that"
     />

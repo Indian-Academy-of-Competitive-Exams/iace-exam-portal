@@ -282,12 +282,16 @@ export type UpdateTopicBody = z.infer<typeof updateTopicSchema>;
 
 export const subjectListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
+  /** Only these rows: how a picker names a chosen value it has not loaded a page of. */
+  id: csvIdQuery(),
 });
 export type SubjectListQuery = z.infer<typeof subjectListQuerySchema>;
 export type SubjectListQueryInput = z.input<typeof subjectListQuerySchema>;
 
 export const topicListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
+  /** Only these rows: how a picker names a chosen value it has not loaded a page of. */
+  id: csvIdQuery(),
   /** Several, because the questions screen narrows topics by every subject it is filtering on. */
   subjectId: csvIdQuery(),
 });

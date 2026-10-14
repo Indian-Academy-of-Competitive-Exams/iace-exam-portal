@@ -246,6 +246,8 @@ const assignmentScopeShape = {
 
 export const assignmentTestsQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
+  /** Only these rows: how a picker names a chosen value it has not loaded a page of. */
+  id: csvIdQuery(),
   ...assignmentScopeShape,
 });
 export type AssignmentTestsQuery = z.infer<typeof assignmentTestsQuerySchema>;

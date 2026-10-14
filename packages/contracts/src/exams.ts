@@ -113,6 +113,8 @@ export function examsInCourses<T extends { code: string; course: ExamCourse }>(
 
 export const examListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
+  /** Only these rows: how a picker names a chosen value it has not loaded a page of. */
+  id: csvIdQuery(),
   course: csvQuery(examCourseSchema),
   /** Pickers offer active exams only; the admin screen shows all. */
   activeOnly: optionalBooleanQuery(),
@@ -205,6 +207,8 @@ export type ExamStage = z.infer<typeof examStageSchema>;
 
 export const examStageListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
+  /** Only these rows: how a picker names a chosen value it has not loaded a page of. */
+  id: csvIdQuery(),
   /** Several, because a screen filtering on several exams narrows its stage list by all of them. */
   examId: csvIdQuery(),
   course: examCourseSchema.optional(),

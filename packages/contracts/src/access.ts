@@ -112,6 +112,8 @@ export type UpdateEventBody = z.infer<typeof updateEventSchema>;
 
 export const eventListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
+  /** Only these rows: how a picker names a chosen value it has not loaded a page of. */
+  id: csvIdQuery(),
   activeOnly: optionalBooleanQuery(),
 });
 export type EventListQuery = z.infer<typeof eventListQuerySchema>;

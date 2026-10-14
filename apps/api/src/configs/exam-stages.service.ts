@@ -65,6 +65,7 @@ export class ExamStagesService {
       ...(query.course ? { exam: { course: query.course } } : {}),
       ...(query.disposition ? { disposition: query.disposition } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),
+      ...(query.id ? { id: { in: query.id } } : {}),
     };
 
     const [rows, total] = await this.prisma.$transaction([

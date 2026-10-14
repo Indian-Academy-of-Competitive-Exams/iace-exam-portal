@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useInfiniteQuery, type QueryKey } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, type QueryKey } from '@tanstack/react-query';
 import { PAGE_SIZE_MAX, type Paginated } from '@iace/contracts';
 
 /** Whether there is another page, and which; counts what has been LOADED, so a short page ends the list rather than starting an empty one. */
@@ -112,6 +112,8 @@ export interface PickerPageParams {
   page: number;
   pageSize: number;
   q: string;
+  /** Only these rows, when the picker is naming chosen values it has not loaded. */
+  id?: string[];
   /** Aborted when the search moves on, so a stale page is cancelled rather than downloaded. */
   signal?: AbortSignal;
 }
@@ -121,6 +123,8 @@ export function usePagedPicker<T>(options: {
   queryKey: QueryKey;
   fetchPage: (params: PickerPageParams) => Promise<Paginated<T>>;
   enabled?: boolean;
+  /** The values chosen now; any not in a loaded page is fetched by id, so the control can name it. */
+  chosen?: readonly string[];
 }) {
   const [search, setSearch] = useState('');
   const pages = useInfinitePages({
@@ -130,8 +134,23 @@ export function usePagedPicker<T>(options: {
     enabled: options.enabled,
   });
 
+  const unloaded = (options.chosen ?? [])
+    .filter((value) => value !== '' && !pages.items.some((row) => idOf(row) === value))
+    .sort((a, b) => a.localeCompare(b));
+  const named = useQuery({
+    queryKey: [...options.queryKey, 'chosen', unloaded],
+    queryFn: ({ signal }) =>
+      options.fetchPage({ page: 1, pageSize: PAGE_SIZE_MAX, q: '', id: unloaded, signal }),
+    // After the first page, which usually holds them: asking sooner fetches every choice twice.
+    enabled: unloaded.length > 0 && !pages.isLoading,
+    // A row's name does not move while it is chosen, so it is asked for once.
+    staleTime: Infinity,
+  });
+
   return {
     items: pages.items,
+    /** The chosen rows no loaded page holds, read by id; empty until they arrive. */
+    chosen: named.data?.items ?? [],
     paging: {
       search,
       onSearchChange: setSearch,

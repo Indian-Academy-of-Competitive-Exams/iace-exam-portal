@@ -66,9 +66,12 @@ export class TaxonomyService {
   // ==========================================================================
 
   async listSubjects(query: SubjectListQuery): Promise<Paginated<Subject>> {
-    const where = everyTermMatches<Prisma.SubjectWhereInput>(query.q, (term) => [
-      { name: { contains: term, mode: 'insensitive' } },
-    ]);
+    const where: Prisma.SubjectWhereInput = {
+      ...everyTermMatches<Prisma.SubjectWhereInput>(query.q, (term) => [
+        { name: { contains: term, mode: 'insensitive' } },
+      ]),
+      ...(query.id ? { id: { in: query.id } } : {}),
+    };
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.subject.findMany({
@@ -198,6 +201,7 @@ export class TaxonomyService {
         { name: { contains: term, mode: 'insensitive' } },
       ]),
       ...(query.subjectId ? { subjectId: { in: query.subjectId } } : {}),
+      ...(query.id ? { id: { in: query.id } } : {}),
     };
 
     const [rows, total] = await this.prisma.$transaction([

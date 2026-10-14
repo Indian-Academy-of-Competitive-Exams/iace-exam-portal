@@ -65,4 +65,34 @@ describe('usePagedPicker', () => {
     await waitFor(() => assert.deepEqual(result.current.items, ['ssc']));
     assert.equal(result.current.paging.isError, false);
   });
+
+  /** THE failure this prevents: a value read from the URL, on no loaded page, shown as its raw id. */
+  it('fetches a chosen value no loaded page holds, by id, and leaves a loaded one alone', async () => {
+    const rows = [
+      { id: 'sub_1', name: 'Reasoning' },
+      { id: 'sub_9', name: 'Quant' },
+    ];
+    const asked: PickerPageParams[] = [];
+    const { result } = renderHook(
+      () =>
+        usePagedPicker({
+          queryKey: ['subjects'],
+          chosen: ['sub_1', 'sub_9'],
+          fetchPage: (params) => {
+            asked.push(params);
+            const items = params.id
+              ? rows.filter((row) => params.id?.includes(row.id))
+              : [rows[0]!];
+            return Promise.resolve({ items, total: items.length, page: 1, pageSize: 100 });
+          },
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => assert.deepEqual(result.current.chosen, [rows[1]]));
+    assert.deepEqual(
+      asked.filter((params) => params.id).map((params) => params.id),
+      [['sub_9']],
+    );
+  });
 });

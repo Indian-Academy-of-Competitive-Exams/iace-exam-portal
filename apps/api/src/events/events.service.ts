@@ -43,6 +43,7 @@ export class EventsService {
         { description: { contains: term, mode: 'insensitive' } },
       ]),
       ...(query.activeOnly ? { isActive: true } : {}),
+      ...(query.id ? { id: { in: query.id } } : {}),
     };
 
     const [rows, total] = await this.prisma.$transaction([

@@ -680,6 +680,7 @@ export class AssignmentsService {
       ...everyTermMatches<Prisma.TestWhereInput>(query.q, (term) => [
         { title: { contains: term, mode: 'insensitive' } },
       ]),
+      ...(query.id ? { id: { in: query.id } } : {}),
     };
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.test.findMany({

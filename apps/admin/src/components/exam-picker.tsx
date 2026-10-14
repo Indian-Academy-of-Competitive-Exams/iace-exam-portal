@@ -7,7 +7,7 @@ import {
   examStageFilterQueryKey,
   examStagePickerQueryKey,
 } from '../lib/constants';
-import { type MultiPickerProps, type PickerProps } from './picker-props';
+import { itemsOf, namesOf, type MultiPickerProps, type PickerProps } from './picker-props';
 
 // Exam code is the label — it's what an enrolment stores, so a stage is qualified by it since "Tier 1" alone names several papers.
 
@@ -16,14 +16,22 @@ export function ExamPicker(props: Readonly<PickerProps>) {
   const exams = usePagedPicker({
     queryKey: examPickerQueryKey(),
     fetchPage: (params) => api.admin.exams.list({ ...params, activeOnly: 'true' }),
+    chosen: [props.value],
   });
+
+  const { items, chosen } = itemsOf(exams, (exam) => ({
+    value: exam.id,
+    label: exam.code,
+    hint: exam.name,
+  }));
 
   return (
     <Combobox
       {...props}
+      selectedLabel={props.selectedLabel ?? namesOf(chosen)[props.value]}
       {...exams.paging}
       placeholder={props.placeholder ?? 'All exams'}
-      items={exams.items.map((exam) => ({ value: exam.id, label: exam.code, hint: exam.name }))}
+      items={items}
       searchPlaceholder="Search exams"
       emptyLabel="No exam matches that"
     />
@@ -47,18 +55,22 @@ export function ExamStagePicker({
     queryKey: examStagePickerQueryKey(examId ?? ''),
     fetchPage: (params) =>
       api.admin.examStages.list({ ...params, examId: examId || undefined, activeOnly: 'true' }),
+    chosen: [props.value],
   });
+
+  const { items, chosen } = itemsOf(stages, (stage) => ({
+    value: stage.id,
+    label: `${stage.exam.code} / ${stage.name}`,
+    hint: stage.stageKey,
+  }));
 
   return (
     <Combobox
       {...props}
+      selectedLabel={props.selectedLabel ?? namesOf(chosen)[props.value]}
       {...stages.paging}
       placeholder={props.placeholder ?? 'All stages'}
-      items={stages.items.map((stage) => ({
-        value: stage.id,
-        label: `${stage.exam.code} / ${stage.name}`,
-        hint: stage.stageKey,
-      }))}
+      items={items}
       onChange={(value) => {
         const stage = stages.items.find((candidate) => candidate.id === value);
         onPick?.(stage ? { examCode: stage.exam.code, stageName: stage.name } : null);
@@ -75,15 +87,23 @@ export function ExamMultiPicker(props: Readonly<MultiPickerProps>) {
   const exams = usePagedPicker({
     queryKey: examFilterQueryKey(),
     fetchPage: (params) => api.admin.exams.list(params),
+    chosen: props.value,
   });
+
+  const { items, chosen } = itemsOf(exams, (exam) => ({
+    value: exam.id,
+    label: exam.code,
+    hint: exam.name,
+  }));
 
   return (
     <MultiCombobox
       {...props}
+      selectedLabels={{ ...namesOf(chosen), ...props.selectedLabels }}
       {...exams.paging}
       chips={false}
       placeholder={props.placeholder ?? 'All exams'}
-      items={exams.items.map((exam) => ({ value: exam.id, label: exam.code, hint: exam.name }))}
+      items={items}
       searchPlaceholder="Search exams"
       emptyLabel="No exam matches that"
     />
@@ -98,19 +118,23 @@ export function ExamStageMultiPicker({
   const stages = usePagedPicker({
     queryKey: examStageFilterQueryKey([...examIds].join(',')),
     fetchPage: (params) => api.admin.examStages.list({ ...params, examId: [...examIds] }),
+    chosen: props.value,
   });
+
+  const { items, chosen } = itemsOf(stages, (stage) => ({
+    value: stage.id,
+    label: `${stage.exam.code} / ${stage.name}`,
+    hint: stage.stageKey,
+  }));
 
   return (
     <MultiCombobox
       {...props}
+      selectedLabels={{ ...namesOf(chosen), ...props.selectedLabels }}
       {...stages.paging}
       chips={false}
       placeholder={props.placeholder ?? 'All stages'}
-      items={stages.items.map((stage) => ({
-        value: stage.id,
-        label: `${stage.exam.code} / ${stage.name}`,
-        hint: stage.stageKey,
-      }))}
+      items={items}
       searchPlaceholder="Search stages"
       emptyLabel="No stage matches that"
     />
