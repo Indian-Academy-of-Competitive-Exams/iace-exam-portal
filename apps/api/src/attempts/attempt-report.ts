@@ -7,9 +7,12 @@ import {
   round2,
   type AttemptSectionScore,
   type AttemptStatus,
+  type ScoreCardQuestion,
   type ScoreCardSection,
 } from '@iace/contracts';
 import { MS_PER_SECOND } from '../common/time/units';
+
+export const NOT_YOURS = 'No such sitting';
 
 /** Why a sitting that is not marked has no result to read: set aside for good, or only not marked yet. */
 export function noResultFor(status: AttemptStatus, notMarkedYet: string): AppException {
@@ -83,3 +86,41 @@ export function sectionsWithScores(
 /** Nothing counted is not a zero: an average over no sittings is a dash, never a nought. */
 export const perSitting = (total: number, sittings: number): number | null =>
   sittings === 0 ? null : round2(total / sittings);
+
+export function toScoreCardQuestion(
+  row: Omit<ScoreCardQuestion, 'marks' | 'negativeMarks' | 'disposition'> & {
+    marks: Prisma.Decimal;
+    negativeMarks: Prisma.Decimal;
+    status: ScoreCardQuestion['disposition'];
+  },
+): ScoreCardQuestion {
+  return {
+    questionId: row.questionId,
+    order: row.order,
+    baseConfigSectionId: row.baseConfigSectionId,
+    state: row.state,
+    selectedOptionId: row.selectedOptionId,
+    typedAnswer: row.typedAnswer,
+    isCorrect: row.isCorrect,
+    marksAwarded: row.marksAwarded,
+    marks: Number(row.marks),
+    negativeMarks: Number(row.negativeMarks),
+    disposition: row.status,
+    timeSpentSec: row.timeSpentSec,
+  };
+}
+
+/** Which refusal an unreadable sitting is: not theirs, or theirs and not marked. Asked only once the cheap read has failed. */
+export async function refuseUnreadable(
+  db: Prisma.TransactionClient,
+  studentId: string,
+  attemptId: string,
+  notMarkedYet: string,
+): Promise<never> {
+  const theirs = await db.attempt.findFirst({
+    where: { id: attemptId, studentId },
+    select: { status: true },
+  });
+  if (theirs === null) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+  throw noResultFor(theirs.status, notMarkedYet);
+}

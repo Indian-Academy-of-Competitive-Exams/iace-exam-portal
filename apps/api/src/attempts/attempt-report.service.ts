@@ -15,7 +15,6 @@ import {
   type PerformancePoint,
   type PerformanceTrend,
   type SatSitting,
-  type ScoreCardQuestion,
   type SolutionQuestion,
   type SolutionReport,
   type SolutionsQuery,
@@ -36,10 +35,8 @@ import { imageUrlsIn } from './exam-images';
 import { htmlOfQuestion, narrowTo, servedQuestion } from './exam-content';
 import { PaperSheetService, type SolutionPaperRow } from './paper-sheet.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import { noResultFor, percentageOf } from './attempt-report';
+import { NOT_YOURS, noResultFor, percentageOf, toScoreCardQuestion } from './attempt-report';
 import { answerKeyIn, optionsIn, scopeRefOf } from '../common/prisma-json';
-
-const NOT_YOURS = 'No such sitting';
 
 /** How many sittings a trend line carries. Beyond this a chart is a smear, not a trend. */
 const TREND_LENGTH = 20;
@@ -133,8 +130,7 @@ export class AttemptReportService {
     return new Map(rows.map((row) => [row.testId, round(Number(row._sum.marks ?? 0))]));
   }
 
-  /** Read off what was typed, so it is ready with the marks and not at the solution gate: a passage is no key. */
-  async typing(studentId: string, attemptId: string): Promise<TypingSitting[]> {
+  private async reviewable(studentId: string, attemptId: string) {
     const attempt = await this.prisma.attempt.findFirst({
       where: { id: attemptId, studentId },
       select: SOLUTION_SELECT,
@@ -143,6 +139,12 @@ export class AttemptReportService {
     if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
       throw noResultFor(attempt.status, NOT_REVIEWABLE);
     }
+    return attempt;
+  }
+
+  /** Read off what was typed, so it is ready with the marks and not at the solution gate: a passage is no key. */
+  async typing(studentId: string, attemptId: string): Promise<TypingSitting[]> {
+    const attempt = await this.reviewable(studentId, attemptId);
 
     const { test } = attempt;
     const sections = scopedSections(test.baseConfig.sections, test.scope, scopeRefOf(test));
@@ -176,14 +178,7 @@ export class AttemptReportService {
     attemptId: string,
     query: SolutionsQuery,
   ): Promise<SolutionReport> {
-    const attempt = await this.prisma.attempt.findFirst({
-      where: { id: attemptId, studentId },
-      select: SOLUTION_SELECT,
-    });
-    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
-      throw noResultFor(attempt.status, NOT_REVIEWABLE);
-    }
+    const attempt = await this.reviewable(studentId, attemptId);
 
     const config = attempt.test.baseConfig;
     const paper = await this.papers.solutionsOf(attempt.testId, attempt.test.paperRevision);
@@ -248,23 +243,6 @@ function wantedOf(
   return {
     sectionId,
     questions: served.filter((row) => row.baseConfigSectionId === sectionId),
-  };
-}
-
-function toScoreCardQuestion(row: SolutionRow): ScoreCardQuestion {
-  return {
-    questionId: row.questionId,
-    order: row.order,
-    baseConfigSectionId: row.baseConfigSectionId,
-    state: row.state,
-    selectedOptionId: row.selectedOptionId,
-    typedAnswer: row.typedAnswer,
-    isCorrect: row.isCorrect,
-    marksAwarded: row.marksAwarded,
-    marks: Number(row.marks),
-    negativeMarks: Number(row.negativeMarks),
-    disposition: row.status,
-    timeSpentSec: row.timeSpentSec,
   };
 }
 

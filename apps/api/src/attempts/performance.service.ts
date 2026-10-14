@@ -37,7 +37,8 @@ import { LeaderboardService, type Standing } from './leaderboard.service';
 import {
   elapsedSeconds,
   marksBySection,
-  noResultFor,
+  NOT_YOURS,
+  refuseUnreadable,
   percentageOf,
   sectionsWithScores,
 } from './attempt-report';
@@ -54,7 +55,6 @@ import {
   type SectionCohort,
 } from './performance-analytics';
 
-const NOT_YOURS = 'No such sitting';
 const NOT_MARKED = 'This paper has not been marked yet. Its score card opens the moment it is.';
 
 /** Handed in, marked or not: the two states a paper's effort can be read in. */
@@ -208,7 +208,7 @@ export class PerformanceAnalyticsService {
       where: { id: attemptId, studentId, status: ATTEMPT_STATUS.EVALUATED },
       select: SCORE_CARD_SELECT,
     });
-    if (!attempt) return this.refuseCard(studentId, attemptId);
+    if (!attempt) return refuseUnreadable(this.prisma, studentId, attemptId, NOT_MARKED);
 
     const [testStats, standing] = await Promise.all([
       this.testStats([attempt.testId]),
@@ -297,16 +297,6 @@ export class PerformanceAnalyticsService {
     return hold(this.fields, `${testId}:${stat.computedAt.getTime()}`, () =>
       fieldEffortOf(this.prisma, testId),
     );
-  }
-
-  /** Only a refusal reads this: the owner is in the WHERE, so another student's sitting is missing. */
-  private async refuseCard(studentId: string, attemptId: string): Promise<never> {
-    const theirs = await this.prisma.attempt.findFirst({
-      where: { id: attemptId, studentId },
-      select: { status: true },
-    });
-    if (theirs === null) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    throw noResultFor(theirs.status, NOT_MARKED);
   }
 
   /** The anchor's figures alone: the other sittings only ever give the trajectory their marks. */

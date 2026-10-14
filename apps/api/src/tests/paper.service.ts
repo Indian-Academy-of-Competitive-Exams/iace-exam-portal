@@ -137,22 +137,31 @@ export class PaperService {
     return this.paperOf(test, this.scopedOf(test, config));
   }
 
-  /** Several at once, numbered from the section's current highest order; every one resolved and checked before any write. */
-  async addQuestions(
-    testId: string,
-    input: AddPaperQuestionBody,
-    editor: Editor = {},
-  ): Promise<TestPaper> {
+  private async lockedSection(testId: string, sectionId: string, editor: Editor) {
     const test = await this.requireTest(testId);
     await takeTestEditLock(this.redis, this.prisma, testId, editor);
     this.assertAssemblable(test);
     assertSourceChosen(test);
 
     const config = await this.configs.detail(test.baseConfigId);
-    const section = this.scopedOf(test, config).find((row) => row.id === input.baseConfigSectionId);
+    const section = this.scopedOf(test, config).find((row) => row.id === sectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
     this.assertNotTyped(test, editor);
     await this.assertWithOwner(testId, [section.id], editor);
+    return { test, config, section };
+  }
+
+  /** Several at once, numbered from the section's current highest order; every one resolved and checked before any write. */
+  async addQuestions(
+    testId: string,
+    input: AddPaperQuestionBody,
+    editor: Editor = {},
+  ): Promise<TestPaper> {
+    const { test, config, section } = await this.lockedSection(
+      testId,
+      input.baseConfigSectionId,
+      editor,
+    );
 
     this.assertNoRepeats(input.questionIds);
 
@@ -241,16 +250,7 @@ export class PaperService {
     baseConfigSectionId: string,
     editor: Editor = {},
   ): Promise<TestPaper> {
-    const test = await this.requireTest(testId);
-    await takeTestEditLock(this.redis, this.prisma, testId, editor);
-    this.assertAssemblable(test);
-    assertSourceChosen(test);
-
-    const config = await this.configs.detail(test.baseConfigId);
-    const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
-    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
-    this.assertNotTyped(test, editor);
-    await this.assertWithOwner(testId, [section.id], editor);
+    const { test, config, section } = await this.lockedSection(testId, baseConfigSectionId, editor);
 
     const spec = (test.questionPoolFilter as DrawSpec | null)?.sections?.[section.id];
     const added = await this.prisma.$transaction(async (tx) => {

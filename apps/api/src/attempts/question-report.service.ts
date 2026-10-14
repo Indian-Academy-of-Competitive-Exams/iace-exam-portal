@@ -8,9 +8,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
-  AppException,
   COHORT_COMPARISON_FLOOR,
-  ErrorCodes,
   QUESTION_TYPE,
   scopedSections,
   servedQuestions,
@@ -20,7 +18,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService } from './leaderboard.service';
 import { answeredRows, type ServedAnswer } from './answer-sheet';
-import { elapsedSeconds, noResultFor } from './attempt-report';
+import { elapsedSeconds, refuseUnreadable, toScoreCardQuestion } from './attempt-report';
 import { SHEET_ROW_SELECT } from './paper-sheet.service';
 import { optionCountsIn, pValueOf } from './rollup-fold';
 import { answerKeyIn, optionsIn, scopeRefOf } from '../common/prisma-json';
@@ -33,7 +31,6 @@ import {
   type SatQuestion,
 } from './question-report';
 
-const NOT_YOURS = 'No such sitting';
 const NOT_MARKED = 'This paper has not been marked yet, so there is nothing to compare.';
 
 /** No `questionVersion` anywhere in here. That absence is the feature. */
@@ -103,7 +100,7 @@ export class QuestionReportService {
       where: { id: attemptId, studentId, status: ATTEMPT_STATUS.EVALUATED },
       select: REPORT_SELECT,
     });
-    if (!attempt) return this.refuse(studentId, attemptId);
+    if (!attempt) return refuseUnreadable(this.prisma, studentId, attemptId, NOT_MARKED);
 
     // One read of the paper serves both the sheet and its key.
     const [cohort, paper, topper, rows, sittings] = await Promise.all([
@@ -137,16 +134,6 @@ export class QuestionReportService {
       keyed: keyOf(served),
       sittings,
     });
-  }
-
-  /** Which of the two refusals it is, asked only once the cheap read has already failed. */
-  private async refuse(studentId: string, attemptId: string): Promise<never> {
-    const theirs = await this.prisma.attempt.findFirst({
-      where: { id: attemptId, studentId },
-      select: { status: true },
-    });
-    if (theirs === null) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
-    throw noResultFor(theirs.status, NOT_MARKED);
   }
 
   private assemble(
@@ -246,19 +233,8 @@ function keyOf(served: readonly ReportPaperRow[]): Map<string, KeyedQuestion> {
 
 function toSat(row: ReportPaperRow): SatQuestion {
   return {
-    questionId: row.questionId,
+    ...toScoreCardQuestion(row),
     paperQuestionId: row.id,
-    order: row.order,
-    baseConfigSectionId: row.baseConfigSectionId,
-    state: row.state,
-    selectedOptionId: row.selectedOptionId,
-    typedAnswer: row.typedAnswer,
-    isCorrect: row.isCorrect,
-    marksAwarded: row.marksAwarded,
-    marks: Number(row.marks),
-    negativeMarks: Number(row.negativeMarks),
-    disposition: row.status,
-    timeSpentSec: row.timeSpentSec,
     // Null unless BOTH instants exist: a sitting from before this was measured has neither.
     timeToRespondSec:
       row.firstActionAt && row.answeredAt
