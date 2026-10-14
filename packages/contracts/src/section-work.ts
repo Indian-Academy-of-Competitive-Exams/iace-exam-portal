@@ -1,3 +1,4 @@
+import { languageCodeSchema } from './exams';
 import { z } from 'zod';
 import { assignmentSchema } from './assignments';
 import { editLockHolderSchema } from './common';
@@ -76,6 +77,8 @@ export const sectionWorkSchema = z.object({
   testId: z.string(),
   baseConfigSectionId: z.string(),
   sectionName: z.string(),
+  /** What its questions are sat in: its own languages where it has them, else the paper's. */
+  languages: z.array(languageCodeSchema),
   testTitle: z.string().nullable(),
   paperSource: paperSourceSchema,
   questionCount: z.number().int(),

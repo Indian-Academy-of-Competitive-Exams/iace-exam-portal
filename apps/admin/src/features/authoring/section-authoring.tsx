@@ -281,6 +281,7 @@ function SectionWorkspace({
       types: SECTION_QUESTION_TYPES[work.answerKind],
       blocked,
       checkDuplicates: seat.typing,
+      languages: work.languages,
       create: seat.typing
         ? {
             header: {

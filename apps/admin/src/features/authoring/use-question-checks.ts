@@ -7,6 +7,8 @@ import {
   hasText,
   validateQuestion,
   type QuestionDraft,
+  contentLanguageOf,
+  type LanguageCode,
 } from '@iace/contracts';
 import { mathErrorIn } from '@iace/ui';
 import { api } from '../../lib/api';
@@ -76,12 +78,18 @@ export function useChecked(
   header: AuthoringHeader,
   state: AuthoringState,
   duplicate: string | null,
+  /** The languages its section is sat in; absent in the bank, where every language is asked for. */
+  expected?: readonly LanguageCode[],
 ) {
   const issues = useIssues(draft, header);
 
   const checks = useMemo(() => {
+    const asked = expected ? new Set(expected.map(contentLanguageOf)) : null;
     const missing = LANGUAGE_ORDER.filter(
-      (code) => code !== DEFAULT_LANGUAGE && !hasText(state.content[code].stem),
+      (code) =>
+        code !== DEFAULT_LANGUAGE &&
+        (asked?.has(code) ?? true) &&
+        !hasText(state.content[code].stem),
     );
     return checksFor(
       state,
@@ -89,7 +97,7 @@ export function useChecked(
       missing.map((code) => LANGUAGE_LABELS[code]),
       duplicate,
     );
-  }, [state, issues, duplicate]);
+  }, [state, issues, duplicate, expected]);
 
   return { issues, checks };
 }

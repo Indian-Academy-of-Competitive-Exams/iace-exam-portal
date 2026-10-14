@@ -9,6 +9,7 @@ import {
   LANGUAGE_ORDER,
   type QuestionLanguage,
   type QuestionType,
+  type LanguageCode,
 } from '@iace/contracts';
 import { Badge, Button, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
@@ -58,6 +59,8 @@ export interface WorkspaceSource {
   types?: readonly QuestionType[];
   /** Only where a copy of a bank question refuses the save; an import row just becomes a duplicate. */
   checkDuplicates: boolean;
+  /** The languages a question here is sat in, so a section sat in English alone is not asked for Hindi. */
+  languages?: readonly LanguageCode[];
   /** A blank card after the last, for writing the next question; absent where nothing new is written. */
   create?: {
     header: AuthoringHeader;
@@ -612,6 +615,7 @@ function CardBody({
       onEdit={onEdit}
       onView={onView}
       onSave={onSave}
+      languages={source.languages}
     />
   );
 }
@@ -630,6 +634,7 @@ function EditBody({
   onEdit,
   onView,
   onSave,
+  languages,
 }: Readonly<{
   questionKey: string;
   shown: Held;
@@ -643,9 +648,10 @@ function EditBody({
   onEdit: (change: (current: Held) => Held) => void;
   onView: (change: (current: View) => View) => void;
   onSave: () => void;
+  languages?: readonly LanguageCode[];
 }>) {
   const draft = useMemo(() => toDraft(shown.state, shown.header), [shown]);
-  const { checks } = useChecked(draft, shown.header, shown.state, duplicate);
+  const { checks } = useChecked(draft, shown.header, shown.state, duplicate, languages);
   const switchTo = (language: QuestionLanguage) =>
     onView((current) => ({ language, box: current.box + 1 }));
 

@@ -32,6 +32,8 @@ import {
   SECTION_QUESTION_TYPES,
   sectionAnswerKindOf,
   type SectionAnswerKind,
+  sectionLanguagesFor,
+  type LanguageCode,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { assertSourceChosen, beginDraftPaperEdit } from '../common/paper-edit';
@@ -66,6 +68,7 @@ interface Context {
     title: string | null;
     paperSource: PaperSource;
     finalizedAt: Date | null;
+    baseConfig: { languages: LanguageCode[] };
   };
   section: {
     name: string;
@@ -73,6 +76,7 @@ interface Context {
     subjectId: string | null;
     typingPreset: string | null;
     descriptive: boolean;
+    languages: LanguageCode[];
   };
   rows: Assignment[];
   typist: Assignment | null;
@@ -189,6 +193,7 @@ export class SectionWorkService {
       testId: pair.testId,
       baseConfigSectionId: pair.baseConfigSectionId,
       sectionName: context.section.name,
+      languages: sectionLanguagesFor(context.section.languages, context.test.baseConfig.languages),
       testTitle: context.test.title,
       paperSource: context.test.paperSource,
       questionCount: context.section.questionCount,
@@ -534,6 +539,7 @@ export class SectionWorkService {
         baseConfigId: true,
         paperSource: true,
         finalizedAt: true,
+        baseConfig: { select: { languages: true } },
       },
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
@@ -547,6 +553,7 @@ export class SectionWorkService {
           subjectId: true,
           typingPreset: true,
           descriptive: true,
+          languages: true,
         },
       }),
       this.assignments.sectionAssignments(pair.testId, pair.baseConfigSectionId, viewer),
