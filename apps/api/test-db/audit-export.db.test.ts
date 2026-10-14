@@ -26,6 +26,7 @@ import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { type AuthenticatedUser } from '../src/common/security';
 import { FakeStorage } from '../test/support/fakes';
 import { makeAdmin, resetDatabase, testPrisma, uid } from './support/database';
+import { fetchExport, inlineExports } from './support/exports';
 import { sheetRows } from './support/workbook';
 
 const prisma = testPrisma();
@@ -33,16 +34,17 @@ const auditContext = new AuditContext();
 const audit = new AuditService(prisma, new FakeStorage() as never);
 
 let caller: AuthenticatedUser;
+const { jobs, Collect } = inlineExports(prisma, {});
 
 /** tsx emits no decorator metadata, so Nest cannot inject by type; the route itself is inherited whole. */
 class ExportController extends AuditController {
   constructor() {
-    super(audit, auditContext);
+    super(audit, jobs);
   }
 }
 
 @Module({
-  controllers: [ExportController],
+  controllers: [ExportController, Collect],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
@@ -106,8 +108,9 @@ const actionBy = (actorId: string, feature: AuditFeature) =>
   });
 
 async function exportOf(query: Record<string, string> = {}) {
-  const response = await fetch(
-    `${baseUrl}/admin/audit/row-actions/export?${new URLSearchParams(query).toString()}`,
+  const response = await fetchExport(
+    baseUrl,
+    `/admin/audit/row-actions/export?${new URLSearchParams(query).toString()}`,
   );
   assert.equal(response.status, 200);
   return sheetRows(await response.arrayBuffer());
@@ -119,7 +122,7 @@ const viewerOf = (user: AuthenticatedUser) => ({
   isActive: user.isActive,
 });
 
-describe('GET admin/audit/row-actions/export', () => {
+describe('POST admin/audit/row-actions/export', () => {
   it('gives a non-super admin only their own actions, as their list shows them', async () => {
     caller = await adminCaller();
     const other = await makeAdmin(prisma, { fullName: 'Someone Else' });
@@ -181,7 +184,7 @@ describe('GET admin/audit/row-actions/export', () => {
   });
 });
 
-/** The interceptor files its row after the response, off the request's own promise. */
+/** The worker files its row once the file is built, which the inline queue has done by now. */
 async function waitForExportRow() {
   for (let tries = 0; tries < 50; tries += 1) {
     const row = await prisma.rowActionLog.findFirst({ where: { action: AUDIT_ACTION.EXPORT } });

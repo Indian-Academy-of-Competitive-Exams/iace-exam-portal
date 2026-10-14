@@ -10,6 +10,7 @@ export const QUEUE_NAMES = {
   ROLLUP: 'rollup',
   NOTIFICATIONS: 'notifications',
   NOTIFICATION_DELIVERY: 'notification-delivery',
+  EXPORTS: 'exports',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -31,6 +32,8 @@ export const QUEUE_POLICY = {
   [QUEUE_NAMES.NOTIFICATIONS]: { concurrency: 4, attempts: 5, backoffMs: 5000 },
   // Held narrow on purpose: this is what a rate-limited aggregator sees, and it is billable.
   [QUEUE_NAMES.NOTIFICATION_DELIVERY]: { concurrency: 2, attempts: 4, backoffMs: 15000 },
+  // A workbook holds its rows in memory while it is written, so two at once is the ceiling.
+  [QUEUE_NAMES.EXPORTS]: { concurrency: 2, attempts: 2, backoffMs: 5000 },
 } as const satisfies Record<
   QueueName,
   { concurrency: number; attempts: number; backoffMs: number }

@@ -140,6 +140,8 @@ A module is a **bounded context**. Six rules make it extraction-ready:
   period nobody else asks for.
 - `me` aggregates `students`, `auth`, `access` and `notifications`. This is the one to copy —
   everything arrives through a module barrel.
+- `exports` aggregates every module that lends a file (`questions`, `students`, `reports`,
+  `attempts`, `access`, `notifications`, `audit`) the same way, and writes nothing but the file.
 
 ---
 
@@ -366,8 +368,13 @@ Built and in use. Reach for these rather than adding a second of any of them.
   in process memory. `PaperSheetService` is that case — a sat paper's rows and its pinned versions'
   options and keys, frozen by `paper_question_sat_guard` and `question_version_sat_guard`.
 - **An export is its list, unpaged.** The owning module adds `…/export` beside its list route and
-  reuses that list's query schema and where-builder, so the file cannot drift from the screen; a
-  central exports module would read tables it does not own. `common/exporting` writes the workbook
+  reuses that list's query schema and where-builder, so the file cannot drift from the screen. The
+  route only queues it: `ExportJobsService` hands the request to the `exports` queue, the worker's
+  `exports` module routes it to the owner's builder through that module's barrel (it reads no table
+  itself), stores the file for an hour, and the admin client polls `/admin/exports/:id` and fetches
+  `/file` — so a 50,000-row workbook is never built on the request path, and only its asker can
+  collect it. A refusal the builder raises (too many rows, not found) completes the job as that
+  error rather than retrying it. `common/exporting` writes the workbook
   (text cells for mobiles and codes, real IST date cells) and counts against `EXPORT_MAX_ROWS` before
   a row is read. `RequiresExport` demands the owning feature's READ **and** `DATA_EXPORT`; the audit
   log has no owning feature and is a super admin's alone, so its export asks nothing beyond that. Every export writes one

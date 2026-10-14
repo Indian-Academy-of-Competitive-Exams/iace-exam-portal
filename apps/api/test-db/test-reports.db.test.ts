@@ -44,22 +44,24 @@ import {
   type Catalog,
   sitPaper,
 } from './support/database';
+import { fetchExport, inlineExports } from './support/exports';
 import { SUPER_ADMIN, VIEWER, figureOf, reportsOver, tableOf } from './support/reports';
 
 const prisma = testPrisma();
 
 const { reports, read } = reportsOver(prisma);
 const auditContext = new AuditContext();
+const { jobs, Collect } = inlineExports(prisma, { reports });
 
 /** tsx emits no decorator metadata, so Nest cannot inject by type; the routes are inherited whole. */
 class Controller extends ReportsController {
   constructor() {
-    super(reports, auditContext);
+    super(reports, jobs);
   }
 }
 
 @Module({
-  controllers: [Controller],
+  controllers: [Controller, Collect],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     {
@@ -348,14 +350,15 @@ describe('asking for a report', () => {
   });
 });
 
-describe('GET admin/reports/:key/export', () => {
+describe('POST admin/reports/:key/export', () => {
   it('writes the page’s rows under a cover sheet, and one audit row against the admin', async () => {
     const { testId } = await freeTest();
     await sit(testId, await student('Ana'), 50);
     await sit(testId, await student('Bala'), 40);
 
-    const response = await fetch(
-      `${baseUrl}/admin/reports/${REPORT_KEYS.TEST_MERIT}/export?testId=${testId}`,
+    const response = await fetchExport(
+      baseUrl,
+      `/admin/reports/${REPORT_KEYS.TEST_MERIT}/export?testId=${testId}`,
     );
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(await response.arrayBuffer());
@@ -379,7 +382,7 @@ describe('GET admin/reports/:key/export', () => {
   });
 });
 
-/** The interceptor files its row after the response, off the request's own promise. */
+/** The worker files its row once the file is built, which the inline queue has done by now. */
 async function waitForAuditRows() {
   for (let tries = 0; tries < 50; tries += 1) {
     const rows = await prisma.rowActionLog.findMany();

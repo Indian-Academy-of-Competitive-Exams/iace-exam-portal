@@ -296,7 +296,7 @@ function fileBody(file: File): FormData {
 }
 
 export function adminClient(core: ApiCore) {
-  const { get, write, list, requestBlob, requestUploadBlob } = core;
+  const { get, write, list, requestBlob, requestExport, requestUploadBlob } = core;
 
   return {
     /** Watching one test's sittings, and resolving the ones that broke. */
@@ -336,7 +336,7 @@ export function adminClient(core: ApiCore) {
         get(ANNOUNCEMENT_ROUTES.detail(id), announcementSchema),
 
       deliveriesExport: (id: string): Promise<Blob> =>
-        requestBlob(ANNOUNCEMENT_ROUTES.deliveriesExport(id)),
+        requestExport(ANNOUNCEMENT_ROUTES.deliveriesExport(id)),
     },
 
     students: {
@@ -373,7 +373,7 @@ export function adminClient(core: ApiCore) {
       export: (
         query: Omit<StudentExportQueryInput, 'view'>,
         view: StudentExportView,
-      ): Promise<Blob> => requestBlob(ADMIN_STUDENT_ROUTES.export, { ...query, view }),
+      ): Promise<Blob> => requestExport(ADMIN_STUDENT_ROUTES.export, { ...query, view }),
 
       /** Anonymises the person. Super admin only, and every sitting they sat is left standing. */
       erase: (id: string): Promise<ErasureReceipt> =>
@@ -524,7 +524,7 @@ export function adminClient(core: ApiCore) {
         get(ADMIN_SERIES_ROUTES.tests(id), seriesTestRowSchema.array()),
 
       grantsExport: (id: string): Promise<Blob> =>
-        requestBlob(ADMIN_SERIES_ROUTES.grantsExport(id)),
+        requestExport(ADMIN_SERIES_ROUTES.grantsExport(id)),
     },
 
     /** Every series a student reaches and what opens each one, the branch gate already applied. */
@@ -588,7 +588,8 @@ export function adminClient(core: ApiCore) {
       resyncAnalytics: (id: string): Promise<NoContent> =>
         write('POST', ADMIN_TEST_ROUTES.resyncAnalytics(id), noContentSchema),
 
-      reportExport: (id: string): Promise<Blob> => requestBlob(ADMIN_TEST_ROUTES.reportExport(id)),
+      reportExport: (id: string): Promise<Blob> =>
+        requestExport(ADMIN_TEST_ROUTES.reportExport(id)),
 
       /** The paper as it stands, built a question or a section at a time. */
       readPaper: (id: string): Promise<TestPaper> =>
@@ -720,7 +721,7 @@ export function adminClient(core: ApiCore) {
         list(ADMIN_QUESTION_ROUTES.list, query, questionSummarySchema),
 
       export: (query: QuestionExportQueryInput): Promise<Blob> =>
-        requestBlob(ADMIN_QUESTION_ROUTES.export, { ...query }),
+        requestExport(ADMIN_QUESTION_ROUTES.export, { ...query }),
 
       detail: (id: string): Promise<QuestionDetail> =>
         get(ADMIN_QUESTION_ROUTES.get(id), questionDetailSchema),
@@ -1098,7 +1099,7 @@ export function adminClient(core: ApiCore) {
         get(`${ADMIN_REPORT_ROUTES.read(key)}${queryString({ ...query })}`, reportDocumentSchema),
 
       export: (key: ReportKey, query: ReportQueryInput): Promise<Blob> =>
-        requestBlob(ADMIN_REPORT_ROUTES.export(key), { ...query }),
+        requestExport(ADMIN_REPORT_ROUTES.export(key), { ...query }),
 
       /** What a report's picker offers, behind the same key as the report it is asking for. */
       choices: (
@@ -1113,7 +1114,7 @@ export function adminClient(core: ApiCore) {
         list(ADMIN_AUDIT_ROUTES.rowActions, query, rowActionSchema),
 
       rowActionsExport: (query: RowActionExportQueryInput): Promise<Blob> =>
-        requestBlob(ADMIN_AUDIT_ROUTES.rowActionsExport, { ...query }),
+        requestExport(ADMIN_AUDIT_ROUTES.rowActionsExport, { ...query }),
 
       /** The sheet a run was fed — a Blob, not an envelope. */
       importFile: (id: string): Promise<Blob> => requestBlob(ADMIN_AUDIT_ROUTES.importFile(id)),

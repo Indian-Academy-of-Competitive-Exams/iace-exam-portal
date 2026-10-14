@@ -2,3 +2,4 @@
 export { AccessModule } from './access.module';
 export { ProgramsService } from './programs.service';
 export { AccessResolverService } from './access-resolver.service';
+export { StudentGrantsService } from './student-grants.service';

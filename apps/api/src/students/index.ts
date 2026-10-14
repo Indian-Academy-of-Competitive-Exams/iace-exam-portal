@@ -11,3 +11,6 @@ export { StudentPrivacyService } from './student-privacy.service';
 
 /** A report's person columns, for a module holding student ids. */
 export { STUDENT_CARD_SELECT, studentCardsOf, type StudentCard } from './student-cards';
+
+/** The roster as a workbook, built on the worker that the export queue runs. */
+export { buildStudentExport } from './student-export';

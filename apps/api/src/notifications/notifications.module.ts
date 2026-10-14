@@ -49,7 +49,7 @@ import { API_ROLES, onRole, servesRole } from '../config/api-role';
     NotificationListener,
     WebPushSender,
   ],
-  exports: [NotificationsService, PushService],
+  exports: [NotificationsService, PushService, AnnouncementsService],
 })
 export class NotificationsModule implements OnModuleInit {
   constructor(

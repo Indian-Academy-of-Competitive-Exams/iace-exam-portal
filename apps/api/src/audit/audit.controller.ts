@@ -1,13 +1,22 @@
-import { Controller, Get, Header, Param, Query, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import { type Response } from 'express';
 import {
-  AUDIT_ACTION,
-  AUDIT_FEATURE,
   ActorTypes,
   EXPORT_KINDS,
   paginationQuerySchema,
   rowActionExportQuerySchema,
   rowActionListQuerySchema,
+  type ExportStarted,
   type ImportLogSummary,
   type Paginated,
   type PaginationQuery,
@@ -15,7 +24,7 @@ import {
   type RowActionExportQuery,
   type RowActionListQuery,
 } from '@iace/contracts';
-import { chosenFilters, sendWorkbook } from '../common/exporting';
+import { ExportJobsService } from '../common/exporting';
 import {
   Actors,
   CurrentUser,
@@ -24,8 +33,6 @@ import {
   type AuthenticatedUser,
 } from '../common/security';
 import { ZodQuery } from '../common/zod-validation.pipe';
-import { AuditContext } from './audit.context';
-import { Audit } from './audit.decorator';
 import { AuditService, type AuditViewer } from './audit.service';
 
 const viewerOf = (user: AuthenticatedUser): AuditViewer => ({
@@ -41,7 +48,7 @@ const viewerOf = (user: AuthenticatedUser): AuditViewer => ({
 export class AuditController {
   constructor(
     private readonly audit: AuditService,
-    private readonly auditContext: AuditContext,
+    private readonly exportJobs: ExportJobsService,
   ) {}
 
   @Get('row-actions')
@@ -54,23 +61,13 @@ export class AuditController {
 
   /** No feature owns the log, so DATA_EXPORT alone; the service scopes the rows as the list does. */
   @RequiresExport()
-  @Audit(AUDIT_FEATURE.AUDIT_LOG, AUDIT_ACTION.EXPORT)
-  @Get('row-actions/export')
-  async exportRowActions(
+  @Post('row-actions/export')
+  @HttpCode(HttpStatus.ACCEPTED)
+  exportRowActions(
     @Query(new ZodQuery(rowActionExportQuerySchema)) query: RowActionExportQuery,
     @CurrentUser() user: AuthenticatedUser,
-    @Res() response: Response,
-  ): Promise<void> {
-    const viewer = viewerOf(user);
-    const { workbook, rows } = await this.audit.exportRowActions(query, viewer);
-    // `rowActionWhere` ignores an admin's actor filter, so the log must not claim it was applied.
-    const applied = viewer.isSuperAdmin ? query : { ...query, actorId: undefined };
-    this.auditContext.setEntityId(user.id);
-    this.auditContext.setChanged({
-      filters: { from: null, to: chosenFilters(applied) },
-      rows: { from: null, to: rows },
-    });
-    sendWorkbook(response, EXPORT_KINDS.AUDIT_LOG, workbook);
+  ): Promise<ExportStarted> {
+    return this.exportJobs.start({ kind: EXPORT_KINDS.AUDIT_LOG, query }, user);
   }
 
   @Get('imports')

@@ -11,6 +11,14 @@ import {
   type Paginated,
 } from '../envelope';
 import { AUTH_ROUTES, authTokensSchema, type AuthTokens } from '../auth';
+import {
+  ADMIN_EXPORT_ROUTES,
+  EXPORT_JOB_STATES,
+  EXPORT_POLL_MS,
+  EXPORT_WAIT_MS,
+  exportJobSchema,
+  exportStartedSchema,
+} from '../exports';
 
 /** Drops empty and undefined keys, so an unset filter never becomes `?q=undefined`. */
 export function queryString(params: Record<string, unknown>): string {
@@ -267,6 +275,25 @@ export function createApiCore(options: ApiClientOptions) {
     return blobOf(`${path}${queryString(query)}`, 'GET');
   }
 
+  /** A file a worker builds: asked for, waited on, then fetched — one `Promise<Blob>` to the caller, as before. */
+  async function requestExport(path: string, query: Record<string, unknown> = {}): Promise<Blob> {
+    const { id } = await request(`${path}${queryString(query)}`, {
+      method: 'POST',
+      schema: exportStartedSchema,
+    });
+    const giveUpAt = Date.now() + EXPORT_WAIT_MS;
+    while (Date.now() < giveUpAt) {
+      await new Promise((resolve) => setTimeout(resolve, EXPORT_POLL_MS));
+      const job = await request(ADMIN_EXPORT_ROUTES.job(id), { schema: exportJobSchema });
+      if (job.error) throw new AppException(job.error.code, job.error.message);
+      if (job.state === EXPORT_JOB_STATES.DONE) return blobOf(ADMIN_EXPORT_ROUTES.file(id), 'GET');
+    }
+    throw new AppException(
+      ErrorCodes.SERVICE_UNAVAILABLE,
+      'That file is taking too long. Try again.',
+    );
+  }
+
   /** A file posted, a file back: the same download, with the upload as its body. */
   async function requestUploadBlob(path: string, body: FormData): Promise<Blob> {
     return blobOf(path, 'POST', body);
@@ -309,7 +336,16 @@ export function createApiCore(options: ApiClientOptions) {
     });
   };
 
-  return { request, requestPaginated, requestBlob, requestUploadBlob, get, write, list };
+  return {
+    request,
+    requestPaginated,
+    requestBlob,
+    requestExport,
+    requestUploadBlob,
+    get,
+    write,
+    list,
+  };
 }
 
 /** The shared transport every domain group calls through, never the schemas it carries. */

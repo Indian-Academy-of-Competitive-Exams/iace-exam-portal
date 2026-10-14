@@ -9,12 +9,10 @@ import {
   Patch,
   Post,
   Query,
-  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { type Response } from 'express';
 import {
   ActorTypes,
   AUDIT_ACTION,
@@ -28,6 +26,7 @@ import {
   QUESTION_IMAGE_MAX_BYTES,
   questionAvailabilityQuerySchema,
   questionListQuerySchema,
+  type ExportStarted,
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
@@ -48,9 +47,8 @@ import {
   type AuthenticatedUser,
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
-import { Audit, AuditContext } from '../audit';
-import { chosenFilters, sendWorkbook } from '../common/exporting';
-import { writeQuestionExport } from './question-export';
+import { Audit } from '../audit';
+import { ExportJobsService } from '../common/exporting';
 import { QuestionsService } from './questions.service';
 
 /** What multer hands back; typed here rather than pulling Express types into a controller. */
@@ -69,7 +67,7 @@ const PICKER_READERS = [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.TEST_MANA
 export class QuestionsController {
   constructor(
     private readonly questions: QuestionsService,
-    private readonly auditContext: AuditContext,
+    private readonly exportJobs: ExportJobsService,
   ) {}
 
   @RequiresAnyFeature(PICKER_READERS, PERMISSION_LEVELS.READ)
@@ -82,21 +80,13 @@ export class QuestionsController {
 
   /** Before `:id`, or "export" is read as a question id. */
   @RequiresExport(FEATURE_KEYS.QUESTION_MANAGEMENT)
-  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.EXPORT)
-  @Get('export')
-  async export(
+  @Post('export')
+  @HttpCode(HttpStatus.ACCEPTED)
+  export(
     @Query(new ZodQuery(questionExportQuerySchema)) query: QuestionExportQuery,
     @CurrentUser() user: AuthenticatedUser,
-    @Res() response: Response,
-  ): Promise<void> {
-    const { questions, authoring } = await this.questions.exportRows(query);
-    const workbook = await writeQuestionExport(questions, authoring);
-    this.auditContext.setEntityId(user.id);
-    this.auditContext.setChanged({
-      filters: { from: null, to: chosenFilters(query) },
-      rows: { from: null, to: questions.length },
-    });
-    sendWorkbook(response, EXPORT_KINDS.QUESTIONS, workbook);
+  ): Promise<ExportStarted> {
+    return this.exportJobs.start({ kind: EXPORT_KINDS.QUESTIONS, query }, user);
   }
 
   /** Before `:id`, or "images" is read as a question id. */

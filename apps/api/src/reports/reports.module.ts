@@ -12,5 +12,6 @@ import { ReportsService } from './reports.service';
   imports: [PrismaModule, AttemptsModule, AccessModule],
   controllers: onRole([API_ROLES.CORE], [ReportsController, MeReportsController]),
   providers: [ReportsService, SittingFigures],
+  exports: [ReportsService],
 })
 export class ReportsModule {}

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import 'reflect-metadata';
 import {
@@ -11,6 +12,7 @@ import { APP_INTERCEPTOR, NestFactory, Reflector } from '@nestjs/core';
 import ExcelJS from 'exceljs';
 import {
   ATTEMPT_STATUS,
+  ActorTypes,
   AUDIT_ACTION,
   AUDIT_FEATURE,
   TEST_SERIES_KIND,
@@ -25,7 +27,9 @@ import { AdminTestAnalyticsController } from '../src/attempts/test-analytics.con
 import { TestAnalyticsService } from '../src/attempts/test-analytics.service';
 import { RollupQueue } from '../src/attempts/rollup-queue';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
+import { type AuthenticatedUser } from '../src/common/security';
 import { FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';
+import { fetchExport, inlineExports } from './support/exports';
 import {
   makeCatalog,
   makeSection,
@@ -46,16 +50,25 @@ const analytics = new TestAnalyticsService(
   access,
 );
 const auditContext = new AuditContext();
+const { jobs, Collect } = inlineExports(prisma, { analytics, access });
+const caller: AuthenticatedUser = {
+  id: randomUUID(),
+  actor: ActorTypes.ADMIN,
+  sessionId: randomUUID(),
+  isSuperAdmin: true,
+  isActive: true,
+  permissions: {},
+};
 
 /** tsx emits no decorator metadata, so Nest cannot inject by type; the route itself is inherited whole. */
 class ReportController extends AdminTestAnalyticsController {
   constructor() {
-    super(analytics, prisma, access, auditContext);
+    super(analytics, jobs);
   }
 }
 
 @Module({
-  controllers: [ReportController],
+  controllers: [ReportController, Collect],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     {
@@ -73,7 +86,12 @@ class ReportController extends AdminTestAnalyticsController {
 class ReportModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     const middleware = new AuditContextMiddleware(auditContext);
-    consumer.apply(middleware.use.bind(middleware)).forRoutes('*');
+    consumer
+      .apply((request: { user?: AuthenticatedUser }, _response: unknown, next: () => void) => {
+        request.user = caller;
+        next();
+      }, middleware.use.bind(middleware))
+      .forRoutes('*');
   }
 }
 
@@ -100,7 +118,7 @@ interface Download {
 }
 
 async function download(testId: string): Promise<Download> {
-  const response = await fetch(`${baseUrl}/admin/tests/${testId}/report/export`);
+  const response = await fetchExport(baseUrl, `/admin/tests/${testId}/report/export`);
   assert.equal(response.status, 200);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await response.arrayBuffer());
@@ -279,7 +297,7 @@ describe('GET admin/tests/:id/report/export', () => {
   });
 });
 
-/** The interceptor files its row after the response, off the request's own promise. */
+/** The worker files its row once the file is built, which the inline queue has done by now. */
 async function waitForAuditRows() {
   for (let tries = 0; tries < 50; tries += 1) {
     const rows = await prisma.rowActionLog.findMany();

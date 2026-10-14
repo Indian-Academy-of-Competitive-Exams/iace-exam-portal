@@ -31,6 +31,8 @@ import { SavedModule } from './saved';
 import { TypingModule } from './typing';
 import { DashboardModule } from './dashboard';
 import { ReportsModule } from './reports';
+import { ExportsModule } from './exports';
+import { ExportJobsModule } from './common/exporting';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
 import { FeaturePermissionGuard } from './auth/guards/feature-permission.guard';
@@ -50,6 +52,7 @@ import { RequestIdMiddleware } from './common/request-id';
     RedisModule,
     QueueModule,
     StorageModule,
+    ExportJobsModule,
     DomainEventsModule,
     MessagingModule,
     AuditModule,
@@ -71,6 +74,7 @@ import { RequestIdMiddleware } from './common/request-id';
     TypingModule,
     DashboardModule,
     ReportsModule,
+    ExportsModule,
     HealthModule,
     ThrottlingModule,
     MetricsModule,

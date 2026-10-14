@@ -10,9 +10,7 @@ import {
   Post,
   Put,
   Query,
-  Res,
 } from '@nestjs/common';
-import { type Response } from 'express';
 import {
   ActorTypes,
   AUDIT_ACTION,
@@ -32,6 +30,7 @@ import {
   type SeriesBranch,
   type CreateProgramBody,
   type CreateTestSeriesBody,
+  type ExportStarted,
   type GrantSeriesBody,
   type Paginated,
   type Program,
@@ -54,8 +53,8 @@ import {
   type AuthenticatedUser,
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
-import { Audit, AuditContext } from '../audit';
-import { sendWorkbook } from '../common/exporting';
+import { Audit } from '../audit';
+import { ExportJobsService } from '../common/exporting';
 import { ProgramsService } from './programs.service';
 import { TestSeriesService } from './test-series.service';
 import { StudentGrantsService } from './student-grants.service';
@@ -106,8 +105,7 @@ export class ProgramsController {
 export class TestSeriesController {
   constructor(
     private readonly series: TestSeriesService,
-    private readonly grants: StudentGrantsService,
-    private readonly auditContext: AuditContext,
+    private readonly exportJobs: ExportJobsService,
   ) {}
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -153,13 +151,13 @@ export class TestSeriesController {
   }
 
   @RequiresExport(FEATURE_KEYS.TEST_MANAGEMENT)
-  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.EXPORT)
-  @Get(':id/grants/export')
-  async grantsExport(@Param('id') id: string, @Res() response: Response): Promise<void> {
-    const { workbook, rows } = await this.grants.exportForSeries(id);
-    this.auditContext.setEntityId(id);
-    this.auditContext.setChanged({ rows: { from: null, to: rows } });
-    sendWorkbook(response, EXPORT_KINDS.SERIES_GRANTS, workbook);
+  @Post(':id/grants/export')
+  @HttpCode(HttpStatus.ACCEPTED)
+  grantsExport(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ExportStarted> {
+    return this.exportJobs.start({ kind: EXPORT_KINDS.SERIES_GRANTS, seriesId: id }, user);
   }
 
   @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.READ)

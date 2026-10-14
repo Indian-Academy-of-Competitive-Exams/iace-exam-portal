@@ -1474,8 +1474,9 @@ describe('QuestionsController — a section’s work in progress is not the bank
 
   /** The failure this prevents: a bank admin rewriting or deleting a typist's draft under them. */
   it('refuses the bank’s edit, archive and delete while its test has a section unfinished', async () => {
-    const { questions, audit } = await build([{ id: 'typed' }]);
-    const bank = new QuestionsController(questions, audit);
+    const { questions } = await build([{ id: 'typed' }]);
+    // The bank's writes never reach an export, so the job service is not wired.
+    const bank = new QuestionsController(questions, undefined as never);
     await assignedFor(idFor('typed'));
 
     await assert.rejects(() => bank.update(idFor('typed'), draft(), BANK_ADMIN), onItsSection);
@@ -1486,8 +1487,9 @@ describe('QuestionsController — a section’s work in progress is not the bank
   });
 
   it('takes the bank’s edit once every section of its test is finished', async () => {
-    const { questions, audit } = await build([{ id: 'typed' }]);
-    const bank = new QuestionsController(questions, audit);
+    const { questions } = await build([{ id: 'typed' }]);
+    // The bank's writes never reach an export, so the job service is not wired.
+    const bank = new QuestionsController(questions, undefined as never);
     const testId = await assignedFor(idFor('typed'));
     await prisma.questionAssignment.updateMany({
       where: { testId },
@@ -1503,8 +1505,9 @@ describe('QuestionsController — a section’s work in progress is not the bank
 
   /** The failure this prevents: a question on a test offered over an open section, which its section's page no longer changes either. */
   it('takes the bank’s edit once its test has been offered, whatever was left open', async () => {
-    const { questions, audit } = await build([{ id: 'typed' }]);
-    const bank = new QuestionsController(questions, audit);
+    const { questions } = await build([{ id: 'typed' }]);
+    // The bank's writes never reach an export, so the job service is not wired.
+    const bank = new QuestionsController(questions, undefined as never);
     const testId = await assignedFor(idFor('typed'));
     await prisma.test.update({
       where: { id: testId },

@@ -28,6 +28,7 @@ async function auditedSend(sent: Partial<Announcement>): Promise<AuditEntry[]> {
   const controller = new AnnouncementsController(
     { send: () => Promise.resolve(sent) } as never,
     context,
+    undefined as never,
   );
   const sender = { id: 'adm_1', actor: ActorTypes.ADMIN };
   const execution = {

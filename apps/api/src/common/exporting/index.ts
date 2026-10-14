@@ -11,3 +11,16 @@ export {
   type ExportDateFormat,
   type ExportSheet,
 } from './write-workbook';
+export {
+  EXPORT_FILE_TTL_MS,
+  EXPORT_JOBS,
+  ExportJobsModule,
+  ExportJobsService,
+  REPORT_EXPORT,
+  exportFileKey,
+  type DiscardJobData,
+  type ExportJobData,
+  type ExportOutcome,
+  type ExportRequest,
+  type ExportViewer,
+} from './export-jobs';

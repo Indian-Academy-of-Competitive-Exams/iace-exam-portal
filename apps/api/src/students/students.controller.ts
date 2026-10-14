@@ -4,15 +4,11 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  Inject,
   Param,
   Patch,
   Post,
   Query,
-  Res,
-  forwardRef,
 } from '@nestjs/common';
-import { type Response } from 'express';
 import {
   AUDIT_FEATURE,
   AUDIT_ACTION,
@@ -35,6 +31,7 @@ import {
   type ChangeStudentMobileBody,
   type CreateStudentBody,
   type ErasureReceipt,
+  type ExportStarted,
   type Paginated,
   type ReportSitting,
   type SetStudentActiveBody,
@@ -57,13 +54,10 @@ import {
 } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit, AuditContext, TOGGLE_ACTIONS } from '../audit';
-import { chosenFilters, sendWorkbook } from '../common/exporting';
-import { PrismaService } from '../prisma/prisma.service';
-import { type StudentOverviewService } from '../attempts';
+import { ExportJobsService } from '../common/exporting';
 import { AuthService } from '../auth';
 import { StudentsService } from './students.service';
 import { StudentPrivacyService } from './student-privacy.service';
-import { buildStudentExport } from './student-export';
 
 /** The admin-side student directory. `@Actors(ADMIN)` is the hard boundary — a student's token is a valid JWT and must not reach here. `@RequiresFeature` is per route: read vs write. */
 @Controller('admin/students')
@@ -72,19 +66,7 @@ export class StudentsController {
   constructor(
     private readonly students: StudentsService,
     private readonly privacy: StudentPrivacyService,
-    private readonly prisma: PrismaService,
-    // `require`, not a static import: `attempts` reaches `configs`, which imports this barrel back.
-    @Inject(
-      forwardRef(
-        () =>
-          (
-            module.require('../attempts') as {
-              StudentOverviewService: typeof StudentOverviewService;
-            }
-          ).StudentOverviewService,
-      ),
-    )
-    private readonly rollups: StudentOverviewService,
+    private readonly exportJobs: ExportJobsService,
     private readonly auditContext: AuditContext,
     private readonly auth: AuthService,
   ) {}
@@ -100,31 +82,18 @@ export class StudentsController {
 
   /** Declared before `:id`, which would otherwise take "export" as a student id. */
   @RequiresExport(FEATURE_KEYS.STUDENT_MANAGEMENT)
-  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.EXPORT)
-  @Get('export')
-  async export(
+  @Post('export')
+  @HttpCode(HttpStatus.ACCEPTED)
+  export(
     @Query(new ZodQuery(studentExportQuerySchema)) query: StudentExportQuery,
     @CurrentUser() user: AuthenticatedUser,
-    @Res() response: Response,
-  ): Promise<void> {
+  ): Promise<ExportStarted> {
     const performance = query.view === STUDENT_EXPORT_VIEWS.PERFORMANCE;
     if (performance && !can(user, FEATURE_KEYS.STUDENT_PERFORMANCE)) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'You do not have access to student performance');
     }
-    const { workbook, rows } = await buildStudentExport(
-      { prisma: this.prisma, rollups: this.rollups },
-      query,
-    );
-    this.auditContext.setEntityId(user.id);
-    this.auditContext.setChanged({
-      filters: { from: null, to: chosenFilters(query) },
-      rows: { from: null, to: rows },
-    });
-    sendWorkbook(
-      response,
-      performance ? EXPORT_KINDS.STUDENT_PERFORMANCE : EXPORT_KINDS.STUDENTS,
-      workbook,
-    );
+    const kind = performance ? EXPORT_KINDS.STUDENT_PERFORMANCE : EXPORT_KINDS.STUDENTS;
+    return this.exportJobs.start({ kind, query }, user);
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)

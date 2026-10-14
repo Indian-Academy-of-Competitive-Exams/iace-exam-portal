@@ -7,7 +7,6 @@ import {
   type MiddlewareConsumer,
   type NestModule,
 } from '@nestjs/common';
-import { SELF_DECLARED_DEPS_METADATA } from '@nestjs/common/constants';
 import { APP_FILTER, APP_INTERCEPTOR, NestFactory, Reflector } from '@nestjs/core';
 import ExcelJS from 'exceljs';
 import {
@@ -37,6 +36,7 @@ import { buildStudentExport } from '../src/students/student-export';
 import { StudentsController } from '../src/students/students.controller';
 import { StudentsService } from '../src/students/students.service';
 import { FakeEventsService, FakeProgramsService, FakeStorage } from '../test/support/fakes';
+import { fetchExport, inlineExports } from './support/exports';
 import {
   makeAdmin,
   makeBranch,
@@ -71,19 +71,17 @@ const imports = new ImportsService(
 );
 
 let caller: AuthenticatedUser;
+const { jobs, Collect } = inlineExports(prisma, { rollups });
 
 /** tsx emits no decorator metadata, so Nest cannot inject by type; the route itself is inherited whole. */
 class ExportController extends StudentsController {
   constructor() {
-    super(students, unused, prisma, rollups, auditContext, unused);
+    super(students, unused, jobs, auditContext, unused);
   }
 }
 
-// The parent's `@Inject(forwardRef)` is inherited metadata; the subclass passes its own.
-Reflect.defineMetadata(SELF_DECLARED_DEPS_METADATA, [], ExportController);
-
 @Module({
-  controllers: [ExportController],
+  controllers: [ExportController, Collect],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
@@ -146,7 +144,7 @@ async function adminWith(permissions: AdminPermissions): Promise<AuthenticatedUs
 type Cell = ExcelJS.CellValue;
 
 async function exportOf(query: Record<string, string>): Promise<Response> {
-  return fetch(`${baseUrl}/admin/students/export?${new URLSearchParams(query).toString()}`);
+  return fetchExport(baseUrl, `/admin/students/export?${new URLSearchParams(query).toString()}`);
 }
 
 async function rowsOf(response: Response): Promise<Record<string, Cell>[]> {
@@ -369,7 +367,7 @@ describe('rollupsFor past the bind limit', () => {
   });
 });
 
-/** The interceptor files its row after the response, off the request's own promise. */
+/** The worker files its row once the file is built, which the inline queue has done by now. */
 async function waitForAuditRows() {
   for (let tries = 0; tries < 50; tries += 1) {
     const rows = await prisma.rowActionLog.findMany();

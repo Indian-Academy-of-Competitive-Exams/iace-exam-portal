@@ -41,7 +41,7 @@ import {
   type BuiltQuestion,
 } from './question-core';
 import { questionOrderBy, questionWhere } from './question-query';
-import { type AuthoringCount, type ExportedQuestion } from './question-export';
+import { writeQuestionExport, type AuthoringCount, type ExportedQuestion } from './question-export';
 import { taxonomyForIds } from './taxonomy-context';
 import { assertJobOpen, uncheckReworded } from '../assignments';
 import { optionsIn } from '../common/prisma-json';
@@ -108,6 +108,12 @@ export class QuestionsService {
     ]);
 
     return paged(query, rows.map(toSummary), total);
+  }
+
+  /** The bank as a workbook: what the export queue's worker writes, never a request. */
+  async exportWorkbook(query: QuestionExportQuery): Promise<{ workbook: Buffer; rows: number }> {
+    const { questions, authoring } = await this.exportRows(query);
+    return { workbook: await writeQuestionExport(questions, authoring), rows: questions.length };
   }
 
   /** Every row the list would page through, unsigned — a cell carries the image KEY the stem hash folds. */

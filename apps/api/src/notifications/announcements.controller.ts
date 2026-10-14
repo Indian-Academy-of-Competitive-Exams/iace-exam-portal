@@ -1,15 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  Query,
-  Res,
-} from '@nestjs/common';
-import { type Response } from 'express';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
@@ -23,11 +12,12 @@ import {
   type AnnouncementPreview,
   type AnnouncementSummary,
   type CreateAnnouncementBody,
+  type ExportStarted,
   type Paginated,
   type AnnouncementListQuery,
 } from '@iace/contracts';
 import { Audit, AuditContext } from '../audit';
-import { sendWorkbook } from '../common/exporting';
+import { ExportJobsService } from '../common/exporting';
 import {
   Actors,
   CurrentUser,
@@ -45,6 +35,7 @@ export class AnnouncementsController {
   constructor(
     private readonly announcements: AnnouncementsService,
     private readonly auditContext: AuditContext,
+    private readonly exportJobs: ExportJobsService,
   ) {}
 
   @RequiresFeature(FEATURE_KEYS.NOTIFICATION_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -87,12 +78,13 @@ export class AnnouncementsController {
   }
 
   @RequiresExport(FEATURE_KEYS.NOTIFICATION_MANAGEMENT)
-  @Audit(AUDIT_FEATURE.ANNOUNCEMENT, AUDIT_ACTION.EXPORT)
-  @Get(':id/deliveries/export')
-  async deliveriesExport(@Param('id') id: string, @Res() response: Response): Promise<void> {
-    const { workbook, rows } = await this.announcements.exportDeliveries(id);
-    this.auditContext.setEntityId(id);
-    this.auditContext.setChanged({ rows: { from: null, to: rows } });
-    sendWorkbook(response, EXPORT_KINDS.ANNOUNCEMENT_DELIVERIES, workbook);
+  @Post(':id/deliveries/export')
+  @HttpCode(HttpStatus.ACCEPTED)
+  deliveriesExport(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ExportStarted> {
+    const request = { kind: EXPORT_KINDS.ANNOUNCEMENT_DELIVERIES, announcementId: id } as const;
+    return this.exportJobs.start(request, user);
   }
 }

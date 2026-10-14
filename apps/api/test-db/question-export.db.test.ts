@@ -32,6 +32,7 @@ import { QuestionImportService } from '../src/questions/question-import.service'
 import { QuestionsController } from '../src/questions/questions.controller';
 import { QuestionsService } from '../src/questions/questions.service';
 import { FakeStorage } from '../test/support/fakes';
+import { fetchExport, inlineExports } from './support/exports';
 import { BANK, makeQuestionBank, resetDatabase, testPrisma, uid } from './support/database';
 
 const prisma = testPrisma();
@@ -44,16 +45,17 @@ const AUTHOR = uid();
 const OTHER_AUTHOR = uid();
 
 let caller: AuthenticatedUser;
+const { jobs, Collect } = inlineExports(prisma, { questions });
 
 /** tsx emits no decorator metadata, so Nest cannot inject by type; the route itself is inherited whole. */
 class ExportController extends QuestionsController {
   constructor() {
-    super(questions, auditContext);
+    super(questions, jobs);
   }
 }
 
 @Module({
-  controllers: [ExportController],
+  controllers: [ExportController, Collect],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
@@ -111,8 +113,9 @@ function adminWith(permissions: AdminPermissions): AuthenticatedUser {
 type Cell = ExcelJS.CellValue;
 
 async function workbookOf(query: Record<string, string> = {}): Promise<ExcelJS.Workbook> {
-  const response = await fetch(
-    `${baseUrl}/admin/questions/export?${new URLSearchParams(query).toString()}`,
+  const response = await fetchExport(
+    baseUrl,
+    `/admin/questions/export?${new URLSearchParams(query).toString()}`,
   );
   assert.equal(response.status, 200);
   const workbook = new ExcelJS.Workbook();

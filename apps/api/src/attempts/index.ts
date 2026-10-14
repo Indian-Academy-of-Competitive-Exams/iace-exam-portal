@@ -11,7 +11,7 @@ export {
 export { answersOf } from './answer-sheet';
 /** A test's figures and its report's sheets, for a report that prints one of them. */
 export { TestAnalyticsService } from './test-analytics.service';
-export { TestReportSheets, type ResultRow, type SummaryRow } from './test-report';
+export { TestReportSheets, buildTestReport, type ResultRow, type SummaryRow } from './test-report';
 /** One sitting's card, a paper's own marks and a section column read back: a student's report is these. */
 export { PerformanceAnalyticsService } from './performance.service';
 export { AttemptReportService } from './attempt-report.service';
