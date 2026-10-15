@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { Controller, Get, Header, Headers, Res } from '@nestjs/common';
 import { type Response } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -35,8 +36,14 @@ export class MetricsController {
   private assertScraper(authorization: string | undefined): void {
     const token = this.config.get('METRICS_TOKEN');
     if (!token) return;
-    if (authorization !== `Bearer ${token}`) {
+    if (!sameSecret(authorization ?? '', `Bearer ${token}`)) {
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Not a scraper we know');
     }
   }
+}
+
+/** Hashed first so the lengths match, which `timingSafeEqual` requires and a length check would leak. */
+function sameSecret(given: string, expected: string): boolean {
+  const digest = (value: string) => createHash('sha256').update(value).digest();
+  return timingSafeEqual(digest(given), digest(expected));
 }

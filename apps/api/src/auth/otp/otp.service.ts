@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { createHmac, randomInt } from 'node:crypto';
+import { createHmac, hkdfSync, randomInt } from 'node:crypto';
 import {
   ActorTypes,
   AppException,
@@ -25,6 +25,7 @@ import {
 import { type StoredOtp } from '../auth.types';
 
 const HOUR_SEC = 60 * 60;
+const OTP_HASH_INFO = 'iace:otp-hash';
 const DAY_SEC = 24 * HOUR_SEC;
 
 /** How long a code the desk reads out is good for. Short: it is said aloud, to somebody standing there. */
@@ -64,6 +65,7 @@ const SIGNUP_BUDGET: DailyBudget = {
 /** OTP lifecycle. */
 @Injectable()
 export class OtpService {
+  private otpKey: Buffer | undefined;
   private readonly logger = new Logger(OtpService.name);
 
   constructor(
@@ -290,7 +292,15 @@ export class OtpService {
   }
 
   private hash(code: string): string {
-    return createHmac('sha256', this.config.get('JWT_ACCESS_SECRET')).update(code).digest('hex');
+    return createHmac('sha256', this.hashKey()).update(code).digest('hex');
+  }
+
+  /** A key of its own, derived so an OTP hash and a token signature never share one key. */
+  private hashKey(): Buffer {
+    this.otpKey ??= Buffer.from(
+      hkdfSync('sha256', this.config.get('JWT_ACCESS_SECRET'), '', OTP_HASH_INFO, 32),
+    );
+    return this.otpKey;
   }
 }
 
