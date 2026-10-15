@@ -3,7 +3,7 @@
  * confirmation are here rather than in a template, so a new skin cannot ship
  * without them — and the data attribute is what scopes that skin's tokens.
  */
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type SyntheticEvent } from 'react';
 import { Send } from 'lucide-react';
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, Calculator, ConfirmDialog } from '@iace/ui';
@@ -41,8 +41,12 @@ export function ExamShell({
     <div
       // Lowercased for CSS, where the skin's whole palette hangs off this one attribute.
       data-exam-template={template.toLowerCase()}
-      // A sitting is not a document to copy from: neither skin lets the paper be selected.
-      className="relative flex h-dvh select-none flex-col bg-exam-surface text-exam-ink"
+      // A sitting is not a document to copy from: not selected, copied, dragged out or printed.
+      className="relative flex h-dvh select-none flex-col bg-exam-surface text-exam-ink print:hidden"
+      onCopy={refuse}
+      onCut={refuse}
+      onContextMenu={refuse}
+      onDragStart={refuse}
     >
       {!online || view.hasUnsaved ? (
         <Alert variant="warning" className="mx-3 mt-2 shrink-0">
@@ -135,3 +139,5 @@ function CalculatorPanel({ onClose }: Readonly<{ onClose: () => void }>) {
     <Calculator display={display} keypad={CALCULATOR_KEYPAD} onKey={press} onClose={onClose} />
   );
 }
+
+const refuse = (event: SyntheticEvent) => event.preventDefault();

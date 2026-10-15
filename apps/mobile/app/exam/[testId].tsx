@@ -7,6 +7,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { BackHandler, View } from 'react-native';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppException, ErrorCodes, type ExamQuestion } from '@iace/contracts';
 import {
@@ -51,6 +52,8 @@ const refuse = async () => false;
 /** Asked before any sitting is started: a typing section cannot be sat here, and the clock must not find that out. */
 export default function ExamScreen() {
   const { testId = '' } = useLocalSearchParams<{ testId: string }>();
+  // The paper leaves the hall by screenshot or recording otherwise; Android blanks both, and the app switcher too.
+  usePreventScreenCapture();
   const brief = useQuery(briefQuery(testId));
 
   if (brief.data && needsKeyboard(brief.data)) {
