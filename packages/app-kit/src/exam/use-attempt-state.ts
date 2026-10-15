@@ -10,7 +10,6 @@ import {
   ErrorCodes,
   isReviewState,
   QUESTION_TIME_MAX_SEC,
-  SAVE_BATCH_MAX,
   type AnswerChange,
   type AnswerState,
   type ExamClock,
@@ -18,17 +17,13 @@ import {
   type SectionProgress,
 } from '@iace/contracts';
 import { type AppApiClient } from '../api-client';
-import {
-  autosaveDelayMs,
-  FINISH_WAIT_MS,
-  SAVE_TIMEOUT_MS,
-  seedRevision,
-  shouldFlushNow,
-  shouldHeartbeat,
-} from '../autosave-policy';
+import { autosaveDelayMs, shouldFlushNow } from '../autosave-policy';
 import { isWorthAskingAgain } from '../query-client';
 import { type KeyValueStorage } from '../token-store';
 import { createPendingAnswers, type PendingAnswers } from './pending-answers';
+import { createSaveLoop, type LastBatch, type SaveLoop } from './save-loop';
+
+export { type LastBatch } from './save-loop';
 
 /** Where unsent answers wait: a synchronous store, so the last answer before the app dies is kept. */
 export interface AnswerQueue {
@@ -118,13 +113,6 @@ const answerOf = (change: AnswerChange, held: LiveAnswer | undefined): LiveAnswe
   firstActionAt: held?.firstActionAt ?? change.firstActionAt ?? null,
 });
 
-/** What a save would have carried, handed to the call that ends the sitting instead. */
-export interface LastBatch {
-  revision: number;
-  answers: AnswerChange[];
-  sections: Record<string, SectionProgress>;
-}
-
 /** What the bottom bar can say. Absent means "leave that half as it was". */
 export interface AnswerIntent {
   selectedOptionId?: string | null;
@@ -156,7 +144,6 @@ export function useAttemptState(
   const [takenOver, setTakenOver] = useState(false);
   const [setAside, setSetAside] = useState(false);
   const [ended, setEnded] = useState(false);
-  const stopped = useRef(false);
   // This screen answers no more, whatever resumes: the sitting is held elsewhere, or over.
   const stoodDown = useRef(false);
 
@@ -164,16 +151,11 @@ export function useAttemptState(
   const answersNow = useRef<Record<string, LiveAnswer>>(answers);
   const openedAt = useRef(0);
   const openQuestion = useRef<string | null>(null);
-  const revision = useRef(0);
   const fresh = useRef(startedByThisCall);
-  const inFlight = useRef<Promise<boolean> | null>(null);
   const seeded = useRef(false);
   // The same fact as `seeded`, drawn: a typing box stays shut until what was typed before has arrived.
   const [answersLoaded, setAnswersLoaded] = useState(startedByThisCall);
-  const giveUp = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastSaveFailed = useRef(false);
-  // When the server last answered this screen: the start that mounted it, then every save since.
-  const heardAt = useRef(0);
 
   const commit = useCallback((next: Record<string, LiveAnswer>) => {
     answersNow.current = next;
@@ -182,7 +164,6 @@ export function useAttemptState(
 
   // Either refusal keeps the queue: continued here, it is resent as it stands.
   const standDown = useCallback((forAnotherTest = false) => {
-    stopped.current = true;
     stoodDown.current = true;
     setSetAside(forAnotherTest);
     setTakenOver(true);
@@ -195,7 +176,6 @@ export function useAttemptState(
 
   // Unlike a stand-down there is nothing to continue, so nothing is kept to send.
   const endHere = useCallback(() => {
-    stopped.current = true;
     stoodDown.current = true;
     queue.clear();
     unsaved(false);
@@ -211,6 +191,20 @@ export function useAttemptState(
     },
     [endHere, standDown],
   );
+
+  const saving = useRef<SaveLoop>(undefined);
+  const loop = (saving.current ??= createSaveLoop({
+    queue,
+    post: (batch, init) => {
+      const { api, tab } = mounted.current;
+      return api.me.saveAttemptState(attemptId, { ...batch, tab }, init);
+    },
+    saving: setIsSaving,
+    clock: setClock,
+    unsaved,
+    refused,
+    stoodDown: () => stoodDown.current,
+  }));
 
   // Seeded from the server until it lands: a reloaded tab has answers it cannot otherwise see.
   useEffect(() => {
@@ -232,8 +226,7 @@ export function useAttemptState(
           setSectionsSettled(true);
           seeded.current = true;
           setAnswersLoaded(true);
-          // Never backwards: a flush racing this GET may already have moved the counter on.
-          revision.current = seedRevision(revision.current, held.revision);
+          loop.seed(held.revision);
         },
         (error: unknown) => {
           if (!live) return;
@@ -248,145 +241,24 @@ export function useAttemptState(
       live = false;
       clearTimeout(again);
     };
-  }, [attemptId, commit, refused]);
-
-  const failed = useCallback(
-    (error: unknown) => {
-      unsaved(true);
-      refused(error);
-    },
-    [refused, unsaved],
-  );
+  }, [attemptId, commit, loop, refused]);
 
   const hasUnsent = useCallback(() => queue.anyUnsent(), [queue]);
 
-  const unsentBatch = useCallback(
-    (): LastBatch => ({ revision: revision.current, ...queue.batch() }),
-    [queue],
-  );
+  const resume = useCallback(() => loop.resume(), [loop]);
 
-  // In the air until it settles, so whatever comes next waits behind it and the last call really is last.
-  const inAir = useCallback((run: Promise<boolean>): Promise<boolean> => {
-    const marked = run.finally(() => {
-      if (inFlight.current === marked) inFlight.current = null;
-    });
-    inFlight.current = marked;
-    return marked;
-  }, []);
-
-  const save = useCallback(async (): Promise<boolean> => {
-    // Nothing to send is the idle tick saying this device is here: not a save the screen reports.
-    const heartbeat = !queue.anyUnsent();
-    revision.current += 1;
-    const batch = unsentBatch();
-    if (!heartbeat) setIsSaving(true);
-    const abandon = new AbortController();
-    giveUp.current = setTimeout(() => abandon.abort(), SAVE_TIMEOUT_MS);
-    try {
-      const { api, tab } = mounted.current;
-      const saved = await api.me.saveAttemptState(
-        attemptId,
-        { ...batch, tab },
-        { signal: abandon.signal },
-      );
-      revision.current = seedRevision(revision.current, saved.revision);
-      heardAt.current = Date.now();
-      // Answering is also a clock check: the deadline it answers with is the one that counts.
-      setClock({ endsAt: saved.endsAt, serverNow: saved.serverNow, arrivedAt: Date.now() });
-      // A batch behind the one the server holds answers 200 too; only `applied` says it landed.
-      const applied = saved.applied !== false;
-      if (applied) queue.acknowledge(batch);
-      if (!heartbeat) unsaved(!applied);
-      return applied;
-    } catch (error: unknown) {
-      if (heartbeat) refused(error);
-      else failed(error);
-      return false;
-    } finally {
-      clearTimeout(giveUp.current);
-      setIsSaving(false);
-    }
-  }, [attemptId, failed, queue, refused, unsaved, unsentBatch]);
-
-  const flush = useCallback(async (): Promise<boolean> => {
-    // Nothing awaited between the last check and the send, so two saves never fly side by side.
-    while (inFlight.current) await inFlight.current;
-    const idle = !hasUnsent();
-    if (stopped.current || idle) return idle;
-    // A backlog past one batch goes up in consecutive saves; one oversized batch would be refused forever.
-    let over = queue.size() - SAVE_BATCH_MAX;
-    let sent = await inAir(save());
-    while (sent && over > 0 && !stopped.current) {
-      over -= SAVE_BATCH_MAX;
-      sent = await inAir(save());
-    }
-    return sent;
-  }, [hasUnsent, inAir, queue, save]);
-
-  const finish = useCallback(
-    async <T>(send: (batch: LastBatch | null) => Promise<T>): Promise<T> => {
-      // Behind a save in the air, but not for long: the last batch carries its answers too.
-      const giveUpAt = Date.now() + FINISH_WAIT_MS;
-      while (inFlight.current && Date.now() < giveUpAt) {
-        await settledWithin(inFlight.current, giveUpAt - Date.now());
-      }
-      // Nothing is saved beside the paper going in, nor between its retries, nor after it went.
-      stopped.current = true;
-      // Only one batch may ride the paper, so a backlog past it goes up as saves while it still can.
-      let over = queue.size() - SAVE_BATCH_MAX;
-      while (over > 0 && (await save())) over -= SAVE_BATCH_MAX;
-      const idle = !hasUnsent();
-      if (!idle) revision.current += 1;
-      const going = (async () => {
-        try {
-          const done = await send(idle ? null : unsentBatch());
-          queue.clear();
-          return done;
-        } catch (error: unknown) {
-          failed(error);
-          throw error;
-        }
-      })();
-      void inAir(
-        going.then(
-          () => true,
-          () => false,
-        ),
-      );
-      return going;
-    },
-    [failed, hasUnsent, inAir, queue, save, unsentBatch],
-  );
-
-  const resume = useCallback(() => {
-    stopped.current = stoodDown.current;
-  }, []);
-
-  // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      const idle = !hasUnsent() && !stopped.current && !inFlight.current;
-      // Idle and in touch, the tick still sends: only this device's silence hands the sitting on.
-      if (idle && shouldHeartbeat(heardAt.current, Date.now())) void inAir(save());
-      else void flush();
-      timer = setTimeout(tick, autosaveDelayMs());
-    };
-    timer = setTimeout(tick, autosaveDelayMs());
-    return () => clearTimeout(timer);
-  }, [flush, hasUnsent, inAir, save]);
+  useEffect(() => loop.start(), [loop]);
 
   // The first question is open from the moment the paper is on screen, not from the first click.
   useEffect(() => {
     openedAt.current = Date.now();
-    heardAt.current = Date.now();
+    loop.heard();
     queue.attach();
-    // Unmounted, a save still in the air is left to land; only its give-up timer goes.
     return () => {
       queue.detach();
-      clearTimeout(giveUp.current);
+      loop.dispose();
     };
-  }, [queue]);
+  }, [loop, queue]);
 
   const record = useCallback(
     (change: AnswerChange) => {
@@ -434,11 +306,11 @@ export function useAttemptState(
       openedAt.current = Date.now();
       record(changeFor(questionId, answersNow.current[questionId], next, spent, seenAt));
       // Between saves only, and not after one failed: the timer retries, rather than every tap.
-      if (!inFlight.current && !lastSaveFailed.current && shouldFlushNow(queue.size())) {
-        void flush();
+      if (!loop.isBusy() && !lastSaveFailed.current && shouldFlushNow(queue.size())) {
+        void loop.flush();
       }
     },
-    [flush, queue, record],
+    [loop, queue, record],
   );
 
   const type = useCallback(
@@ -474,15 +346,10 @@ export function useAttemptState(
   // Fire and forget, on keepalive: the page is gone before any answer could be read.
   const leave = useCallback(() => {
     // The paper going in carries everything unsent itself; a keepalive save beside it is one more write.
-    if (stopped.current) return;
+    if (loop.isStopped()) return;
     bankOpen();
-    if (!hasUnsent()) return;
-    revision.current += 1;
-    const { api, tab } = mounted.current;
-    void api.me
-      .saveAttemptState(attemptId, { ...unsentBatch(), tab }, { keepalive: true })
-      .catch(() => undefined);
-  }, [attemptId, bankOpen, hasUnsent, unsentBatch]);
+    loop.leave();
+  }, [bankOpen, loop]);
 
   return {
     answers,
@@ -502,8 +369,8 @@ export function useAttemptState(
     bankOpen,
     enterSection,
     closeSection,
-    flush,
-    finish,
+    flush: loop.flush,
+    finish: loop.finish,
     resume,
     hasUnsent,
     leave,
@@ -585,15 +452,6 @@ function stateFor(
   const answered = option !== null || (typed ?? '').trim() !== '';
   if (answered) return marked ? ANSWER_STATE.ANSWERED_MARKED : ANSWER_STATE.ANSWERED;
   return marked ? ANSWER_STATE.MARKED_REVIEW : ANSWER_STATE.NOT_ANSWERED;
-}
-
-/** Settles when `run` does or after `ms`, whichever comes first. */
-function settledWithin(run: Promise<unknown>, ms: number): Promise<unknown> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise((resolve) => {
-    timer = setTimeout(resolve, ms);
-  });
-  return Promise.race([run, late]).finally(() => clearTimeout(timer));
 }
 
 /** An epoch ref as an instant. Zero means the clock never started, which is not a time to record. */
