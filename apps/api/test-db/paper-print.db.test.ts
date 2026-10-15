@@ -21,8 +21,8 @@ import {
 import { AccessResolverService } from '../src/access/access-resolver.service';
 import { AuditContext, AuditContextMiddleware, AuditInterceptor } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
-import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
-import { AdminPaperPrintController } from '../src/attempts/paper-print.controller';
+import { AttemptPaperService } from '../src/attempts/sitting/attempt-paper.service';
+import { AdminPaperPrintController } from '../src/attempts/results/paper-print.controller';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';

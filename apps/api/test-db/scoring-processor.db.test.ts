@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, NOTIFICATION_TYPE, PAPER_QUESTION_STATUS } from '@iace/contracts';
-import { ScoringProcessor } from '../src/attempts/scoring.processor';
-import { sectionScoresIn } from '../src/attempts/score-paper';
+import { ScoringProcessor } from '../src/attempts/scoring/scoring.processor';
+import { sectionScoresIn } from '../src/attempts/scoring/score-paper';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { RollupService } from '../src/attempts/rollup.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
+import { RollupService } from '../src/attempts/results/rollup.service';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { ROLLUP_JOBS } from '../src/queue/queues';

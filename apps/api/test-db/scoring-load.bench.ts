@@ -6,10 +6,10 @@
  */
 import { execFileSync } from 'node:child_process';
 import { ANSWER_STATE, ATTEMPT_STATUS, STUDENT_TYPE, type LiveAnswer } from '@iace/contracts';
-import { ScoringProcessor } from '../src/attempts/scoring.processor';
+import { ScoringProcessor } from '../src/attempts/scoring/scoring.processor';
 import { PaperSheetService, SHEET_ROW_SELECT } from '../src/attempts/paper-sheet.service';
-import { RollupService } from '../src/attempts/rollup.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
+import { RollupService } from '../src/attempts/results/rollup.service';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { sheetOf } from '../src/attempts/answer-sheet';
 import { FakeQueue, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';

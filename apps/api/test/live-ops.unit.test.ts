@@ -6,8 +6,8 @@ import {
   sittingsFrom,
   watchableTestsWhere,
   type SittingRow,
-} from '../src/attempts/live-ops';
-import { type HeldState } from '../src/attempts/attempt-state';
+} from '../src/attempts/sitting/live-ops';
+import { type HeldState } from '../src/attempts/sitting/attempt-state';
 
 const STARTED_AT = new Date('2026-09-09T09:30:00.000Z');
 const ENDS_AT = new Date('2026-09-09T10:30:00.000Z');

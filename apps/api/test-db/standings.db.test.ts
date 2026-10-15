@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
 import { ATTEMPT_STATUS } from '@iace/contracts';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { LeaderboardService } from '../src/attempts/results/leaderboard.service';
 import {
   makeCatalog,
   makeSitting,

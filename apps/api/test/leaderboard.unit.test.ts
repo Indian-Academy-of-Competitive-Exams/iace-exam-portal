@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { LEADERBOARD_MAX_TIME_SEC, timeTakenSec } from '../src/attempts/leaderboard-score';
+import { LEADERBOARD_MAX_TIME_SEC, timeTakenSec } from '../src/attempts/scoring/leaderboard-score';
 
 describe('timeTakenSec', () => {
   const startedAt = new Date('2026-09-01T05:00:00.000Z');

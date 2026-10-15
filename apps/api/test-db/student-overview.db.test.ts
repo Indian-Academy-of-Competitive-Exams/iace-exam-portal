@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { TEST_SCOPE, scopesSat, studentOverviewSchema, type TestScope } from '@iace/contracts';
-import { StudentOverviewService } from '../src/attempts/overview.service';
+import { StudentOverviewService } from '../src/attempts/results/overview.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { FakeLeaderboard, makeStanding, type FakeStanding } from '../test/support/fakes';
 import { makeStudent, makeSubject, resetDatabase, testPrisma } from './support/database';

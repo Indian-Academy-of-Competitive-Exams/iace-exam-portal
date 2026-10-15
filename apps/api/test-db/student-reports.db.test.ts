@@ -10,9 +10,9 @@ import {
   reportChoicesQuerySchema,
 } from '@iace/contracts';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { RollupService } from '../src/attempts/rollup.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
-import { ScoringProcessor } from '../src/attempts/scoring.processor';
+import { RollupService } from '../src/attempts/results/rollup.service';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
+import { ScoringProcessor } from '../src/attempts/scoring/scoring.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { FakeMetrics, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {

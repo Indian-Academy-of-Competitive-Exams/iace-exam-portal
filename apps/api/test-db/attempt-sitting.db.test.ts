@@ -11,14 +11,14 @@ import {
   type AnswerChange,
 } from '@iace/contracts';
 import { AccessResolverService } from '../src/access/access-resolver.service';
-import { AttemptFlushProcessor } from '../src/attempts/attempt-flush.processor';
-import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
-import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
-import { AttemptsService } from '../src/attempts/attempts.service';
+import { AttemptFlushProcessor } from '../src/attempts/sitting/attempt-flush.processor';
+import { AttemptPaperService } from '../src/attempts/sitting/attempt-paper.service';
+import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
+import { AttemptsService } from '../src/attempts/sitting/attempts.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { ScoringQueue } from '../src/attempts/scoring-queue';
-import { SubmitService } from '../src/attempts/submit.service';
+import { ScoringQueue } from '../src/attempts/scoring/scoring-queue';
+import { SubmitService } from '../src/attempts/sitting/submit.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakeMetrics, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import {

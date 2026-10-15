@@ -5,8 +5,8 @@ import {
   SUPPORT_ACTIONS,
   resolutionBlocker,
   supportDiff,
-} from '../src/attempts/attempt-resolution';
-import { slotsAfter } from '../src/attempts/attempt-rules';
+} from '../src/attempts/sitting/attempt-resolution';
+import { slotsAfter } from '../src/attempts/sitting/attempt-rules';
 
 const LIVE_ONLY = [
   SUPPORT_ACTIONS.FORCE_SUBMIT,

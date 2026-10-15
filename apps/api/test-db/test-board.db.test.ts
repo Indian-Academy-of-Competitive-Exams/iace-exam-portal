@@ -9,8 +9,8 @@ import {
   type Leaderboard,
   type LeaderboardRow,
 } from '@iace/contracts';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
-import { LeaderboardViewService } from '../src/attempts/leaderboard-view.service';
+import { LeaderboardService } from '../src/attempts/results/leaderboard.service';
+import { LeaderboardViewService } from '../src/attempts/results/leaderboard-view.service';
 import {
   makeCatalog,
   makeSitting,

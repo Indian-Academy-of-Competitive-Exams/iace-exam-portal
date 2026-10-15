@@ -21,11 +21,11 @@ import {
 import { AccessResolverService } from '../src/access/access-resolver.service';
 import { AuditContext, AuditContextMiddleware, AuditInterceptor } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
-import { packedSections } from '../src/attempts/score-paper';
-import { standingsSql, type StandingRow } from '../src/attempts/ranking-sql';
-import { AdminTestAnalyticsController } from '../src/attempts/test-analytics.controller';
-import { TestAnalyticsService } from '../src/attempts/test-analytics.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
+import { packedSections } from '../src/attempts/scoring/score-paper';
+import { standingsSql, type StandingRow } from '../src/attempts/results/ranking-sql';
+import { AdminTestAnalyticsController } from '../src/attempts/results/test-analytics.controller';
+import { TestAnalyticsService } from '../src/attempts/results/test-analytics.service';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { type AuthenticatedUser } from '../src/common/security';
 import { FakeQueue, FakeRedis, FakeStorage } from '../test/support/fakes';

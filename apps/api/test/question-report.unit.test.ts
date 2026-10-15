@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { COHORT_COMPARISON_FLOOR } from '@iace/contracts';
-import { paceIndexOf } from '../src/attempts/question-report';
+import { paceIndexOf } from '../src/attempts/results/question-report';
 
 describe('paceIndexOf', () => {
   it('reads above one for slower than the field and below it for faster', () => {

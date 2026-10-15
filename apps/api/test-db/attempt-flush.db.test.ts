@@ -2,11 +2,11 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ANSWER_STATE, ATTEMPT_STATUS, type AttemptStatus } from '@iace/contracts';
-import { AttemptFlushProcessor } from '../src/attempts/attempt-flush.processor';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { AttemptFlushProcessor } from '../src/attempts/sitting/attempt-flush.processor';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
 import { FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import { redisKeys } from '../src/redis/redis.keys';
-import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
+import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import {
   makePaper,

@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { API_ROLES, onRole, rolePlays, roleNamed } from '../src/config/api-role';
-import { AttemptsController } from '../src/attempts/attempts.controller';
-import { MeLeaderboardController } from '../src/attempts/leaderboard.controller';
-import { MeOverviewController } from '../src/attempts/overview.controller';
-import { MePerformanceController } from '../src/attempts/performance.controller';
-import { MeAttemptReportController } from '../src/attempts/attempt-report.controller';
-import { MeQuestionReportController } from '../src/attempts/question-report.controller';
+import { AttemptsController } from '../src/attempts/sitting/attempts.controller';
+import { MeLeaderboardController } from '../src/attempts/results/leaderboard.controller';
+import { MeOverviewController } from '../src/attempts/results/overview.controller';
+import { MePerformanceController } from '../src/attempts/results/performance.controller';
+import { MeAttemptReportController } from '../src/attempts/results/attempt-report.controller';
+import { MeQuestionReportController } from '../src/attempts/results/question-report.controller';
 import { MeController } from '../src/me/me.controller';
 import { SavedController } from '../src/saved/saved.controller';
 

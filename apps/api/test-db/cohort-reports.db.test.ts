@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { REPORT_KEYS, TEST_SERIES_KIND, TEST_STATUS } from '@iace/contracts';
-import { packedSections } from '../src/attempts/score-paper';
+import { packedSections } from '../src/attempts/scoring/score-paper';
 import {
   makeBranch,
   makeCatalog,

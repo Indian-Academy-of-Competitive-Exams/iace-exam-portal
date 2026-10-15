@@ -12,7 +12,7 @@ import {
   scorePaper,
   sectionScoresIn,
   type ScorableQuestion,
-} from '../src/attempts/score-paper';
+} from '../src/attempts/scoring/score-paper';
 import { rowAt } from './support/fakes';
 
 const MARKS = 2;

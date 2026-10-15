@@ -3,19 +3,19 @@ import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import type { Prisma } from '@prisma/client';
 import { ANSWER_STATE, ATTEMPT_STATUS, STUDENT_TYPE } from '@iace/contracts';
-import { AttemptFlushProcessor } from '../src/attempts/attempt-flush.processor';
-import { AttemptResolutionService } from '../src/attempts/attempt-resolution.service';
-import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
+import { AttemptFlushProcessor } from '../src/attempts/sitting/attempt-flush.processor';
+import { AttemptResolutionService } from '../src/attempts/sitting/attempt-resolution.service';
+import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';
 import {
   AttemptSweeperProcessor,
   NEVER_SCORED_BATCH_CEILING,
   RESCORE_PAGE,
   SWEEP_BATCH,
   SWEEP_LANES,
-} from '../src/attempts/attempt-sweeper.processor';
-import { RollupQueue } from '../src/attempts/rollup-queue';
-import { ScoringQueue } from '../src/attempts/scoring-queue';
-import { SubmitService } from '../src/attempts/submit.service';
+} from '../src/attempts/sitting/attempt-sweeper.processor';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
+import { ScoringQueue } from '../src/attempts/scoring/scoring-queue';
+import { SubmitService } from '../src/attempts/sitting/submit.service';
 import { AuditContext } from '../src/audit';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import {
@@ -25,7 +25,7 @@ import {
   rescoreJobId,
   scoringJobId,
 } from '../src/queue/queues';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { FakeMetrics, FakeQueue, FakeRedis, fakeQueueFailures } from '../test/support/fakes';
 import {

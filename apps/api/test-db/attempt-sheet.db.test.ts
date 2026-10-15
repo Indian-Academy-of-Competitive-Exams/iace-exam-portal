@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ANSWER_STATE, ATTEMPT_STATUS, type LiveAnswer } from '@iace/contracts';
-import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
+import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { type HeldState } from '../src/attempts/attempt-state';
+import { type HeldState } from '../src/attempts/sitting/attempt-state';
 import {
   makePaper,
   makeStudent,

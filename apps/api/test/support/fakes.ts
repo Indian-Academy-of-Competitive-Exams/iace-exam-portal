@@ -7,7 +7,7 @@ import {
   type LeaderboardService,
   type SittingStanding,
   type Standing,
-} from '../../src/attempts/leaderboard.service';
+} from '../../src/attempts/results/leaderboard.service';
 import { type StorageService } from '../../src/storage/storage.service';
 import {
   type MessageChannel,

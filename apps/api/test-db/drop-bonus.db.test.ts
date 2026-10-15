@@ -10,14 +10,14 @@ import {
   type PaperQuestionStatus,
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
-import { AttemptSweeperProcessor } from '../src/attempts/attempt-sweeper.processor';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
+import { AttemptSweeperProcessor } from '../src/attempts/sitting/attempt-sweeper.processor';
+import { LeaderboardService } from '../src/attempts/results/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
-import { RollupService } from '../src/attempts/rollup.service';
-import { ScoringProcessor } from '../src/attempts/scoring.processor';
-import { ScoringQueue } from '../src/attempts/scoring-queue';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
+import { RollupService } from '../src/attempts/results/rollup.service';
+import { ScoringProcessor } from '../src/attempts/scoring/scoring.processor';
+import { ScoringQueue } from '../src/attempts/scoring/scoring-queue';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { NotificationsService } from '../src/notifications/notifications.service';

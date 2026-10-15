@@ -8,12 +8,12 @@ import {
   ErrorCodes,
   type AttemptStatus,
 } from '@iace/contracts';
-import { AttemptResolutionService } from '../src/attempts/attempt-resolution.service';
-import { SUPPORT_ACTIONS } from '../src/attempts/attempt-resolution';
-import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { AttemptResolutionService } from '../src/attempts/sitting/attempt-resolution.service';
+import { SUPPORT_ACTIONS } from '../src/attempts/sitting/attempt-resolution';
+import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
 import { AuditContext } from '../src/audit';
 import { ROLLUP_JOBS } from '../src/queue/queues';
 import { FakeQueue, FakeRedis } from '../test/support/fakes';

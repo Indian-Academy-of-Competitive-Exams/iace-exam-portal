@@ -24,7 +24,7 @@ import {
 } from '@iace/contracts';
 import { AuditContext, AuditContextMiddleware, AuditInterceptor } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
-import { packedSections } from '../src/attempts/score-paper';
+import { packedSections } from '../src/attempts/scoring/score-paper';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { ReportsController } from '../src/reports/reports.controller';
 import { FakeStorage } from '../test/support/fakes';

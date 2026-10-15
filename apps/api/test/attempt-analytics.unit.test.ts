@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ANSWER_STATE } from '@iace/contracts';
-import { timeUseOf, type AnalysedQuestion } from '../src/attempts/attempt-analytics';
+import { timeUseOf, type AnalysedQuestion } from '../src/attempts/results/attempt-analytics';
 
 function asked(overrides: Partial<AnalysedQuestion> = {}): AnalysedQuestion {
   return {

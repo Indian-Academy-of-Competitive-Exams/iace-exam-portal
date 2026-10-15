@@ -14,13 +14,13 @@ import {
   TYPING_PRESET_KEY,
   type PerformanceReport,
 } from '@iace/contracts';
-import { AttemptReportService } from '../src/attempts/attempt-report.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { AttemptReportService } from '../src/attempts/results/attempt-report.service';
+import { LeaderboardService } from '../src/attempts/results/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
-import { RollupService } from '../src/attempts/rollup.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
-import { ScoringProcessor } from '../src/attempts/scoring.processor';
+import { PerformanceAnalyticsService } from '../src/attempts/results/performance.service';
+import { RollupService } from '../src/attempts/results/rollup.service';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
+import { ScoringProcessor } from '../src/attempts/scoring/scoring.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { FakeQueue, FakeStorage, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';

@@ -17,10 +17,10 @@ import {
   type TestStatus,
 } from '@iace/contracts';
 import { AccessResolverService } from '../src/access/access-resolver.service';
-import { AttemptResolutionService } from '../src/attempts/attempt-resolution.service';
-import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
-import { AttemptsService } from '../src/attempts/attempts.service';
+import { AttemptResolutionService } from '../src/attempts/sitting/attempt-resolution.service';
+import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
+import { AttemptsService } from '../src/attempts/sitting/attempts.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { AuditContext } from '../src/audit';
 import type { PrismaService } from '../src/prisma/prisma.service';

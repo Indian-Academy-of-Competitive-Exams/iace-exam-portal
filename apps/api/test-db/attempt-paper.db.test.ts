@@ -19,10 +19,10 @@ import {
   type TimerTemplate,
 } from '@iace/contracts';
 import { AccessResolverService } from '../src/access/access-resolver.service';
-import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
+import { AttemptPaperService } from '../src/attempts/sitting/attempt-paper.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { AttemptReportService } from '../src/attempts/attempt-report.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { AttemptReportService } from '../src/attempts/results/attempt-report.service';
+import { LeaderboardService } from '../src/attempts/results/leaderboard.service';
 import { FakeRedis } from '../test/support/fakes';
 import {
   makePaper,

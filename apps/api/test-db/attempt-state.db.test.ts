@@ -8,7 +8,7 @@ import {
   ErrorCodes,
   type AnswerChange,
 } from '@iace/contracts';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
 import { sheetOf } from '../src/attempts/answer-sheet';
 import { PaperSheetService, SHEET_ROW_SELECT } from '../src/attempts/paper-sheet.service';
 import { type PrismaService } from '../src/prisma/prisma.service';

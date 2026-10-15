@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, ErrorCodes, fieldEffortSchema, type AppException } from '@iace/contracts';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { LeaderboardService } from '../src/attempts/results/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
-import { RollupService } from '../src/attempts/rollup.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
-import { ScoringProcessor } from '../src/attempts/scoring.processor';
+import { PerformanceAnalyticsService } from '../src/attempts/results/performance.service';
+import { RollupService } from '../src/attempts/results/rollup.service';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
+import { ScoringProcessor } from '../src/attempts/scoring/scoring.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { FakeMetrics, FakeQueue, fakeQueueFailures } from '../test/support/fakes';
 import {

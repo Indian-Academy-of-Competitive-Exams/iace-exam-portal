@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ErrorCodes, PRESENT_GRACE_SEC, type AppException } from '@iace/contracts';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
 import {
   heldIn,
   holdsSitting,
   sittingRefusal,
   type HeldState,
-} from '../src/attempts/attempt-state';
+} from '../src/attempts/sitting/attempt-state';
 import { type PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';

@@ -26,8 +26,8 @@ import {
 } from '@iace/contracts';
 import { AuditContext, AuditContextMiddleware, AuditInterceptor } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
-import { StudentOverviewService } from '../src/attempts/overview.service';
+import { LeaderboardService } from '../src/attempts/results/leaderboard.service';
+import { StudentOverviewService } from '../src/attempts/results/overview.service';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { type AuthenticatedUser } from '../src/common/security';

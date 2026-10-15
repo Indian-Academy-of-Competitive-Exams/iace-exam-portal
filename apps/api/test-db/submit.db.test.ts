@@ -10,14 +10,14 @@ import {
   type AnswerChange,
   type AttemptStatus,
 } from '@iace/contracts';
-import { AttemptResolutionService } from '../src/attempts/attempt-resolution.service';
-import { AttemptSheetService } from '../src/attempts/attempt-sheet.service';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
-import { AttemptSweeperProcessor } from '../src/attempts/attempt-sweeper.processor';
+import { AttemptResolutionService } from '../src/attempts/sitting/attempt-resolution.service';
+import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
+import { AttemptSweeperProcessor } from '../src/attempts/sitting/attempt-sweeper.processor';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
-import { ScoringQueue } from '../src/attempts/scoring-queue';
-import { SubmitService } from '../src/attempts/submit.service';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
+import { ScoringQueue } from '../src/attempts/scoring/scoring-queue';
+import { SubmitService } from '../src/attempts/sitting/submit.service';
 import { AuditContext } from '../src/audit';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { QUEUE_NAMES, scoringJobId } from '../src/queue/queues';

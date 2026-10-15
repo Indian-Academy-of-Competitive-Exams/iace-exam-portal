@@ -1,0 +1,252 @@
+/**
+ * The per-question table for one sitting. ONE read of the paper carries the sheet and its key, and
+ * it runs only past the gate the review shares: a sitting not yet marked is refused before any
+ * `questionVersion` loads. The cohort's own columns come off the rollup tables and nowhere else — a
+ * question no job has counted yet reads as a dash, never as a scan.
+ */
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import {
+  ATTEMPT_STATUS,
+  COHORT_COMPARISON_FLOOR,
+  QUESTION_TYPE,
+  scopedSections,
+  servedQuestions,
+  type QuestionOption,
+  type QuestionReport,
+} from '@iace/contracts';
+import { PrismaService } from '../../prisma/prisma.service';
+import { LeaderboardService } from './leaderboard.service';
+import { answeredRows, type ServedAnswer } from '../answer-sheet';
+import { elapsedSeconds, refuseUnreadable, toScoreCardQuestion } from '../attempt-report';
+import { SHEET_ROW_SELECT } from '../paper-sheet.service';
+import { optionCountsIn, pValueOf } from './rollup-fold';
+import { answerKeyIn, optionsIn, scopeRefOf } from '../../common/prisma-json';
+import { topperOf, type TopperTimes } from './topper';
+import {
+  paceIndexOf,
+  questionReportRow,
+  type CohortItem,
+  type KeyedQuestion,
+  type SatQuestion,
+} from './question-report';
+
+const NOT_MARKED = 'This paper has not been marked yet, so there is nothing to compare.';
+
+/** No `questionVersion` anywhere in here. That absence is the feature. */
+const REPORT_SELECT = {
+  id: true,
+  testId: true,
+  startedAt: true,
+  shuffleSeed: true,
+  sheet: { select: { answers: true, verdicts: true } },
+  test: {
+    select: {
+      title: true,
+      scope: true,
+      scopeRef: true,
+      baseConfig: {
+        select: {
+          durationSec: true,
+          shuffleQuestions: true,
+          shuffleOptions: true,
+          sections: {
+            select: {
+              id: true,
+              moduleId: true,
+              name: true,
+              order: true,
+              questionCount: true,
+              durationSec: true,
+            },
+            orderBy: { order: 'asc' },
+          },
+        },
+      },
+    },
+  },
+} as const satisfies Prisma.AttemptSelect;
+
+/** The KEY, read with the sheet's rows and reached only past the marked-sitting gate. */
+const KEY_ROW_SELECT = {
+  questionId: true,
+  question: { select: { type: true } },
+  questionVersion: { select: { options: true, answerKey: true } },
+} as const satisfies Prisma.PaperQuestionSelect;
+
+const REPORT_ROW_SELECT = {
+  ...SHEET_ROW_SELECT,
+  ...KEY_ROW_SELECT,
+  marks: true,
+  negativeMarks: true,
+  status: true,
+} as const satisfies Prisma.PaperQuestionSelect;
+
+type ReportPaperRow = Prisma.PaperQuestionGetPayload<{ select: typeof REPORT_ROW_SELECT }> &
+  ServedAnswer & { options: readonly QuestionOption[] };
+
+type ReportRow = Prisma.AttemptGetPayload<{ select: typeof REPORT_SELECT }>;
+
+@Injectable()
+export class QuestionReportService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaderboard: LeaderboardService,
+  ) {}
+
+  async forAttempt(studentId: string, attemptId: string): Promise<QuestionReport> {
+    // Marked is in the WHERE, so a refusal never pays for the nested reads behind the row.
+    const attempt = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId, status: ATTEMPT_STATUS.EVALUATED },
+      select: REPORT_SELECT,
+    });
+    if (!attempt) return refuseUnreadable(this.prisma, studentId, attemptId, NOT_MARKED);
+
+    // One read of the paper serves both the sheet and its key.
+    const [cohort, paper, topper, rows, sittings] = await Promise.all([
+      this.cohortItems(attempt.testId),
+      this.paperTotals(attempt.testId),
+      topperOf(this.prisma, attempt.testId),
+      this.prisma.paperQuestion.findMany({
+        where: { testId: attempt.testId },
+        orderBy: { order: 'asc' },
+        select: REPORT_ROW_SELECT,
+      }),
+      this.leaderboard.cohortSize(attempt.testId),
+    ]);
+    const config = attempt.test.baseConfig;
+    // The review's own sequencer, so "Option 2" here is the second row a student reads there.
+    const served = servedQuestions(
+      answeredRows(rows, attempt).map((row) => ({
+        ...row,
+        options: optionsIn(row.questionVersion.options),
+      })),
+      attempt.shuffleSeed,
+      config.shuffleQuestions,
+      config.shuffleOptions,
+      // A typing passage is neither answered nor skipped, so it is not a row of this report.
+    ).filter((row) => row.question.type !== QUESTION_TYPE.TYPING);
+
+    return this.assemble(attempt, served, {
+      cohort,
+      paper,
+      topper,
+      keyed: keyOf(served),
+      sittings,
+    });
+  }
+
+  private assemble(
+    attempt: ReportRow,
+    served: readonly ReportPaperRow[],
+    held: {
+      cohort: ReadonlyMap<string, CohortItem>;
+      paper: { evaluatedCount: number; sumTimeSec: number };
+      topper: TopperTimes;
+      keyed: ReadonlyMap<string, KeyedQuestion>;
+      sittings: number;
+    },
+  ): QuestionReport {
+    // The same floor `paceIndexOf` holds, over the n the rolled columns were counted from.
+    const compared = held.paper.evaluatedCount >= COHORT_COMPARISON_FLOOR;
+    const questions = served.map((row) =>
+      questionReportRow(
+        toSat(row),
+        compared ? (held.cohort.get(row.id) ?? null) : null,
+        compared ? (held.topper.byPaperQuestion.get(row.id) ?? null) : null,
+        held.keyed.get(row.questionId) ?? null,
+      ),
+    );
+    const yourTimeSec = served.reduce((total, row) => total + row.timeSpentSec, 0);
+    const { test } = attempt;
+
+    return {
+      attemptId: attempt.id,
+      testId: attempt.testId,
+      testTitle: attempt.test.title,
+      cohortSize: held.sittings,
+      paceIndex: paceIndexOf(yourTimeSec, held.paper.sumTimeSec, held.paper.evaluatedCount),
+      sections: scopedSections(test.baseConfig.sections, test.scope, scopeRefOf(test)).map(
+        ({ moduleId: _moduleId, ...section }) => section,
+      ),
+      questions,
+    };
+  }
+
+  /** The rollup's item analysis, keyed by the paper row a sitting was served. */
+  private async cohortItems(testId: string): Promise<Map<string, CohortItem>> {
+    const rows = await this.prisma.testQuestionStat.findMany({
+      where: { testId },
+      select: {
+        paperQuestionId: true,
+        skippedCount: true,
+        correctCount: true,
+        wrongCount: true,
+        sumTimeSec: true,
+        optionCounts: true,
+      },
+    });
+    return new Map(
+      rows.map((row) => [
+        row.paperQuestionId,
+        {
+          attemptedCount: row.correctCount + row.wrongCount,
+          skippedCount: row.skippedCount,
+          correctCount: row.correctCount,
+          sumTimeSec: Number(row.sumTimeSec),
+          pValue: pValueOf(row.correctCount, row.wrongCount),
+          optionCounts: optionCountsIn(row.optionCounts),
+        },
+      ]),
+    );
+  }
+
+  /** What the whole paper cost the cohort, for the pace index. Zeroes where no rollup has run. */
+  private async paperTotals(
+    testId: string,
+  ): Promise<{ evaluatedCount: number; sumTimeSec: number }> {
+    const stat = await this.prisma.testStat.findUnique({
+      where: { testId },
+      select: { evaluatedCount: true, sumTimeSec: true },
+    });
+    return {
+      evaluatedCount: stat?.evaluatedCount ?? 0,
+      sumTimeSec: stat === null ? 0 : Number(stat.sumTimeSec),
+    };
+  }
+}
+
+/** Each option numbered by the seat this sitting was served it in, which is the one a student saw. */
+function keyOf(served: readonly ReportPaperRow[]): Map<string, KeyedQuestion> {
+  const keyed = new Map<string, KeyedQuestion>();
+  for (const row of served) {
+    keyed.set(row.questionId, {
+      options: row.options.map((option, seat) => ({ ...option, position: seat + 1 })),
+      correctAnswer:
+        row.question.type === QUESTION_TYPE.TEXT_FIELD
+          ? acceptedAnswerIn(row.questionVersion.answerKey)
+          : null,
+    });
+  }
+  return keyed;
+}
+
+function toSat(row: ReportPaperRow): SatQuestion {
+  return {
+    ...toScoreCardQuestion(row),
+    paperQuestionId: row.id,
+    // Null unless BOTH instants exist: a sitting from before this was measured has neither.
+    timeToRespondSec:
+      row.firstActionAt && row.answeredAt
+        ? elapsedSeconds(row.firstActionAt, row.answeredAt)
+        : null,
+  };
+}
+
+/** The first answer the key accepts. A typed question has no option to point at instead. */
+function acceptedAnswerIn(stored: Prisma.JsonValue): string | null {
+  const key = answerKeyIn(stored);
+  return key === null
+    ? null
+    : (Object.values(key.answers ?? {}).find((value) => typeof value === 'string') ?? null);
+}

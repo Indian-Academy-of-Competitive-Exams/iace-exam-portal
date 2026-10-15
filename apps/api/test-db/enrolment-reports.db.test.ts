@@ -9,7 +9,7 @@ import {
   STUDENT_TYPE,
   TEST_SERIES_KIND,
 } from '@iace/contracts';
-import { SUPPORT_ACTIONS, supportDiff } from '../src/attempts/attempt-resolution';
+import { SUPPORT_ACTIONS, supportDiff } from '../src/attempts/sitting/attempt-resolution';
 import {
   makeAdmin,
   makeBranch,

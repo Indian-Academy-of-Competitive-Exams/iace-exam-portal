@@ -17,9 +17,9 @@ const iacePlugin = {
 
 /** The live answer path and ONLY it: the flusher, submit and the sweeper write Postgres by design. */
 const LIVE_ANSWER_PATH = [
-  'src/attempts/attempt-state.service.ts',
-  'src/attempts/attempt-state.ts',
-  'src/attempts/attempts.controller.ts',
+  'src/attempts/sitting/attempt-state.service.ts',
+  'src/attempts/sitting/attempt-state.ts',
+  'src/attempts/sitting/attempts.controller.ts',
 ];
 
 export default defineConfig([

@@ -6,8 +6,8 @@ import { type ExecutionContext } from '@nestjs/common';
 import { ActorTypes, AppException, ErrorCodes, type LeaderboardRow } from '@iace/contracts';
 import { ActorGuard } from '../src/auth/guards/actor.guard';
 import { IS_PUBLIC_KEY, type AuthenticatedUser } from '../src/common/security';
-import { MeLeaderboardController } from '../src/attempts/leaderboard.controller';
-import { pageRanks, splitBoard } from '../src/attempts/leaderboard-board';
+import { MeLeaderboardController } from '../src/attempts/results/leaderboard.controller';
+import { pageRanks, splitBoard } from '../src/attempts/results/leaderboard-board';
 
 describe('splitBoard', () => {
   it('takes the top three as the podium and the page in order under it', () => {

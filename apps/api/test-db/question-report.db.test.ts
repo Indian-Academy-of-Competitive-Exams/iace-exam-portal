@@ -10,13 +10,13 @@ import {
   TEST_SCOPE,
   questionReportSchema,
 } from '@iace/contracts';
-import { AttemptReportService } from '../src/attempts/attempt-report.service';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { AttemptReportService } from '../src/attempts/results/attempt-report.service';
+import { LeaderboardService } from '../src/attempts/results/leaderboard.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
-import { QuestionReportService } from '../src/attempts/question-report.service';
-import { RollupService } from '../src/attempts/rollup.service';
-import { RollupQueue } from '../src/attempts/rollup-queue';
-import { ScoringProcessor } from '../src/attempts/scoring.processor';
+import { QuestionReportService } from '../src/attempts/results/question-report.service';
+import { RollupService } from '../src/attempts/results/rollup.service';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
+import { ScoringProcessor } from '../src/attempts/scoring/scoring.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { FakeQueue, FakeStorage, fakeQueueFailures, FakeMetrics } from '../test/support/fakes';
 import {

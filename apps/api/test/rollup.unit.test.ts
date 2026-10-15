@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { type Job } from 'bullmq';
-import { type RollupService } from '../src/attempts/rollup.service';
-import { RollupProcessor } from '../src/attempts/rollup.processor';
-import { RollupQueue } from '../src/attempts/rollup-queue';
+import { type RollupService } from '../src/attempts/results/rollup.service';
+import { RollupProcessor } from '../src/attempts/results/rollup.processor';
+import { RollupQueue } from '../src/attempts/results/rollup-queue';
 import {
   COHORT_SWEEP_JOB_ID,
   DRAINED_ROLLUP_JOBS,

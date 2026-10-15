@@ -14,14 +14,14 @@ import {
 } from '@iace/contracts';
 import { type AuthenticatedUser } from '../src/common/security';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
-import { AdminPerformanceController } from '../src/attempts/performance.controller';
+import { AdminPerformanceController } from '../src/attempts/results/performance.controller';
 import {
   cohortShapeOf,
   compositionOf,
   flagYours,
   sectionalStandingOf,
   type ReportedQuestion,
-} from '../src/attempts/performance-analytics';
+} from '../src/attempts/results/performance-analytics';
 
 function asked(overrides: Partial<ReportedQuestion> = {}): ReportedQuestion {
   return {

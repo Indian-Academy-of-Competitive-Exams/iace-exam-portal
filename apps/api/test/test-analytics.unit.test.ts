@@ -15,8 +15,8 @@ import {
   type ItemTotals,
   type SectionTotals,
   type StatTotals,
-} from '../src/attempts/test-analytics';
-import { type CohortShape } from '../src/attempts/performance-analytics';
+} from '../src/attempts/results/test-analytics';
+import { type CohortShape } from '../src/attempts/results/performance-analytics';
 
 const COMPUTED_AT = new Date('2026-09-09T04:30:00.000Z');
 

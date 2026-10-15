@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, type AttemptStatus } from '@iace/contracts';
-import { LiveOpsService } from '../src/attempts/live-ops.service';
+import { LiveOpsService } from '../src/attempts/sitting/live-ops.service';
 import { makeBranch, makePaper, makeStudent, resetDatabase, testPrisma } from './support/database';
 
 const prisma = testPrisma();

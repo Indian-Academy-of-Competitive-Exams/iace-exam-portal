@@ -6,7 +6,7 @@ import {
   type AnswerChange,
   type LiveAnswer,
 } from '@iace/contracts';
-import { AttemptStateService } from '../src/attempts/attempt-state.service';
+import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';
 import { type PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
 import { redisKeys } from '../src/redis/redis.keys';
@@ -27,7 +27,7 @@ import {
   SAVE_GRACE_SEC,
   stateOf,
   type HeldState,
-} from '../src/attempts/attempt-state';
+} from '../src/attempts/sitting/attempt-state';
 
 const ENDS_AT = '2026-09-01T05:30:00.000Z';
 
