@@ -20,6 +20,7 @@ import {
   type ExamPaper,
   type ExamTemplate,
   type StartedAttempt,
+  type TimerTemplate,
   type SubmittedAttempt,
 } from '@iace/contracts';
 import { autosaveDelayMs, SITTING_ENDED_SAYS } from '@iace/app-kit';
@@ -40,6 +41,8 @@ const LATER_SECTION = 'Reasoning';
 const HANDED_IN = 'Handed in';
 const REPORT = 'Report';
 const RIGHT_OPTION_ID = 'q1-a';
+const FIRST_SECTION = 'Quant';
+const SECTION_SEC = 60;
 const LONGEST_AUTOSAVE_MS = autosaveDelayMs(() => 1);
 
 /** A skin's own words for handing the paper in, and for saying yes to it. */
@@ -72,27 +75,33 @@ const question = (questionId: string, order: number, sectionId: string, stem: st
   })),
 });
 
-const paper = (examTemplate: ExamTemplate): ExamPaper => ({
-  attemptId: ATTEMPT_ID,
-  endsAt: new Date(Date.now() + 3_600_000).toISOString(),
-  serverNow: new Date().toISOString(),
-  languages: [LANGUAGE_CODE.EN],
-  languageMode: LANGUAGE_MODE.SINGLE,
-  examTemplate,
-  testUi: TEST_UI.CBT,
-  timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
-  navigation: NAVIGATION_POLICY.FREE,
-  calculatorEnabled: false,
-  sections: [
-    { id: 'sec1', name: 'Quant', order: 1, questionCount: 2, durationSec: null },
-    { id: 'sec2', name: LATER_SECTION, order: 2, questionCount: 1, durationSec: null },
-  ],
-  questions: [
-    question('q1', 1, 'sec1', STEM),
-    question('q2', 2, 'sec1', NEXT_STEM),
-    question('q3', 3, 'sec2', 'Pick one.'),
-  ],
-});
+const paper = (
+  examTemplate: ExamTemplate,
+  timerTemplate: TimerTemplate = TIMER_TEMPLATE.COMPOSITE_FREE,
+): ExamPaper => {
+  const sectionSec = timerTemplate === TIMER_TEMPLATE.COMPOSITE_FREE ? null : SECTION_SEC;
+  return {
+    attemptId: ATTEMPT_ID,
+    endsAt: new Date(Date.now() + 3_600_000).toISOString(),
+    serverNow: new Date().toISOString(),
+    languages: [LANGUAGE_CODE.EN],
+    languageMode: LANGUAGE_MODE.SINGLE,
+    examTemplate,
+    testUi: TEST_UI.CBT,
+    timerTemplate,
+    navigation: NAVIGATION_POLICY.FREE,
+    calculatorEnabled: false,
+    sections: [
+      { id: 'sec1', name: FIRST_SECTION, order: 1, questionCount: 2, durationSec: sectionSec },
+      { id: 'sec2', name: LATER_SECTION, order: 2, questionCount: 1, durationSec: sectionSec },
+    ],
+    questions: [
+      question('q1', 1, 'sec1', STEM),
+      question('q2', 2, 'sec1', NEXT_STEM),
+      question('q3', 3, 'sec2', 'Pick one.'),
+    ],
+  };
+};
 
 const STARTED = {
   id: ATTEMPT_ID,
@@ -119,9 +128,13 @@ afterEach(() => {
 });
 
 /** The server, answering as a fresh sitting does; `save` is what a save meets. */
-function serve(examTemplate: ExamTemplate, save: () => Promise<unknown> = savedAll) {
+function serve(
+  examTemplate: ExamTemplate,
+  save: () => Promise<unknown> = savedAll,
+  timerTemplate: TimerTemplate = TIMER_TEMPLATE.COMPOSITE_FREE,
+) {
   mock.method(api.me, 'startAttempt', () => Promise.resolve(STARTED));
-  mock.method(api.me, 'attemptPaper', () => Promise.resolve(paper(examTemplate)));
+  mock.method(api.me, 'attemptPaper', () => Promise.resolve(paper(examTemplate, timerTemplate)));
   return {
     saves: mock.method(api.me, 'saveAttemptState', save),
     submits: mock.method(api.me, 'submitAttempt', () => Promise.resolve(SUBMITTED)),
@@ -225,6 +238,112 @@ for (const skin of SKIN_NAMES) {
       assert.equal(submits.mock.callCount(), 1);
       assert.equal(submits.mock.calls[0]?.arguments[0], ATTEMPT_ID);
       assert.ok(carriesTheAnswer(submits.mock.calls[0]?.arguments[1]));
+    });
+  });
+}
+
+/** A skin's own words for leaving a section early; Railways and Default have no such control. */
+const LEAVES_A_SECTION = {
+  [EXAM_TEMPLATE.BANKING]: { leave: 'SUBMIT SECTION', confirm: 'Submit Section' },
+  [EXAM_TEMPLATE.SSC]: { leave: 'Next Section', confirm: 'Next Section' },
+} as const;
+
+/** The state a closed section is sent in, beside the answers. */
+type SentSections = { sections?: Record<string, { closed?: boolean }> };
+
+const closesTheFirstSection = (body: unknown) =>
+  (body as SentSections).sections?.sec1?.closed === true;
+
+/** The section's tab or button, if the skin still draws one, is switched off. */
+function assertCannotOpen(name: string) {
+  for (const role of ['tab', 'button'] as const) {
+    const control = screen.queryByRole(role, { name });
+    if (control) assert.ok(control.hasAttribute('disabled') || control.ariaDisabled === 'true');
+  }
+}
+
+for (const skin of Object.keys(LEAVES_A_SECTION) as (keyof typeof LEAVES_A_SECTION)[]) {
+  describe(`leaving a section early in the ${skin} skin`, () => {
+    const words = LEAVES_A_SECTION[skin];
+
+    async function leaveFirstSection() {
+      const served = serve(skin, savedAll, TIMER_TEMPLATE.SECTIONAL_LOCKED);
+      open();
+      await screen.findByText(STEM);
+      chooseAndMoveOn();
+      await screen.findByText(NEXT_STEM);
+
+      fireEvent.click(screen.getByRole('button', { name: words.leave }));
+      fireEvent.click(screen.getAllByRole('button', { name: words.confirm }).at(-1) as HTMLElement);
+      return served;
+    }
+
+    /** The failure this prevents: a section handed in that the student can walk back into. */
+    it('moves on to the next section and cannot go back', async () => {
+      await leaveFirstSection();
+
+      assert.ok(await screen.findByText('Pick one.'));
+      assert.equal(screen.queryByText(STEM), null);
+      assertCannotOpen(FIRST_SECTION);
+    });
+
+    /** The failure this prevents: a finished section whose answers and closing never reached the server. */
+    it('sends the section answers, and that it closed, to the server', async () => {
+      const { saves, submits } = await leaveFirstSection();
+      await screen.findByText('Pick one.');
+      await settle();
+
+      const bodies = saves.mock.calls.map((call) => call.arguments[1]);
+      assert.ok(bodies.some(carriesTheAnswer));
+      assert.ok(bodies.some(closesTheFirstSection));
+      assert.equal(submits.mock.callCount(), 0);
+    });
+  });
+}
+
+for (const skin of SKIN_NAMES) {
+  describe(`a section running out of time in the ${skin} skin`, () => {
+    async function runOutOfTime() {
+      mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: Date.now() });
+      const served = serve(skin, savedAll, TIMER_TEMPLATE.SECTIONAL_LOCKED);
+      open();
+      await settle();
+      return served;
+    }
+
+    const tickSection = async () => {
+      await act(async () => mock.timers.tick(SECTION_SEC * 1000));
+      await settle();
+    };
+
+    /** The failure this prevents: a section whose clock ended and the student kept answering it. */
+    it('moves to the next section by itself and keeps the answers', async () => {
+      const { saves, submits } = await runOutOfTime();
+      chooseAndMoveOn();
+      await settle();
+
+      await tickSection();
+
+      assert.ok(screen.getByText('Pick one.'));
+      assert.equal(screen.queryByText(STEM), null);
+      assertCannotOpen(FIRST_SECTION);
+      assert.ok(saves.mock.calls.some((call) => carriesTheAnswer(call.arguments[1])));
+      assert.ok(saves.mock.calls.some((call) => closesTheFirstSection(call.arguments[1])));
+      assert.equal(submits.mock.callCount(), 0);
+    });
+
+    /** The failure this prevents: a last section that runs out and leaves the paper sitting open. */
+    it('hands the paper in once when the last section runs out', async () => {
+      const { submits } = await runOutOfTime();
+      chooseAndMoveOn();
+      await settle();
+      await tickSection();
+
+      await tickSection();
+
+      assert.ok(screen.getByText(HANDED_IN));
+      assert.equal(submits.mock.callCount(), 1);
+      assert.equal(submits.mock.calls[0]?.arguments[0], ATTEMPT_ID);
     });
   });
 }
