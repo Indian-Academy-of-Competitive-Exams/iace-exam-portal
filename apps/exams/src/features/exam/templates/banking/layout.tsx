@@ -27,7 +27,8 @@ import { RailwayOptions, RailwayQuestion } from '../railway/question';
 import profileImage from '../railway/assets/profile.png';
 import { BankingInstructionsDialog, BankingPauseDialog } from './info-dialog';
 import { BankingGeneral } from './instructions';
-import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL, StateBadge } from './states';
+import { StateBadge } from './state-badge';
+import { LEGEND_ORDER, STATE_CLASS, STATE_LABEL } from './states';
 import { BankingSummaryDialog } from './submit-dialog';
 import './banking.css';
 import {

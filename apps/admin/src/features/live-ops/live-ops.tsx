@@ -30,7 +30,8 @@ import { liveOpsBoardQueryKey } from '../../lib/query-keys';
 import { LIVE_OPS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useAuth } from '../../providers/auth';
 import { LiveTestPicker } from './live-test-picker';
-import { SittingActions, useSittingActions, type AskSittingAction } from './sitting-actions';
+import { useSittingActions, type AskSittingAction } from './sitting-actions';
+import { SittingActions } from './sitting-actions-menu';
 
 const TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,

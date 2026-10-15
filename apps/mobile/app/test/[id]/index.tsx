@@ -35,14 +35,16 @@ import { briefQuery, catalogQuery } from '../../../src/lib/queries';
 import { Alert } from '../../../src/components/ui/alert';
 import { Button } from '../../../src/components/ui/button';
 import { Card } from '../../../src/components/ui/card';
-import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
+import { EmptyState } from '../../../src/components/ui/empty-state';
+import { EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state-kinds';
 import { Skeleton } from '../../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../../src/components/ui/stat-tile';
 import { ExamJourney } from '../../../src/components/tests/exam-journey';
 import { PastAttempts } from '../../../src/components/tests/past-attempts';
 import { DETAIL_ROUTES } from '../../../src/lib/nav';
 import { cn } from '../../../src/lib/cn';
-import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
+import { HeaderTourTrigger } from '../../../src/lib/page-tour';
+import { usePageTour, useTourTarget } from '../../../src/lib/use-page-tour';
 import { TEST_ABOUT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import Play from 'lucide-react-native/icons/play';
 import RotateCcw from 'lucide-react-native/icons/rotate-ccw';
@@ -89,7 +91,7 @@ export default function TestAboutScreen() {
   return (
     <Fragment>
       <Stack.Screen
-        options={{ title: brief.data?.title ?? 'Test', headerRight: renderTourTrigger }}
+        options={{ title: brief.data?.title ?? 'Test', headerRight: HeaderTourTrigger }}
       />
       <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-5 px-5 py-6">
         <AboutContent

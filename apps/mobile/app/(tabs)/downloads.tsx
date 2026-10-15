@@ -17,7 +17,8 @@ import {
 } from '@iace/app-kit';
 import { Button } from '../../src/components/ui/button';
 import { Picker } from '../../src/components/ui/picker';
-import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
+import { EmptyState } from '../../src/components/ui/empty-state';
+import { EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state-kinds';
 import { Skeleton } from '../../src/components/ui/skeleton';
 import { StatTile, StatTileRow } from '../../src/components/ui/stat-tile';
 import { Text } from '../../src/components/ui/text';

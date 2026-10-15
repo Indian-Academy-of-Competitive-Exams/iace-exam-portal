@@ -19,7 +19,8 @@ import {
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
-import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
+import { TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
+import { NO_SERIES } from '../../components/no-series';
 import { api } from '../../lib/api';
 import { QUERY_KEYS, studentSeriesQueryKey } from '../../lib/query-keys';
 import { SERIES_SOURCE_LABELS } from '../../lib/labels';

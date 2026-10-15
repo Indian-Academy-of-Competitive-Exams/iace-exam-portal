@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { NavBadge, useNavBadge } from './nav-badges';
+import { NavBadge } from './nav-badges';
+import { useNavBadge } from './nav-badge-context';
 import {
   cn,
   Popover,

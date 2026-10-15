@@ -5,7 +5,7 @@ import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { type StudentCatalogSeries } from '@iace/contracts';
 import { seriesProgress, type Sittable, type TestResult, plural } from '@iace/app-kit';
 import { Text } from '../ui/text';
-import { useTourTarget } from '../../lib/page-tour';
+import { useTourTarget } from '../../lib/use-page-tour';
 import { DETAIL_ROUTES } from '../../lib/nav';
 import { TestTile } from './test-tile';
 

@@ -15,7 +15,8 @@ import {
   cn,
 } from '@iace/ui';
 import { collapseLoneSections, filterNavByPermission, type NavItem } from '../src';
-import { NavBadgeProvider, type NavBadges } from './app-shell/nav-badges';
+import type { NavBadges } from './app-shell/nav-badge-context';
+import { NavBadgeProvider } from './app-shell/nav-badges';
 import { NavPanel } from './app-shell/nav-panel';
 import { UserMenu } from './app-shell/user-menu';
 import { DESKTOP_QUERY, useMediaQuery } from './app-shell/use-media-query';

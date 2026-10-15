@@ -10,15 +10,7 @@ import SearchX from 'lucide-react-native/icons/search-x';
 import { Text } from './text';
 import { cn } from '../../lib/cn';
 import { Button } from './button';
-
-/** The four absences a region can have. The glyph says which one before a word is read. */
-export const EMPTY_STATE_KINDS = {
-  EMPTY: 'EMPTY',
-  FILTERED: 'FILTERED',
-  FAILURE: 'FAILURE',
-  REFUSED: 'REFUSED',
-} as const;
-export type EmptyStateKind = (typeof EMPTY_STATE_KINDS)[keyof typeof EMPTY_STATE_KINDS];
+import { EMPTY_STATE_KINDS, type EmptyStateKind } from './empty-state-kinds';
 
 const KIND_ICON: Readonly<Record<EmptyStateKind, LucideIcon>> = {
   EMPTY: Inbox,

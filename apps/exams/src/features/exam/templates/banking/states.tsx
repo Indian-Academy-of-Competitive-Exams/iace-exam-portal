@@ -1,6 +1,5 @@
 /** The five answer states of the banking skin, drawn in CSS and shared by the grid, the legend and the tab tallies. */
 import { ANSWER_STATE, type AnswerState, type PaletteCounts } from '@iace/contracts';
-import { cn } from '@iace/ui';
 
 export const STATE_CLASS: Readonly<Record<AnswerState, string>> = {
   [ANSWER_STATE.NOT_VISITED]: 'notvisited',
@@ -26,10 +25,6 @@ export const LEGEND_ORDER: readonly AnswerState[] = [
   ANSWER_STATE.MARKED_REVIEW,
   ANSWER_STATE.ANSWERED_MARKED,
 ];
-
-export function StateBadge({ state, count }: Readonly<{ state: AnswerState; count?: number }>) {
-  return <span className={cn('bk-cell bk-badge', STATE_CLASS[state])}>{count}</span>;
-}
 
 /** An answer marked for review is still evaluated, so the summary counts it as answered. */
 export function summaryOf(counts: PaletteCounts): {

@@ -186,7 +186,9 @@ describe('Combobox label after a search', () => {
   it('keeps naming the chosen item once a search leaves it out of the list', () => {
     const { rerender } = show(box({ value: 'ext_2' }));
 
-    rerender(<TooltipProvider>{box({ value: 'ext_2', items: [items[0]!] })}</TooltipProvider>);
+    rerender(
+      <TooltipProvider>{box({ value: 'ext_2', items: items.slice(0, 1) })}</TooltipProvider>,
+    );
 
     assert.ok(screen.getByRole('button', { name: 'RRB JE' }));
     assert.equal(screen.queryByRole('button', { name: 'ext_2' }), null);

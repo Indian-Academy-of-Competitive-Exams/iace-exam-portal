@@ -42,8 +42,8 @@ export function scrollToCard(card: HTMLElement | undefined) {
   card.scrollIntoView({ block: 'start', behavior: 'smooth' });
   const typing = document.activeElement?.closest('[data-card]');
   if (!typing || typing === card) return;
-  // Typing follows the card in view, never the one scrolled away.
   const box = card.querySelector<HTMLElement>('[contenteditable="true"]');
+  // eslint-disable-next-line @iace/no-manual-focus -- typing follows the card in view, and no dialog is closing here.
   if (box) box.focus({ preventScroll: true });
   else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 }

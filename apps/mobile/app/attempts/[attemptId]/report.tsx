@@ -16,8 +16,10 @@ import {
 import { performanceQuery, scoreCardQuery } from '../../../src/lib/queries';
 import { Alert } from '../../../src/components/ui/alert';
 import { ChipRow, type ChipOption } from '../../../src/components/ui/chip-row';
-import { EmptyState, EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state';
-import { renderTourTrigger, usePageTour, useTourTarget } from '../../../src/lib/page-tour';
+import { EmptyState } from '../../../src/components/ui/empty-state';
+import { EMPTY_STATE_KINDS } from '../../../src/components/ui/empty-state-kinds';
+import { HeaderTourTrigger } from '../../../src/lib/page-tour';
+import { usePageTour, useTourTarget } from '../../../src/lib/use-page-tour';
 import { REPORT_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../../src/lib/tours';
 import { ComparePanel } from '../../../src/components/report/compare-panel';
 import { QuestionsPanel } from '../../../src/components/report/questions-panel';
@@ -65,7 +67,7 @@ export default function ReportScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <Stack.Screen options={{ headerRight: renderTourTrigger }} />
+      <Stack.Screen options={{ headerRight: HeaderTourTrigger }} />
       <View className="gap-3 px-5 pt-4">
         {title ? (
           <Text className="text-xl font-bold tracking-tight text-foreground" numberOfLines={2}>

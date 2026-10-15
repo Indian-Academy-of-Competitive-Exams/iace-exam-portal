@@ -21,7 +21,8 @@ import { Badge } from '../src/components/ui/badge';
 import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
 import { FilterSearch, FilterSummary, FilterTrigger } from '../src/components/ui/filter-bar';
-import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
+import { EmptyState } from '../src/components/ui/empty-state';
+import { EMPTY_STATE_KINDS } from '../src/components/ui/empty-state-kinds';
 import { ListFooter } from '../src/components/ui/list-footer';
 import { Skeleton } from '../src/components/ui/skeleton';
 

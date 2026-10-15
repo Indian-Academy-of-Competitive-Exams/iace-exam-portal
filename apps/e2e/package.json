@@ -5,7 +5,7 @@
   "scripts": {
     "e2e": "playwright test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "clean": "rm -rf dist .turbo test-results playwright-report"
   },
   "devDependencies": {

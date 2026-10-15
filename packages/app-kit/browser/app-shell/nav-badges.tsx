@@ -1,22 +1,12 @@
 import * as React from 'react';
 import { cn } from '@iace/ui';
-
-/** Counts a nav row carries, keyed by its route — a number, so `nav.ts` stays DOM-free. */
-export type NavBadges = Readonly<Record<string, number>>;
-
-const NavBadgeContext = React.createContext<NavBadges>({});
+import { NavBadgeContext, type NavBadges } from './nav-badge-context';
 
 export function NavBadgeProvider({
   badges,
   children,
 }: Readonly<{ badges: NavBadges; children: React.ReactNode }>) {
   return <NavBadgeContext value={badges}>{children}</NavBadgeContext>;
-}
-
-/** Zero is no badge: a row announcing "0 unread" is a row saying nothing. */
-export function useNavBadge(to: string | undefined): number {
-  const badges = React.useContext(NavBadgeContext);
-  return to === undefined ? 0 : (badges[to] ?? 0);
 }
 
 /** Past this the count stops being a number and becomes "a lot", which is all it has to say. */

@@ -9,7 +9,7 @@
     "android": "node webview/build.mjs && expo run:android",
     "build": "node webview/build.mjs && expo export --platform android",
     "typecheck": "node webview/build.mjs && tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json && tsc -p webview/tsconfig.json",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "test": "TSX_TSCONFIG_PATH=test/tsconfig.json node --import tsx --test \"test/**/*.test.ts\"",
     "clean": "rm -rf dist webview/dist .expo .turbo"
   },

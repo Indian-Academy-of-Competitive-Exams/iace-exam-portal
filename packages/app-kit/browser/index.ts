@@ -115,4 +115,5 @@ export { useListScreen } from './use-list-screen';
 export { useScrollList } from './use-scroll-list';
 export { useLocalFilters, type FilterStore } from './use-local-filters';
 export { shrunkForUpload, worthEncoding, drawnSize, webpName } from './shrink-image';
-export { TourProvider, TourTrigger, usePageTour } from './page-tour';
+export { TourProvider, TourTrigger } from './page-tour';
+export { usePageTour } from './use-page-tour';

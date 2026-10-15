@@ -1,7 +1,8 @@
 /** The tally an (i) drops open, on the test header and on every section tab. */
 import { useEffect, useRef, useState } from 'react';
 import { type AnswerState } from '@iace/contracts';
-import { STATE_LABEL, StateSwatch } from './states';
+import { StateSwatch } from './state-swatch';
+import { STATE_LABEL } from './states';
 
 export function InfoTally({
   counts,

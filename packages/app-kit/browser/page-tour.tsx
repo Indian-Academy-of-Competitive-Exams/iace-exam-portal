@@ -1,13 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CircleQuestionMark } from 'lucide-react';
 import {
   Button,
@@ -17,56 +8,12 @@ import {
   TourSpotlight,
   type SpotlightRect,
 } from '@iace/ui';
-import { seenTours, useTourRun, type KeyValueStorage, type TourStep } from '../src';
-
-/** What a mounted screen declares about itself. The mounted page IS the registry: no route table to keep in step with the router. */
-interface Registration {
-  readonly id: string;
-  /** A ref, not an array: a screen writing its steps inline hands a new one every render, and registering on that identity loops. */
-  readonly steps: { readonly current: readonly TourStep[] };
-}
-
-interface TourContextValue {
-  /** The id alone, because it is all the trigger needs to decide whether to draw — and a steps array a screen built inline would change identity on every render. */
-  registeredId: string | null;
-  registered: { readonly current: Registration | null };
-  register: (registration: Registration | null) => void;
-  /** Opens whatever of the registration can actually be pointed at; false when none of it can. */
-  start: (registration: Registration) => boolean;
-  hasSeen: (id: string) => boolean;
-  mark: (id: string) => void;
-}
-
-const TourContext = createContext<TourContextValue | null>(null);
-
-function useTourContext(): TourContextValue {
-  const held = useContext(TourContext);
-  if (held === null) throw new Error('usePageTour needs a TourProvider above it');
-  return held;
-}
+import { seenTours, useTourRun, type KeyValueStorage } from '../src';
+import { spotlightAnchor } from './spotlight-anchor';
+import { TourContext, useTourContext, type Registration } from './tour-context';
 
 function targetElement(target: string): Element | null {
   return document.querySelector(`[data-tour="${target}"]`);
-}
-
-/** Room a tour card needs beside a target: Radix picks a side but never clamps, so the anchor has to leave it one. */
-const CARD_ROOM = 220;
-
-/** The target cut to the viewport, and trimmed when it is tall enough that neither side has room — then the card sits inside it. */
-export function spotlightAnchor(
-  { top, left, width, height }: SpotlightRect,
-  viewport: { readonly width: number; readonly height: number },
-): SpotlightRect {
-  const y = Math.max(top, 0);
-  const x = Math.max(left, 0);
-  const bottom = Math.min(top + height, viewport.height);
-  const trapped = y < CARD_ROOM && bottom > viewport.height - CARD_ROOM;
-  return {
-    top: y,
-    left: x,
-    width: Math.max(Math.min(left + width, viewport.width) - x, 0),
-    height: Math.max((trapped ? viewport.height - CARD_ROOM : bottom) - y, 0),
-  };
 }
 
 /** A control measuring nothing is one nobody can see pointed at, so it counts as absent. */
@@ -164,35 +111,6 @@ export function TourProvider({
       ) : null}
     </TourContext.Provider>
   );
-}
-
-/** One call per screen: it puts the header's help icon on, and opens the tour once on a first visit. */
-export function usePageTour({
-  id,
-  steps,
-  ready,
-}: Readonly<{ id: string; steps: readonly TourStep[]; ready: boolean }>): void {
-  const { register, start, hasSeen, mark } = useTourContext();
-  const attempted = useRef(false);
-  const latest = useRef(steps);
-
-  // Synced in an effect, never during render: the React Compiler rules refuse a ref written while rendering.
-  useEffect(() => {
-    latest.current = steps;
-  }, [steps]);
-
-  // Keyed on the ID alone. A screen that builds its steps inline would otherwise re-register on every render.
-  useEffect(() => {
-    register({ id, steps: latest });
-    return () => register(null);
-  }, [register, id]);
-
-  useEffect(() => {
-    if (attempted.current || !ready || hasSeen(id)) return;
-    attempted.current = true;
-    // Marked only when it OPENED: a screen whose targets had not painted yet gets another chance on the next visit.
-    if (start({ id, steps: latest })) mark(id);
-  }, [ready, id, start, hasSeen, mark]);
 }
 
 /** Absent on a screen that registered no tour, so a page without the hook cannot show a dead control. */

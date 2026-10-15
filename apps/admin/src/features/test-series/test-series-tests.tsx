@@ -35,7 +35,8 @@ import { api } from '../../lib/api';
 import { QUERY_KEYS } from '../../lib/query-keys';
 import { ROUTES } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
-import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
+import { TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
+import { NO_SERIES } from '../../components/no-series';
 import { switchedOffering } from '../tests/test-offer-draft';
 import { testsKey } from './test-series-detail';
 

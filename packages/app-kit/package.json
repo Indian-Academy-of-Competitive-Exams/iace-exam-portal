@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "clean": "rm -rf .turbo",
     "test": "TSX_TSCONFIG_PATH=test/tsconfig.json node --import tsx --import @iace/ui/test-support/dom --test \"test/**/*.test.ts\" \"test/**/*.test.tsx\""
   },

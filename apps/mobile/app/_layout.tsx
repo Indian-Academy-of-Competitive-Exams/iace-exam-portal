@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createAppQueryClient } from '@iace/app-kit';
 import * as SplashScreen from 'expo-splash-screen';
-import { EmptyState, EMPTY_STATE_KINDS } from '../src/components/ui/empty-state';
+import { EmptyState } from '../src/components/ui/empty-state';
+import { EMPTY_STATE_KINDS } from '../src/components/ui/empty-state-kinds';
 import { alertOnce } from '../src/lib/alert-once';
 import { hydrate } from '../src/lib/api';
 import { linkGuard } from '../src/lib/link-guard';
@@ -30,7 +31,7 @@ const queryClient = createAppQueryClient({
   notify: { error: raiseAlert, success: () => undefined },
 });
 
-// A link opened cold lands on its screen with the tabs beneath it, so Back never leaves the app.
+// eslint-disable-next-line react-refresh/only-export-components -- expo-router reads this export by name, and it keeps Back inside the app.
 export const unstable_settings = { anchor: '(tabs)' };
 
 const WHOLE_SCREEN = 'flex-1 items-center justify-center bg-background px-6';

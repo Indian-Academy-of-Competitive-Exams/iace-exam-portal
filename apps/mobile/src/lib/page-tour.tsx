@@ -1,59 +1,18 @@
 /// <reference types="nativewind/types" />
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, View, useWindowDimensions } from 'react-native';
-import { useFocusEffect } from 'expo-router';
 import CircleQuestionMark from 'lucide-react-native/icons/circle-question-mark';
-import { seenTours, useTourRun, type TourStep } from '@iace/app-kit';
+import { seenTours, useTourRun } from '@iace/app-kit';
 import { Text } from '../components/ui/text';
 import { Button } from '../components/ui/button';
 import { STORAGE_KEYS } from './constants';
 import { sittingStorage } from './sitting-store';
 import { useTokenColor } from './use-token-color';
+import { TourContext, useTourContext, type Measurable, type Registration } from './tour-context';
 import { cardPlacement, clampedBox, isRingable, ringableSteps, type Box } from './tour-placement';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import Check from 'lucide-react-native/icons/check';
-
-interface Registration {
-  readonly id: string;
-  /** A ref, not an array: a screen writing its steps inline hands a new one every render. */
-  readonly steps: { readonly current: readonly TourStep[] };
-}
-
-/** A measurable target — every View has this; declared rather than imported so the ref stays a plain View. */
-interface Measurable {
-  measureInWindow: (
-    callback: (x: number, y: number, width: number, height: number) => void,
-  ) => void;
-}
-
-interface TourContextValue {
-  registeredId: string | null;
-  registered: RefObject<Registration | null>;
-  register: (registration: Registration | null) => void;
-  targets: RefObject<Map<string, Measurable>>;
-  start: (registration: Registration) => Promise<boolean>;
-  hasSeen: (id: string) => boolean;
-  mark: (id: string) => void;
-}
-
-const TourContext = createContext<TourContextValue | null>(null);
-
-function useTourContext(): TourContextValue {
-  const held = useContext(TourContext);
-  if (held === null) throw new Error('usePageTour needs a TourProvider above it');
-  return held;
-}
 
 const seen = seenTours(sittingStorage, STORAGE_KEYS.TOURS);
 
@@ -61,25 +20,6 @@ const measured = (view: Measurable) =>
   new Promise<Box>((resolve) => {
     view.measureInWindow((x, y, width, height) => resolve({ x, y, width, height }));
   });
-
-/** Registers a view as a tour target; an undefined key attaches nothing, so a list can anchor its first row alone. */
-export function useTourTarget(key?: string): { ref?: (view: Measurable | null) => void } {
-  const { targets } = useTourContext();
-
-  const ref = useCallback(
-    (view: Measurable | null) => {
-      if (key === undefined) return;
-      if (view === null) {
-        targets.current.delete(key);
-        return;
-      }
-      targets.current.set(key, view);
-    },
-    [targets, key],
-  );
-
-  return { ref };
-}
 
 export function TourProvider({ children }: Readonly<{ children: ReactNode }>) {
   const registered = useRef<Registration | null>(null);
@@ -143,7 +83,7 @@ export function TourProvider({ children }: Readonly<{ children: ReactNode }>) {
     return () => {
       live = false;
     };
-  }, [target, next, screen.height]);
+  }, [target, next, screen]);
 
   const value = useMemo(
     () => ({
@@ -178,41 +118,6 @@ export function TourProvider({ children }: Readonly<{ children: ReactNode }>) {
   );
 }
 
-/** One call per screen: it puts the header's help icon on, and opens the tour once on a first visit. */
-export function usePageTour({
-  id,
-  steps,
-  ready,
-}: Readonly<{ id: string; steps: readonly TourStep[]; ready: boolean }>): void {
-  const { registeredId, register, start, hasSeen, mark } = useTourContext();
-  const attempted = useRef(false);
-  // Tabs stay mounted: a screen behind another would spend its tour unseen and close the one showing.
-  const isInFront = registeredId === id;
-  const latest = useRef(steps);
-
-  // Synced in an effect, never during render, and read through the ref so an inline steps array cannot re-register.
-  useEffect(() => {
-    latest.current = steps;
-  }, [steps]);
-
-  // On FOCUS, not on mount: nothing unmounts on blur here, so a mount-time claim is never handed back.
-  useFocusEffect(
-    useCallback(() => {
-      register({ id, steps: latest });
-      return () => register(null);
-    }, [register, id]),
-  );
-
-  useEffect(() => {
-    if (attempted.current || !ready || !isInFront || hasSeen(id)) return;
-    attempted.current = true;
-    // Marked only when it OPENED: a screen whose targets had not mounted yet gets another chance.
-    void start({ id, steps: latest }).then((opened) => {
-      if (opened) mark(id);
-    });
-  }, [ready, isInFront, id, start, hasSeen, mark]);
-}
-
 /** Absent on a screen that registered no tour, so a screen without the hook shows no dead control. */
 export function TourTrigger() {
   const { registeredId, registered, start } = useTourContext();
@@ -235,7 +140,7 @@ export function TourTrigger() {
 }
 
 /** A stable render prop for a navigator's `headerRight`, rather than a closure rebuilt on every render. */
-export const renderTourTrigger = () => <TourTrigger />;
+export const HeaderTourTrigger = () => <TourTrigger />;
 
 /** Four dim panes around the target, because React Native has neither `clip-path` nor a shadow spread. */
 function Spotlight({

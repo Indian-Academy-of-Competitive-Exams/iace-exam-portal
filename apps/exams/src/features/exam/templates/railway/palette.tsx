@@ -1,7 +1,8 @@
 import { ANSWER_STATE, type AnswerState, type LiveAnswer } from '@iace/contracts';
 import { cn } from '@iace/ui';
 import profileImage from './assets/profile.png';
-import { STATE_CLASS, STATE_LABEL, StateSwatch } from './states';
+import { StateSwatch } from './state-swatch';
+import { STATE_CLASS, STATE_LABEL } from './states';
 import { ScrollPane } from '../../scroll-pane';
 
 export function RailwayPalette({

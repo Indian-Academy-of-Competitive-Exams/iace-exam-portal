@@ -1,6 +1,5 @@
 /** The five answer states, drawn in CSS. Shared by the grid, the legend and the (i) tallies. */
 import { ANSWER_STATE, type AnswerState } from '@iace/contracts';
-import { cn } from '@iace/ui';
 
 export const STATE_CLASS: Readonly<Record<AnswerState, string>> = {
   [ANSWER_STATE.NOT_VISITED]: 'notvisited',
@@ -36,7 +35,3 @@ export const TALLY_ORDER: readonly AnswerState[] = [
   ANSWER_STATE.ANSWERED_MARKED,
   ANSWER_STATE.NOT_VISITED,
 ];
-
-export function StateSwatch({ state, count }: Readonly<{ state: AnswerState; count: number }>) {
-  return <span className={cn('rw-cell rw-swatch', STATE_CLASS[state])}>{count}</span>;
-}

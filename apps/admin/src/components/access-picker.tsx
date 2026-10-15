@@ -9,6 +9,7 @@ import {
   seriesPickerQueryKey,
   studentPickerQueryKey,
 } from '../lib/query-keys';
+import { NO_SERIES } from './no-series';
 import { itemsOf, namesOf, type MultiPickerProps, type PickerProps } from './picker-props';
 
 /** A program is picked by its CODE: a student row and a series both store that string with no FK. */
@@ -68,9 +69,6 @@ export interface ChosenSeries {
   id: string;
   name: string;
 }
-
-/** What a cleared series picker hands back, so nothing has to spell out the empty shape twice. */
-export const NO_SERIES: ChosenSeries = { id: '', name: '' };
 
 /** The row comes back with the id because what asks for a series next is a dialog naming it. */
 export function TestSeriesPicker({

@@ -18,7 +18,8 @@ import { TEST_SHUT } from '@iace/contracts';
 import { Text } from '../../src/components/ui/text';
 import { catalogQuery, performanceQuery } from '../../src/lib/queries';
 import { Alert } from '../../src/components/ui/alert';
-import { EmptyState, EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state';
+import { EmptyState } from '../../src/components/ui/empty-state';
+import { EMPTY_STATE_KINDS } from '../../src/components/ui/empty-state-kinds';
 import { Skeleton } from '../../src/components/ui/skeleton';
 import { FilterSearch, FilterSummary, FilterTrigger } from '../../src/components/ui/filter-bar';
 import { SeriesShelf } from '../../src/components/tests/series-shelf';
@@ -29,7 +30,8 @@ import {
   type FilterSpec,
   type FilterState,
 } from '../../src/lib/filters';
-import { TourTrigger, usePageTour, useTourTarget } from '../../src/lib/page-tour';
+import { TourTrigger } from '../../src/lib/page-tour';
+import { usePageTour, useTourTarget } from '../../src/lib/use-page-tour';
 import { TESTS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../src/lib/tours';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
@@ -49,6 +51,7 @@ export default function TestsScreen() {
   const bucket = asText(state.values.state);
   const seriesValue = state.values.series;
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the clock is re-read on every refetch, which only dataUpdatedAt signals.
   const now = useMemo(() => new Date(), [catalog.dataUpdatedAt]);
   const { rows, shelves } = useMemo(
     () => testsShelves(reaches, { q, course, state: bucket, series: asSet(seriesValue) }),

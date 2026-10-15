@@ -1,7 +1,8 @@
 /// <reference types="nativewind/types" />
 import { ActivityIndicator } from 'react-native';
 import { useTokenColor } from '../../lib/use-token-color';
-import { EmptyState, EMPTY_STATE_KINDS } from './empty-state';
+import { EmptyState } from './empty-state';
+import { EMPTY_STATE_KINDS } from './empty-state-kinds';
 
 export interface ListFooterProps {
   list: { isLoadingMore: boolean; isLoadMoreError: boolean; loadMore: () => void };

@@ -3,20 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { Ban, Clock, RotateCcw, Send } from 'lucide-react';
 import { EXTEND_MINUTES_MAX, supportReasonSchema } from '@iace/contracts';
 import { applyFieldErrors, numberOr } from '@iace/app-kit';
-import {
-  Checkbox,
-  ConfirmDialog,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  FormField,
-  Input,
-  NumericInput,
-  RowActions,
-  toast,
-} from '@iace/ui';
+import { Checkbox, ConfirmDialog, FormField, Input, NumericInput, toast } from '@iace/ui';
 import { api } from '../../lib/api';
 import { QUERY_KEYS } from '../../lib/query-keys';
 
@@ -30,7 +19,7 @@ export interface ActionableSitting {
   isLive: boolean;
 }
 
-const ACTIONS = {
+export const ACTIONS = {
   FORCE_SUBMIT: 'FORCE_SUBMIT',
   EXTEND: 'EXTEND',
   RESET: 'RESET',
@@ -109,39 +98,6 @@ const actionSchema = z.object({
 type ActionValues = z.infer<typeof actionSchema>;
 
 const FIELDS = ['reason', 'minutes', 'regrantRanked'] as const;
-
-/** The row's own menu, and nothing else: the form and the mutation belong to the panel. */
-export function SittingActions({
-  sitting,
-  onAsk,
-}: Readonly<{ sitting: ActionableSitting; onAsk: AskSittingAction }>) {
-  return (
-    <RowActions label={`Act on ${sitting.studentName ?? 'this sitting'}`}>
-      {sitting.isLive ? (
-        <>
-          <DropdownMenuItem onSelect={() => onAsk(sitting, ACTIONS.FORCE_SUBMIT)}>
-            <Send aria-hidden />
-            Submit now
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onAsk(sitting, ACTIONS.EXTEND)}>
-            <Clock aria-hidden />
-            Add time
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onAsk(sitting, ACTIONS.RESET)}>
-            <RotateCcw aria-hidden />
-            Put the live sitting back
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-        </>
-      ) : null}
-
-      <DropdownMenuItem destructive onSelect={() => onAsk(sitting, ACTIONS.VOID)}>
-        <Ban aria-hidden />
-        Void
-      </DropdownMenuItem>
-    </RowActions>
-  );
-}
 
 /** One form and one mutation for a whole panel: a hundred rows each holding their own re-render on every poll. */
 export function useSittingActions(): { ask: AskSittingAction; dialog: React.ReactNode } {

@@ -3,7 +3,9 @@ import { afterEach, before, describe, it } from 'node:test';
 import { StrictMode } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@iace/ui';
-import { spotlightAnchor, TourProvider, TourTrigger, usePageTour } from '../browser/page-tour';
+import { TourProvider, TourTrigger } from '../browser/page-tour';
+import { spotlightAnchor } from '../browser/spotlight-anchor';
+import { usePageTour } from '../browser/use-page-tour';
 import { type KeyValueStorage, type TourStep } from '../src';
 import { fakeStorage } from './support/fake-storage';
 

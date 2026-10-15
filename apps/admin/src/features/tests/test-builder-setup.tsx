@@ -26,7 +26,8 @@ import { EXAM_TEMPLATE_LABELS } from '../../lib/labels';
 import { ExamPicker, ExamStagePicker } from '../../components/exam-picker';
 import { BaseConfigPicker } from './config-picker';
 import { ExamTemplatePreview } from './exam-template-preview';
-import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
+import { TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
+import { NO_SERIES } from '../../components/no-series';
 import { useSuggestedTestName } from '../../lib/use-suggested-name';
 import { type TestForm, type TestFormValues } from './test-builder-form';
 

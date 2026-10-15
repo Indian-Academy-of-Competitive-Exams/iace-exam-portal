@@ -82,7 +82,7 @@ describe('usePagedPicker', () => {
             asked.push(params);
             const items = params.id
               ? rows.filter((row) => params.id?.includes(row.id))
-              : [rows[0]!];
+              : rows.slice(0, 1);
             return Promise.resolve({ items, total: items.length, page: 1, pageSize: 100 });
           },
         }),
