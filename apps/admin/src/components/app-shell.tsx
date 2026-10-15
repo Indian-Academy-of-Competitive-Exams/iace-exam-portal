@@ -7,7 +7,9 @@ import {
   TourProvider,
   TourTrigger,
 } from '@iace/app-kit/browser';
-import { NAV_ITEMS, ROUTES, STORAGE_KEYS, filterAdminNav } from '../lib/constants';
+import { NAV_ITEMS } from '../lib/nav';
+import { ROUTES, STORAGE_KEYS } from '../lib/constants';
+import { filterAdminNav } from '../lib/route-access';
 import { useAuth } from '../providers/auth';
 
 // can goes to the shell, which reads featureKey; superAdminOnly and a route's own guard are neither, so both are applied here.

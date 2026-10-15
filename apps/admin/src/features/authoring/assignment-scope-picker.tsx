@@ -3,7 +3,10 @@ import { type AssignmentRole } from '@iace/contracts';
 import { usePagedPicker } from '@iace/app-kit';
 import { Combobox } from '@iace/ui';
 import { api } from '../../lib/api';
-import { assignmentSectionFilterQueryKey, assignmentTestFilterQueryKey } from '../../lib/constants';
+import {
+  assignmentSectionFilterQueryKey,
+  assignmentTestFilterQueryKey,
+} from '../../lib/query-keys';
 import { itemsOf, namesOf, type PickerProps } from '../../components/picker-props';
 
 /** Test -> section, the pair an assignment keys on: the tests page and search, the sections do not. */

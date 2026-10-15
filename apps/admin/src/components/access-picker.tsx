@@ -8,7 +8,7 @@ import {
   programPickerQueryKey,
   seriesPickerQueryKey,
   studentPickerQueryKey,
-} from '../lib/constants';
+} from '../lib/query-keys';
 import { itemsOf, namesOf, type MultiPickerProps, type PickerProps } from './picker-props';
 
 /** A program is picked by its CODE: a student row and a series both store that string with no FK. */

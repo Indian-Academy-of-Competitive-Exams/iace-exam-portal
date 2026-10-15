@@ -1,6 +1,6 @@
 import { TEST_STATUS, type TestStatus } from '@iace/contracts';
 import { Badge } from '@iace/ui';
-import { TEST_STATUS_LABELS } from '../lib/constants';
+import { TEST_STATUS_LABELS } from '../lib/labels';
 
 /** Frozen and offered are two facts: an inactive test still carries the frozen paper it went out with. */
 export function TestStatusBadges({

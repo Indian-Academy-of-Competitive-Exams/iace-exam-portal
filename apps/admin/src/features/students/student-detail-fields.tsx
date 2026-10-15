@@ -26,7 +26,7 @@ import {
   StatRow,
   TruncatedText,
 } from '@iace/ui';
-import { COURSE_ITEMS, GENDER_LABELS, STUDENT_TYPE_LABELS } from '../../lib/constants';
+import { COURSE_ITEMS, GENDER_LABELS, STUDENT_TYPE_LABELS } from '../../lib/labels';
 import { useBranchChoice, useBranches } from '../../lib/use-branches';
 import { useExams } from './use-exams';
 import { ProgramMultiPicker } from '../../components/access-picker';

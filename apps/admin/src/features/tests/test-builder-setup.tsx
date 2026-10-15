@@ -22,7 +22,7 @@ import {
   RadioGroupItem,
   ReadOnlyField,
 } from '@iace/ui';
-import { EXAM_TEMPLATE_LABELS } from '../../lib/constants';
+import { EXAM_TEMPLATE_LABELS } from '../../lib/labels';
 import { ExamPicker, ExamStagePicker } from '../../components/exam-picker';
 import { BaseConfigPicker } from './config-picker';
 import { ExamTemplatePreview } from './exam-template-preview';

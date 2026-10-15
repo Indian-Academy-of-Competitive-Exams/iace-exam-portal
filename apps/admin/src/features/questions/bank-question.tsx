@@ -13,15 +13,13 @@ import {
 } from '@iace/contracts';
 import { Badge, Button, ConfirmDialog } from '@iace/ui';
 import { api } from '../../lib/api';
+import { QUERY_KEYS, heldQuestionQueryKey, questionQueryKey } from '../../lib/query-keys';
 import {
-  QUERY_KEYS,
   QUESTION_CODE_FIELD,
   QUESTION_STATUS_LABELS,
   QUESTION_STATUS_VARIANT,
-  ROUTES,
-  heldQuestionQueryKey,
-  questionQueryKey,
-} from '../../lib/constants';
+} from '../../lib/labels';
+import { ROUTES } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import { AuthoringWorkspace } from '../authoring/authoring-workspace';
 import type { Held, WorkspaceSource } from '../authoring/workspace-types';

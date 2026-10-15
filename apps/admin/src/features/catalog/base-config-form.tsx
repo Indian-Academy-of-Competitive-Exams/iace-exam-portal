@@ -1,77 +1,33 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFieldArray, useForm, useWatch } from 'react-hook-form';
-import { Copy, Pencil, Plus, Trash2 } from 'lucide-react';
-import {
-  AppException,
-  ErrorCodes,
-  EXAM_TEMPLATE,
-  EXAM_TEMPLATES,
-  FEATURE_KEYS,
-  LANGUAGE_MODES,
-  NAVIGATION_POLICIES,
-  PERMISSION_LEVELS,
-  TEST_UI,
-  TEST_UIS,
-  TIMER_TEMPLATE,
-  TIMER_TEMPLATES,
-  type BaseConfigDetail,
-} from '@iace/contracts';
-import { bannerMessage } from '@iace/app-kit';
+import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import type { BaseConfigDetail } from '@iace/contracts';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
   Card,
-  ConfirmDialog,
   EMPTY_STATE_KINDS,
   EmptyState,
-  FieldRow,
-  FormCombobox,
-  FormField,
   FormPanel,
-  FormSection,
-  Input,
   PageHeader,
-  plural,
-  ReadOnlyField,
   Skeleton,
   SkeletonParagraph,
-  toast,
 } from '@iace/ui';
 import { api } from '../../lib/api';
+import { NAV_ITEMS } from '../../lib/nav';
+import { baseConfigQueryKey } from '../../lib/query-keys';
+import { configTitle, stageMetaOf, useConfigEditor } from './base-config-editor';
 import {
-  EXAM_TEMPLATE_HINTS,
-  EXAM_TEMPLATE_LABELS,
-  LANGUAGE_MODE_HINTS,
-  LANGUAGE_MODE_LABELS,
-  NAVIGATION_POLICY_HINTS,
-  NAVIGATION_POLICY_LABELS,
-  NAV_ITEMS,
-  QUERY_KEYS,
-  ROUTES,
-  TEST_UI_LABELS,
-  TIMER_TEMPLATE_HINTS,
-  TIMER_TEMPLATE_LABELS,
-  baseConfigQueryKey,
-  defaultBaseConfigQueryKey,
-} from '../../lib/constants';
-import { useAuth } from '../../providers/auth';
-import { ExamStagePicker } from '../../components/exam-picker';
-import { sectionsAfterSessionRemoved, sectionsInSession } from './base-config-sessions';
-import {
-  type ConfigFormValues,
-  emptySection,
-  valuesOf,
-  shapeOf,
-  NUMBER_FIELD,
-  serverFields,
-  sectionIssuesOf,
-  applyServerErrors,
-  shownElsewhere,
-} from './base-config-values';
-import { ToggleField, LanguageChoice, SectionCard, Totals } from './base-config-fields';
+  EditorBanners,
+  EditorDialogs,
+  HeaderAction,
+  PaperSection,
+  SectionsSection,
+  SessionsSection,
+  StageSection,
+} from './base-config-form-sections';
+import { Totals } from './base-config-fields';
 
 // One stage blueprint; totalQuestions/totalMarks are never typed — the server sums them, and configTotalsOf mirrors that while editing.
 
@@ -131,81 +87,6 @@ export function BaseConfigFormPage() {
 // The editor
 // ============================================================================
 
-function configTitle(detail: BaseConfigDetail | null, isEditing: boolean): string {
-  if (!detail) return 'New base configuration';
-  return isEditing ? `Edit ${detail.name}` : detail.name;
-}
-
-function stageMetaOf(detail: BaseConfigDetail | null): string | undefined {
-  if (!detail) return undefined;
-  return `${detail.examStage.exam.code} / ${detail.examStage.name}, version ${detail.version}`;
-}
-
-/** Locked is the one state with no way into the form, so it offers the clone instead. */
-function HeaderAction({
-  isEditing,
-  locked,
-  onClone,
-  onEdit,
-}: Readonly<{ isEditing: boolean; locked: boolean; onClone: () => void; onEdit: () => void }>) {
-  if (isEditing) return null;
-  if (locked) {
-    return (
-      <Button size="sm" onClick={onClone}>
-        <Copy aria-hidden />
-        Clone to change it
-      </Button>
-    );
-  }
-  return (
-    <Button size="sm" onClick={onEdit}>
-      <Pencil aria-hidden />
-      Edit
-    </Button>
-  );
-}
-
-/** What stands between an admin and this form: somebody else in it, or a paper already sat. */
-function EditorBanners({
-  elsewhere,
-  locked,
-}: Readonly<{ elsewhere: { fullName: string | null } | null; locked: boolean }>) {
-  return (
-    <>
-      {elsewhere ? (
-        <Alert variant="warning">
-          {elsewhere.fullName ?? 'Another admin'} is editing this configuration. Their changes have
-          to land first.
-        </Alert>
-      ) : null}
-
-      {locked ? (
-        <Alert variant="warning">
-          <span>
-            This configuration is locked. A test built from it has already been sat, and a paper
-            somebody has sat cannot change shape underneath them. Every field below is fixed for
-            good. Clone it to carry all of this into a copy you can edit: the copy starts unlocked
-            and is not the stage&apos;s default until you promote it. The name, and whether this one
-            is still offered, can be changed from the configurations list.
-          </span>
-        </Alert>
-      ) : null}
-    </>
-  );
-}
-
-/** The sections a removed session held and where they went; null when it held none. */
-function displacedNote(
-  sessions: ConfigFormValues['modules'],
-  index: number,
-  moved: number,
-): string | null {
-  const first = sessions.find((_, at) => at !== index);
-  if (!first || moved === 0) return null;
-  const removed = sessions[index]?.name || `Session ${index + 1}`;
-  return `${removed} held ${plural(moved, 'section')}, now in ${first.name || 'the first session'}.`;
-}
-
 function ConfigEditor({
   detail,
   isEditing,
@@ -215,143 +96,21 @@ function ConfigEditor({
   isEditing: boolean;
   onEditingChange: (editing: boolean) => void;
 }>) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { identity, can } = useAuth();
-  const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const existing = detail !== null;
-  const saveLabel = existing ? 'Save configuration' : 'Create configuration';
-  // A locked config can never be edited, so it is the one that never leaves read-only.
-  const locked = detail?.locked ?? false;
-  const editingBy = detail?.editingBy ?? null;
-  const elsewhere = editingBy?.adminId === identity?.id ? null : editingBy;
-  const [asking, setAsking] = useState(false);
-  const [promoting, setPromoting] = useState<ConfigFormValues | null>(null);
-  const [losingDefault, setLosingDefault] = useState<string | null>(null);
-  const [displaced, setDisplaced] = useState<string | null>(null);
-
-  const clone = useMutation({
-    meta: { success: 'Configuration cloned.' },
-    mutationFn: () => api.admin.baseConfigs.clone(detail?.id ?? '', {}),
-    onSuccess: (copy: BaseConfigDetail) => {
-      setAsking(false);
-      navigate(ROUTES.BASE_CONFIG(copy.id));
-    },
-    onError: () => setAsking(false),
-  });
-
-  const form = useForm<ConfigFormValues>({ defaultValues: valuesOf(detail) });
-  const sections = useFieldArray({ control: form.control, name: 'sections' });
-  const modules = useFieldArray({ control: form.control, name: 'modules' });
-
-  // Silent: the form's own banner and fields say what went wrong, so a toast would say it twice.
-  const save = useMutation({
-    meta: { silent: true },
-    mutationFn: (values: ConfigFormValues) =>
-      detail
-        ? api.admin.baseConfigs.update(detail.id, {
-            name: values.name,
-            isDefault: values.isDefault,
-            isActive: values.isActive,
-            expectedUpdatedAt: detail.updatedAt,
-            ...shapeOf(values),
-          })
-        : api.admin.baseConfigs.create({
-            examStageId: values.examStageId,
-            name: values.name,
-            isDefault: values.isDefault,
-            ...shapeOf(values),
-          }),
-    onSuccess: async () => {
-      toast.success(existing ? 'Configuration saved.' : 'Configuration created.');
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BASE_CONFIGS });
-      navigate(ROUTES.BASE_CONFIGS);
-    },
-    onError: (error) => {
-      // Closed, or the banner and fields holding the error stay behind its overlay.
-      setPromoting(null);
-      applyServerErrors(error, form);
-      // A save refused as out of date leaves that copy cached, to be opened and refused again.
-      if (AppException.is(error) && error.code === ErrorCodes.CONFLICT) {
-        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BASE_CONFIGS });
-      }
-    },
-  });
-
-  const examStageId = useWatch({ control: form.control, name: 'examStageId' });
-  const examTemplate = useWatch({ control: form.control, name: 'examTemplate' });
-  const defaultTestUi = useWatch({ control: form.control, name: 'defaultTestUi' });
-  // A bubble sheet is the default template's affordance; no other skin draws one.
-  const omrNeedsDefault = defaultTestUi === TEST_UI.OMR && examTemplate !== EXAM_TEMPLATE.DEFAULT;
-  const timerTemplate = useWatch({ control: form.control, name: 'timerTemplate' });
-  const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
-
-  /** A new config has nowhere to fall back to, so Cancel leaves; a saved one returns to itself. */
-  const cancel = () => {
-    if (!existing) return navigate(ROUTES.BASE_CONFIGS);
-    form.reset();
-    setDisplaced(null);
-    onEditingChange(false);
-  };
-
-  /** A section names its session by position, so the sections follow the removal and the ones it held are named. */
-  const removeSession = (index: number) => {
-    const sessions = form.getValues('modules');
-    const before = form.getValues('sections');
-    const moved = sectionsInSession(before, index).length;
-
-    modules.remove(index);
-    sectionsAfterSessionRemoved(before, index).forEach((section, at) =>
-      form.setValue(`sections.${at}.moduleOrder`, section.moduleOrder, { shouldDirty: true }),
-    );
-    setDisplaced(displacedNote(sessions, index, moved));
-  };
-
-  const issues = sectionIssuesOf(save.error);
-  const banner = bannerMessage(save.error, [
-    ...serverFields(sections.fields.length, modules.fields.length).map(String),
-    ...shownElsewhere(save.error),
-  ]);
-
-  /** Taking the stage's default off another configuration is confirmed before anything is saved. */
-  const submit = form.handleSubmit(async (values) => {
-    if (!values.isDefault || !values.examStageId) return save.mutate(values);
-
-    // Read as the save is made: one from when the form opened may not have answered, or may predate another admin's change.
-    const current = await queryClient
-      .fetchQuery({
-        queryKey: defaultBaseConfigQueryKey(values.examStageId),
-        queryFn: () =>
-          api.admin.baseConfigs.list({
-            examStageId: values.examStageId,
-            defaultOnly: 'true',
-            pageSize: 1,
-          }),
-        staleTime: 0,
-      })
-      .catch(() => null);
-    // The failed read is already announced, and saving unasked is what this exists to stop.
-    if (current === null) return;
-
-    // Only a config other than this one can lose the badge; re-saving the default takes nothing.
-    const losing = current.items.find((row) => row.id !== detail?.id);
-    if (!losing) return save.mutate(values);
-    setLosingDefault(losing.name);
-    setPromoting(values);
-  });
+  const editor = useConfigEditor({ detail, onEditingChange });
+  const { form, save } = editor;
 
   return (
     <FormPanel
       disabled={!isEditing}
-      onSubmit={submit}
+      onSubmit={editor.submit}
       footer={
         isEditing ? (
           <>
-            <Button type="button" variant="outline" onClick={cancel}>
+            <Button type="button" variant="outline" onClick={editor.cancel}>
               Cancel
             </Button>
             <Button type="submit" loading={save.isPending || form.formState.isSubmitting}>
-              {saveLabel}
+              {editor.saveLabel}
             </Button>
           </>
         ) : null
@@ -363,281 +122,55 @@ function ConfigEditor({
             title={configTitle(detail, isEditing)}
             meta={stageMetaOf(detail)}
             action={
-              canWrite ? (
+              editor.canWrite ? (
                 <HeaderAction
                   isEditing={isEditing}
-                  locked={locked}
-                  onClone={() => setAsking(true)}
+                  locked={editor.locked}
+                  onClone={() => editor.setAsking(true)}
                   onEdit={() => onEditingChange(true)}
                 />
               ) : undefined
             }
           />
 
-          {banner ? <Alert variant="danger">{banner}</Alert> : null}
+          {editor.banner ? <Alert variant="danger">{editor.banner}</Alert> : null}
         </>
       }
     >
-      <EditorBanners elsewhere={elsewhere} locked={locked} />
+      <EditorBanners elsewhere={editor.elsewhere} locked={editor.locked} />
 
-      <FormSection title="Stage">
-        <FieldRow>
-          {existing ? (
-            <ReadOnlyField
-              label="Stage"
-              value={`${detail.examStage.exam.code} / ${detail.examStage.name}`}
-            />
-          ) : (
-            <FormField form={form} name="examStageId" label="Stage">
-              {(control) => (
-                <ExamStagePicker
-                  id={control.id}
-                  value={examStageId}
-                  placeholder="Choose a stage"
-                  onChange={(value) =>
-                    form.setValue('examStageId', value, { shouldValidate: true })
-                  }
-                />
-              )}
-            </FormField>
-          )}
+      <StageSection form={form} detail={detail} examStageId={editor.examStageId} />
 
-          <FormField form={form} name="name" label="Name">
-            {(control) => <Input {...control} placeholder="SSC CGL Tier 1, 2024 pattern" />}
-          </FormField>
+      <PaperSection form={form} omrNeedsDefault={editor.omrNeedsDefault} />
 
-          <ToggleField form={form} name="isDefault" label="The stage's default pattern" />
-
-          {existing ? (
-            <ToggleField
-              form={form}
-              name="isActive"
-              label="Offered when building a test"
-              /* ui-copy-ok: rule */ hint="Tests already built keep it"
-            />
-          ) : null}
-        </FieldRow>
-      </FormSection>
-
-      <FormSection title="How the paper runs">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <FormField form={form} name="durationMin" label="Duration (minutes)">
-            {(control) => (
-              <Input
-                {...control}
-                {...form.register('durationMin', NUMBER_FIELD)}
-                inputMode="decimal"
-                placeholder="60"
-              />
-            )}
-          </FormField>
-
-          <FormCombobox
-            form={form}
-            name="timerTemplate"
-            label="Timing pattern"
-            items={TIMER_TEMPLATES.map((value) => ({
-              value,
-              label: TIMER_TEMPLATE_LABELS[value],
-              hint: TIMER_TEMPLATE_HINTS[value],
-            }))}
-          />
-
-          <FormCombobox
-            form={form}
-            name="navigation"
-            label="Navigation"
-            items={NAVIGATION_POLICIES.map((value) => ({
-              value,
-              label: NAVIGATION_POLICY_LABELS[value],
-              hint: NAVIGATION_POLICY_HINTS[value],
-            }))}
-          />
-
-          <FormCombobox
-            form={form}
-            name="defaultTestUi"
-            label="Test interface"
-            items={TEST_UIS.map((value) => ({ value, label: TEST_UI_LABELS[value] }))}
-          />
-
-          {omrNeedsDefault ? (
-            <Alert variant="warning">
-              An OMR sheet is only drawn by the default template. Set the template to Default, or
-              answer on screen.
-            </Alert>
-          ) : null}
-
-          <FormCombobox
-            form={form}
-            name="languageMode"
-            label="Language mode"
-            items={LANGUAGE_MODES.map((value) => ({
-              value,
-              label: LANGUAGE_MODE_LABELS[value],
-              hint: LANGUAGE_MODE_HINTS[value],
-            }))}
-          />
-
-          <FormCombobox
-            form={form}
-            name="examTemplate"
-            label="Exam template"
-            items={EXAM_TEMPLATES.map((value) => ({
-              value,
-              label: EXAM_TEMPLATE_LABELS[value],
-              hint: EXAM_TEMPLATE_HINTS[value],
-            }))}
-          />
-
-          <FormField
-            form={form}
-            name="optionalSectionCount"
-            label="Optional sections"
-            /* ui-copy-ok: rule */ hint="Blank means none"
-          >
-            {(control) => (
-              <Input
-                {...control}
-                {...form.register('optionalSectionCount', NUMBER_FIELD)}
-                inputMode="numeric"
-                placeholder="0"
-              />
-            )}
-          </FormField>
-
-          <div className="sm:col-span-2 lg:col-span-3">
-            <LanguageChoice form={form} />
-          </div>
-
-          <div className="flex flex-wrap gap-x-8 gap-y-2 sm:col-span-2 lg:col-span-3">
-            <ToggleField form={form} name="shuffleQuestions" label="Shuffle the questions" />
-            <ToggleField form={form} name="shuffleOptions" label="Shuffle the options" />
-            <ToggleField form={form} name="calculatorEnabled" label="Offer a calculator" />
-          </div>
-        </div>
-      </FormSection>
-
-      {sessionPaper ? (
-        <FormSection title="Sessions">
-          <div className="flex flex-col gap-3">
-            {modules.fields.map((field, index) => (
-              <div
-                key={field.id}
-                className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
-              >
-                <FormField
-                  form={form}
-                  name={`modules.${index}.name`}
-                  label="Session"
-                  className="min-w-48 flex-1"
-                >
-                  {(control) => <Input {...control} placeholder="Session 1" />}
-                </FormField>
-                <FormField
-                  form={form}
-                  name={`modules.${index}.durationMin`}
-                  label="Minutes"
-                  className="w-28"
-                >
-                  {(control) => (
-                    <Input
-                      {...control}
-                      {...form.register(`modules.${index}.durationMin`, NUMBER_FIELD)}
-                      inputMode="decimal"
-                    />
-                  )}
-                </FormField>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  aria-label={`Remove session ${index + 1}`}
-                  onClick={() => removeSession(index)}
-                >
-                  <Trash2 aria-hidden />
-                </Button>
-              </div>
-            ))}
-
-            {displaced ? <Alert variant="warning">{displaced}</Alert> : null}
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => modules.append({ name: '', durationMin: '' })}
-              >
-                <Plus aria-hidden />
-                Add a session
-              </Button>
-            </div>
-          </div>
-        </FormSection>
-      ) : null}
-
-      <FormSection title="Sections">
-        <div className="flex flex-col gap-4">
-          {issues.length > 0 ? (
-            <Alert variant="danger">
-              <ul className="flex list-disc flex-col gap-1 pl-4">
-                {issues.map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
-              </ul>
-            </Alert>
-          ) : null}
-
-          {sections.fields.map((field, index) => (
-            <SectionCard
-              key={field.id}
-              form={form}
-              index={index}
-              sectionalClocks={timerTemplate === TIMER_TEMPLATE.SECTIONAL_LOCKED}
-              perQuestionClocks={timerTemplate === TIMER_TEMPLATE.PER_ITEM_TIMED}
-              sessionPaper={sessionPaper}
-              canRemove={sections.fields.length > 1}
-              onRemove={() => sections.remove(index)}
-            />
-          ))}
-
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => sections.append(emptySection())}
-            >
-              <Plus aria-hidden />
-              Add a section
-            </Button>
-          </div>
-        </div>
-      </FormSection>
-
-      <Totals form={form} />
-
-      {detail ? (
-        <ConfirmDialog
-          open={asking}
-          onOpenChange={setAsking}
-          loading={clone.isPending}
-          title={`Clone ${detail.name}?`}
-          description={`The copy carries every setting and all ${plural(detail.totalQuestions, 'question')} of its sections as they stand now. It starts unlocked, is not the stage's default, and ${detail.name} is left exactly as it is. You will land on the copy.`}
-          confirmLabel="Clone configuration"
-          onConfirm={() => clone.mutate()}
+      {editor.sessionPaper ? (
+        <SessionsSection
+          form={form}
+          modules={editor.modules}
+          displaced={editor.displaced}
+          onRemove={editor.removeSession}
         />
       ) : null}
 
-      <ConfirmDialog
-        open={promoting !== null}
-        onOpenChange={(open) => !open && setPromoting(null)}
-        loading={save.isPending}
-        title="The stage's default pattern"
-        // ui-copy-ok: consequence — a confirm names what it is about to take away
-        description={`${losingDefault ?? 'The current default'} is the stage's default now and stops being it. Tests already built keep the configuration they were created from; only new ones start from this.`}
-        confirmLabel="Make it the default"
-        onConfirm={() => promoting && save.mutate(promoting)}
+      <SectionsSection
+        form={form}
+        sections={editor.sections}
+        issues={editor.issues}
+        timerTemplate={editor.timerTemplate}
+        sessionPaper={editor.sessionPaper}
+      />
+
+      <Totals form={form} />
+
+      <EditorDialogs
+        detail={detail}
+        asking={editor.asking}
+        onAskingChange={editor.setAsking}
+        promoting={editor.promoting !== null}
+        onPromotingClose={() => editor.setPromoting(null)}
+        saving={save.isPending}
+        losingDefault={editor.losingDefault}
+        onPromote={() => editor.promoting && save.mutate(editor.promoting)}
       />
     </FormPanel>
   );

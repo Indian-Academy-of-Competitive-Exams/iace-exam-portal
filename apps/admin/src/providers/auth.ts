@@ -8,7 +8,7 @@ import {
 } from '@iace/contracts';
 import { createAuth } from '@iace/app-kit';
 import { api, signOutSignal, tokenStore } from '../lib/api';
-import { QUERY_KEYS } from '../lib/constants';
+import { QUERY_KEYS } from '../lib/query-keys';
 
 // This app's session: actor, cache key, client, one admin-only read; ActorTypes.ADMIN is load-bearing since a student JWT is not a session here.
 export const { AuthProvider, useAuth } = createAuth<

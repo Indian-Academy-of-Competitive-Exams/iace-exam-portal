@@ -12,7 +12,7 @@ import {
 } from '@iace/contracts';
 import { mathErrorIn } from '@iace/ui';
 import { api } from '../../lib/api';
-import { authoringDuplicateQueryKey } from '../../lib/constants';
+import { authoringDuplicateQueryKey } from '../../lib/query-keys';
 import { checksFor } from './authoring-checks';
 import { taxonomyFor, type AuthoringHeader, type AuthoringState } from './question-scaffold';
 import { useSubjectLanguage } from './subject-languages';

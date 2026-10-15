@@ -45,15 +45,13 @@ import {
 import { api } from '../../lib/api';
 import {
   DIFFICULTY_VARIANT,
-  NAV_ITEMS,
-  QUERY_KEYS,
   QUESTION_STATUS_LABELS,
   QUESTION_STATUS_VARIANT,
   QUESTION_TYPE_LABELS,
-  ROUTES,
-  authoringHistoryQueryKey,
-  authoringStatsQueryKey,
-} from '../../lib/constants';
+} from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS, authoringHistoryQueryKey, authoringStatsQueryKey } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import { useDeleteQuestion } from './use-delete-question';
 import { SubjectMultiPicker } from '../../components/taxonomy-picker';

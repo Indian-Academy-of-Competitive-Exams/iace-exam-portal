@@ -1,7 +1,7 @@
 import { usePagedPicker } from '@iace/app-kit';
 import { MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
-import { adminFilterQueryKey } from '../lib/constants';
+import { adminFilterQueryKey } from '../lib/query-keys';
 import { itemsOf, namesOf, type MultiPickerProps } from './picker-props';
 
 /** A FILTER over admins, named with the email beside it where there is a name to lead with. */

@@ -20,7 +20,8 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, ROUTES } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { ROUTES } from '../../lib/constants';
 import { useErrorRows } from './use-error-rows';
 import { PreviewRows } from './preview-rows';
 

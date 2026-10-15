@@ -21,7 +21,7 @@ import {
   Input,
   StatRow,
 } from '@iace/ui';
-import { LANGUAGE_CODE_LABELS, MERIT_TYPE_HINTS, MERIT_TYPE_LABELS } from '../../lib/constants';
+import { LANGUAGE_CODE_LABELS, MERIT_TYPE_HINTS, MERIT_TYPE_LABELS } from '../../lib/labels';
 import { minutesFieldOf } from '../../lib/duration';
 import { SubjectPicker } from '../../components/taxonomy-picker';
 import { useSubjectLanguage } from '../authoring/subject-languages';

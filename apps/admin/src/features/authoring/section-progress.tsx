@@ -21,7 +21,9 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, ROUTES, assignmentProgressQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { ROUTES } from '../../lib/constants';
+import { assignmentProgressQueryKey } from '../../lib/query-keys';
 import { useAuth } from '../../providers/auth';
 import { useTestSectionFilters } from './use-test-section-filters';
 import { AdminMultiPicker } from '../../components/admin-multi-picker';

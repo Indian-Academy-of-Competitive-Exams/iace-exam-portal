@@ -12,7 +12,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function studentEventColumns(

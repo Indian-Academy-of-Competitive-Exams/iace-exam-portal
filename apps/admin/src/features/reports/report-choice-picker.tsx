@@ -3,7 +3,7 @@ import { usePagedPicker } from '@iace/app-kit';
 import { Combobox } from '@iace/ui';
 import { type PickerProps } from '../../components/picker-props';
 import { api } from '../../lib/api';
-import { reportChoicesQueryKey } from '../../lib/constants';
+import { reportChoicesQueryKey } from '../../lib/query-keys';
 
 const PLACEHOLDERS: Readonly<Record<ReportChoiceParam, string>> = {
   [REPORT_PARAMS.TEST]: 'Choose a test',

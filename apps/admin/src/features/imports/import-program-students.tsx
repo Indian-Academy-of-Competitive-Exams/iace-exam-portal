@@ -20,7 +20,7 @@ import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
 import { useErrorRows } from './use-error-rows';
 import { PreviewRows } from './preview-rows';
-import { NAV_ITEMS } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
 
 export function ImportProgramStudentsPage() {
   const { code = '' } = useParams();

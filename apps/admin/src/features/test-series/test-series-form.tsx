@@ -20,7 +20,9 @@ import {
   type FormPanelTab,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, seriesQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS, seriesQueryKey } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { type StageChoice } from '../../components/exam-picker';
 import { ExportButton } from '../../components/export-button';
 import {

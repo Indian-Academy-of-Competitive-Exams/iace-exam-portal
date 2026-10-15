@@ -37,7 +37,9 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useImportScreen, usePageTour } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, sectionWorkQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS, sectionWorkQueryKey } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../../lib/tours';
 import { useErrorRows } from './use-error-rows';
 import { ImportCauses } from './import-causes';

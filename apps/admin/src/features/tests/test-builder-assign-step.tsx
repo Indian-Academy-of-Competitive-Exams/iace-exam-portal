@@ -56,15 +56,15 @@ import {
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../providers/auth';
+import { ASSIGNMENT_ROLE_LABELS } from '../../lib/labels';
 import {
-  ASSIGNMENT_ROLE_LABELS,
   QUERY_KEYS,
-  ROUTES,
   assignableAdminsQueryKey,
   testAssignmentsQueryKey,
   testPaperQueryKey,
   testQueryKey,
-} from '../../lib/constants';
+} from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { FULLNESS_VARIANT, holderOf, sectionFullness, sectionTally } from './test-paper-view';
 import { SectionThreadButton } from '../../components/section-thread';
 import { DueStandingBadge } from '../../components/due-standing-badge';

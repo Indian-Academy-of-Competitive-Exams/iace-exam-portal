@@ -25,7 +25,9 @@ import {
 import { StageCell } from '../../components/stage-cell';
 import { TestStatusBadges } from '../../components/test-status-badges';
 import { api } from '../../lib/api';
-import { QUERY_KEYS, ROUTES, TEST_STATUS_LABELS } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
+import { TEST_STATUS_LABELS } from '../../lib/labels';
 import { durationLabel } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 import { ExamMultiPicker } from '../../components/exam-picker';

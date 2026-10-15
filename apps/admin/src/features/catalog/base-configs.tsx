@@ -34,7 +34,10 @@ import {
 import { ActiveStatus, RetireDeleteActions } from './retire-delete-actions';
 import { StageCell } from '../../components/stage-cell';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, TIMER_TEMPLATE_LABELS } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
+import { TIMER_TEMPLATE_LABELS } from '../../lib/labels';
 import { durationLabel } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 import { ExamMultiPicker } from '../../components/exam-picker';

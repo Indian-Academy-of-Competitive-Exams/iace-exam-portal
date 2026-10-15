@@ -11,7 +11,7 @@ import {
   testNameKind,
 } from '@iace/contracts';
 import { api } from './api';
-import { namedSeriesQueryKey, namedTestQueryKey } from './constants';
+import { namedSeriesQueryKey, namedTestQueryKey } from './query-keys';
 
 /** The names already on a stage, so a suggestion goes past the highest rather than repeating it. */
 

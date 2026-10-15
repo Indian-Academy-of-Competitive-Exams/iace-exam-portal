@@ -24,7 +24,8 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { COURSE_ITEMS, announcementPreviewQueryKey } from '../../lib/constants';
+import { COURSE_ITEMS } from '../../lib/labels';
+import { announcementPreviewQueryKey } from '../../lib/query-keys';
 import { useBranches } from '../../lib/use-branches';
 
 /** The two cohort dimensions this dialog offers; the server validates the whole filter for real. */

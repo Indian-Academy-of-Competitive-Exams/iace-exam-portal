@@ -7,7 +7,7 @@
 import { DIFFICULTY_LEVELS, QUESTION_TYPES } from '@iace/contracts';
 import { type ListFilterMultiControl } from '@iace/ui';
 import { SubjectMultiPicker, TopicMultiPicker } from '../../components/taxonomy-picker';
-import { QUESTION_TYPE_LABELS } from '../../lib/constants';
+import { QUESTION_TYPE_LABELS } from '../../lib/labels';
 
 /** Narrow enough that any screen's `useFilters` satisfies it, whatever its own key union. */
 interface SubjectCascade {

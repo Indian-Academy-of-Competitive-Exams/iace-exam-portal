@@ -27,7 +27,7 @@ import {
   Textarea,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { SEND_BACK_REASON_LABELS } from '../../lib/constants';
+import { SEND_BACK_REASON_LABELS } from '../../lib/labels';
 import { useDeleteQuestion } from './use-delete-question';
 import { OtherTestsNotice } from './cross-test-warning';
 import { NoticeChip } from './notice-chip';

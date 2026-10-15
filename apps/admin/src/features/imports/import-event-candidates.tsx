@@ -21,7 +21,8 @@ import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
 import { useErrorRows } from './use-error-rows';
 import { PreviewRows } from './preview-rows';
-import { NAV_ITEMS, eventQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { eventQueryKey } from '../../lib/query-keys';
 
 const ACTION_LABELS: Readonly<Record<CandidateImportRow['action'], string>> = {
   create: 'New candidate',

@@ -28,7 +28,8 @@ import {
 import { api } from '../lib/api';
 import { uploadQuestionImage } from '../lib/upload-question-image';
 import { useAuth } from '../providers/auth';
-import { ADMIN_ROLE_LABELS, sectionThreadQueryKey } from '../lib/constants';
+import { ADMIN_ROLE_LABELS } from '../lib/labels';
+import { sectionThreadQueryKey } from '../lib/query-keys';
 
 /** The discussion on one (test, section) — spec §9, read as a conversation rather than a log. */
 

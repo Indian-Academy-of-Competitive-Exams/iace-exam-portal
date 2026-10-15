@@ -25,7 +25,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS, sectionWorkQueryKey } from '../../lib/constants';
+import { QUERY_KEYS, sectionWorkQueryKey } from '../../lib/query-keys';
 
 /** A typist's Done: exactly the section's questions onto its paper, the rest to the bank or deleted. */
 export function TypistDoneDialog({

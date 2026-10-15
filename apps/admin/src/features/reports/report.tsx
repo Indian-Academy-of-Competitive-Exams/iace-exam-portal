@@ -48,7 +48,9 @@ import {
 import { api } from '../../lib/api';
 import { ExportButton } from '../../components/export-button';
 import { NotFoundPage } from '../../components/not-found';
-import { NAV_ITEMS, REPORT_PARAM_LABELS, reportQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { REPORT_PARAM_LABELS } from '../../lib/reports';
+import { reportQueryKey } from '../../lib/query-keys';
 import { useAuth } from '../../providers/auth';
 import { reportFilters } from './report-filters';
 

@@ -11,7 +11,8 @@ import {
   type SectionWork,
 } from '@iace/contracts';
 import { Button, Tabs, TabsContent, TabsList, TabsTrigger, TruncatedText, cn } from '@iace/ui';
-import { REVIEW_STATE_LABELS, ROUTES } from '../../lib/constants';
+import { REVIEW_STATE_LABELS } from '../../lib/labels';
+import { ROUTES } from '../../lib/constants';
 import { NEW_CARD } from './workspace-types';
 import { liveTotal, type WorkClock } from './work-clock';
 import type { Seat } from './section-seat';

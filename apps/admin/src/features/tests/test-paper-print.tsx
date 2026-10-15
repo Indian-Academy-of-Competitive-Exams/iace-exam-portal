@@ -30,7 +30,9 @@ import {
   type ListFilter,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, ROUTES, testPaperPrintQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { ROUTES } from '../../lib/constants';
+import { testPaperPrintQueryKey } from '../../lib/query-keys';
 import { durationLabel } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 

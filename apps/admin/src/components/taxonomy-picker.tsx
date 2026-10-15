@@ -1,7 +1,7 @@
 import { usePagedPicker } from '@iace/app-kit';
 import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
-import { subjectPickerQueryKey, topicPickerQueryKey } from '../lib/constants';
+import { subjectPickerQueryKey, topicPickerQueryKey } from '../lib/query-keys';
 import { itemsOf, namesOf, type MultiPickerProps, type PickerProps } from './picker-props';
 
 // Subject -> topic cascade: a topic only means something under its subject, so there's no list to offer without one.

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { contentLanguageOf, type QuestionLanguage } from '@iace/contracts';
 import { api } from '../../lib/api';
-import { QUERY_KEYS } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
 
 /** The language subjects the editor has met, so the rules run here judge them as the server does. */
 const languageOf = new Map<string, QuestionLanguage | null>();

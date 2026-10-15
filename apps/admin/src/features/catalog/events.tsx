@@ -39,7 +39,8 @@ import { ActiveStatus, RetireDeleteActions } from './retire-delete-actions';
 import { useAuth } from '../../providers/auth';
 import { api } from '../../lib/api';
 import { StudentMultiPicker } from '../../components/access-picker';
-import { NEW_RECORD, QUERY_KEYS, ROUTES } from '../../lib/constants';
+import { NEW_RECORD, ROUTES } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
 
 const EVENT_FIELDS = ['name', 'description'] as const;
 

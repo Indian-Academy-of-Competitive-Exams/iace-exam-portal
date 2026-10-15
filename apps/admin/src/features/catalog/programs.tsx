@@ -13,7 +13,8 @@ import {
 } from '@iace/contracts';
 import { applyFieldErrors, changedValues } from '@iace/app-kit';
 import { useListScreen } from '@iace/app-kit/browser';
-import { NEW_RECORD, QUERY_KEYS, ROUTES } from '../../lib/constants';
+import { NEW_RECORD, ROUTES } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
 import {
   Alert,
   DropdownMenuItem,

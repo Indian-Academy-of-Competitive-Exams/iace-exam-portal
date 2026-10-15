@@ -47,11 +47,11 @@ import {
   AUDIT_ACTION_LABELS,
   AUDIT_ACTOR_TYPE_LABELS,
   AUDIT_FEATURE_LABELS,
-  QUERY_KEYS,
   QUESTION_STATUS_LABELS,
-  ROUTES,
   TEST_STATUS_LABELS,
-} from '../../lib/constants';
+} from '../../lib/labels';
+import { QUERY_KEYS } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import { DueStandingBadge } from '../../components/due-standing-badge';
 import { TimeSpent } from '../../components/time-spent';

@@ -23,7 +23,7 @@ import {
 } from '@iace/ui';
 import { applyFieldErrors } from '@iace/app-kit';
 import { api } from '../../lib/api';
-import { QUERY_KEYS, studentQueryKey } from '../../lib/constants';
+import { QUERY_KEYS, studentQueryKey } from '../../lib/query-keys';
 import { useAuth } from '../../providers/auth';
 
 const MOBILE_FIELDS = ['mobile'] as const;

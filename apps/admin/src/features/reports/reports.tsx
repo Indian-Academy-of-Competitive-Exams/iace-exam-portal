@@ -24,14 +24,14 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
+import { NAV_ITEMS } from '../../lib/nav';
 import {
-  NAV_ITEMS,
   REPORT_GROUP_LABELS,
   REPORT_PARAM_LABELS,
   REPORT_PERIOD_LABELS,
   REPORT_SUMMARIES,
-  ROUTES,
-} from '../../lib/constants';
+} from '../../lib/reports';
+import { ROUTES } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 
 interface CatalogueRow extends ReportSpec {

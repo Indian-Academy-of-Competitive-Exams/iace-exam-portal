@@ -34,7 +34,10 @@ import {
 import { ActiveStatus, RetireDeleteActions } from './retire-delete-actions';
 import { useAuth } from '../../providers/auth';
 import { api } from '../../lib/api';
-import { BRANCH_TYPE_LABELS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../../lib/constants';
+import { BRANCH_TYPE_LABELS } from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { useBranches } from '../../lib/use-branches';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';

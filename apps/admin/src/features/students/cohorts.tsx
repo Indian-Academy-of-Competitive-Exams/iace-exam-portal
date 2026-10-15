@@ -4,7 +4,8 @@ import { FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { Button, PageHeader, TableFrame } from '@iace/ui';
 import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
 import { useAuth } from '../../providers/auth';
-import { COHORT_TABS, NAV_ITEMS, type CohortTab } from '../../lib/constants';
+import { COHORT_TABS, type CohortTab } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
 import { ProgramsList } from '../catalog/programs';
 import { EventsList } from '../catalog/events';
 

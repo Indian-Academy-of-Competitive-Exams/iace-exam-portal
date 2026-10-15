@@ -2,7 +2,7 @@ import { usePagedPicker } from '@iace/app-kit';
 import { Combobox, plural } from '@iace/ui';
 import { api } from '../../lib/api';
 import { durationLabel } from '../../lib/duration';
-import { baseConfigPickerQueryKey } from '../../lib/constants';
+import { baseConfigPickerQueryKey } from '../../lib/query-keys';
 
 /** The blueprints a test can be built on: one stage's, and only the ones still offered. */
 export function BaseConfigPicker({

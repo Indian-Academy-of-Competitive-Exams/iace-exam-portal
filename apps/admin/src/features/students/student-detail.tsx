@@ -18,7 +18,8 @@ import {
   SkeletonParagraph,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, studentQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS, studentQueryKey } from '../../lib/query-keys';
 import { STUDENT_DETAIL_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useAuth } from '../../providers/auth';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';

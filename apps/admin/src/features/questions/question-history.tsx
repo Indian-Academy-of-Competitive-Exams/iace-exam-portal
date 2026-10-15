@@ -28,12 +28,8 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../providers/auth';
 import { ChangedCell } from '../../lib/audit-format';
 import { ACTION_BADGE_VARIANT } from '../../lib/audit-vocabulary';
-import {
-  AUDIT_ACTION_LABELS,
-  AUDIT_ACTOR_TYPE_LABELS,
-  questionAuditQueryKey,
-  questionVersionsQueryKey,
-} from '../../lib/constants';
+import { AUDIT_ACTION_LABELS, AUDIT_ACTOR_TYPE_LABELS } from '../../lib/labels';
+import { questionAuditQueryKey, questionVersionsQueryKey } from '../../lib/query-keys';
 
 /** Wider than a nav drawer: a version beside its changes needs the room. */
 const PANEL = 'w-[--modal-w-lg] gap-5';

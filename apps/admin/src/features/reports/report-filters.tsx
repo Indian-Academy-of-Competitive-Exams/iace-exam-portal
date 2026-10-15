@@ -12,7 +12,7 @@ import {
   type ReportSpec,
 } from '@iace/contracts';
 import { Combobox, DatePicker, type ListFilter, type ListFilterControl } from '@iace/ui';
-import { REPORT_PARAM_LABELS, REPORT_PERIOD_LABELS } from '../../lib/constants';
+import { REPORT_PARAM_LABELS, REPORT_PERIOD_LABELS } from '../../lib/reports';
 import { ReportChoicePicker } from './report-choice-picker';
 
 const TOP_CHOICES = [25, 50, 100] as const;

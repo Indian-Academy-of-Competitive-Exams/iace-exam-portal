@@ -41,10 +41,9 @@ import {
   AUDIT_ACTOR_TYPE_LABELS,
   AUDIT_FEATURE_LABELS,
   IMPORT_SOURCE_LABELS,
-  NAV_ITEMS,
-  auditImportsQueryKey,
-  auditRowActionsQueryKey,
-} from '../../lib/constants';
+} from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { auditImportsQueryKey, auditRowActionsQueryKey } from '../../lib/query-keys';
 
 const IMPORT_STATUS_LABELS: Readonly<Record<ImportLogStatus, string>> = {
   [IMPORT_LOG_STATUS.PREVIEWED]: 'Previewed',

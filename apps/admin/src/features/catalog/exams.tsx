@@ -41,13 +41,10 @@ import {
 import { ActiveStatus, RetireDeleteActions } from './retire-delete-actions';
 import { useAuth } from '../../providers/auth';
 import { api } from '../../lib/api';
-import {
-  COURSE_ITEMS,
-  NAV_ITEMS,
-  NEW_RECORD,
-  QUERY_KEYS,
-  examStagesQueryKey,
-} from '../../lib/constants';
+import { COURSE_ITEMS } from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { NEW_RECORD } from '../../lib/constants';
+import { QUERY_KEYS, examStagesQueryKey } from '../../lib/query-keys';
 import { ExamPicker } from '../../components/exam-picker';
 import { applyFieldErrors, changedValues } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';

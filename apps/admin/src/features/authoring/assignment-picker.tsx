@@ -2,7 +2,7 @@ import { type AssignmentRole } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
 import { MultiCombobox } from '@iace/ui';
 import { api } from '../../lib/api';
-import { assignmentPickerQueryKey } from '../../lib/constants';
+import { assignmentPickerQueryKey } from '../../lib/query-keys';
 import { type MultiPickerProps } from '../../components/picker-props';
 
 /** One role's own sections, loading on as they scroll — `mine` has no search for a box to drive. */

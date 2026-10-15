@@ -24,7 +24,9 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { ATTEMPT_STATUS_LABELS, NAV_ITEMS, liveOpsBoardQueryKey } from '../../lib/constants';
+import { ATTEMPT_STATUS_LABELS } from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { liveOpsBoardQueryKey } from '../../lib/query-keys';
 import { LIVE_OPS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useAuth } from '../../providers/auth';
 import { LiveTestPicker } from './live-test-picker';

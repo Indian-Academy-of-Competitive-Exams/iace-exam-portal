@@ -10,7 +10,9 @@ import {
   type PermissionLevel,
 } from '@iace/contracts';
 import { filterNavByPermission, type NavItem } from '@iace/app-kit';
-import { NAV_ITEMS, ROUTES, ROUTE_ACCESS, filterAdminNav, opensRoute } from '../src/lib/constants';
+import { NAV_ITEMS } from '../src/lib/nav';
+import { ROUTES } from '../src/lib/constants';
+import { ROUTE_ACCESS, filterAdminNav, opensRoute } from '../src/lib/route-access';
 
 const { READ, WRITE } = PERMISSION_LEVELS;
 

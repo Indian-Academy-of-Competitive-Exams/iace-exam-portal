@@ -44,13 +44,9 @@ import {
 import { api } from '../../lib/api';
 import { ExportButton } from '../../components/export-button';
 import { QuestionLink } from '../../components/question-link';
-import {
-  ANALYTICS_SYNC_MAX_MS,
-  ANALYTICS_SYNC_POLL_MS,
-  NAV_ITEMS,
-  ROUTES,
-  testAnalyticsQueryKey,
-} from '../../lib/constants';
+import { ANALYTICS_SYNC_MAX_MS, ANALYTICS_SYNC_POLL_MS, ROUTES } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { testAnalyticsQueryKey } from '../../lib/query-keys';
 import { useAuth } from '../../providers/auth';
 import { durationLabel, secondsLabel } from '../../lib/duration';
 

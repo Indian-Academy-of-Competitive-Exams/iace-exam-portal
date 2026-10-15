@@ -2,7 +2,7 @@ import { INSTITUTE_TIME_ZONE, type LiveOpsTest } from '@iace/contracts';
 import { usePagedPicker } from '@iace/app-kit';
 import { Combobox } from '@iace/ui';
 import { api } from '../../lib/api';
-import { liveTestPickerQueryKey } from '../../lib/constants';
+import { liveTestPickerQueryKey } from '../../lib/query-keys';
 
 const WINDOW_FORMATTER = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,

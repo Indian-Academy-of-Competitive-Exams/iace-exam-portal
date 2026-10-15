@@ -20,7 +20,8 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS, TEST_SERIES_KIND_HINTS } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
+import { TEST_SERIES_KIND_HINTS } from '../../lib/labels';
 import { useAuth } from '../../providers/auth';
 import { branchesKey } from './test-series-detail';
 

@@ -34,13 +34,12 @@ import {
 import { api } from '../../lib/api';
 import {
   DIFFICULTY_VARIANT,
-  NAV_ITEMS,
-  QUERY_KEYS,
   QUESTION_STATUS_LABELS,
   QUESTION_STATUS_VARIANT,
-  ROUTES,
-  questionAuditQueryKey,
-} from '../../lib/constants';
+} from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS, questionAuditQueryKey } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { QUESTIONS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useAuth } from '../../providers/auth';
 import { questionFacetFilters } from './question-filters';

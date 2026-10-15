@@ -11,7 +11,7 @@ import {
 import { Checkbox, Field, RatioBar, type RatioPart, type RatioValues } from '@iace/ui';
 import { api } from '../../lib/api';
 import { TopicMultiPicker } from '../../components/taxonomy-picker';
-import { availableQuestionsQueryKey } from '../../lib/constants';
+import { availableQuestionsQueryKey } from '../../lib/query-keys';
 
 /** What one section is drawn from: its topics, and how many of each difficulty. */
 

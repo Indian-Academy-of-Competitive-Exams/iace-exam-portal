@@ -38,17 +38,16 @@ import {
   type StepperStep,
 } from '@iace/ui';
 import { api } from '../../lib/api';
+import { NAV_ITEMS } from '../../lib/nav';
 import {
-  NAV_ITEMS,
   QUERY_KEYS,
-  ROUTES,
-  TEST_BUILDER_STEP_LABELS,
-  TEST_STATUS_LABELS,
   baseConfigQueryKey,
   seriesQueryKey,
   testAssignmentsQueryKey,
   testQueryKey,
-} from '../../lib/constants';
+} from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
+import { TEST_BUILDER_STEP_LABELS, TEST_STATUS_LABELS } from '../../lib/labels';
 import { TEST_BUILDER_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useAuth } from '../../providers/auth';
 import { ConfigSummaryButton } from './config-summary';

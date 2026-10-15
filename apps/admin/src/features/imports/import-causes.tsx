@@ -10,7 +10,7 @@ import {
 } from '@iace/contracts';
 import { Alert, Button, plural } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
 import { useAuth } from '../../providers/auth';
 import { SubjectPicker, TopicPicker } from '../../components/taxonomy-picker';
 

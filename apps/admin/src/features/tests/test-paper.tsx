@@ -56,15 +56,15 @@ import {
   sectionFullness,
   sectionTally,
 } from './test-paper-view';
+import { NAV_ITEMS } from '../../lib/nav';
 import {
-  NAV_ITEMS,
   QUERY_KEYS,
-  ROUTES,
   availableQuestionsQueryKey,
   testAssignmentsQueryKey,
   testPaperQueryKey,
   testQueryKey,
-} from '../../lib/constants';
+} from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
 

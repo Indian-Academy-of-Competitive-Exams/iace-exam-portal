@@ -23,7 +23,7 @@ import {
   MERIT_TYPE_LABELS,
   NAVIGATION_POLICY_LABELS,
   TIMER_TEMPLATE_LABELS,
-} from '../../lib/constants';
+} from '../../lib/labels';
 import { durationLabel } from '../../lib/duration';
 
 /** The shape a test reads off its blueprint — never the test's to change, so never in its way. */

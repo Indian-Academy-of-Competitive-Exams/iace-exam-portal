@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { PAGE_SIZE_MAX, type Exam } from '@iace/contracts';
 import { api } from '../../lib/api';
-import { examsQueryKey } from '../../lib/constants';
+import { examsQueryKey } from '../../lib/query-keys';
 
 /** The list plus how the read went, so a picker with nothing in it can say which it is. */
 export interface ExamList {

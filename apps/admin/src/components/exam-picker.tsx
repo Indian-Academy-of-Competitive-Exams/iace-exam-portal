@@ -6,7 +6,7 @@ import {
   examPickerQueryKey,
   examStageFilterQueryKey,
   examStagePickerQueryKey,
-} from '../lib/constants';
+} from '../lib/query-keys';
 import { itemsOf, namesOf, type MultiPickerProps, type PickerProps } from './picker-props';
 
 // Exam code is the label — it's what an enrolment stores, so a stage is qualified by it since "Tier 1" alone names several papers.

@@ -30,11 +30,8 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import {
-  PERFORMANCE_SCOPE_LABELS,
-  studentReportQueryKey,
-  studentSittingsQueryKey,
-} from '../../lib/constants';
+import { PERFORMANCE_SCOPE_LABELS } from '../../lib/labels';
+import { studentReportQueryKey, studentSittingsQueryKey } from '../../lib/query-keys';
 import { useAuth } from '../../providers/auth';
 
 const SCOPE_ITEMS = Object.entries(PERFORMANCE_SCOPE_LABELS).map(([value, label]) => ({

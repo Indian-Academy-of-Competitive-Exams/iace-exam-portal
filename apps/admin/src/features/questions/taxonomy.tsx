@@ -41,7 +41,10 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { LANGUAGE_CODE_LABELS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../../lib/constants';
+import { LANGUAGE_CODE_LABELS } from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { TAXONOMY_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../lib/tours';
 import { useAuth } from '../../providers/auth';
 import { SubjectMultiPicker, SubjectPicker } from '../../components/taxonomy-picker';

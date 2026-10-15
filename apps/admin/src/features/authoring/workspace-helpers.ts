@@ -1,5 +1,5 @@
 import { AppException } from '@iace/contracts';
-import { QUESTION_CODE_FIELD } from '../../lib/constants';
+import { QUESTION_CODE_FIELD } from '../../lib/labels';
 import { toDraft } from './question-scaffold';
 import { issuesOf } from './use-question-checks';
 import { type Held } from './workspace-types';

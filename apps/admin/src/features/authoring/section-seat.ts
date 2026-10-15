@@ -6,7 +6,7 @@ import {
   type PermissionLevel,
   type SectionWork,
 } from '@iace/contracts';
-import { SECTION_KEYS } from '../../lib/constants';
+import { SECTION_KEYS } from '../../lib/route-access';
 
 /** What the viewer can do right now, read off the section and the levels they hold, once for the page and every card. */
 export function seatOf(

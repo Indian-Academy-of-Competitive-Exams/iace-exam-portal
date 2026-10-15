@@ -21,7 +21,8 @@ import {
 } from '@iace/ui';
 import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../../components/access-picker';
 import { api } from '../../lib/api';
-import { QUERY_KEYS, SERIES_SOURCE_LABELS, studentSeriesQueryKey } from '../../lib/constants';
+import { QUERY_KEYS, studentSeriesQueryKey } from '../../lib/query-keys';
+import { SERIES_SOURCE_LABELS } from '../../lib/labels';
 
 function seriesColumns(
   busy: boolean,

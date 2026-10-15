@@ -26,7 +26,9 @@ import {
   type ListFilter,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, myAssignmentsQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS, myAssignmentsQueryKey } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import { useTestSectionFilters } from './use-test-section-filters';
 import { TypistDoneDialog } from './typist-done-dialog';

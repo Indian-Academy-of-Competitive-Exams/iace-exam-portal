@@ -22,7 +22,7 @@ import {
 import { api } from '../../lib/api';
 import { useAuth } from '../../providers/auth';
 import { ProgramPicker, TestSeriesPicker } from '../../components/access-picker';
-import { QUERY_KEYS } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
 import { opensLabel } from '../../lib/duration';
 import { instantOf, type ProgramOpening, type ScheduleDraft } from './test-schedule-draft';
 import {

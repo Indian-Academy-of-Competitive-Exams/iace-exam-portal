@@ -8,7 +8,8 @@ import { AppShell } from './components/app-shell';
 import { PageSkeleton } from './components/page-skeleton';
 import { LoginPage } from './features/auth/login';
 import { NotFoundPage } from './components/not-found';
-import { ROUTES, opensRoute } from './lib/constants';
+import { ROUTES } from './lib/constants';
+import { opensRoute } from './lib/route-access';
 
 const DashboardPage = React.lazy(() =>
   import('./features/dashboard/dashboard').then((module) => ({ default: module.DashboardPage })),

@@ -18,7 +18,7 @@ import {
   toast,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { QUERY_KEYS } from '../../lib/constants';
+import { QUERY_KEYS } from '../../lib/query-keys';
 
 /** Enough of a sitting to act on it. Both panels hand over the same five facts. */
 export interface ActionableSitting {

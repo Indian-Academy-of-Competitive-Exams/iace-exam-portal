@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { type QuestionOnOtherTest } from '@iace/contracts';
-import { questionOtherTestsQueryKey } from '../../lib/constants';
+import { questionOtherTestsQueryKey } from '../../lib/query-keys';
 import { NoticeChip } from './notice-chip';
 
 const TEST_NAMES = new Intl.ListFormat('en-IN', { style: 'long', type: 'conjunction' });

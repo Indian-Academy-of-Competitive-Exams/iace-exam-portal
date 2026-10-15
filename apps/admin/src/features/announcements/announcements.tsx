@@ -33,7 +33,8 @@ import {
 } from '@iace/ui';
 import { useAuth } from '../../providers/auth';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, announcementQueryKey } from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS, announcementQueryKey } from '../../lib/query-keys';
 import { ExportButton } from '../../components/export-button';
 import { ComposeAnnouncementDialog } from './compose-announcement-dialog';
 import { CHANNEL_LABEL, rupees } from './money';

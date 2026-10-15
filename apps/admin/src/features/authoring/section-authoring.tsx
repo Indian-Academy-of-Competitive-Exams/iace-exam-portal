@@ -28,13 +28,9 @@ import {
   toast,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import {
-  QUERY_KEYS,
-  REVIEW_STATE_LABELS,
-  SECTION_QUESTION_PARAM,
-  sectionWorkHeldQueryKey,
-  sectionWorkQueryKey,
-} from '../../lib/constants';
+import { QUERY_KEYS, sectionWorkHeldQueryKey, sectionWorkQueryKey } from '../../lib/query-keys';
+import { REVIEW_STATE_LABELS } from '../../lib/labels';
+import { SECTION_QUESTION_PARAM } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
 import {} from './use-delete-question';
 import { SectionThreadButton } from '../../components/section-thread';

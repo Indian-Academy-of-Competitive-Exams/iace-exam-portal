@@ -25,13 +25,9 @@ import {
 } from '@iace/ui';
 import { StageCell } from '../../components/stage-cell';
 import { api } from '../../lib/api';
-import {
-  QUERY_KEYS,
-  ROUTES,
-  TEST_SERIES_KIND_LABELS,
-  TEST_SERIES_KIND_HINTS,
-  seriesQueryKey,
-} from '../../lib/constants';
+import { QUERY_KEYS, seriesQueryKey } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
+import { TEST_SERIES_KIND_LABELS, TEST_SERIES_KIND_HINTS } from '../../lib/labels';
 import { useAuth } from '../../providers/auth';
 import { ExamMultiPicker, ExamStageMultiPicker } from '../../components/exam-picker';
 

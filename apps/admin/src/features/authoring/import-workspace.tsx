@@ -9,7 +9,7 @@ import {
 } from '@iace/contracts';
 import { Badge, Tooltip, TooltipContent, TooltipTrigger, TruncatedText, cn } from '@iace/ui';
 import { api } from '../../lib/api';
-import { importDraftQueryKey, importDraftsQueryKey } from '../../lib/constants';
+import { importDraftQueryKey, importDraftsQueryKey } from '../../lib/query-keys';
 import { AuthoringWorkspace } from './authoring-workspace';
 import type { Held, WorkspaceSource } from './workspace-types';
 import { NoticeChip } from './notice-chip';

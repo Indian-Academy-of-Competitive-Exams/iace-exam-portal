@@ -8,7 +8,7 @@ import {
   type StudentType,
 } from '@iace/contracts';
 import { api } from './api';
-import { QUERY_KEYS } from './constants';
+import { QUERY_KEYS } from './query-keys';
 
 const everyBranch = (page: Paginated<Branch>) => page.items;
 const activeBranches = (page: Paginated<Branch>) => page.items.filter((branch) => branch.isActive);

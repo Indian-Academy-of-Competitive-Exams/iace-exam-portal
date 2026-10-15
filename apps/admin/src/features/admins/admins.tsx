@@ -33,7 +33,9 @@ import {
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
-import { ADMIN_ROLE_LABELS, NAV_ITEMS, QUERY_KEYS } from '../../lib/constants';
+import { ADMIN_ROLE_LABELS } from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS } from '../../lib/query-keys';
 import { SuperAdminOnly } from './super-admin-only';
 
 const NEW_ADMIN_FIELDS = ['email', 'fullName', 'role'] as const;

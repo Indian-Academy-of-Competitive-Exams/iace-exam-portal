@@ -20,7 +20,7 @@ import {
   type BadgeProps,
 } from '@iace/ui';
 import { api } from '../../lib/api';
-import { testQueryKey } from '../../lib/constants';
+import { testQueryKey } from '../../lib/query-keys';
 
 /** What a finalized paper's question is worth now — the only change a frozen paper allows. */
 

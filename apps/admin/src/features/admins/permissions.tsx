@@ -31,13 +31,10 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
-import {
-  ADMIN_ROLE_LABELS,
-  NAV_ITEMS,
-  PAGE_SIZE_FOR_PICKERS,
-  QUERY_KEYS,
-  allAdminsQueryKey,
-} from '../../lib/constants';
+import { ADMIN_ROLE_LABELS } from '../../lib/labels';
+import { NAV_ITEMS } from '../../lib/nav';
+import { PAGE_SIZE_FOR_PICKERS } from '../../lib/constants';
+import { QUERY_KEYS, allAdminsQueryKey } from '../../lib/query-keys';
 import { SuperAdminOnly } from './super-admin-only';
 
 /** What an admin holds for one feature, with "nothing" said out loud. */

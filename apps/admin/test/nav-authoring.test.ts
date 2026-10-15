@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { FEATURE_KEYS, type FeatureKey } from '@iace/contracts';
 import { filterNavByPermission } from '@iace/app-kit';
-import { NAV_ITEMS, ROUTES, filterAdminNav } from '../src/lib/constants';
+import { NAV_ITEMS } from '../src/lib/nav';
+import { ROUTES } from '../src/lib/constants';
+import { filterAdminNav } from '../src/lib/route-access';
 
 const holding = (...keys: FeatureKey[]) => {
   const held = new Set<FeatureKey>(keys);

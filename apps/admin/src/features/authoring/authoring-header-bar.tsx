@@ -12,11 +12,7 @@ import {
   type WritingFormat,
 } from '@iace/contracts';
 import { Combobox, Input, SegmentedControl, UPPERCASE_CODE, cn } from '@iace/ui';
-import {
-  ANSWER_MODE_LABELS,
-  QUESTION_TYPE_LABELS,
-  WRITING_FORMAT_LABELS,
-} from '../../lib/constants';
+import { ANSWER_MODE_LABELS, QUESTION_TYPE_LABELS, WRITING_FORMAT_LABELS } from '../../lib/labels';
 import { TOUR_TARGETS } from '../../lib/tours';
 import { SubjectPicker, TopicPicker } from '../../components/taxonomy-picker';
 import {

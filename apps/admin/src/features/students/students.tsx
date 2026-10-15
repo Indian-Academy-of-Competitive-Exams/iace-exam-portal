@@ -45,13 +45,10 @@ import {
 import { EventMultiPicker, ProgramMultiPicker } from '../../components/access-picker';
 import { ExportButton, type ExportChoice } from '../../components/export-button';
 import { api } from '../../lib/api';
-import {
-  NAV_ITEMS,
-  QUERY_KEYS,
-  ROUTES,
-  STUDENT_TYPE_LABELS,
-  COURSE_ITEMS,
-} from '../../lib/constants';
+import { NAV_ITEMS } from '../../lib/nav';
+import { QUERY_KEYS } from '../../lib/query-keys';
+import { ROUTES } from '../../lib/constants';
+import { STUDENT_TYPE_LABELS, COURSE_ITEMS } from '../../lib/labels';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { useBranchChoice, useBranches } from '../../lib/use-branches';

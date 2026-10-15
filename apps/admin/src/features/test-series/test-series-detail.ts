@@ -6,11 +6,8 @@ import {
   type TestSeriesKind,
   type TestSeriesSummary,
 } from '@iace/contracts';
-import {
-  TEST_SERIES_KIND_HINTS,
-  TEST_SERIES_KIND_LABELS,
-  seriesQueryKey,
-} from '../../lib/constants';
+import { TEST_SERIES_KIND_HINTS, TEST_SERIES_KIND_LABELS } from '../../lib/labels';
+import { seriesQueryKey } from '../../lib/query-keys';
 
 /** One series read four ways. What more than one of its tabs needs lives here, and only that. */
 
