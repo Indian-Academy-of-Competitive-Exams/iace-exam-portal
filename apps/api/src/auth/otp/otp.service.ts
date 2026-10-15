@@ -24,7 +24,8 @@ import {
 } from '../../common/messaging';
 import { type StoredOtp } from '../auth.types';
 
-const DAY_SEC = 24 * 60 * 60;
+const HOUR_SEC = 60 * 60;
+const DAY_SEC = 24 * HOUR_SEC;
 
 /** How long a code the desk reads out is good for. Short: it is said aloud, to somebody standing there. */
 export const DESK_CODE_TTL_SEC = 5 * 60;
@@ -144,16 +145,20 @@ export class OtpService {
   }
 
   /** INCR then guarantee a TTL, checked every call: a crash between the two commands would otherwise leave a counter that counts up forever. */
-  private async incrementDailyCounter(key: string): Promise<number> {
+  private async incrementDailyCounter(key: string, windowSec = DAY_SEC): Promise<number> {
     const count = await this.redis.client.incr(key);
-    if ((await this.redis.client.ttl(key)) < 0) await this.redis.client.expire(key, DAY_SEC);
+    if ((await this.redis.client.ttl(key)) < 0) await this.redis.client.expire(key, windowSec);
     return count;
   }
 
   /** Counted before sending and never refunded: a refused request past the cap is already over it. */
   private async countTowardsDay(mobile: string): Promise<void> {
     const sent = await this.incrementDailyCounter(redisKeys.otpDaily(mobile));
-    if (sent > this.config.get('OTP_MAX_PER_DAY')) {
+    const sentThisHour = await this.incrementDailyCounter(redisKeys.otpHourly(mobile), HOUR_SEC);
+    if (
+      sent > this.config.get('OTP_MAX_PER_DAY') ||
+      sentThisHour > this.config.get('OTP_MAX_PER_HOUR')
+    ) {
       this.metrics.countOtpSend('refused_mobile_daily');
       throw new AppException(
         ErrorCodes.RATE_LIMITED,

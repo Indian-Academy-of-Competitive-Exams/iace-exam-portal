@@ -12,6 +12,9 @@ export const redisKeys = {
   /** Codes sent to one mobile in the last 24 hours. Set on the first, so the window rolls. */
   otpDaily: (mobile: string) => `otp:daily:${mobile}`,
 
+  /** The same count over the last hour: the SMS account is shared with every IACE app. */
+  otpHourly: (mobile: string) => `otp:hourly:${mobile}`,
+
   /** The address-wide twin of `otpDaily`: a mobile's cap alone does not stop one address minting new numbers. */
   otpDailyByIp: (ip: string) => `otp:daily:ip:${ip}`,
 

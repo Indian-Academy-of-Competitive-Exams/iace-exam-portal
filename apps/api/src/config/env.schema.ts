@@ -86,9 +86,10 @@ export const envSchema = z.object({
   // OTP policy. Every byte of OTP state lives in Redis, never Postgres.
   OTP_LENGTH: z.coerce.number().int().min(4).max(8).default(6),
   OTP_TTL_SEC: z.coerce.number().int().positive().default(300),
-  OTP_RESEND_COOLDOWN_SEC: z.coerce.number().int().nonnegative().default(45),
+  OTP_RESEND_COOLDOWN_SEC: z.coerce.number().int().nonnegative().default(60),
   OTP_MAX_VERIFY_ATTEMPTS: z.coerce.number().int().positive().default(5),
   OTP_MAX_PER_DAY: z.coerce.number().int().positive().default(10),
+  OTP_MAX_PER_HOUR: z.coerce.number().int().positive().default(5),
   // The address-wide twin of OTP_MAX_PER_DAY: a mobile's cap alone does not stop one address minting new numbers.
   OTP_MAX_PER_DAY_PER_IP: z.coerce.number().int().positive().default(3000),
   // The platform-wide kill switch on OTP spend, in paise — checked against NOTIFICATION_COST_SMS_PAISE.
@@ -134,9 +135,10 @@ export const envSchema = z.object({
     .min(1, 'MEDIA_BASE_URL is required')
     .transform((v) => v.trim().replace(TRAILING_SLASH, '')),
 
-  // The SMS aggregator, named nowhere: a swap is these three values, not a code change.
+  // The SMS gateway's endpoint and login; the password rides its query string, so it is never logged.
   SMS_PROVIDER_URL: optional,
-  SMS_PROVIDER_KEY: optional,
+  SMS_PROVIDER_USER: optional,
+  SMS_PROVIDER_PASS: optional,
   SMS_SENDER_ID: z.string().default(''),
 
   // The Gmail account an admin's OTP comes from. MAIL_PASSWORD is a Google app password.

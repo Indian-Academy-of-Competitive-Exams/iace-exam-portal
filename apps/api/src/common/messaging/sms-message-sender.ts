@@ -1,8 +1,8 @@
 /**
- * The SMS provider, as a shape rather than a name. India's DLT rules mean every
- * message is a registered template id and a set of variables, and that is true
- * of every aggregator — so endpoint, key, sender id and the template per kind
- * all come from env, and swapping provider is a config change, not a code one.
+ * The SMS gateway (Spearuc). Under India's DLT rules every message is a registered template, and
+ * this gateway wants its full text, character for character, beside the template id — so the text
+ * lives here, the id in env, and a kind with either missing is off. The credentials ride the query
+ * string, so the URL is never logged.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
@@ -15,7 +15,7 @@ import {
   type OutboundMessage,
 } from './message-sender';
 
-/** Which env var carries each kind's registered template. Adding a kind is adding a line to both. */
+/** Which env var carries each kind's registered template id. */
 const TEMPLATE_KEYS = {
   [MESSAGE_KINDS.OTP]: 'SMS_TEMPLATE_OTP',
   [MESSAGE_KINDS.RESULT_READY]: 'SMS_TEMPLATE_RESULT_READY',
@@ -24,8 +24,20 @@ const TEMPLATE_KEYS = {
   [MESSAGE_KINDS.ANNOUNCEMENT]: 'SMS_TEMPLATE_ANNOUNCEMENT',
 } as const satisfies Record<MessageKind, string>;
 
-/** Long enough for a slow aggregator, short enough that a student is not left watching a spinner. */
-const SEND_TIMEOUT_MS = 8000;
+const DLT_VAR = '{#var#}';
+
+/** The registered wording, exactly; each `{#var#}` takes the next field of `data`, in order. */
+const DLT_TEXTS: Partial<Record<MessageKind, { text: string; fields: readonly string[] }>> = {
+  [MESSAGE_KINDS.OTP]: {
+    text: 'Your OTP for IACE Login is {#var#}. This OTP is valid for 5 minutes. Do not share this OTP with anyone. Indian Academy of Competitive Exams.',
+    fields: ['code'],
+  },
+};
+
+const GATEWAY_REFUSAL = /^\s*ERROR/i;
+
+/** The gateway's own advice: a slow answer may still have sent, so wait it out rather than retry. */
+const SEND_TIMEOUT_MS = 15_000;
 
 @Injectable()
 export class SmsMessageSender implements MessageSender {
@@ -34,8 +46,9 @@ export class SmsMessageSender implements MessageSender {
   constructor(private readonly config: AppConfigService) {}
 
   async send(message: OutboundMessage): Promise<void> {
-    const templateId = this.templateFor(message.kind);
-    if (!templateId) {
+    const templateId = this.config.get(TEMPLATE_KEYS[message.kind]);
+    const registered = DLT_TEXTS[message.kind];
+    if (!templateId || !registered) {
       if (REQUIRED_KINDS.has(message.kind)) {
         throw new Error(`No DLT template is configured for "${message.kind}".`);
       }
@@ -44,35 +57,33 @@ export class SmsMessageSender implements MessageSender {
       throw new MessageNotConfiguredError(message.kind);
     }
 
-    await this.post({
-      to: message.to,
-      templateId,
-      senderId: this.config.get('SMS_SENDER_ID'),
-      variables: message.data ?? {},
+    const answer = await this.get({
+      type: 'smsquicksend',
+      user: this.config.get('SMS_PROVIDER_USER') ?? '',
+      pass: this.config.get('SMS_PROVIDER_PASS') ?? '',
+      sender: this.config.get('SMS_SENDER_ID'),
+      to_mobileno: message.to,
+      sms_text: fill(registered.text, registered.fields, message.data ?? {}),
+      t_id: templateId,
     });
+    this.logger.log(`SMS "${message.kind}" to ******${message.to.slice(-4)}: ${answer}`);
   }
 
-  /** Placeholder shape, one POST — the concrete provider's field names land here and nowhere else. */
-  private async post(payload: Record<string, unknown>): Promise<void> {
-    const url = this.config.get('SMS_PROVIDER_URL');
-    if (!url) throw new Error('SMS_PROVIDER_URL is not set.');
+  private async get(params: Record<string, string>): Promise<string> {
+    const base = this.config.get('SMS_PROVIDER_URL');
+    if (!base) throw new Error('SMS_PROVIDER_URL is not set.');
+    const url = new URL(base);
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: this.config.get('SMS_PROVIDER_KEY') ?? '',
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
-    });
-
-    if (!response.ok) {
-      throw new Error(`SMS provider answered ${response.status}`);
-    }
+    const response = await fetch(url, { signal: AbortSignal.timeout(SEND_TIMEOUT_MS) });
+    const answer = (await response.text()).trim();
+    if (!response.ok) throw new Error(`SMS gateway answered ${response.status}: ${answer}`);
+    if (GATEWAY_REFUSAL.test(answer)) throw new Error(`SMS gateway refused: ${answer}`);
+    return answer;
   }
+}
 
-  private templateFor(kind: MessageKind): string | undefined {
-    return this.config.get(TEMPLATE_KEYS[kind]);
-  }
+function fill(text: string, fields: readonly string[], data: Record<string, string | number>) {
+  let next = 0;
+  return text.replaceAll(DLT_VAR, () => String(data[fields[next++] ?? ''] ?? ''));
 }

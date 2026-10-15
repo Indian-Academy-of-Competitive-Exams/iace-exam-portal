@@ -28,8 +28,14 @@ export function createMessageSender(
   }
 
   // Required on the WhatsApp path too: SMS is the fallback nobody signs in without.
-  if (!config.get('SMS_PROVIDER_URL')) {
-    throw new Error(`OTP_SENDER=${mode} needs SMS_PROVIDER_URL — see .env.example.`);
+  if (
+    !config.get('SMS_PROVIDER_URL') ||
+    !config.get('SMS_PROVIDER_USER') ||
+    !config.get('SMS_PROVIDER_PASS')
+  ) {
+    throw new Error(
+      `OTP_SENDER=${mode} needs SMS_PROVIDER_URL, SMS_PROVIDER_USER and SMS_PROVIDER_PASS — see .env.example.`,
+    );
   }
   // Refused here rather than at the first admin login, which is the worst time to find out.
   if (!config.get('MAIL_USER') || !config.get('MAIL_PASSWORD')) {

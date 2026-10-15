@@ -201,7 +201,7 @@ describe('OtpService — request', () => {
     await otp.request(ActorTypes.ADMIN, 'same-identifier');
 
     const keys = Object.keys(redis.snapshot()).filter(
-      (k) => k.startsWith('otp:') && !k.includes('cooldown') && !k.includes('daily'),
+      (k) => k.startsWith('otp:') && !/cooldown|daily|hourly/.test(k),
     );
     assert.deepEqual(keys.sort(), ['otp:admin:same-identifier', 'otp:student:same-identifier']);
   });
@@ -387,6 +387,22 @@ describe('OtpService — the day a mobile is allowed', () => {
     await otp.request(ActorTypes.STUDENT, MOBILE);
 
     assert.ok((await redis.client.ttl(`otp:daily:${MOBILE}`)) > 0);
+  });
+
+  it('refuses past the hour’s allowance, and sends again once the hour has passed', async () => {
+    const { otp, sender, redis } = build({
+      ...noCooldown,
+      OTP_MAX_PER_DAY: 10,
+      OTP_MAX_PER_HOUR: 2,
+    });
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+    await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    await assert.rejects(() => otp.request(ActorTypes.STUDENT, MOBILE), refusedAsRateLimited);
+    assert.equal(sender.sent.length, 2);
+
+    redis.advanceSeconds(60 * 60);
+    assert.equal((await otp.request(ActorTypes.STUDENT, MOBILE)).sent, true);
   });
 
   it('counts each mobile on its own', async () => {

@@ -28,6 +28,8 @@ const WHATSAPP_READY = {
   NODE_ENV: 'production',
   OTP_SENDER: 'whatsapp',
   SMS_PROVIDER_URL: 'https://sms.example/send',
+  SMS_PROVIDER_USER: 'iace',
+  SMS_PROVIDER_PASS: 'secret',
   MAIL_USER: 'no-reply@iace.co.in',
   MAIL_PASSWORD: 'abcd efgh ijkl mnop',
   WHATSAPP_INTERAKT_API_KEY: 'interakt-key',
@@ -112,6 +114,13 @@ describe('Provider selection', () => {
     );
   });
 
+  it('refuses the SMS sender without the gateway login', () => {
+    assert.throws(
+      () => senderFor({ ...WHATSAPP_READY, OTP_SENDER: 'sms', SMS_PROVIDER_PASS: undefined }),
+      /SMS_PROVIDER_PASS/,
+    );
+  });
+
   /** An admin signs in by email, so a deployment with no mail account cannot let anybody in. */
   it('refuses to boot with SMS configured and email not', () => {
     assert.throws(
@@ -120,6 +129,8 @@ describe('Provider selection', () => {
           NODE_ENV: 'production',
           OTP_SENDER: 'sms',
           SMS_PROVIDER_URL: 'https://sms.example/send',
+          SMS_PROVIDER_USER: 'iace',
+          SMS_PROVIDER_PASS: 'secret',
         }),
       /MAIL_USER/,
     );
@@ -130,6 +141,8 @@ describe('Provider selection', () => {
       NODE_ENV: 'production',
       OTP_SENDER: 'sms',
       SMS_PROVIDER_URL: 'https://sms.example/send',
+      SMS_PROVIDER_USER: 'iace',
+      SMS_PROVIDER_PASS: 'secret',
       MAIL_USER: 'no-reply@iace.co.in',
       MAIL_PASSWORD: 'abcd efgh ijkl mnop',
     });
@@ -170,6 +183,8 @@ describe('Provider selection', () => {
       NODE_ENV: 'production',
       OTP_SENDER: 'sms',
       SMS_PROVIDER_URL: 'https://sms.example/send',
+      SMS_PROVIDER_USER: 'iace',
+      SMS_PROVIDER_PASS: 'secret',
       MAIL_USER: 'no-reply@iace.co.in',
       MAIL_PASSWORD: 'abcd efgh ijkl mnop',
     });
