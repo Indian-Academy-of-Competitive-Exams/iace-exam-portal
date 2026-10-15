@@ -35,7 +35,7 @@ jobs:
     steps:
       # Whole history, because the range below reaches back to the last green run and a shallow
       # clone cannot see it.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
 
       - id: f
