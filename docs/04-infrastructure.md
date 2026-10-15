@@ -114,8 +114,8 @@ day" would throw away the rollback you wanted. Two is the last release and the o
 is a rollback that needs no network. `KEEP=4` before something risky. **It never touches
 volumes, and neither should you** — they hold Caddy's issued certificates and Box B's append-only
 file, and Let's Encrypt rate-limits five certificates per hostname per week, so one careless
-`docker system prune --volumes` locks you out of your own domain for seven days. Run it weekly
-from `cron`, and before any release you expect to be large.
+`docker system prune --volumes` locks you out of your own domain for seven days. Every deploy runs
+it as its last step (`_deploy-api.yml`), and a weekly `cron` is the backstop between releases.
 
 **Add 18% GST to both** — ap-south-1 bills through AWS India, so ~$62 today and ~$132 with
 production. It is input credit against the institute's GSTIN, but only if the GSTIN is on the
@@ -264,9 +264,9 @@ hourly. At `t4g.2xlarge` (8 vCPU) one box serves roughly 4,000 requests a second
 pessimistic multiplier, which is eight times the 10K ceiling `CLAUDE.md` sets. **One box will not
 run out of capacity; it runs out of availability**, which is the reason to add a second, not CPU.
 
-Point Caddy at the compose service name with a `dynamic a` upstream rather than a fixed host.
-Docker's DNS returns every container of a scaled service, so `docker compose up -d --scale exam=4`
-is the whole of scaling out and Caddy needs no config change.
+Caddy points at the compose service name with a `dynamic a` upstream rather than a fixed host,
+re-resolved every 10 s. Docker's DNS returns every container of a scaled service, so
+`docker compose up -d --scale exam=4` is the whole of scaling out and Caddy needs no config change.
 
 **Event windows.** Only tests in an EVENT series are pre-warmed. On this shape pre-warming means
 resizing the box before `opensAt` rather than raising an autoscaling minimum — deliberate, not
@@ -295,10 +295,10 @@ ports 80 and 443 open. No ALB, no ACM, no target groups.
 `deploy/Caddyfile` is the real one and the source of record for the route list; its shape:
 
 ```
-api.examprep.iace.co.in {
+{$API_HOST} {
 	@exam path <the exam role's leaf paths>
-	reverse_proxy @exam exam:3000
-	reverse_proxy core:3000
+	reverse_proxy @exam { dynamic a exam 3000 }
+	reverse_proxy { dynamic a core 3000 }
 }
 ```
 
@@ -428,12 +428,13 @@ Then the migration's `IF NOT EXISTS` is a no-op and passes. Skip it and `prisma 
 dies on a permission error — and because the API containers wait on `migrate` exiting zero,
 nothing starts at all.
 
-Where 25 itself comes from: the worker's processors sum to exactly **20** concurrent slots
-(`QUEUE_POLICY` in `apps/api/src/queue/queues.ts` — scoring 8, rollup 2, notifications 4, delivery
-2, and four singletons), so one container has twenty jobs wanting a connection before it serves a
-request. Prisma's default pool is `cpus × 2 + 1`, which is five on a 2-vCPU box.
+Where 25 itself comes from: the worker's processors sum to **22** concurrent slots
+(`QUEUE_POLICY` in `apps/api/src/queue/queues.ts` — scoring 8, notifications 4, rollup 2, delivery
+2, exports 2, and four singletons), so one container has twenty-two jobs wanting a connection
+before it serves a request. Prisma's default pool is `cpus × 2 + 1`, which is five on a 2-vCPU box.
 
-So the trigger for `db.t4g.small` is the **third** API container, whatever its role. `scale.yml`
+So the trigger for `db.t4g.small` is the **fifth** API container — a third exam, or a second core
+beside a second exam. `scale.yml`
 computes this against the live instance class and refuses a scale-up that would exceed 90% of the
 ceiling, which is the only reason the arithmetic is now right. Per-role limits would need a
 `DATABASE_URL` per role in `compose.yml`; that is worth doing before production and is not done.
@@ -724,14 +725,16 @@ broken.
 | File                  | Tracked                          | What it is                                                                                            |
 | --------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `.env.example`        | yes                              | Every variable the schema knows, with `dev_only_` secrets — local development, and the reference list |
-| `deploy/.env.example` | yes                              | The deployed subset, carrying the arithmetic beside the pool size and the heaps                       |
+| `deploy/.env.example` | yes                              | Every key the API reads, plus the images to run, the per-container sizing and the operator's ids      |
 | `deploy/.env`         | **never** — `.gitignore` line 32 | The real one on Box A. It exists on the box and in SSM, and nowhere else                              |
 | `deploy/valkey/.env`  | **never**                        | Box B's, carrying `PRIVATE_IP` and a `requirepass` per process (§7)                                   |
 
-**Per-role values are deliberately not in the file.** `API_ROLE`, `UV_THREADPOOL_SIZE`,
-`NODE_OPTIONS`, `cpu_shares` and `mem_limit` are set per service in `compose.yml`, because they differ by
-role and the file cannot know which of the three containers is reading it. The file carries only
-what all three share.
+**The per-role environment is deliberately not in the file.** `API_ROLE`, `UV_THREADPOOL_SIZE`
+and `NODE_OPTIONS` are set per service in `compose.yml`, because every container is handed the
+whole file and none could tell which of the three it is. The sizing the file does carry —
+`EXAM_MEM`, `CORE_HEAP_MB`, `WORKER_CPU_SHARES` and the rest — is read only by compose's
+substitution into `mem_limit`, `cpu_shares` and the heap flag. `pnpm env:check` fails when the
+file and `.env.example` stop naming the same keys.
 
 **The SPAs have no runtime environment at all.** `VITE_API_URL` is substituted at compile time
 (§14), so for them an environment is a BUILD rather than a variable, and a staging artifact cannot
@@ -764,8 +767,9 @@ replaces the port-22 rule (§8) rather than an extra privilege for its own sake.
 **What production refuses to boot without**, each refusal naming its own variable rather than
 surfacing as a mystery 500 an hour into a live test: `connection_limit` on `DATABASE_URL`, a
 non-empty `CORS_ORIGINS`, a `METRICS_TOKEN`, `TRUST_PROXY_HOPS` above zero, a Valkey that cannot
-evict, and either of `JWT_ACCESS_SECRET` or `JWT_REFRESH_SECRET` still carrying the
-`dev_only_` prefix `.env.example` publishes. It additionally **warns** when the heap in
+evict, an `OTP_SENDER` other than `console` with the SMS provider and mail keys it needs, and
+either of `JWT_ACCESS_SECRET` or `JWT_REFRESH_SECRET` still carrying the `dev_only_` prefix
+`.env.example` publishes. It additionally **warns** when the heap in
 `NODE_OPTIONS` does not match the container's memory limit, naming the role that is wrong.
 
 - **`examprep.iace.co.in` is NOT free — it is a CNAME to `exam.thinkexam.in`,** the platform this
@@ -779,8 +783,9 @@ evict, and either of `JWT_ACCESS_SECRET` or `JWT_REFRESH_SECRET` still carrying 
   mechanism — remapping it to a replacement instance takes seconds and needs no DNS propagation.
 - **ECR** at $0.10/GB-month with a lifecycle keeping the last ten images, under $0.20.
 - **GitHub Actions assumes `examprep-github-actions` through OIDC**, so no AWS key lives in
-  GitHub. It can push to the two ECR repositories, write the SPA bucket, invalidate CloudFront,
-  and `ssm:SendCommand` to an instance tagged `examprep-api-staging` — and nothing else. The trust
+  GitHub. It pushes to the two ECR repositories, writes the SPA bucket, invalidates CloudFront and
+  sends SSM commands to the API box; the workflows also look the box up and read each command's
+  result, and `scale.yml` reads the database's class and stops, resizes and starts the box. The trust
   policy names two exact subjects rather than a wildcard, which on a public repository is the
   difference between a scoped role and one any fork can assume.
 
@@ -825,9 +830,10 @@ costs nothing to have. Nothing shuts staging down unless a tester chose a time, 
 nobody chose cuts a session. One schedule runs regardless, daily at 03:00 IST: AWS restarts a
 stopped RDS instance after seven days, and this stops it again when the API box is stopped. **A
 deploy never starts anything.** A push while the box is off ends green with "ECR updated", and
-`deploy/boot-update.sh` — a systemd unit on the staging box only — pulls the `staging` tag on every
-start and retries until the database is up. **The day production exists, set `MANAGE_SHARED=false`**:
-the Valkey box and the database are then production's too, and the switch leaves them alone.
+`deploy/boot-update.sh` — a systemd unit on the staging box only — fast-forwards the checkout,
+pulls with `API_TAG=staging` on every start, and retries `up -d` until the database is up.
+**The day production exists, set `MANAGE_SHARED=false`**: the Valkey box and the database are then
+production's too, and the switch leaves them alone.
 
 **This box is also the load-testing rig**, and the split from Box B is what makes it worth trusting
 — the API box's CPU is the API's alone, and the database is across a network hop, which is the
@@ -849,7 +855,7 @@ it feels prudent.
 |                        |                    | `t4g.xlarge` for an event | Scheduled, on the event calendar — never reactively (§3) |
 | Box B — Valkey         | `t4g.micro`, 10 GB | `t4g.small`               | Before the first full-scale load test                    |
 |                        |                    | `t4g.medium`              | Production carries 8,000 live sittings                   |
-| RDS                    | `db.t4g.micro`     | `db.t4g.small`            | A second exam container — **connections, not load** (§6) |
+| RDS                    | `db.t4g.micro`     | `db.t4g.small`            | A fifth API container — **connections, not load** (§6)   |
 
 **Commit to nothing at launch.** After 4–8 weeks of real events the baseline is known; commit to
 70–80% of it so growth and bursts stay on demand.
@@ -876,13 +882,23 @@ worst-case invoice.
 **One workflow per environment and the halves they share, so the ordering rule below is
 infrastructure rather than a habit.**
 
-| Workflow            | Trigger                                                                             | What it does                                                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `staging.yml`       | a push to `staging`, or Run workflow with an image tag                              | Finds which halves changed since the last green run, then build → API → SPAs as one chain                                |
-| `production.yml`    | `cron` 20:30 UTC (02:00 IST), or Run workflow with a tag and a reason               | API → SPAs against production. **Disabled in the Actions settings until production exists**                              |
-| `build-api.yml`     | called by `staging.yml`; a push to `main` touching `apps/api`, `packages`, `prisma` | Builds both targets natively on `ubuntu-24.04-arm` and pushes `<sha>` plus the branch's moving tag. **Does not deploy.** |
-| `_deploy-api.yml`   | called                                                                              | SSM into Box A: fast-forward the checkout, then `docker compose pull && up -d`                                           |
-| `_publish-spas.yml` | called                                                                              | Builds both SPAs and publishes them                                                                                      |
+| Workflow            | Trigger                                                                                            | What it does                                                                                                                      |
+| ------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`            | a push to `staging` or `main`, a pull request, Run workflow                                        | Verify (format, `actionlint`, deps, env templates, lint, typecheck, test, build), Database (migrations and `test:db`), End to end |
+| `staging.yml`       | a push to `staging`, or Run workflow with an image tag                                             | Finds which halves changed since the last green run, then build → API → SPAs as one chain                                         |
+| `production.yml`    | `cron` 20:30 UTC (02:00 IST), or Run workflow with a tag and a reason                              | API → SPAs against production. **Disabled in the Actions settings until production exists**                                       |
+| `build-api.yml`     | called by `staging.yml`; a push to `main` touching the API, its packages, `prisma` or the lockfile | Builds both targets natively on `ubuntu-24.04-arm` and pushes `<sha>` plus the branch's moving tag. **Does not deploy.**          |
+| `_deploy-api.yml`   | called                                                                                             | SSM into Box A: fast-forward the checkout, `docker compose pull && up -d`, wait for healthy, prune                                |
+| `_publish-spas.yml` | called                                                                                             | Builds both SPAs and publishes them                                                                                               |
+| `scale.yml`         | Run workflow only                                                                                  | Sets the exam and core counts, optionally resizes Box A, and refuses a count the database's connections cannot hold (§6)          |
+
+**CI runs on both branches, and none of it deploys.** Verify lints every workflow with `actionlint`
+(and shellcheck on each `run:` block), because a workflow mistake otherwise surfaces only when that
+workflow next runs, often mid-release. End to end has one student sit a real paper in Chromium
+against the real API, Postgres, Valkey and queue — no MinIO, since a sitting never touches S3. A
+weekly cron runs `pnpm docs:check` and gates nothing (`docs/03` §12). Every action is on its first
+Node 24 major (`actions/checkout@v5`, `aws-actions/configure-aws-credentials@v6`,
+`docker/build-push-action@v7` and the rest), so no run warns of the deprecated Node 20 runtime.
 
 **Staging goes out on every push; production waits for the night.** A SPA release is a file copy —
 no migration, no restart, nothing to drain. An API release runs migrations and recreates containers
@@ -916,11 +932,21 @@ trust policy matches on the exact string — so the plain form every tutorial sh
 and is a spelling one. The prefix to copy is `sub_claim_prefix` from
 `gh api repos/<org>/<repo>/actions/oidc/customization/sub`.
 
-Rolling back is a tag, not a rebuild: Run workflow with the previous commit's sha.
+**A release fails unless the API comes up healthy.** After `up -d`, `deploy/await-healthy.sh` waits
+up to three minutes for exam, core and worker to report healthy on `/health/ready`, and if one does
+not it prints that container's last 80 log lines and fails the run — so SSM cannot report
+Success over a crash loop. Before the pull, the deploy prints `rollback-to:` and the image core was
+running, so the tag to go back to is in the failed run's log.
+
+Rolling back is a tag, not a rebuild: Run workflow with that tag, or the previous commit's sha.
 
 **The manual path still works and is the fallback** when CI is down or the registry is
 unreachable — `git pull && docker compose up -d --build` on the box. `deploy/compose.yml` keeps
-both `image:` and `build:` for exactly that reason.
+both `image:` and `build:` for exactly that reason. A bare `docker compose up -d` runs what the last
+release pushed: `deploy/.env` names `API_IMAGE`, `MIGRATE_IMAGE` and `API_TAG=staging` (or `prod`),
+and the deploy's exported commit tag wins over the file. Without them compose falls back to
+`iace-api:local`, a stale image built on the box, which once ran week-old code against a migrated
+database.
 
 ### The steps, whoever performs them
 

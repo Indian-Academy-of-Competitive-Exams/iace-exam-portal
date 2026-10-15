@@ -95,7 +95,7 @@ describe('the metrics endpoint', () => {
 });
 
 describe('the database pool', () => {
-  /** The bug this prevents: 20 worker slots per container queueing on Prisma's default pool as P2024. */
+  /** The bug this prevents: 22 worker slots per container queueing on Prisma's default pool as P2024. */
   it('refuses to boot production on a URL that never sized it', () => {
     assert.throws(
       () => validateEnv(production({ DATABASE_URL: 'postgresql://iace:iace@db:5432/iace' })),

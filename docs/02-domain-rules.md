@@ -61,12 +61,16 @@ there is no per-test duration, marks or timing. The way to change a shape is to 
 - The shape rules are checked in the service before the database's deferred triggers see them, so an
   admin gets a field error rather than a raw exception at commit. A `SECTIONAL_LOCKED` paper gives
   every section its own clock and the paper's duration must be their sum. A `SESSION_MODULE_LOCKED`
-  paper has at least one `BaseConfigModule`, and no other timer template may have any. A
+  paper has at least one `BaseConfigModule`, every section sits in one, and no other timer template
+  may have any. A
   `PER_ITEM_TIMED` paper gives every section its seconds per question. Two sections never share a
   position. A config names at least one language, since a paper in none cannot be begun. No clock
   runs past 24 hours, whether the paper's, a section's, a session's or one question's, and the
   sections' marks add up to at most `CONFIG_TOTAL_MARKS_MAX`, the width of the column that caches
   them.
+- **A session is a grouping, not a clock.** A `SESSION_MODULE_LOCKED` paper is sat as a sectional
+  one: each section counts down on its own clock and closes behind the candidate. A module's own
+  duration is checked against the paper's and runs no clock of its own.
 - `BaseConfigSection.patternNote` is the exam-pattern workbook's own words. Reference only — no draw
   reads it.
 - A config **locks when the first sitting starts** on a test built from it, not when a test is
@@ -258,7 +262,8 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   twice. An extension is counted from now when the deadline has already passed.
 - **Resume is not a start.** A live sitting is re-entered without asking the start gate again. A
   test may be sat again any number of times, and nothing counts or caps re-entries into one sitting.
-  Two racing starts resolve to one sitting.
+  Two racing starts resolve to one sitting, and the database holds it: a partial unique allows one
+  `IN_PROGRESS` sitting per (test, student).
 - **A student answers one sitting at a time, on one tab.** Starting or resuming a sitting hands it to
   the tab that asked, and stands down whichever tab held the student's last one — the same rule
   whether that was another tab, another device, or another test. A save or a submit from a tab that
@@ -269,7 +274,9 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   limit: that kept queue is resent as it stands, so it can overwrite an answer given on the other
   device since; the fix is a per-question version the server's save checks. A sitting held by nobody, because
   its key was rebuilt from Postgres, is adopted by the first tab back. A reclaim names its attempt
-  and never starts a new one: once that sitting has ended, it is refused with `SITTING_ENDED`.
+  and never starts a new one: once that sitting has ended, it is refused with `SITTING_ENDED`. The
+  exam screen is keyed on the attempt id, so a new sitting always gets a fresh engine and no queue
+  outlives the sitting it was for.
 - **A sitting stays with the sign-in answering it.** Web and the app are two sign-ins. A second tab
   of the SAME sign-in takes the sitting at once, as above — that is a crashed browser coming back.
   The OTHER sign-in is refused with `SITTING_HELD_ELSEWHERE` until the holder has been silent for
@@ -360,10 +367,16 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   applied by the save's own rules, so the deadline costs one request, not two. Answers are written
   before the sitting is claimed, so a write that throws leaves it open with its state intact; the live state is taken behind the claim and
   written last, so nothing scores a half-written paper; only then is it queued for scoring. A sitting
-  left `SUBMITTED` and unscored is queued again by the sweeper under the same id, and a sitting
+  left `SUBMITTED` and unscored is queued again by the sweeper under the same id — one still unscored
+  after 30 minutes only once an hour, so a sitting that keeps failing cannot spin the worker — and a sitting
   nobody ended is ended by it. The sweeper ends through the same gate, with the deadline it listed
   the sitting by in the claim's own `WHERE`: time given between its list and its end matches no row
   and leaves the sitting open.
+- **A sitting's shape is held by CHECK constraints**, not only by its writers: an `EVALUATED`
+  sitting carries its score and `evaluatedAt`, `endsAt` is never before `startedAt`, and
+  `attemptNo` is at least 1 with no count or time taken negative. They were added `NOT VALID`, so
+  only rows written since are checked; the migration
+  `20261015130000_an_attempt_holds_its_own_shape` carries the query to run before validating them.
 - The pre-test gate is minimal — mother's name, father's name, date of birth. It **prompts**, and
   `profileCompleted` only drives a nudge. Neither blocks a sitting, and neither is stored: both are
   read off the profile (`READINESS_FIELDS`) wherever a student is read.
@@ -478,8 +491,8 @@ presentation.
   navigated, drawn or scored differently.
 - **`ExamTemplate` is where things SIT** — timer position and format, palette side, section switching
   and the watermark. All of it is resolved through one shared config, so the admin's preview cannot
-  describe a screen the student does not get. A test copies the skin from its config at creation: a
-  sat paper must not re-skin because the config moved. A skin nothing is registered for falls back
+  describe a screen the student does not get. A test keeps its own copy of the skin, its config's
+  unless the admin picks another at creation: a sat paper must not re-skin because the config moved. A skin nothing is registered for falls back
   rather than leaving a candidate on a blank page.
 - Every IACE format shares the CBT screen. Their differences are **config, not template**: sectional
   timing on or off and locked versus free switching, free or forward-only navigation (§7), an
@@ -606,7 +619,7 @@ and needs no mapping at all.
 - **A section of a paper can be a typing test.** It names its standard (`typingPreset`) and holds
   one typing passage worth no marks, so it adds nothing to the score or the rank. Its clock is
   exactly its standard's length and shared with nothing: the section's own clock on a sectional
-  paper, a session of its own on a session paper, or the whole paper where it is the only section.
+  or a session paper, or the whole paper where it is the only section.
   A typing section draws typing passages and nothing else, and its typist writes nothing else.
 - **A typing passage is typed in the sitting like any answer.** What the box holds is the
   question's typed answer and rides the ordinary autosave; a key is not a save. The scorer counts

@@ -1,7 +1,7 @@
 # Scaling Box A without a shell, and refusing the scale-ups that would break something.
 #
 # Two dials, in the order you should reach for them: more containers (seconds, free), then a
-# bigger box (two minutes, billed hourly). docs/04 §16. Deliberately manual — pre-warming for an
+# bigger box (two minutes, billed hourly). docs/04 §3 and §13. Deliberately manual — pre-warming for an
 # event goes on the release calendar, and nothing here should fire on its own.
 name: Scale
 
@@ -68,7 +68,7 @@ jobs:
 
           # Connections decide this, not CPU. One DATABASE_URL carries connection_limit=25 and
           # every container reads the same one, so the budget is 25 per container INCLUDING the
-          # single worker — not the per-role split docs/04 §6 still describes.
+          # single worker (docs/04 §6).
           CLASS=$(aws rds describe-db-instances --db-instance-identifier ${{ vars.DB_INSTANCE_ID }} \
             --query 'DBInstances[0].DBInstanceClass' --output text)
           case "$CLASS" in

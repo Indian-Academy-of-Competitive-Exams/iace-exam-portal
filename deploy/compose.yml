@@ -19,7 +19,7 @@ name: iace-api
 # worker 0.35; with core and the shipper idle, which is what a live sitting looks like, exam takes
 # the box.
 #
-# Docker's default json-file driver never rotates, and Box A has 30 GB. Capped here so a stuck
+# Docker's default json-file driver never rotates, and Box A has 20 GB. Capped here so a stuck
 # container logging in a loop cannot take the disk — and with it the migrate step of the next release.
 x-logging: &logging
   driver: json-file

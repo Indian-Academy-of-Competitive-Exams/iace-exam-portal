@@ -224,7 +224,7 @@ export const envSchemaChecked = envSchema
   .refine(poolIsSized, {
     path: ['DATABASE_URL'],
     message:
-      'needs connection_limit in production — the default pool is smaller than the 20 worker slots one container runs',
+      'needs connection_limit in production — the default pool is smaller than the worker slots one container runs',
   })
   .refine(storageCanSign, {
     path: ['S3_ACCESS_KEY_ID'],

@@ -125,7 +125,7 @@ ON CONFLICT DO NOTHING;
 --
 -- isDefault, so it is the config a new test starts from; an admin who wants a
 -- different shape clones it rather than editing it. It locks at the first
--- finalize of any test built from it.
+-- sitting of any test built from it.
 --
 -- The pattern: four sections of 25 questions at 2 marks, 100 questions and 200
 -- marks in one 60-minute sitting, 0.50 deducted per wrong answer, free movement

@@ -273,17 +273,21 @@ Rule: any cross-module _reaction_ goes through this catalog as an event, not a d
 
 ## 7. Service tiers — deploy few, design many
 
-| Tier                                  | Modules                                                                                                                   | Scales on              |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| **Core / admin** (one deployable)     | auth, admins, students, branches, access, events, imports, questions, configs, tests, audit, me, dashboard, notifications | admin traffic, modest  |
-| **Exam service** (autoscale)          | attempts — the sitting engine only                                                                                        | concurrent test-takers |
-| **Worker service(s)** (autoscale)     | scoring (and drop/bonus re-score), rollups, sweeps, exports, notification delivery                                        | BullMQ queue depth     |
-| **Shared libraries** (never services) | prisma, redis, queue, storage, common, config, contracts                                                                  | —                      |
+One image ships as three containers, chosen by `API_ROLE` (`apps/api/src/config/api-role.ts`).
+Every container imports every module; `onRole` decides only which controllers and processors it
+registers, so a service a controller calls exists in all three.
 
-Today one image ships as three containers, chosen by `API_ROLE` (`apps/api/src/config/api-role.ts`
-and `onRole`): `exam` serves the sitting, `core` everything else that has a route, and `worker` the
-queues; unset, one process plays all three, as local development does. Attempts is the first
-extraction candidate: its request path is Redis-first, so it is stateless and cheap to autoscale.
+| `API_ROLE`    | What `onRole` registers                                                                                                                                                                                                                                                                         | Runs                             |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `exam`        | `AttemptsController` and `MeLeaderboardController` — start, brief, paper, autosave, submit, and the board a candidate refreshes                                                                                                                                                                 | as many as the box takes         |
+| `core`        | every other controller: auth, admins, students, branches, access, events, imports, questions, configs, tests, assignments, saved, typing, reports, exports, audit, dashboard, me, announcements, and the attempts module's results, performance, overview, analytics, live-ops and print routes | as many as the box takes         |
+| `worker`      | no route; the nine processors — scoring, rollup, attempt flush, attempt sweep, exports, audit archive, notifications, notification delivery, notification prune — their schedulers, and the stem rehash at boot                                                                                 | **exactly one** (`docs/04` §3)   |
+| unset (`all`) | all of the above in one process                                                                                                                                                                                                                                                                 | local development and every test |
+| any           | prisma, redis, queue, storage, common, config, contracts — shared libraries, never services                                                                                                                                                                                                     | in every container               |
+
+`HealthController` and `MetricsController` are not role-gated, so every container answers
+`/health` and `/metrics`. Attempts is the first extraction candidate: its request path is
+Redis-first, so it is stateless and cheap to run many of.
 
 **A separate service is not a separate database.** Extract a service that still shares Postgres
 first; split its data only if load demands it. The two are independent decisions.

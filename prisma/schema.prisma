@@ -86,8 +86,8 @@ enum ExamTemplate {
   SSC
 }
 
-// Section-return behaviour derives from this: COMPOSITE_FREE may return,
-// SECTIONAL_LOCKED / SESSION_MODULE_LOCKED may not, PER_ITEM_TIMED is forward-only.
+// Section-return behaviour derives from this: COMPOSITE_FREE may return to a section and every
+// other template may not. Moving back WITHIN a section is NavigationPolicy's call, not this.
 enum TimerTemplate {
   COMPOSITE_FREE
   SECTIONAL_LOCKED
@@ -383,8 +383,8 @@ model BaseConfig {
   @@index([isDefault])
 }
 
-// Session/module layer above sections. The table and the config seam ship in V1;
-// the SESSION_MODULE_LOCKED runtime engine is the deferred part.
+// Session/module layer above sections: a grouping, not a clock. A session paper is sat section by
+// section like a sectional one; a module's durationSec is checked against the paper's and runs nothing.
 model BaseConfigModule {
   id           String @id @default(uuid(7)) @db.Uuid
   baseConfigId String @db.Uuid
