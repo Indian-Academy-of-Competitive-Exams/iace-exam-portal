@@ -15,9 +15,9 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 
 ## Stack
 
-TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live sittings, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 4-digit PIN; admins: email OTP). No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
+TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live sittings, OTP/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: a code by SMS every time, no PIN; admins: email OTP). No SSR, no WebSockets. Runs on AWS — see `docs/04-infrastructure.md`.
 
-`apps/exams` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
+`apps/exams` is the test-taking portal (test player + report), and `apps/mobile` is the same student app for Android (Expo). The broader student platform — courses, performance — becomes a separate `apps/student` later.
 
 `apps/mobile` is the student client in Expo + React Native (Android first). It is **in progress and not yet shipped**: the screens are built, push is dark until Firebase is wired, and nothing is device-verified. It shares `@iace/contracts` and `@iace/app-kit` with the SPAs and nothing else — `@iace/ui` is web, so the mobile app has its own components.
 
@@ -57,7 +57,7 @@ Then create the first super admin — see [Bootstrapping the first admin](#boots
 
 OTP delivery is stubbed in development (`OTP_SENDER=console`): **the code is printed in the API log** and echoed into the login screen, so no SMS or email is sent.
 
-- **Student** (:5173) — _Create an account_ with any valid 10-digit Indian mobile → enter the code from the API log → choose a 4-digit PIN. That signs you in and creates the account. Every login after that is **mobile + PIN**; _Forgot PIN?_ runs the same OTP flow again. Five wrong PINs lock the number, and each repeat lockout lasts longer — 15 minutes, then an hour, then a day (`PIN_LOCKOUT_STEPS_SEC`). Signing in or resetting the PIN clears the ladder.
+- **Student** (:5173) — enter any valid 10-digit Indian mobile → enter the code from the API log. The first sign-in on a number is the signup; every sign-in after that is the same code-by-mobile flow. There is no PIN and no password.
 - **Admin** (:5174) — email + OTP every time. Admins cannot self-register, and **there is no code path anywhere in this repo that creates one** — the first row goes in by hand (below), and every admin after that is created by a super admin in the admin app.
 
 ### Bootstrapping the first admin
