@@ -44,3 +44,6 @@ export function summaryOf(counts: PaletteCounts): {
     notVisited: counts[ANSWER_STATE.NOT_VISITED],
   };
 }
+
+export const READING = { SYMBOLS: 'SYMBOLS', INSTRUCTIONS: 'INSTRUCTIONS' } as const;
+export type Reading = (typeof READING)[keyof typeof READING];
