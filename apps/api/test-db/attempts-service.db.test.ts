@@ -24,6 +24,7 @@ import { AttemptsService } from '../src/attempts/sitting/attempts.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { AuditContext } from '../src/audit';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { isUniqueViolation } from '../src/common/prisma-errors';
 import { FakeRedis } from '../test/support/fakes';
 import {
   makePaper,
@@ -372,6 +373,32 @@ describe('AttemptsService — resuming what is already running', () => {
 
     assert.equal(resumed.id, live.id);
     assert.equal(resumed.endsAt, row.endsAt.toISOString());
+  });
+});
+
+describe('AttemptsService — the database holds one live sitting per paper', () => {
+  /** The failure this prevents: a second IN_PROGRESS row written by some other path, and autosave, submit and sweeper each picking a different one. */
+  it('refuses a second sitting in progress on the same test for the same student', async () => {
+    const { student, paper } = await hall();
+    const live = await prisma.attempt.findUniqueOrThrow({
+      where: { id: (await running(paper, student)).id },
+    });
+
+    await assert.rejects(
+      () =>
+        prisma.attempt.create({
+          data: {
+            testId: live.testId,
+            studentId: live.studentId,
+            attemptNo: live.attemptNo + 1,
+            status: ATTEMPT_STATUS.IN_PROGRESS,
+            startedAt: live.startedAt,
+            endsAt: live.endsAt,
+            shuffleSeed: 1,
+          },
+        }),
+      (error: unknown) => isUniqueViolation(error),
+    );
   });
 });
 

@@ -770,6 +770,7 @@ model Attempt {
   sheet          AttemptSheet?
   savedQuestions SavedQuestion[]
 
+  // One IN_PROGRESS row per (testId, studentId): a partial unique written in the migration.
   @@unique([testId, studentId, attemptNo])
   @@index([studentId, createdAt])
   @@index([testId, status])
