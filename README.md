@@ -13,6 +13,31 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 - **`docs/local-setup.md`** — the same run-through as below, at a new machine's pace.
 - **`prisma/schema.prisma`** — the data model (source of truth).
 
+## Your first week
+
+The docs above total about 3,000 lines. Read them in this order and stop when you have what the task needs.
+
+1. **Day one:** this README to the end, `docs/local-setup.md`, and get the stack running. Then `docs/01-architecture.md` §1–5 for the shape and the live-test scaling design.
+2. **Before any change:** `docs/superpowers/task-constraints.md` — the gates, commit rules and invariants. It is binding, and the pre-commit hook enforces most of it.
+3. **When the task touches a rule:** the matching section of `docs/02-domain-rules.md` (§7 the sitting, §8 results, §5 access). Read sections, not the file.
+4. **When you add a file:** `docs/03-conventions.md` for where it goes and which module owns which table.
+5. **Before UI work:** `.claude/skills/ui-conventions/SKILL.md`. `docs/04-infrastructure.md` only when you touch AWS.
+
+Where the code that matters most lives:
+
+| What                                                                | Where                                     |
+| ------------------------------------------------------------------- | ----------------------------------------- |
+| A sitting: start, autosave, submit, sweep, live ops                 | `apps/api/src/attempts/sitting/`          |
+| Scoring and its queue                                               | `apps/api/src/attempts/scoring/`          |
+| Score card, leaderboards, analytics, rollups                        | `apps/api/src/attempts/results/`          |
+| Who may see and start what                                          | `apps/api/src/access/`                    |
+| The exam engine shared by web and mobile (timer, save loop, submit) | `packages/app-kit/src/exam/`              |
+| The exam skins (Default, SSC, Banking, Railways)                    | `apps/exams/src/features/exam/templates/` |
+| The mobile exam screen                                              | `apps/mobile/app/exam/[testId].tsx`       |
+| API types, schemas and the typed client                             | `packages/contracts/`                     |
+
+Five rules that break production when forgotten: an answer save never writes Postgres (Redis only); a controller throws `AppException` and never builds the response envelope; every route names `@Public()` or `@Actors(...)`, or the guard refuses it; a civil date uses the IST helpers in CLAUDE.md, never `getUTC*`; and a database test runs against a real database, never a fake Prisma.
+
 ## Stack
 
 TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live sittings, OTP/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: a code by SMS every time, no PIN; admins: email OTP). No SSR, no WebSockets. Runs on AWS — see `docs/04-infrastructure.md`.
