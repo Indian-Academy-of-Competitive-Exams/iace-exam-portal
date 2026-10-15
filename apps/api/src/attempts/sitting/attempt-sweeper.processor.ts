@@ -17,7 +17,7 @@ import { ScoringQueue } from '../scoring/scoring-queue';
 import { SubmitService } from './submit.service';
 import { QueueFailures } from '../../common/metrics/queue-failures';
 import { MetricsService } from '../../common/metrics/metrics.service';
-import { MS_PER_SECOND } from '../../common/time/units';
+import { MS_PER_MINUTE, MS_PER_SECOND } from '../../common/time/units';
 
 /** Ends the sittings nobody ended, and hands on the scoring and counting nobody enqueued. */
 @Processor(QUEUE_NAMES.ATTEMPT_SWEEP, {
@@ -25,6 +25,7 @@ import { MS_PER_SECOND } from '../../common/time/units';
 })
 export class AttemptSweeperProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(AttemptSweeperProcessor.name);
+  private staleAskedAt = 0;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -148,10 +149,16 @@ export class AttemptSweeperProcessor extends ReportingWorkerHost {
   /** Past the grace a submit gets to queue its own job; one the queue still holds is not queued twice. */
   private neverScored(now: Date): Promise<{ id: string; testId: string }[]> {
     const settling = new Date(now.getTime() - SUBMIT_QUEUE_GRACE_SEC * MS_PER_SECOND);
+    // A sitting that keeps failing is asked hourly once it is stale, so it cannot spin the worker or hold the batch.
+    const staleDue = now.getTime() - this.staleAskedAt >= STALE_UNSCORED_EVERY_MS;
+    if (staleDue) this.staleAskedAt = now.getTime();
+    const fresh = staleDue
+      ? Prisma.empty
+      : Prisma.sql`AND "submittedAt" > ${new Date(now.getTime() - STALE_UNSCORED_AFTER_MS)}`;
     // Caps one sweep's re-asks, not the scoring queue, which drains at its own pace.
     return this.prisma.$queryRaw<{ id: string; testId: string }[]>`
       SELECT "id", "testId" FROM "Attempt"
-      WHERE ${UNSCORED} AND "submittedAt" < ${settling}
+      WHERE ${UNSCORED} AND "submittedAt" < ${settling} ${fresh}
       ORDER BY "submittedAt" ASC
       LIMIT ${NEVER_SCORED_BATCH_CEILING}`;
   }
@@ -195,6 +202,10 @@ interface Behind {
 
 /** The never-scored arm's own ceiling: wide enough to drain 6,000 in minutes, not hours. */
 export const NEVER_SCORED_BATCH_CEILING = 1000;
+
+/** Unscored this long has failed every retry a pass gives it; it is asked again once an hour, not every pass. */
+export const STALE_UNSCORED_AFTER_MS = 30 * MS_PER_MINUTE;
+export const STALE_UNSCORED_EVERY_MS = 60 * MS_PER_MINUTE;
 
 /** Sittings behind their paper read at a time; one sweep keeps paging until a short page. */
 export const RESCORE_PAGE = 1000;

@@ -387,6 +387,25 @@ describe('AttemptSweeperProcessor — two clocks for an unscored sitting', () =>
     assert.equal(scoring.jobs.length, 1);
     assert.deepEqual(metrics.scoringBacklog, [0]);
   });
+
+  /** The failure this prevents: a sitting whose scoring always fails, queued again on every sweep forever. */
+  it('asks again for a stale one hourly, and for a fresh one every sweep', async () => {
+    const [stale, fresh] = await unscored(2);
+    await prisma.attempt.update({
+      where: { id: fresh },
+      data: { submittedAt: new Date(Date.now() - 60 * 1000) },
+    });
+    const { sweeper, scoring } = build();
+    const asked = () => scoring.jobs.map((job) => (job.data as { attemptId: string }).attemptId);
+
+    await sweeper.process();
+    assert.deepEqual(asked().sort(), [stale, fresh].sort());
+
+    // Both jobs failed and were removed, as removeOnFail does; the next sweep asks only for the fresh one.
+    scoring.jobs.length = 0;
+    await sweeper.process();
+    assert.deepEqual(asked(), [fresh]);
+  });
 });
 
 describe('AttemptSweeperProcessor — the clock the cohort counting runs on', () => {
