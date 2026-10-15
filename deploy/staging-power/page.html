@@ -4,28 +4,105 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Staging</title>
+    <title>IACE Staging</title>
     <style>
       :root {
         color-scheme: light dark;
+        --bg: #f6f7f9;
+        --surface: #ffffff;
+        --fg: #0f172a;
+        --muted: #64748b;
+        --border: #e2e8f0;
+        --primary: #bf0d10;
+        --primary-hover: #a60b0e;
+        --success: #15803d;
+        --success-subtle: #dcfce7;
+        --warning: #b45309;
+        --warning-subtle: #fef3c7;
+        --danger-subtle: #fee3e1;
+        --idle: #94a3b8;
+        --idle-subtle: #f1f5f9;
+        --shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 4px 16px rgb(15 23 42 / 6%);
         font:
-          16px/1.5 system-ui,
+          15px/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
           sans-serif;
       }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0a0c10;
+          --surface: #13161c;
+          --fg: #f8fafc;
+          --muted: #94a3b8;
+          --border: #262c35;
+          --primary: #bf5448;
+          --primary-hover: #d3776a;
+          --success: #4ade80;
+          --success-subtle: #12301f;
+          --warning: #fbbf24;
+          --warning-subtle: #33270d;
+          --danger-subtle: #3a1714;
+          --idle: #64748b;
+          --idle-subtle: #1b212a;
+          --shadow: none;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
       body {
-        max-width: 34rem;
-        margin: 0 auto;
-        padding: 1.5rem 1rem;
-        display: grid;
-        gap: 1.25rem;
-      }
-      h1 {
-        font-size: 1.5rem;
         margin: 0;
+        background: var(--bg);
+        color: var(--fg);
       }
-      section {
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 1.5rem 1rem 3rem;
         display: grid;
-        gap: 0.5rem;
+        gap: 1rem;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .brand {
+        background: var(--primary);
+        color: #fff;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 0.3rem 0.7rem;
+        border-radius: 6px;
+      }
+      header h1 {
+        font-size: 1.15rem;
+        margin: 0;
+        font-weight: 600;
+      }
+      header .who {
+        margin-left: auto;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        box-shadow: var(--shadow);
+        display: grid;
+        gap: 0.9rem;
+        animation: rise 0.35s ease-out both;
+      }
+      .card h2 {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0;
+        font-weight: 600;
       }
       .row {
         display: flex;
@@ -33,108 +110,490 @@
         flex-wrap: wrap;
         align-items: center;
       }
-      table {
-        border-collapse: collapse;
-        width: 100%;
-      }
-      td {
-        padding: 0.35rem 0;
-        border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-      }
-      td:last-child {
-        text-align: right;
+      .row > input {
+        flex: 1 1 10rem;
       }
       input,
-      select,
-      button {
+      select {
         font: inherit;
-        padding: 0.4rem 0.6rem;
+        color: inherit;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.5rem 0.7rem;
       }
-      a[aria-disabled='true'] {
+      input:focus,
+      select:focus,
+      button:focus-visible,
+      a.button:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 1px;
+      }
+      button,
+      a.button {
+        font: inherit;
+        font-weight: 600;
+        border-radius: 8px;
+        padding: 0.55rem 1rem;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: inherit;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        transition:
+          background 0.15s,
+          transform 0.1s,
+          opacity 0.15s;
+      }
+      button:hover:not(:disabled),
+      a.button:hover {
+        background: var(--idle-subtle);
+      }
+      button:active:not(:disabled) {
+        transform: scale(0.97);
+      }
+      button:disabled,
+      a.button[aria-disabled='true'] {
+        opacity: 0.45;
+        cursor: not-allowed;
         pointer-events: none;
-        opacity: 0.4;
       }
-      #error {
-        color: color-mix(in srgb, red 70%, currentColor);
+      button.primary {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+      }
+      button.primary:hover:not(:disabled) {
+        background: var(--primary-hover);
+      }
+      button.go {
+        background: var(--success);
+        border-color: var(--success);
+        color: #fff;
+      }
+      button.go:hover:not(:disabled) {
+        filter: brightness(1.08);
+        background: var(--success);
+      }
+      button.stop {
+        color: var(--primary);
+        border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+      }
+      button.busy::before {
+        content: '';
+        width: 0.9em;
+        height: 0.9em;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      .link {
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--primary);
+        font-weight: 500;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 1rem;
+        align-items: center;
+      }
+      .orb {
+        width: 3.25rem;
+        height: 3.25rem;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        position: relative;
+        background: var(--tone-subtle);
+        color: var(--tone);
+        font-size: 1.4rem;
+        font-weight: 700;
+      }
+      .orb::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid var(--tone);
+        opacity: 0;
+      }
+      .orb.pulse::after {
+        animation: ring 1.8s ease-out infinite;
+      }
+      .orb.pop {
+        animation: pop 0.45s ease-out;
+      }
+      .state {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      [data-tone='ready'] {
+        --tone: var(--success);
+        --tone-subtle: var(--success-subtle);
+      }
+      [data-tone='working'] {
+        --tone: var(--warning);
+        --tone-subtle: var(--warning-subtle);
+      }
+      [data-tone='off'] {
+        --tone: var(--idle);
+        --tone-subtle: var(--idle-subtle);
+      }
+      [data-tone='alert'] {
+        --tone: var(--primary);
+        --tone-subtle: var(--danger-subtle);
+      }
+
+      .bar {
+        height: 0.6rem;
+        border-radius: 999px;
+        background: var(--idle-subtle);
+        overflow: hidden;
+        position: relative;
+      }
+      .fill {
+        height: 100%;
+        width: 0;
+        border-radius: inherit;
+        background-color: var(--tone);
+        background-image: linear-gradient(
+          45deg,
+          rgb(255 255 255 / 22%) 25%,
+          transparent 25%,
+          transparent 50%,
+          rgb(255 255 255 / 22%) 50%,
+          rgb(255 255 255 / 22%) 75%,
+          transparent 75%
+        );
+        background-size: 1rem 1rem;
+        animation: stripes 0.8s linear infinite;
+        transition: width 0.9s ease;
+      }
+      .bar.indeterminate .fill {
+        width: 35%;
+        position: absolute;
+        animation:
+          stripes 0.8s linear infinite,
+          slide 1.6s ease-in-out infinite;
+      }
+      .bar-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.15rem;
+      }
+      .steps li {
+        display: grid;
+        grid-template-columns: 1.6rem 1fr auto;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.55rem 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .steps li:last-child {
+        border-bottom: none;
+      }
+      .steps .what {
+        font-weight: 500;
+      }
+      .steps .when {
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-align: right;
+      }
+      .icon {
+        width: 1.35rem;
+        height: 1.35rem;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #fff;
+      }
+      .icon.done {
+        background: var(--success);
+        animation: pop 0.35s ease-out;
+      }
+      .icon.done::before {
+        content: '✓';
+      }
+      .icon.working {
+        border: 2.5px solid var(--warning);
+        border-right-color: transparent;
+        animation: spin 0.8s linear infinite;
+      }
+      .icon.waiting {
+        border: 2px solid var(--idle);
+      }
+      .icon.off {
+        background: var(--idle);
+      }
+
+      .people {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      .people li {
+        background: var(--idle-subtle);
+        border-radius: 999px;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.85rem;
+      }
+      .people li b {
+        font-weight: 600;
+      }
+      .note {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .alert {
+        border-radius: 8px;
+        padding: 0.7rem 0.9rem;
+        background: var(--danger-subtle);
+        color: var(--primary);
+        font-weight: 500;
+        animation: rise 0.25s ease-out both;
+      }
+      #panel {
+        display: grid;
+        gap: 1rem;
       }
       [hidden] {
-        display: none;
+        display: none !important;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes stripes {
+        to {
+          background-position: 1rem 0;
+        }
+      }
+      @keyframes slide {
+        0% {
+          left: -35%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
+      @keyframes ring {
+        0% {
+          transform: scale(1);
+          opacity: 0.6;
+        }
+        100% {
+          transform: scale(1.5);
+          opacity: 0;
+        }
+      }
+      @keyframes pop {
+        0% {
+          transform: scale(0.6);
+        }
+        60% {
+          transform: scale(1.12);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
       }
     </style>
   </head>
   <body>
-    <h1 id="headline">Staging</h1>
-    <p id="error" role="alert" hidden></p>
+    <main>
+      <header>
+        <span class="brand">IACE</span>
+        <h1>Staging environment</h1>
+        <span class="who" id="who" hidden></span>
+      </header>
 
-    <section>
-      <div class="row">
-        <input id="name" placeholder="Your name" autocomplete="name" maxlength="30" />
-        <input id="passcode" type="password" placeholder="Passcode" autocomplete="off" />
-        <button id="load">Show</button>
-      </div>
-    </section>
+      <div id="error" class="alert" role="alert" hidden></div>
 
-    <section id="panel" hidden>
-      <div class="row">
-        <button id="on">Switch on</button>
-        <button id="off">Switch off</button>
-        <a id="exams" target="_blank" rel="noopener">Test portal</a>
-        <a id="admin" target="_blank" rel="noopener">Admin portal</a>
-      </div>
-
-      <table>
-        <tbody id="resources"></tbody>
-      </table>
-
-      <section>
-        <strong>Checked in</strong>
-        <ul id="people"></ul>
+      <section class="card" id="signin">
+        <h2>Sign in</h2>
         <div class="row">
-          <button id="checkin">Check in</button>
-          <button id="checkout">Check out</button>
+          <input id="name" placeholder="Your name" autocomplete="name" maxlength="30" />
+          <input id="passcode" type="password" placeholder="Passcode" autocomplete="off" />
+          <button id="load" class="primary">Continue</button>
         </div>
       </section>
 
-      <section>
-        <strong>Switch off automatically</strong>
-        <div class="row">
-          <select id="mode">
-            <option value="none">Never</option>
-            <option value="nightly">Every night at</option>
-            <option value="timed">After</option>
-          </select>
-          <input id="time" type="time" value="21:00" hidden />
-          <label id="hoursLabel" hidden
-            ><input id="hours" type="number" min="1" max="24" value="4" /> hours</label
-          >
-          <button id="saveAutoOff">Save</button>
-        </div>
-        <span id="autoOffNote"></span>
-      </section>
-    </section>
+      <div id="panel" hidden>
+        <section class="card" id="status" data-tone="off" aria-live="polite">
+          <div class="hero">
+            <div class="orb" id="orb">●</div>
+            <div>
+              <div class="state" id="state">—</div>
+              <div class="sub" id="stateSub"></div>
+            </div>
+          </div>
+          <div id="progress" hidden>
+            <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
+            <div class="bar-meta">
+              <span id="barLeft"></span>
+              <span id="barRight"></span>
+            </div>
+          </div>
+          <div class="row">
+            <button id="on" class="go">Switch on</button>
+            <button id="off" class="stop">Switch off</button>
+            <a id="exams" class="button" target="_blank" rel="noopener">Test portal ↗</a>
+            <a id="admin" class="button" target="_blank" rel="noopener">Admin portal ↗</a>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>What is running</h2>
+          <ul class="steps" id="steps"></ul>
+        </section>
+
+        <section class="card">
+          <h2>Who is using it</h2>
+          <ul class="people" id="people"></ul>
+          <div class="row">
+            <button id="checkin">I am using it</button>
+            <button id="checkout">I am done</button>
+          </div>
+        </section>
+
+        <section class="card" id="autoOffCard">
+          <h2>Switch off automatically</h2>
+          <div class="row">
+            <select id="mode">
+              <option value="none">Never</option>
+              <option value="nightly">Every night at</option>
+              <option value="timed">After</option>
+            </select>
+            <input id="time" type="time" value="21:00" hidden />
+            <label id="hoursLabel" hidden
+              ><input id="hours" type="number" min="1" max="24" value="4" style="width: 4.5rem" />
+              hours</label
+            >
+            <button id="saveAutoOff">Save</button>
+          </div>
+          <span class="note" id="autoOffNote"></span>
+        </section>
+      </div>
+    </main>
 
     <script>
       const USUAL_START_MINUTES = 8;
+      const USUAL_STOP_MINUTES = 5;
       const POLL_MS = 10_000;
+      const TICK_MS = 1000;
       const READY_POLLS = 2;
-      const KEYS = { NAME: 'staging-name', PASSCODE: 'staging-passcode' };
-      const LABELS = { api: 'Staging API box', valkey: 'Valkey box', db: 'Database' };
-      const IST = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' };
+      const PROGRESS_CAP = 95;
+      const KEYS = {
+        NAME: 'staging-name',
+        PASSCODE: 'staging-passcode',
+        ON_AT: 'staging-on-at',
+        OFF_AT: 'staging-off-at',
+      };
+      const PHASES = {
+        OFF: 'off',
+        STARTING: 'starting',
+        READY: 'ready',
+        STOPPING: 'stopping',
+        PARTLY: 'partly',
+      };
+      const IST = 'Asia/Kolkata';
+      const STEP_LABELS = {
+        db: 'Database',
+        valkey: 'Cache (Valkey)',
+        api: 'Server',
+        answering: 'Website answering',
+      };
+      const STATE_WORDS = {
+        available: 'on',
+        running: 'on',
+        stopped: 'off',
+        pending: 'starting',
+        stopping: 'switching off',
+        'shutting-down': 'switching off',
+      };
       const $ = (id) => document.getElementById(id);
 
       let readyStreak = 0;
       let sawNotReady = false;
       let timer;
+      let lastView;
+      let firstSeenWorking = null;
       const isReady = () => readyStreak >= (sawNotReady ? READY_POLLS : 1);
 
       $('name').value = sessionStorage.getItem(KEYS.NAME) ?? '';
       $('passcode').value = sessionStorage.getItem(KEYS.PASSCODE) ?? '';
 
-      const duration = (ms) => {
+      const dayOf = (date) => date.toLocaleDateString('en-CA', { timeZone: IST });
+      const timeOf = (date) =>
+        date.toLocaleTimeString('en-IN', { timeZone: IST, hour: 'numeric', minute: '2-digit' });
+      function when(iso) {
+        const date = new Date(iso);
+        const today = new Date();
+        const yesterday = new Date(today.getTime() - 86_400_000);
+        if (dayOf(date) === dayOf(today)) return `today, ${timeOf(date)}`;
+        if (dayOf(date) === dayOf(yesterday)) return `yesterday, ${timeOf(date)}`;
+        const day = date.toLocaleDateString('en-IN', {
+          timeZone: IST,
+          day: 'numeric',
+          month: 'short',
+        });
+        return `${day}, ${timeOf(date)}`;
+      }
+      function span(ms) {
+        const minutes = Math.max(0, Math.floor(ms / 60_000));
+        if (minutes < 60) return `${minutes} min`;
+        const hours = Math.floor(minutes / 60);
+        return minutes % 60 ? `${hours} h ${minutes % 60} min` : `${hours} h`;
+      }
+      const clock = (ms) => {
         const total = Math.max(0, Math.round(ms / 1000));
-        return `${Math.floor(total / 60)}m ${total % 60}s`;
+        return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
       };
-      const clock = (iso) => new Date(iso).toLocaleTimeString('en-IN', IST);
       const fail = (text) => {
         $('error').textContent = text;
         $('error').hidden = !text;
@@ -143,62 +602,214 @@
       async function call(path, method = 'GET', body) {
         sessionStorage.setItem(KEYS.NAME, $('name').value);
         sessionStorage.setItem(KEYS.PASSCODE, $('passcode').value);
-        const response = await fetch(path, {
-          method,
-          headers: { 'x-passcode': $('passcode').value, 'content-type': 'application/json' },
-          body: method === 'GET' ? undefined : JSON.stringify({ name: $('name').value, ...body }),
-        });
+        let response;
+        try {
+          response = await fetch(path, {
+            method,
+            headers: { 'x-passcode': $('passcode').value, 'content-type': 'application/json' },
+            body: method === 'GET' ? undefined : JSON.stringify({ name: $('name').value, ...body }),
+          });
+        } catch {
+          fail('Could not reach the switch. Check your connection and try again.');
+          return { status: 0, data: {} };
+        }
         const data = await response.json();
-        if (response.status === 401) fail('Wrong passcode.');
+        if (response.status === 401) fail('That passcode is not right.');
         else if (response.status === 400 && data.error === 'name') fail('Enter your name first.');
         else if (response.status === 400) fail('That auto-off setting is not valid.');
         else if (response.status >= 500) fail('Something went wrong. Try again in a moment.');
         else fail('');
+        if (response.status === 401) showSignin(true);
         return { status: response.status, data };
       }
 
-      function headline(view) {
-        const managed = view.manageShared ? ['api', 'valkey', 'db'] : ['api'];
-        const states = managed.map((name) => view.resources[name].state);
-        const since = view.resources.api.since;
-        if (states.every((state) => state === 'stopped')) return 'Off';
+      function managedOf(view) {
+        return view.manageShared ? ['db', 'valkey', 'api'] : ['api'];
+      }
+
+      function phaseOf(view) {
+        const states = managedOf(view).map((name) => view.resources[name].state);
+        if (states.every((state) => state === 'stopped')) return PHASES.OFF;
         if (states.some((state) => state === 'stopping' || state === 'shutting-down'))
-          return 'Stopping';
-        if (view.resources.api.state === 'stopped')
-          return 'Partly on — press Switch off to stop the rest';
-        if (isReady()) return 'Ready';
-        const elapsed = since ? `${duration(Date.now() - Date.parse(since))} so far, ` : '';
-        return `Starting — ${elapsed}usually about ${USUAL_START_MINUTES} min`;
+          return PHASES.STOPPING;
+        if (view.resources.api.state === 'stopped') return PHASES.PARTLY;
+        return isReady() ? PHASES.READY : PHASES.STARTING;
       }
 
-      function resourceText(name, view) {
+      function stepState(name, view, phase) {
+        if (name === 'answering') {
+          if (view.api.ready) return 'done';
+          return view.resources.api.state === 'running' ? 'working' : 'waiting';
+        }
+        const state = view.resources[name].state;
+        if (state === 'running' || state === 'available') return 'done';
+        if (state === 'stopped') return phase === PHASES.STARTING ? 'waiting' : 'off';
+        return 'working';
+      }
+
+      function stepText(name, view, status) {
+        if (name === 'answering') {
+          if (view.api.ready) return 'yes';
+          if (view.api.reason) return view.api.reason;
+          return status === 'working' ? 'waiting for it to boot' : 'off';
+        }
         const { state, since } = view.resources[name];
-        const shared = name !== 'api' && !view.manageShared ? ' (shared, always on)' : '';
-        return `${state}${since ? `, since ${clock(since)}` : ''}${shared}`;
+        if (name !== 'db' && since && status === 'done')
+          return `on since ${when(since)} · ${span(Date.now() - Date.parse(since))}`;
+        if (!view.manageShared && name !== 'api') return 'shared, always on';
+        return STATE_WORDS[state] ?? state.replace(/-/g, ' ');
       }
 
-      function apiText(view) {
-        if (view.api.ready) return 'answering';
-        if (view.api.reason) return view.api.reason;
-        return view.resources.api.state === 'stopped'
-          ? 'off'
-          : 'not answering yet — the box is still starting';
+      function startedAt(view) {
+        const candidates = [
+          view.resources.api.since,
+          sessionStorage.getItem(KEYS.ON_AT),
+          firstSeenWorking,
+        ];
+        const found = candidates.find(Boolean);
+        return found ? Date.parse(found) : Date.now();
+      }
+
+      const HERO = {
+        [PHASES.OFF]: { tone: 'off', icon: '⏻', title: 'Off', sub: 'Switch it on to test.' },
+        [PHASES.STARTING]: { tone: 'working', icon: '↑', title: 'Starting up' },
+        [PHASES.READY]: { tone: 'ready', icon: '✓', title: 'Ready to use' },
+        [PHASES.STOPPING]: { tone: 'working', icon: '↓', title: 'Switching off' },
+        [PHASES.PARTLY]: {
+          tone: 'alert',
+          icon: '!',
+          title: 'Partly on',
+          sub: 'The server is off but other parts are still running. Press Switch off to stop the rest.',
+        },
+      };
+
+      function paintProgress() {
+        if (!lastView) return;
+        const phase = phaseOf(lastView);
+        const show = phase === PHASES.STARTING || phase === PHASES.STOPPING;
+        $('progress').hidden = !show;
+        if (phase === PHASES.STARTING) {
+          const elapsed = Date.now() - startedAt(lastView);
+          const usual = USUAL_START_MINUTES * 60_000;
+          const steps = Object.keys(STEP_LABELS).filter(
+            (name) => name === 'answering' || managedOf(lastView).includes(name),
+          );
+          const done = steps.filter((name) => stepState(name, lastView, phase) === 'done').length;
+          const pct = Math.min(
+            PROGRESS_CAP,
+            Math.max((elapsed / usual) * 100, (done / steps.length) * 100 * 0.9),
+          );
+          $('bar').className = 'bar';
+          $('fill').style.width = `${pct}%`;
+          $('barLeft').textContent = `${clock(elapsed)} elapsed`;
+          const left = usual - elapsed;
+          $('barRight').textContent =
+            left > 60_000
+              ? `about ${Math.ceil(left / 60_000)} min left`
+              : left > 0
+                ? 'less than a minute left'
+                : 'taking a little longer than usual';
+          $('stateSub').textContent =
+            `Usually takes about ${USUAL_START_MINUTES} minutes. You can leave this page open — it updates by itself.`;
+        } else if (phase === PHASES.STOPPING) {
+          const since = Date.parse(sessionStorage.getItem(KEYS.OFF_AT) ?? firstSeenWorking);
+          $('bar').className = 'bar indeterminate';
+          $('fill').style.width = '';
+          $('barLeft').textContent = since ? `${clock(Date.now() - since)} elapsed` : '';
+          $('barRight').textContent = `usually up to ${USUAL_STOP_MINUTES} min`;
+        }
+      }
+
+      function paintHero(view, phase) {
+        const hero = HERO[phase];
+        const card = $('status');
+        const changed = card.dataset.tone !== hero.tone || $('state').textContent !== hero.title;
+        card.dataset.tone = hero.tone;
+        $('orb').textContent = hero.icon;
+        $('orb').classList.toggle('pulse', hero.tone === 'working');
+        if (changed) {
+          $('orb').classList.remove('pop');
+          void $('orb').offsetWidth;
+          $('orb').classList.add('pop');
+        }
+        $('state').textContent = hero.title;
+        if (phase === PHASES.READY) {
+          const since = view.resources.api.since;
+          $('stateSub').textContent = since
+            ? `On since ${when(since)} (${span(Date.now() - Date.parse(since))}). Open a portal below.`
+            : 'Open a portal below.';
+        } else if (phase === PHASES.STOPPING) {
+          $('stateSub').textContent = 'Shutting everything down to save cost.';
+        } else if (hero.sub) {
+          $('stateSub').textContent = hero.sub;
+        }
+        $('on').disabled = phase !== PHASES.OFF && phase !== PHASES.PARTLY;
+        $('off').disabled = phase === PHASES.OFF || phase === PHASES.STOPPING;
+      }
+
+      function paintSteps(view, phase) {
+        const names = [...managedOf(view), 'answering'];
+        if (!view.manageShared) names.unshift('db', 'valkey');
+        $('steps').replaceChildren(
+          ...names.map((name) => {
+            const status =
+              view.manageShared || name === 'api' || name === 'answering'
+                ? stepState(name, view, phase)
+                : 'done';
+            const li = document.createElement('li');
+            const icon = Object.assign(document.createElement('span'), {
+              className: `icon ${status}`,
+            });
+            li.append(
+              icon,
+              Object.assign(document.createElement('span'), {
+                className: 'what',
+                textContent: STEP_LABELS[name],
+              }),
+              Object.assign(document.createElement('span'), {
+                className: 'when',
+                textContent: stepText(name, view, status),
+              }),
+            );
+            return li;
+          }),
+        );
+      }
+
+      function paintPeople(view) {
+        const me = $('name').value.trim().toLowerCase();
+        const items = view.checkedIn.map((entry) => {
+          const li = document.createElement('li');
+          const name = entry.name.toLowerCase() === me ? `${entry.name} (you)` : entry.name;
+          li.append(
+            Object.assign(document.createElement('b'), { textContent: name }),
+            ` · since ${when(entry.since)}`,
+          );
+          return li;
+        });
+        if (items.length === 0) {
+          items.push(
+            Object.assign(document.createElement('li'), { textContent: 'Nobody right now' }),
+          );
+        }
+        $('people').replaceChildren(...items);
       }
 
       function autoOffText(autoOff) {
-        if (autoOff.mode === 'nightly') return `Switches off every night at ${autoOff.time} IST.`;
+        if (autoOff.mode === 'nightly') {
+          const [hour, minute] = autoOff.time.split(':').map(Number);
+          const at = new Date(Date.UTC(2000, 0, 1, hour, minute)).toLocaleTimeString('en-IN', {
+            timeZone: 'UTC',
+            hour: 'numeric',
+            minute: '2-digit',
+          });
+          return `Switches off every night at ${at} IST.`;
+        }
         if (autoOff.mode === 'timed' && autoOff.firesAt)
-          return `Switches off at ${clock(autoOff.firesAt)} IST.`;
+          return `Switches off ${when(autoOff.firesAt)} IST.`;
         if (autoOff.mode === 'timed')
           return `Switches off ${autoOff.hours} hours after it is switched on.`;
         return 'Stays on until someone switches it off.';
-      }
-
-      function row(label, text) {
-        const tr = document.createElement('tr');
-        tr.append(Object.assign(document.createElement('td'), { textContent: label }));
-        tr.append(Object.assign(document.createElement('td'), { textContent: text }));
-        return tr;
       }
 
       function showModeFields() {
@@ -206,29 +817,52 @@
         $('hoursLabel').hidden = $('mode').value !== 'timed';
       }
 
+      function showSignin(open) {
+        $('signin').hidden = !open;
+        $('who').hidden = open;
+      }
+
+      function paintWho() {
+        const name = $('name').value.trim() || 'Guest';
+        const change = Object.assign(document.createElement('button'), {
+          className: 'link',
+          textContent: 'Change',
+        });
+        change.onclick = () => showSignin(true);
+        $('who').replaceChildren(`Signed in as ${name} · `, change);
+      }
+
       function render(view) {
         const wasReady = isReady();
         readyStreak = view.api.ready ? readyStreak + 1 : 0;
         if (!view.api.ready) sawNotReady = true;
         const ready = isReady();
-        if (ready && !wasReady && sawNotReady && Notification.permission === 'granted') {
+        if (
+          ready &&
+          !wasReady &&
+          sawNotReady &&
+          'Notification' in window &&
+          Notification.permission === 'granted'
+        ) {
           new Notification('Staging is ready');
         }
 
+        lastView = view;
+        const phase = phaseOf(view);
+        if (phase === PHASES.STARTING || phase === PHASES.STOPPING) {
+          firstSeenWorking ??= new Date().toISOString();
+        } else {
+          firstSeenWorking = null;
+          sessionStorage.removeItem(phase === PHASES.OFF ? KEYS.OFF_AT : KEYS.ON_AT);
+        }
+
         $('panel').hidden = false;
-        $('headline').textContent = `Staging: ${headline(view)}`;
-        $('resources').replaceChildren(
-          ...Object.keys(LABELS).map((name) => row(LABELS[name], resourceText(name, view))),
-          row('API', apiText(view)),
-        );
-        $('people').replaceChildren(
-          ...view.checkedIn.map((entry) =>
-            Object.assign(document.createElement('li'), {
-              textContent: `${entry.name}, since ${clock(entry.since)}`,
-            }),
-          ),
-        );
-        if (view.checkedIn.length === 0) $('people').textContent = 'Nobody.';
+        showSignin(false);
+        paintWho();
+        paintHero(view, phase);
+        paintSteps(view, phase);
+        paintPeople(view);
+        paintProgress();
 
         for (const [id, href] of [
           ['exams', view.links.exams],
@@ -237,7 +871,7 @@
           $(id).href = href;
           $(id).setAttribute('aria-disabled', String(!ready));
         }
-        if (document.activeElement?.closest('section') !== $('mode').closest('section')) {
+        if (!$('autoOffCard').contains(document.activeElement)) {
           $('mode').value = view.autoOff.mode;
           if (view.autoOff.time) $('time').value = view.autoOff.time;
           if (view.autoOff.hours) $('hours').value = view.autoOff.hours;
@@ -246,9 +880,20 @@
         $('autoOffNote').textContent = autoOffText(view.autoOff);
 
         clearTimeout(timer);
-        const text = headline(view);
-        if (text !== 'Off' && text !== 'Ready') timer = setTimeout(refresh, POLL_MS);
+        if (phase !== PHASES.OFF && phase !== PHASES.READY) timer = setTimeout(refresh, POLL_MS);
         return view;
+      }
+
+      async function busy(button, work) {
+        button.classList.add('busy');
+        button.disabled = true;
+        try {
+          return await work();
+        } finally {
+          button.classList.remove('busy');
+          button.disabled = false;
+          if (lastView) paintHero(lastView, phaseOf(lastView));
+        }
       }
 
       async function act(path, body) {
@@ -262,43 +907,57 @@
       }
 
       async function switchOff() {
+        sessionStorage.setItem(KEYS.OFF_AT, new Date().toISOString());
         const result = await act('/off');
         const others = result.refused?.others;
         if (!others) return;
         const who = others.join(' and ');
         const verb = others.length === 1 ? 'is' : 'are';
-        if (confirm(`${who} ${verb} checked in. Stop anyway?`)) await act('/off', { force: true });
+        if (confirm(`${who} ${verb} still using staging. Switch it off anyway?`)) {
+          await act('/off', { force: true });
+        } else {
+          sessionStorage.removeItem(KEYS.OFF_AT);
+        }
       }
 
-      $('load').onclick = refresh;
-      $('on').onclick = async () => {
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission();
-        }
-        sawNotReady = true;
-        await act('/on');
+      $('load').onclick = () => busy($('load'), refresh);
+      $('passcode').onkeydown = (event) => {
+        if (event.key === 'Enter') $('load').click();
       };
-      $('off').onclick = switchOff;
-      $('checkin').onclick = () => act('/checkin');
-      $('checkout').onclick = async () => {
-        const view = await act('/checkout');
-        const running = view.resources?.api.state === 'running';
-        if (
-          running &&
-          view.checkedIn.length === 0 &&
-          confirm('You were the last one checked in. Switch staging off?')
-        ) {
-          await switchOff();
-        }
-      };
+      $('on').onclick = () =>
+        busy($('on'), async () => {
+          if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
+          sawNotReady = true;
+          sessionStorage.setItem(KEYS.ON_AT, new Date().toISOString());
+          await act('/on');
+        });
+      $('off').onclick = () => busy($('off'), switchOff);
+      $('checkin').onclick = () => busy($('checkin'), () => act('/checkin'));
+      $('checkout').onclick = () =>
+        busy($('checkout'), async () => {
+          const view = await act('/checkout');
+          const running = view.resources?.api.state === 'running';
+          if (
+            running &&
+            view.checkedIn.length === 0 &&
+            confirm('You were the last one using it. Switch staging off to save cost?')
+          ) {
+            await switchOff();
+          }
+        });
       $('mode').onchange = showModeFields;
       $('saveAutoOff').onclick = () =>
-        act('/auto-off', {
-          mode: $('mode').value,
-          time: $('time').value,
-          hours: Number($('hours').value),
-        });
+        busy($('saveAutoOff'), () =>
+          act('/auto-off', {
+            mode: $('mode').value,
+            time: $('time').value,
+            hours: Number($('hours').value),
+          }),
+        );
 
+      setInterval(paintProgress, TICK_MS);
       if ($('passcode').value) refresh();
     </script>
   </body>
