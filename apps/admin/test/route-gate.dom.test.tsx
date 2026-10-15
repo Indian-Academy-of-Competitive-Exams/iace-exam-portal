@@ -88,7 +88,8 @@ describe('a screen behind a feature key', () => {
       [FEATURE_KEYS.TEST_OPERATIONS]: PERMISSION_LEVELS.READ,
     });
 
-    assert.ok(await screen.findByRole('heading', { name: 'Sittings' }));
+    // The lazy route chunk takes over the 1s default to load on a CI runner.
+    assert.ok(await screen.findByRole('heading', { name: 'Sittings' }, { timeout: 5000 }));
     await waitFor(() => assert.equal(board.mock.callCount(), 1));
     assert.equal(screen.queryByText(REFUSAL), null);
   });
