@@ -4,7 +4,7 @@ import { E2E_PAPER } from '../e2e-env';
 const OTP_PATTERN = /\d{4,8}/;
 const START_URL = /\/me\/tests\/[^/]+\/attempt$/;
 const STATE_URL = /\/me\/attempts\/[^/]+\/state$/;
-const CLOCK_PATTERN = /(?:(\d+):)?(\d{2}):(\d{2})/;
+const CLOCK_PATTERN = /\d+(?::\d{2}){1,2}/;
 
 /** The seed keys every question to the option labelled "Option 1"; the paper shuffles its position. */
 export const RIGHT_OPTION = /Option 1$/;
@@ -69,8 +69,8 @@ export async function dataOf<T>(response: Response): Promise<T> {
 /** Seconds left on the hall's countdown, as drawn. */
 export async function secondsLeft(page: Page): Promise<number> {
   const text = (await page.getByRole('timer').textContent()) ?? '';
-  const [, hours = '0', minutes = '0', seconds = '0'] = CLOCK_PATTERN.exec(text) ?? [];
-  return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+  const clock = CLOCK_PATTERN.exec(text)?.[0] ?? '0';
+  return clock.split(':').reduce((total, part) => total * 60 + Number(part), 0);
 }
 
 /** Submits from the open paper and waits for the scored result. */
