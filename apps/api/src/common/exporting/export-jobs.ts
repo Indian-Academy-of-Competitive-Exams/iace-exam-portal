@@ -106,7 +106,7 @@ export class ExportJobsService {
   private async mine(id: string, adminId: string) {
     const job = await this.queue.getJob(id);
     const data = job?.data as ExportJobData | undefined;
-    if (!job || job.name !== EXPORT_JOBS.BUILD || data?.viewer.id !== adminId) {
+    if (job?.name !== EXPORT_JOBS.BUILD || data?.viewer.id !== adminId) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such file, or it has expired');
     }
     return job;

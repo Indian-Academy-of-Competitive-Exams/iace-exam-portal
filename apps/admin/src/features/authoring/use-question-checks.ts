@@ -9,6 +9,7 @@ import {
   type QuestionDraft,
   contentLanguageOf,
   type LanguageCode,
+  type QuestionLanguage,
 } from '@iace/contracts';
 import { mathErrorIn } from '@iace/ui';
 import { api } from '../../lib/api';
@@ -88,12 +89,7 @@ export function useChecked(
   const subjectLanguage = useSubjectLanguage(header.subjectId);
 
   const checks = useMemo(() => {
-    // A language subject's question is written in that alone; otherwise its section's, else every one.
-    const asked = subjectLanguage
-      ? new Set([subjectLanguage])
-      : expected
-        ? new Set(expected.map(contentLanguageOf))
-        : null;
+    const asked = askedLanguages(subjectLanguage, expected);
     const missing = LANGUAGE_ORDER.filter(
       (code) =>
         code !== (subjectLanguage ?? DEFAULT_LANGUAGE) &&
@@ -109,4 +105,13 @@ export function useChecked(
   }, [state, issues, duplicate, expected, subjectLanguage]);
 
   return { issues, checks };
+}
+
+/** A language subject's question is written in that alone; otherwise its section's, else every one. */
+function askedLanguages(
+  subjectLanguage: QuestionLanguage | null,
+  expected: readonly LanguageCode[] | undefined,
+): Set<QuestionLanguage> | null {
+  if (subjectLanguage) return new Set([subjectLanguage]);
+  return expected ? new Set(expected.map(contentLanguageOf)) : null;
 }

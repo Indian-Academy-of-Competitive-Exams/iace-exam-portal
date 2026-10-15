@@ -609,7 +609,7 @@ function paperRowsOf(
       typingPreset: section.typingPreset ?? null,
       descriptive: section.descriptive ?? false,
       // Sorted, so the same set ticked in another order is not a change to the paper.
-      languages: [...(section.languages ?? [])].sort(),
+      languages: [...(section.languages ?? [])].sort((a, b) => a.localeCompare(b)),
     })),
   };
 }

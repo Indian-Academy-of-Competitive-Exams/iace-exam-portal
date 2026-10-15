@@ -23,7 +23,8 @@ describe('paperRulesFor', () => {
 
   it('swaps the buttons for the bubble on OMR and adds the section clock when sectional', () => {
     const omr = terms({ forwardOnly: false, sectional: true, omr: true });
-    assert.ok(omr.includes('The bubble') && omr.includes('Sectional timing'));
+    assert.ok(omr.includes('The bubble'));
+    assert.ok(omr.includes('Sectional timing'));
     assert.ok(!omr.includes('Clear response'));
   });
 });

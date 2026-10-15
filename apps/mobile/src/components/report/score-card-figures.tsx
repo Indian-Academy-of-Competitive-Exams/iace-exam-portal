@@ -52,6 +52,11 @@ function Figure({
   );
 }
 
+function rankLabel(rank: number | null, cohortSize: number): string {
+  if (rank === null) return DASH;
+  return cohortSize > 0 ? `#${rank} of ${cohortSize}` : `#${rank}`;
+}
+
 const at = (value: number | null) => (value === null ? DASH : timeWords(value));
 
 /** Where the clock went, and the same total against the crowd's and the topper's. */
@@ -109,14 +114,7 @@ export function CohortFigure({ cohort }: Readonly<{ cohort: CohortCurve }>) {
   return (
     <Figure title="Score spread" meta={plural(cohort.cohortSize, 'sitting')}>
       <StatTileRow>
-        <StatTile
-          label="Rank"
-          value={
-            cohort.rank === null
-              ? DASH
-              : `#${cohort.rank}${cohort.cohortSize > 0 ? ` of ${cohort.cohortSize}` : ''}`
-          }
-        />
+        <StatTile label="Rank" value={rankLabel(cohort.rank, cohort.cohortSize)} />
       </StatTileRow>
       <MeasureBars bars={bars} max={peak} />
       {cohort.topperScore === null ? null : (

@@ -237,7 +237,9 @@ export class BellService {
 type Anchor = Pick<Entry, 'id' | 'createdAt'>;
 
 const newestFirst = (a: Anchor, b: Anchor): number =>
-  b.createdAt.getTime() - a.createdAt.getTime() || (b.id < a.id ? -1 : b.id > a.id ? 1 : 0);
+  b.createdAt.getTime() - a.createdAt.getTime() || byCodeUnit(b.id, a.id);
+
+const byCodeUnit = (x: string, y: string): number => (x < y ? -1 : Number(x > y));
 
 const isOlder = (entry: Anchor, anchor: Anchor): boolean => newestFirst(anchor, entry) > 0;
 

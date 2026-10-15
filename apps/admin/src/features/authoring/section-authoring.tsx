@@ -32,10 +32,7 @@ import { QUERY_KEYS, sectionWorkHeldQueryKey, sectionWorkQueryKey } from '../../
 import { REVIEW_STATE_LABELS } from '../../lib/labels';
 import { SECTION_QUESTION_PARAM } from '../../lib/constants';
 import { useAuth } from '../../providers/auth';
-import {} from './use-delete-question';
 import { SectionThreadButton } from '../../components/section-thread';
-import {} from './cross-test-warning';
-import {} from './notice-chip';
 import { TypistDoneDialog } from './typist-done-dialog';
 import { AuthoringWorkspace } from './authoring-workspace';
 import { NEW_CARD, type Held, type WorkspaceCard, type WorkspaceSource } from './workspace-types';
