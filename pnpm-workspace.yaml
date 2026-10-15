@@ -21,8 +21,22 @@ minimumReleaseAgeExclude:
   - bullmq@6.0.10
   - lucide-react@1.31.0
   - tsx@4.23.12
-  - nodemailer@9.1.1
   - '@expo/cli@57.0.25'
   - '@expo/router-server@57.0.10'
   - babel-preset-expo@57.0.12
   - expo@57.0.23
+
+# Transitive security fixes no direct upgrade carries yet; drop each once its parent ships it.
+overrides:
+  # @prisma/config pins 7.1.5 exactly (GHSA-ggr8-5vv4-36mx); it only calls deepmerge(), unchanged in 8.
+  '@prisma/config>deepmerge-ts': 8.0.2
+  # Only sanscript's own build script loads toml, never the shipped bundle (GHSA-82x6-q7mm-w9cf).
+  '@indic-transliteration/sanscript>toml': 4.2.0
+
+# Advisories with no patched release published, all in mobile build tooling and none in a shipped bundle.
+auditConfig:
+  ignoreGhsas:
+    # braces <=3.0.3, no 3.0.4 exists: micromatch inside Metro, the bundler, at build time only.
+    - GHSA-vfj7-8cjw-p6xm
+    # node-forge <=1.4.0, no 1.4.1 exists: @expo/cli code signing, a dev CLI never bundled.
+    - GHSA-86w9-cpqp-85rv
