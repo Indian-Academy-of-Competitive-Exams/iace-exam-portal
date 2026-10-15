@@ -184,4 +184,21 @@ describe('a screen opened by its address', () => {
       }
     }
   });
+
+  /** The failure this prevents: any listed screen opening to an admin holding none of its keys, or below its level. */
+  it('opens every listed screen to a holder of one of its keys at its level, and to nobody short of that', () => {
+    for (const [path, access] of Object.entries(ROUTE_ACCESS)) {
+      if (!access) continue;
+      const unrelated = FEATURE_KEY_VALUES.filter((key) => !access.keys.includes(key));
+      const everyOther = Object.fromEntries(unrelated.map((key) => [key, WRITE]));
+
+      assert.equal(opens(path, everyOther), false, `${path} with no key of its own`);
+      for (const key of access.keys) {
+        assert.equal(opens(path, { [key]: access.level }), true, `${path} with ${key}`);
+        if (access.level === WRITE) {
+          assert.equal(opens(path, { [key]: READ }), false, `${path} read-only ${key}`);
+        }
+      }
+    }
+  });
 });
