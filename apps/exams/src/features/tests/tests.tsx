@@ -13,13 +13,12 @@ import {
   asText,
   emptyReason,
   everySitting,
-  matching,
   resultsByTest,
-  sittablesOf,
   testsFilters,
+  testsShelves,
   type Emptiness,
-  type Sittable,
   type TestResult,
+  type TestsShelf,
 } from '@iace/app-kit';
 import {
   Alert,
@@ -31,7 +30,7 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
-import { TEST_SHUT, type StudentCatalogSeries } from '@iace/contracts';
+import { TEST_SHUT } from '@iace/contracts';
 import { catalogQuery, performanceQuery } from '../../lib/queries';
 import { NAV_ITEMS } from '../../lib/constants';
 import { TESTS_TOUR, TOUR_IDS } from '../../lib/tours';
@@ -53,14 +52,12 @@ export function TestsPage() {
 
   const now = new Date();
   const reaches = catalog.data?.series ?? [];
-  const chosenSeries = asSet(filters.values.series);
-  const series = reaches
-    .filter((row) => course === ANY_CHOICE || row.examStage?.course === course)
-    .filter((row) => chosenSeries.length === 0 || chosenSeries.includes(row.id));
-  const rows = inState(
-    matching(sittablesOf(series), asText(filters.values.q)),
-    asText(filters.values.state) || ANY_CHOICE,
-  );
+  const { rows, shelves } = testsShelves(reaches, {
+    q: asText(filters.values.q),
+    course,
+    state: asText(filters.values.state) || ANY_CHOICE,
+    series: asSet(filters.values.series),
+  });
   const emptiness = emptyReason(reaches, rows.length);
   const results = resultsByTest(everySitting(trend.data));
 
@@ -86,8 +83,7 @@ export function TestsPage() {
         <CatalogRegion
           catalog={catalog}
           emptiness={emptiness}
-          series={series}
-          rows={rows}
+          shelves={shelves}
           now={now}
           results={results}
         />
@@ -100,15 +96,13 @@ export function TestsPage() {
 function CatalogRegion({
   catalog,
   emptiness,
-  series,
-  rows,
+  shelves,
   now,
   results,
 }: Readonly<{
   catalog: { isLoading: boolean; isError: boolean; refetch: () => void };
   emptiness: Emptiness;
-  series: readonly StudentCatalogSeries[];
-  rows: readonly Sittable[];
+  shelves: readonly TestsShelf[];
   now: Date;
   results: ReadonlyMap<string, TestResult>;
 }>) {
@@ -144,23 +138,9 @@ function CatalogRegion({
 
   return (
     <>
-      {shelves(series, rows).map(({ row, tests }) => (
-        <SeriesShelf key={row.id} series={row} rows={tests} now={now} results={results} />
+      {shelves.map(({ series, tests }) => (
+        <SeriesShelf key={series.id} series={series} rows={tests} now={now} results={results} />
       ))}
     </>
   );
 }
-
-/** A shelf per series, and no shelf for one the search emptied. */
-function shelves(
-  series: readonly StudentCatalogSeries[],
-  rows: readonly Sittable[],
-): { row: StudentCatalogSeries; tests: Sittable[] }[] {
-  return series
-    .map((row) => ({ row, tests: rows.filter((sittable) => sittable.seriesId === row.id) }))
-    .filter(({ tests }) => tests.length > 0);
-}
-
-/** Where a paper stands for this student — the one thing they scan a shelf for. */
-const inState = (rows: readonly Sittable[], state: string) =>
-  state === ANY_CHOICE ? [...rows] : rows.filter((row) => row.bucket === state);

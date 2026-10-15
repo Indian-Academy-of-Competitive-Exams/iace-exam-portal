@@ -228,10 +228,13 @@ export {
   shutReason,
   sittablesOf,
   sittingHint,
+  testsShelves,
   waitingOn,
   type Emptiness,
   type SeriesProgress,
+  type TestsShelf,
   type Sittable,
+  type TestsChoice,
   type TestResult,
 } from './catalog';
 export {

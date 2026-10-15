@@ -16,6 +16,7 @@ import {
   type TestBucket,
   type TestShut,
 } from '@iace/contracts';
+import { ANY_CHOICE } from './list-filters';
 
 /** NOT_FOUND or FORBIDDEN is the server refusing this student; offline or a 5xx can be retried. */
 export const isBriefRefused = (error: unknown): boolean =>
@@ -87,6 +88,37 @@ export function matching(rows: readonly Sittable[], term: string): Sittable[] {
   return rows.filter((row) =>
     `${row.test.title ?? ''} ${row.seriesName}`.toLowerCase().includes(wanted),
   );
+}
+
+/** What the tests screen is asked by: each value as its filter spec keys it. */
+export interface TestsChoice {
+  q: string;
+  course: string;
+  state: string;
+  series: readonly string[];
+}
+
+/** One series' tests that survived the filters. */
+export interface TestsShelf {
+  series: StudentCatalogSeries;
+  tests: Sittable[];
+}
+
+/** Every test the filters leave, and a shelf per series still holding one — none for a series they emptied. */
+export function testsShelves(
+  reaches: readonly StudentCatalogSeries[],
+  choice: TestsChoice,
+): { rows: Sittable[]; shelves: TestsShelf[] } {
+  const series = reaches
+    .filter((row) => choice.course === ANY_CHOICE || row.examStage?.course === choice.course)
+    .filter((row) => choice.series.length === 0 || choice.series.includes(row.id));
+  const rows = matching(sittablesOf(series), choice.q).filter(
+    (row) => choice.state === ANY_CHOICE || row.bucket === choice.state,
+  );
+  const shelves = series
+    .map((one) => ({ series: one, tests: rows.filter((row) => row.seriesId === one.id) }))
+    .filter((shelf) => shelf.tests.length > 0);
+  return { rows, shelves };
 }
 
 const FAR_FUTURE = Number.MAX_SAFE_INTEGER;

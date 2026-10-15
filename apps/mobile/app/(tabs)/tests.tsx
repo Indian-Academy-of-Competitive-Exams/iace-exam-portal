@@ -2,21 +2,19 @@ import { useMemo } from 'react';
 import { FlatList, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ANY_CHOICE,
   EMPTINESS,
   SHUT_SAYS,
   emptyReason,
   everySitting,
-  matching,
   resultsByTest,
-  sittablesOf,
   testsFilters,
+  testsShelves,
   type Emptiness,
-  type Sittable,
   type TestResult,
+  type TestsShelf,
   plural,
 } from '@iace/app-kit';
-import { TEST_SHUT, type StudentCatalogSeries } from '@iace/contracts';
+import { TEST_SHUT } from '@iace/contracts';
 import { Text } from '../../src/components/ui/text';
 import { catalogQuery, performanceQuery } from '../../src/lib/queries';
 import { Alert } from '../../src/components/ui/alert';
@@ -35,13 +33,6 @@ import { TourTrigger, usePageTour, useTourTarget } from '../../src/lib/page-tour
 import { TESTS_TOUR, TOUR_IDS, TOUR_TARGETS } from '../../src/lib/tours';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 
-const ANY = ANY_CHOICE;
-
-interface Shelf {
-  series: StudentCatalogSeries;
-  tests: Sittable[];
-}
-
 export default function TestsScreen() {
   useRefetchOnFocus();
   const catalog = useQuery(catalogQuery);
@@ -59,17 +50,10 @@ export default function TestsScreen() {
   const seriesValue = state.values.series;
 
   const now = useMemo(() => new Date(), [catalog.dataUpdatedAt]);
-  const filteredSeries = useMemo(() => {
-    const seriesIds = asSet(seriesValue);
-    return reaches
-      .filter((row) => course === ANY || row.examStage?.course === course)
-      .filter((row) => seriesIds.length === 0 || seriesIds.includes(row.id));
-  }, [reaches, course, seriesValue]);
-  const rows = useMemo(
-    () => inState(matching(sittablesOf(filteredSeries), q), bucket),
-    [filteredSeries, q, bucket],
+  const { rows, shelves } = useMemo(
+    () => testsShelves(reaches, { q, course, state: bucket, series: asSet(seriesValue) }),
+    [reaches, q, course, bucket, seriesValue],
   );
-  const shelves = useMemo(() => shelvesOf(filteredSeries, rows), [filteredSeries, rows]);
   const emptiness = emptyReason(reaches, rows.length);
   const results = useMemo(() => resultsByTest(everySitting(trend.data)), [trend.data]);
   const renderItem = useMemo(() => renderShelf(now, results), [now, results]);
@@ -178,22 +162,12 @@ function TestsHeader({ count, testBlocked, filters, state }: Readonly<TestsHeade
   );
 }
 
-const inState = (rows: readonly Sittable[], state: string) =>
-  state === ANY ? [...rows] : rows.filter((row) => row.bucket === state);
-
-/** A shelf per series, and no shelf for one the search or filters emptied. */
-function shelvesOf(series: readonly StudentCatalogSeries[], rows: readonly Sittable[]): Shelf[] {
-  return series
-    .map((row) => ({ series: row, tests: rows.filter((sittable) => sittable.seriesId === row.id) }))
-    .filter((shelf) => shelf.tests.length > 0);
-}
-
-const keyOfShelf = (shelf: Shelf) => shelf.series.id;
+const keyOfShelf = (shelf: TestsShelf) => shelf.series.id;
 
 /** A stable factory, not a component declared inside another — `now`/`results` close over it. */
 const renderShelf =
   (now: Date, results: ReadonlyMap<string, TestResult>) =>
-  ({ item, index }: { item: Shelf; index: number }) => (
+  ({ item, index }: { item: TestsShelf; index: number }) => (
     <SeriesShelf
       series={item.series}
       rows={item.tests}

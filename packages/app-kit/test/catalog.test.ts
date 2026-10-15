@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AppException,
+  ATTEMPT_STATUS,
+  EXAM_COURSE,
   ErrorCodes,
+  TEST_BUCKET,
   TEST_SERIES_KIND,
   TEST_SHUT,
   TIMER_TEMPLATE,
@@ -20,7 +23,10 @@ import {
   resultsByTest,
   shutOf,
   shutReason,
+  testsShelves,
+  type TestsChoice,
 } from '../src/catalog';
+import { ANY_CHOICE } from '../src/list-filters';
 import { isSectionalPaper } from '../src/student-figures';
 
 test('a brief the server will not show this student is a refusal', () => {
@@ -140,4 +146,84 @@ test('a paper is sectional by its timer, not by its sections carrying durations'
   );
   assert.equal(isSectionalPaper({ sections }), true, 'an older server names no timer');
   assert.equal(isSectionalPaper({ sections: [{ durationSec: null }] }), false);
+});
+
+const ANYTHING: TestsChoice = { q: '', course: ANY_CHOICE, state: ANY_CHOICE, series: [] };
+const stage = (course: (typeof EXAM_COURSE)[keyof typeof EXAM_COURSE]) => ({
+  id: 'stg',
+  name: 'Tier 1',
+  examCode: 'CGL',
+  course,
+});
+const SSC_SERIES: StudentCatalogSeries = {
+  ...seriesOf([
+    listed({ id: 'ssc_open', title: 'CGL Mock', canStart: true }),
+    listed({ id: 'ssc_done', title: 'CGL Past', attemptStatus: ATTEMPT_STATUS.SUBMITTED }),
+  ]),
+  id: 'srs_ssc',
+  name: 'SSC Mocks',
+  examStage: stage(EXAM_COURSE.SSC),
+};
+const BANK_SERIES: StudentCatalogSeries = {
+  ...seriesOf([listed({ id: 'bank_later', title: 'PO Prelims' })]),
+  id: 'srs_bank',
+  name: 'Bank Mocks',
+  examStage: stage(EXAM_COURSE.BANKING),
+};
+const REACHES = [SSC_SERIES, BANK_SERIES, { ...seriesOf([]), id: 'srs_empty' }];
+const shelved = (choice: Partial<TestsChoice>) => {
+  const { rows, shelves } = testsShelves(REACHES, { ...ANYTHING, ...choice });
+  return {
+    rows: rows.map((row) => row.test.id),
+    shelves: shelves.map((shelf) => [shelf.series.id, shelf.tests.map((row) => row.test.id)]),
+  };
+};
+
+/** The failure this prevents: a filter hiding a test it does not name, or a shelf left standing with nothing on it. */
+test('testsShelves keeps only what every filter allows, and a shelf only for a series still holding a test', () => {
+  const cases: { choice: Partial<TestsChoice>; rows: string[]; shelves: unknown[] }[] = [
+    {
+      choice: {},
+      rows: ['ssc_open', 'ssc_done', 'bank_later'],
+      shelves: [
+        ['srs_ssc', ['ssc_open', 'ssc_done']],
+        ['srs_bank', ['bank_later']],
+      ],
+    },
+    {
+      choice: { course: EXAM_COURSE.BANKING },
+      rows: ['bank_later'],
+      shelves: [['srs_bank', ['bank_later']]],
+    },
+    {
+      choice: { series: ['srs_ssc'] },
+      rows: ['ssc_open', 'ssc_done'],
+      shelves: [['srs_ssc', ['ssc_open', 'ssc_done']]],
+    },
+    {
+      choice: { state: TEST_BUCKET.OPEN },
+      rows: ['ssc_open'],
+      shelves: [['srs_ssc', ['ssc_open']]],
+    },
+    {
+      choice: { state: TEST_BUCKET.DONE },
+      rows: ['ssc_done'],
+      shelves: [['srs_ssc', ['ssc_done']]],
+    },
+    {
+      choice: { state: TEST_BUCKET.LATER },
+      rows: ['bank_later'],
+      shelves: [['srs_bank', ['bank_later']]],
+    },
+    {
+      choice: { q: 'bank mocks' },
+      rows: ['bank_later'],
+      shelves: [['srs_bank', ['bank_later']]],
+    },
+    { choice: { course: EXAM_COURSE.SSC, state: TEST_BUCKET.LATER }, rows: [], shelves: [] },
+    { choice: { course: EXAM_COURSE.RRB }, rows: [], shelves: [] },
+  ];
+  for (const { choice, rows, shelves } of cases) {
+    assert.deepEqual(shelved(choice), { rows, shelves }, JSON.stringify(choice));
+  }
 });
