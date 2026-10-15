@@ -4,7 +4,9 @@ import { E2E_PAPER } from '../e2e-env';
 const OTP_PATTERN = /\d{4,8}/;
 const START_URL = /\/me\/tests\/[^/]+\/attempt$/;
 const STATE_URL = /\/me\/attempts\/[^/]+\/state$/;
-const CLOCK_PATTERN = /\d+(?::\d{2}){1,2}/;
+const TEXT_NODE = 3;
+type DomNode = { nodeType: number; textContent: string | null };
+const CLOCK_WORD = /^\d+(?::\d{2}){1,2}$/;
 
 /** The seed keys every question to the option labelled "Option 1"; the paper shuffles its position. */
 export const RIGHT_OPTION = /Option 1$/;
@@ -68,8 +70,15 @@ export async function dataOf<T>(response: Response): Promise<T> {
 
 /** Seconds left on the hall's countdown, as drawn. */
 export async function secondsLeft(page: Page): Promise<number> {
-  const text = (await page.getByRole('timer').textContent()) ?? '';
-  const clock = CLOCK_PATTERN.exec(text)?.[0] ?? '0';
+  // The timer's own text nodes only: its spoken warning and label are child elements.
+  const words = await page.getByRole('timer').evaluate(
+    (timer: { childNodes: ArrayLike<DomNode> }, textNode: number) =>
+      Array.from(timer.childNodes)
+        .filter((node) => node.nodeType === textNode)
+        .map((node) => node.textContent?.trim() ?? ''),
+    TEXT_NODE,
+  );
+  const clock = words.find((word) => CLOCK_WORD.test(word)) ?? '0';
   return clock.split(':').reduce((total, part) => total * 60 + Number(part), 0);
 }
 
