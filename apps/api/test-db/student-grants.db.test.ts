@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { AppException, ErrorCodes } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
 import { AuditContext, AuditService } from '../src/audit';
 import { NotificationsService } from '../src/notifications/notifications.service';

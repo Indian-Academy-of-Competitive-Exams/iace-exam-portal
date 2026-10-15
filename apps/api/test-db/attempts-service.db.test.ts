@@ -16,7 +16,7 @@ import {
   type TestScope,
   type TestStatus,
 } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { AttemptResolutionService } from '../src/attempts/sitting/attempt-resolution.service';
 import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';
 import { AttemptStateService } from '../src/attempts/sitting/attempt-state.service';

@@ -7,7 +7,7 @@ import {
   TEST_SERIES_KIND,
   testSeriesListQuerySchema,
 } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { ProgramsService } from '../src/access/programs.service';
 import { TestSeriesService } from '../src/access/test-series.service';
 import { AuditContext } from '../src/audit';

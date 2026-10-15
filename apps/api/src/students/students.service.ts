@@ -1,4 +1,4 @@
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ATTEMPT_STATUS,
@@ -33,20 +33,24 @@ import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { BranchesService } from '../branches';
 import { ExamsService } from '../configs';
-import { type ProgramsService } from '../access';
+import { ProgramsService } from '../access';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { NotificationsService } from '../notifications';
 
 /** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
-import { formerHoldersOf, studentOrderBy, studentWhere } from './student-query';
-import { type ProfileDocumentColumn } from './student-flags';
+import {
+  formerHoldersOf,
+  HOLDS_OWN_ACCESS,
+  studentOrderBy,
+  studentWhere,
+  type ProfileDocumentColumn,
+} from '../roster';
 import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
 import { everyTermMatches } from '../common/search-terms';
 import { maskedMobile } from '../common/redact';
 import { formRefusal } from '../common/form-refusal';
-import { HOLDS_OWN_ACCESS } from './own-access';
 
 /** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
 const ENROLLED_EXAMS_FIELD = 'enrolledExams';
@@ -90,17 +94,8 @@ export class StudentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
-    @Inject(forwardRef(() => ExamsService))
     private readonly exams: ExamsService,
     private readonly branches: BranchesService,
-    // `require`, not a static import: `access` imports `configs`, which imports this barrel back.
-    @Inject(
-      forwardRef(
-        () =>
-          (module.require('../access') as { ProgramsService: typeof ProgramsService })
-            .ProgramsService,
-      ),
-    )
     private readonly programs: ProgramsService,
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
@@ -453,11 +448,6 @@ export class StudentsService {
       select: { id: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-  }
-
-  /** For the configs module: enrolment is an array of exam CODES, with no relation to follow. */
-  countEnrolledIn(code: string): Promise<number> {
-    return this.prisma.student.count({ where: { enrolledExams: { has: code } } });
   }
 
   /** Points a profile at a stored document; a student who is gone or erased is refused by the write itself, and the file goes with the refusal. */

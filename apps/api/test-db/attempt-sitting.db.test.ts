@@ -10,7 +10,7 @@ import {
   TEST_STATUS,
   type AnswerChange,
 } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { AttemptFlushProcessor } from '../src/attempts/sitting/attempt-flush.processor';
 import { AttemptPaperService } from '../src/attempts/sitting/attempt-paper.service';
 import { AttemptSheetService } from '../src/attempts/sitting/attempt-sheet.service';

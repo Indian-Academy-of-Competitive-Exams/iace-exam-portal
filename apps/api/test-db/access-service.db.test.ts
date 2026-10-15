@@ -11,7 +11,7 @@ import {
 import { ProgramsService } from '../src/access/programs.service';
 import { TestSeriesService } from '../src/access/test-series.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { ExamStagesService } from '../src/configs';
 import { AuditContext, AuditService } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';

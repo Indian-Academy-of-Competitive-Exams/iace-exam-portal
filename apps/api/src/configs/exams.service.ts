@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
@@ -12,7 +12,6 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { everyTermMatches } from '../common/search-terms';
-import { type StudentsService } from '../students';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import {
@@ -37,15 +36,6 @@ export const AUDITED_EXAM_FIELDS = ['course', 'name', 'code', 'description', 'is
 export class ExamsService {
   constructor(
     private readonly prisma: PrismaService,
-    // `require`, not a static import: a top-level import here re-enters the still-loading `students` barrel and throws; a CommonJS `require` tolerates the partial circular load instead.
-    @Inject(
-      forwardRef(
-        () =>
-          (module.require('../students') as { StudentsService: typeof StudentsService })
-            .StudentsService,
-      ),
-    )
-    private readonly students: StudentsService,
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
   ) {}
@@ -97,7 +87,7 @@ export class ExamsService {
     // Only a code change can be refused, and only an enrolment count answers that — so an ordinary rename or retire does not pay for it.
     if (changes.code !== undefined) {
       const blocker = examEditBlocker(
-        { studentCount: await this.students.countEnrolledIn(exam.code) },
+        { studentCount: await this.countEnrolledIn(exam.code) },
         changes,
       );
       if (blocker) {
@@ -129,11 +119,16 @@ export class ExamsService {
 
     const blocker = examDeletionBlocker({
       stageCount: exam._count.stages,
-      studentCount: await this.students.countEnrolledIn(exam.code),
+      studentCount: await this.countEnrolledIn(exam.code),
     });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
     await this.prisma.exam.delete({ where: { id } });
+  }
+
+  /** Enrolment is an array of exam CODES, with no relation to follow. */
+  private countEnrolledIn(code: string): Promise<number> {
+    return this.prisma.student.count({ where: { enrolledExams: { has: code } } });
   }
 
   /** Whether these codes may be attached to. The field key is a PARAMETER: the student form's field is `enrolledExams`, and `applyFieldErrors` drops the wrong one. */

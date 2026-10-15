@@ -18,7 +18,7 @@ import {
   type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { AttemptPaperService } from '../src/attempts/sitting/attempt-paper.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { AttemptReportService } from '../src/attempts/results/attempt-report.service';

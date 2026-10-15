@@ -3,7 +3,7 @@
  * A broadcast — an in-app announcement, a test opening — is one row for everybody, matched here by
  * the announcement's audience or the student's catalog; only a read of one is written per student.
  */
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
@@ -15,7 +15,7 @@ import {
   type NotificationType,
   type Paginated,
 } from '@iace/contracts';
-import { type AccessResolverService } from '../access';
+import { AccessResolverService } from '../reach';
 import { paged } from '../common/pagination';
 import { MS_PER_DAY } from '../common/time/units';
 import { withinInstituteDays } from '../common/time/institute-day';
@@ -56,14 +56,6 @@ const NEWEST_FIRST: Prisma.NotificationOrderByWithRelationInput[] = [
 export class BellService {
   constructor(
     private readonly prisma: PrismaService,
-    // `require`, not a static import: `access` reads this barrel back, closing the cycle on load.
-    @Inject(
-      forwardRef(
-        () =>
-          (module.require('../access') as { AccessResolverService: typeof AccessResolverService })
-            .AccessResolverService,
-      ),
-    )
     private readonly access: AccessResolverService,
   ) {}
 

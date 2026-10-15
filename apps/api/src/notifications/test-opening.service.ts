@@ -4,10 +4,10 @@
  * works. Stamping `Test.announcedAt` IS the bell entry: the bell lists an announced test to every
  * student whose catalog holds its series, so nothing is written per student. The push follows it.
  */
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TEST_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { type AccessResolverService } from '../access';
+import { AccessResolverService } from '../reach';
 import { PushService } from './push.service';
 
 /** How many students' devices one push page reads. */
@@ -26,14 +26,6 @@ export class TestOpeningService {
 
   constructor(
     private readonly prisma: PrismaService,
-    // `require`, not a static import: `access` reads this barrel back, closing the cycle on load.
-    @Inject(
-      forwardRef(
-        () =>
-          (module.require('../access') as { AccessResolverService: typeof AccessResolverService })
-            .AccessResolverService,
-      ),
-    )
     private readonly access: AccessResolverService,
     private readonly push: PushService,
   ) {}

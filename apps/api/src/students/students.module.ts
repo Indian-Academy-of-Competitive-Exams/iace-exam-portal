@@ -1,20 +1,19 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AppConfigModule } from '../config/config.module';
 import { StorageModule } from '../storage/storage.module';
 import { AuthModule } from '../auth';
 import { BranchesModule } from '../branches';
 import { ConfigsModule } from '../configs';
-import { type AccessModule } from '../access';
-import { type AttemptsModule } from '../attempts';
-import { type NotificationsModule } from '../notifications';
+import { AccessModule } from '../access';
+import { NotificationsModule } from '../notifications';
 import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
 import { StudentPrivacyService } from './student-privacy.service';
 import { API_ROLES, onRole } from '../config/api-role';
 
 @Module({
-  // Identity documents are stored as keys; every read signs them. ConfigsModule is a cycle: enrolments validate against the exam-type catalog, whose usage counts come back through here.
+  // Identity documents are stored as keys; every read signs them.
   imports: [
     PrismaModule,
     StorageModule,
@@ -22,22 +21,9 @@ import { API_ROLES, onRole } from '../config/api-role';
     // For the desk code: the students screen asks for one, and the code itself stays auth's.
     AuthModule,
     BranchesModule,
-    forwardRef(() => ConfigsModule),
-    // `require`, not a static import: `access` imports `configs`, which imports this barrel back, and a top-level import here re-enters a still-loading module.
-    forwardRef(
-      () => (module.require('../access') as { AccessModule: typeof AccessModule }).AccessModule,
-    ),
-    // Same re-entry: `notifications` reads students to resolve an announcement's audience.
-    forwardRef(
-      () =>
-        (module.require('../notifications') as { NotificationsModule: typeof NotificationsModule })
-          .NotificationsModule,
-    ),
-    // Same re-entry: the roster screen reads a student's rollups through the overview service.
-    forwardRef(
-      () =>
-        (module.require('../attempts') as { AttemptsModule: typeof AttemptsModule }).AttemptsModule,
-    ),
+    ConfigsModule,
+    AccessModule,
+    NotificationsModule,
   ],
   controllers: onRole([API_ROLES.CORE], [StudentsController]),
   providers: [StudentsService, StudentPrivacyService],

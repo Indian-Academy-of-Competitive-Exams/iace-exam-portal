@@ -17,8 +17,8 @@ import {
   type TestSeriesKind,
   type TestStatus,
 } from '@iace/contracts';
-import { AccessCacheListener } from '../src/access/access-cache.listener';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessCacheListener } from '../src/reach/access-cache.listener';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { ProgramsService } from '../src/access/programs.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
 import { TestSeriesService } from '../src/access/test-series.service';

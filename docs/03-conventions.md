@@ -103,22 +103,25 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 
 **Live seams.** Each is a known crossing, named so it is not mistaken for the pattern:
 
-- `students` ↔ `access` and `students` ↔ `configs` are true cycles, held open with `forwardRef`
-  plus a deferred `module.require`. A student's programs and enrolments are validated against
-  catalogs those modules own, and both catalogs must refuse a delete a student still depends on. The
-  cycle closes only when one direction becomes an event.
-- `students` ↔ `attempts` is a true cycle held open the same way. A student's copy of their own data
-  carries each sitting's live percentile, which only `LeaderboardService` counts, and `attempts`
-  imports modules that import `students` back.
+- The module graph has no cycle, and two read-only folders are what keep it that way. `reach`
+  holds `AccessResolverService` — who a test reaches, read from the tables `access` owns — so
+  `notifications` asks it without importing `access`, which tells a student through
+  `notifications`. `roster` holds the student list's filter, order and person columns
+  (`studentWhere`, `studentCardsOf`), so `notifications` and `access` read students without loading
+  `students`, which imports them both. Neither owns a table, and the `access` and `students` barrels
+  re-export them.
+- `configs` counts the students enrolled under an exam code to refuse a code change or a delete.
+  `Student.enrolledExams` is free text with no foreign key, and `students` validates an enrolment
+  against `configs`, so the count is a direct read where it is used rather than a call back.
 - `auth` reads `Admin` rows directly for the login and `me` paths. The grant lookup already routes
   through `AdminsService`, which is the pattern; the two identity reads predate the split.
 - `configs` counts a stage's and a base config's `Test` rows through `_count` to block a delete.
   `tests` exists, so this is a read that belongs behind a `TestsService` facade.
 - `access` counts students carrying a program to block its delete. `Student.programs` is free text
   with no foreign key, so that count is the only thing between a rename and a silent detach across
-  every student — route it through `StudentsService`.
-- `access` reads `Test` to resolve a student's catalog and to block deleting a series that still
-  holds tests. `tests` is the only writer, and it emits `access.catalog_changed` on every offering
+  every student. `students` imports `access` to validate a program, so it stays a direct read.
+- `access` reads `Test` to block deleting a series that still holds tests, and `reach` reads it to
+  resolve a student's catalog. `tests` is the only writer, and it emits `access.catalog_changed` on every offering
   write, so the held copy cannot go stale behind it; the read is what still wants a facade.
 - `tests` reads `TestSeries` to take the mode a test is judged by — the series decides it, and it is
   denormalised onto `Test` so the composite foreign key holds the two together. Only the read
@@ -168,7 +171,7 @@ erodes.
 | saved         | `SavedQuestion`                                                                                                   |
 | typing        | `TypingPractice`                                                                                                  |
 
-`auth`, `imports`, `me`, `dashboard`, `reports` and `health` own no table. The rollups belong to `attempts` because the
+`auth`, `imports`, `me`, `dashboard`, `reports`, `reach`, `roster` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
 owns the sitting owns the derivation.
 

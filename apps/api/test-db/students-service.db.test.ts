@@ -1041,17 +1041,6 @@ describe('StudentsService — the seams other modules come through', () => {
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
     );
   });
-
-  /** The code is free text on the student, so `configs` has nothing to join on and asks here. */
-  it('counts the students enrolled under an exam code', async () => {
-    const { service } = await serviceWith({ student: { enrolledExams: ['SSC CGL'] } });
-    await makeStudent(prisma, { enrolledExams: ['SSC CGL', 'RRB JE'] });
-    await makeStudent(prisma, { enrolledExams: [] });
-
-    assert.equal(await service.countEnrolledIn('SSC CGL'), 2);
-    assert.equal(await service.countEnrolledIn('RRB JE'), 1);
-    assert.equal(await service.countEnrolledIn('SSC CHSL'), 0);
-  });
 });
 
 describe('StudentsService.changeMobile — who they sign in as', () => {

@@ -6,7 +6,7 @@ import {
   type ReportKey,
   type ReportQuery,
 } from '@iace/contracts';
-import { AccessResolverService } from '../../src/access/access-resolver.service';
+import { AccessResolverService } from '../../src/reach/access-resolver.service';
 import { AuditService } from '../../src/audit/audit.service';
 import { AttemptReportService } from '../../src/attempts/results/attempt-report.service';
 import { LeaderboardService } from '../../src/attempts/results/leaderboard.service';

@@ -12,9 +12,7 @@ import {
 } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
-import { NotificationsService } from '../src/notifications/notifications.service';
 import { ExamsService } from '../src/configs/exams.service';
-import { StudentsService } from '../src/students';
 import { FakeEventBus } from '../test/support/fakes';
 import { makeStudent, resetDatabase, testPrisma, uid } from './support/database';
 
@@ -61,17 +59,7 @@ async function serviceWith(exams: ExamRow[] = [{}]) {
       });
     }
   }
-  const students = new StudentsService(
-    prisma,
-    null as never,
-    null as never,
-    null as never,
-    null as never,
-    null as never,
-    new FakeEventBus().asService(),
-    new NotificationsService(prisma),
-  );
-  return new ExamsService(prisma, students, new AuditContext(), events.asService());
+  return new ExamsService(prisma, new AuditContext(), events.asService());
 }
 
 const listQuery = (over: Partial<ExamListQueryInput> = {}): ExamListQuery =>

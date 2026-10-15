@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ATTEMPT_STATUS, AppException, ErrorCodes } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { PaperSheetService } from '../src/attempts/paper-sheet.service';
 import { RollupQueue } from '../src/attempts/results/rollup-queue';
 import { RollupService } from '../src/attempts/results/rollup.service';

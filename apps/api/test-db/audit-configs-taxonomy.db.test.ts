@@ -4,10 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 import { DEFAULT_EXAM_COURSE } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
-import { NotificationsService } from '../src/notifications/notifications.service';
 import { ExamsService } from '../src/configs/exams.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
-import { StudentsService } from '../src/students';
 import { FakeEventBus } from '../test/support/fakes';
 import { BANK, makeQuestionBank, resetDatabase, testPrisma } from './support/database';
 
@@ -31,17 +29,7 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
       data: { id: examId, course: DEFAULT_EXAM_COURSE, name: 'SSC CGL', code: 'SSC CGL' },
     });
     const audit = new AuditContext();
-    const students = new StudentsService(
-      prisma,
-      null as never,
-      null as never,
-      null as never,
-      null as never,
-      new AuditContext(),
-      new FakeEventBus().asService(),
-      new NotificationsService(prisma),
-    );
-    const exams = new ExamsService(prisma, students, audit, new FakeEventBus().asService());
+    const exams = new ExamsService(prisma, audit, new FakeEventBus().asService());
 
     const changed = await diffOf(audit, () => exams.update(examId, { name: 'SSC CGL TIER 1' }));
 

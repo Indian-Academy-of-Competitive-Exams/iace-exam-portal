@@ -7,7 +7,7 @@ import {
   TEST_SERIES_KIND,
   type AnnouncementAudience,
 } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { BellService } from '../src/notifications/bell.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { FakeRedis } from '../test/support/fakes';

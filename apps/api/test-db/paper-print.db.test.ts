@@ -18,7 +18,7 @@ import {
   printablePaperSchema,
   type PrintablePaper,
 } from '@iace/contracts';
-import { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessResolverService } from '../src/reach/access-resolver.service';
 import { AuditContext, AuditContextMiddleware, AuditInterceptor } from '../src/audit';
 import { AuditService } from '../src/audit/audit.service';
 import { AttemptPaperService } from '../src/attempts/sitting/attempt-paper.service';

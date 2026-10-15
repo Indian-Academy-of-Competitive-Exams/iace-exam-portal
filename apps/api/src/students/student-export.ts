@@ -20,7 +20,7 @@ import {
 } from '../common/exporting';
 import { fromDateColumn } from '../common/time/institute-day';
 import { type PrismaService } from '../prisma/prisma.service';
-import { formerHoldersOf, studentOrderBy, studentWhere } from './student-query';
+import { formerHoldersOf, studentOrderBy, studentWhere } from '../roster';
 
 /** Written as the importer splits a list cell back apart. */
 const LIST_SEPARATOR = ', ';

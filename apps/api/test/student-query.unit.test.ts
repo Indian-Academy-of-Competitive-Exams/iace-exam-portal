@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { STUDENT_SORTS, studentListQuerySchema, type StudentListQuery } from '@iace/contracts';
-import { studentOrderBy, studentWhere } from '../src/students/student-query';
-import { HOLDS_OWN_ACCESS } from '../src/students/own-access';
-import { readinessWhere } from '../src/students/student-flags';
+import { studentOrderBy, studentWhere } from '../src/roster/student-query';
+import { HOLDS_OWN_ACCESS } from '../src/roster/own-access';
+import { readinessWhere } from '../src/roster/student-flags';
 
 /** Parses like a real request would, so the tests exercise the coercions too. */
 const query = (params: Record<string, string> = {}): StudentListQuery =>

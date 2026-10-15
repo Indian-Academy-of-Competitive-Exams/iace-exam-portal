@@ -1,6 +1,6 @@
 import { type Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type AnnouncementAudience } from '@iace/contracts';
-import { studentWhere } from '../students';
+import { studentWhere } from '../roster';
 
 /** Live students only: a soft-deleted or anonymised row is not somebody to announce anything to. */
 export function cohortWhere(audience: AnnouncementAudience): Prisma.StudentWhereInput {

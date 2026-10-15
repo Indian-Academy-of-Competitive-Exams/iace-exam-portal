@@ -40,7 +40,7 @@ import {
   writeWorkbook,
   type ExportColumn,
 } from '../common/exporting';
-import { studentCardsOf, type StudentCard } from '../students';
+import { studentCardsOf, type StudentCard } from '../roster';
 import { cohortWhere, reachedBy } from './announcement-cohort';
 import { SKIP_REASONS } from './notification-policy';
 import { NotificationsService, type NewNotification } from './notifications.service';

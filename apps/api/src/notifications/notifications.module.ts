@@ -1,8 +1,8 @@
-import { forwardRef, Module, type OnModuleInit } from '@nestjs/common';
+import { Module, type OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { type Queue } from 'bullmq';
 import { PrismaModule } from '../prisma/prisma.module';
-import { type AccessModule } from '../access';
+import { ReachModule } from '../reach';
 import { keepScheduled } from '../queue/keep-scheduled';
 import { QueueModule } from '../queue/queue.module';
 import {
@@ -28,14 +28,7 @@ import { API_ROLES, onRole, servesRole } from '../config/api-role';
 
 /** Owns the ledger and the push endpoints. No controller of its own: both hang off `me`. */
 @Module({
-  imports: [
-    PrismaModule,
-    QueueModule,
-    // `require`, not a static import: `access` imports this barrel back and would re-enter it.
-    forwardRef(
-      () => (module.require('../access') as { AccessModule: typeof AccessModule }).AccessModule,
-    ),
-  ],
+  imports: [PrismaModule, QueueModule, ReachModule],
   controllers: onRole([API_ROLES.CORE], [AnnouncementsController]),
   providers: [
     AnnouncementsService,

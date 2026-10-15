@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AccessCacheListener } from '../src/access/access-cache.listener';
-import type { AccessResolverService } from '../src/access/access-resolver.service';
+import { AccessCacheListener } from '../src/reach/access-cache.listener';
+import type { AccessResolverService } from '../src/reach/access-resolver.service';
 
 describe('AccessCacheListener', () => {
   /** The write already happened. A Redis blip must not fail the request behind it. */

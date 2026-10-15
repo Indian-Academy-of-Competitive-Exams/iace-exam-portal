@@ -16,9 +16,9 @@ import {
   writeWorkbook,
   type ExportColumn,
 } from '../common/exporting';
-import { studentCardsOf, type StudentCard } from '../students';
+import { studentCardsOf, type StudentCard } from '../roster';
 import { NotificationsService } from '../notifications';
-import { AccessResolverService } from './access-resolver.service';
+import { AccessResolverService } from '../reach';
 
 interface GrantRow {
   student: StudentCard;
