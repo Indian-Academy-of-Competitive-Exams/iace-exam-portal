@@ -27,7 +27,7 @@ import {
   type PerformanceReport,
   type PerformanceReportQueryInput,
   type ReportSitting,
-} from '../stats';
+} from '../stats-performance';
 import {
   ADMIN_STUDENT_ROUTES,
   studentDeskCodeSchema,

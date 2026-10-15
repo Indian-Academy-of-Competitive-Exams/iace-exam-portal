@@ -1,4 +1,5 @@
-import { previewTextOf, WRITING_FORMAT, type WritingFormat, type WritingRubric } from './questions';
+import { previewTextOf } from './question-content';
+import { WRITING_FORMAT, type WritingFormat, type WritingRubric } from './questions';
 
 // ============================================================================
 // Descriptive answers — an essay, a letter, a précis — marked by rule. Nobody

@@ -69,15 +69,13 @@ import {
 } from '../reports';
 import {
   OVERVIEW_ROUTES,
-  questionReportSchema,
-  scoreCardSchema,
   studentOverviewSchema,
   testCalendarSchema,
-  type QuestionReport,
-  type ScoreCard,
   type StudentOverview,
   type TestCalendar,
 } from '../stats';
+import { questionReportSchema, type QuestionReport } from '../stats-question-report';
+import { scoreCardSchema, type ScoreCard } from '../stats-performance';
 import {
   LEADERBOARD_ROUTES,
   leaderboardSchema,

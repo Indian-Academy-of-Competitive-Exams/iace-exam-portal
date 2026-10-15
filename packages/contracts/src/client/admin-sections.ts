@@ -1,13 +1,11 @@
 import { noContentSchema, type NoContent, type Paginated } from '../envelope';
+import { questionDetailSchema, type QuestionDetail, type QuestionDraftInput } from '../questions';
 import {
-  questionDetailSchema,
   questionImportPlanSchema,
   questionImportResultSchema,
-  type QuestionDetail,
-  type QuestionDraftInput,
   type QuestionImportPlan,
   type QuestionImportResult,
-} from '../questions';
+} from '../question-import';
 import {
   ADMIN_ASSIGNMENTS_ROUTES,
   assignableAdminSchema,

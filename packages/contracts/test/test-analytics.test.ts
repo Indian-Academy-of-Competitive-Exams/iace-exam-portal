@@ -6,7 +6,7 @@ import {
   itemSignalsOf,
   worthInspecting,
   type ItemCounts,
-} from '../src/stats';
+} from '../src/stats-test-analytics';
 
 const SAT = ITEM_SIGNAL_FLOOR * 4;
 

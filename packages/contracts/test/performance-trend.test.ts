@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { bestSitting, testsSat } from '../src/stats';
+import { bestSitting, testsSat } from '../src/stats-performance';
 import { type PerformancePoint } from '../src/attempts';
 
 /** The API hands the trend back oldest sitting first, so every fixture here is in that order. */

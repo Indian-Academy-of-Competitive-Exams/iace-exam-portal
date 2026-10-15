@@ -4,7 +4,7 @@ import {
   type PrintablePaper,
   type PrintablePaperQueryInput,
 } from '../attempts';
-import { testAnalyticsSchema, type TestAnalytics } from '../stats';
+import { testAnalyticsSchema, type TestAnalytics } from '../stats-test-analytics';
 import {
   ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
@@ -32,7 +32,7 @@ import {
   questionImportResultSchema,
   type QuestionImportPlan,
   type QuestionImportResult,
-} from '../questions';
+} from '../question-import';
 import { queryString, type ApiCore } from './core';
 import { fileBody } from './admin-imports';
 

@@ -8,12 +8,8 @@ import {
   testUiSchema,
   timerTemplateSchema,
 } from './configs';
-import {
-  answerKeySchema,
-  localizedContentSchema,
-  questionOptionSchema,
-  questionTypeSchema,
-} from './questions';
+import { answerKeySchema, questionOptionSchema, questionTypeSchema } from './questions';
+import { localizedContentSchema } from './question-content';
 import { paperQuestionStatusSchema } from './tests';
 import { typingPresetKeySchema } from './typing';
 import { TYPED_TEXT_MAX } from './typing-practice';

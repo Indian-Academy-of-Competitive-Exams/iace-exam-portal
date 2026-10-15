@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { previewTextOf } from './questions';
+import { previewTextOf } from './question-content';
 
 // ============================================================================
 // Typing and data-entry skill tests: the standards, and the one evaluator the

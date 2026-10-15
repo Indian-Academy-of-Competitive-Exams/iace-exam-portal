@@ -19,13 +19,13 @@ import {
   questionImportDraftsSchema,
   questionImportPlanSchema,
   questionImportResultSchema,
-  type QuestionDraftInput,
   type QuestionImportDraft,
   type QuestionImportLeaveOut,
   type QuestionImportRemap,
   type QuestionImportPlan,
   type QuestionImportResult,
-} from '../questions';
+} from '../question-import';
+import { type QuestionDraftInput } from '../questions';
 import type { ApiCore } from './core';
 
 /** One field, named once, so the server knows what to look for. */

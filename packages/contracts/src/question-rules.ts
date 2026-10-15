@@ -1,24 +1,26 @@
 import {
   ANSWER_MODE,
-  DEFAULT_LANGUAGE,
-  LANGUAGE_LABELS,
-  LANGUAGE_ORDER,
   MCQ_OPTION_MAX,
   MCQ_OPTION_MIN,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
+  toleranceSchema,
+  type QuestionDraft,
+  type QuestionIdentity,
+  type QuestionType,
+  type ValidationIssue,
+} from './questions';
+import {
+  DEFAULT_LANGUAGE,
+  LANGUAGE_LABELS,
+  LANGUAGE_ORDER,
   hasText,
   imageKeysIn,
   latexIn,
   previewTextOf,
-  toleranceSchema,
   type LocalizedText,
-  type QuestionDraft,
-  type QuestionIdentity,
   type QuestionLanguage,
-  type QuestionType,
-  type ValidationIssue,
-} from './questions';
+} from './question-content';
 import {
   TYPING_PASSAGE_MAX_KEY_DEPRESSIONS,
   TYPING_PASSAGE_MIN_KEY_DEPRESSIONS,

@@ -3,11 +3,10 @@ import { csvIdQuery, csvQuery, editLockHolderSchema, matchModeQuery, searchQuery
 import { paginationQuerySchema } from './envelope';
 import { baseConfigDetailSchema, examTemplateSchema, stageRefSchema } from './configs';
 import { displayNameSchema } from './naming';
+import { contentLanguageOf, LANGUAGE_LABELS } from './question-content';
 import {
-  contentLanguageOf,
   DIFFICULTY_LEVELS,
   difficultyLevelSchema,
-  LANGUAGE_LABELS,
   tagSchema,
   type DifficultyLevel,
 } from './questions';

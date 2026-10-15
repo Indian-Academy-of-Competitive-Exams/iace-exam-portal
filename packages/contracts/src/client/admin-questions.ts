@@ -12,32 +12,36 @@ import {
 import {
   ADMIN_QUESTION_ROUTES,
   type QuestionExportQueryInput,
-  QUESTION_IMAGE_FILE_FIELD,
-  questionImageSchema,
-  ADMIN_TAXONOMY_ROUTES,
   questionDetailSchema,
   questionAvailabilitySchema,
   questionSummarySchema,
   questionVersionSummarySchema,
-  subjectSchema,
-  topicSchema,
-  type CreateSubjectInput,
-  type CreateTopicInput,
   type QuestionDetail,
-  type QuestionImage,
   type QuestionDraftInput,
   type QuestionAvailability,
   type QuestionAvailabilityQueryInput,
   type QuestionListQueryInput,
   type QuestionSummary,
   type QuestionVersionSummary,
+} from '../questions';
+import {
+  QUESTION_IMAGE_FILE_FIELD,
+  questionImageSchema,
+  type QuestionImage,
+} from '../question-content';
+import {
+  ADMIN_TAXONOMY_ROUTES,
+  subjectSchema,
+  topicSchema,
+  type CreateSubjectInput,
+  type CreateTopicInput,
   type Subject,
   type SubjectListQueryInput,
   type Topic,
   type TopicListQueryInput,
   type UpdateSubjectBody,
   type UpdateTopicBody,
-} from '../questions';
+} from '../question-taxonomy';
 import { queryString, type ApiCore } from './core';
 
 export function adminQuestionsClient(core: ApiCore) {
