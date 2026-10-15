@@ -46,11 +46,15 @@ const within = async (limitMs: number, work: Promise<unknown>): Promise<boolean>
 describe('a server told to stop while a connection is busy', () => {
   /** The failure this prevents: one request in flight at SIGTERM holding the process open past its stop grace. */
   it('answers the request in flight, then closes without waiting out the keep-alive', async () => {
+    let arrived: () => void = () => {};
+    const received = new Promise<void>((resolve) => (arrived = resolve));
     const { server, ask, closed } = await serving((_request, response) => {
+      arrived();
       setTimeout(() => response.end('ok'), 150);
     });
     const inFlight = ask();
-    await new Promise((sent) => setTimeout(sent, 50));
+    // Waits for the server to hold the request: a fixed sleep let a loaded run drain an idle socket first.
+    await received;
 
     drainConnections(server, KEEP_ALIVE_MS);
     const finished = within(3_000, closed());
