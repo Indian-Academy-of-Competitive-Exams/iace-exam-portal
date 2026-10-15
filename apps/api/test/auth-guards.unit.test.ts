@@ -316,8 +316,20 @@ describe('ActorGuard', () => {
     },
   });
 
-  it('allows a route that names no actor', async () => {
-    const { context } = probe(ProbeController.prototype.plainRoute, user(ActorTypes.STUDENT));
+  /** The failure this prevents: an admin route that forgot @Actors, open to any student token. */
+  it('refuses a route that names no actor, whoever asks', async () => {
+    for (const actor of [ActorTypes.STUDENT, ActorTypes.ADMIN]) {
+      const { context } = probe(ProbeController.prototype.plainRoute, user(actor));
+
+      await assert.rejects(
+        async () => guard.canActivate(context),
+        (error: unknown) => AppException.is(error) && error.code === ErrorCodes.FORBIDDEN,
+      );
+    }
+  });
+
+  it('lets a @Public route through with no user attached', async () => {
+    const { context } = probe(ProbeController.prototype.publicRoute, {});
 
     assert.equal(await guard.canActivate(context), true);
   });

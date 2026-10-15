@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { type Request } from 'express';
 import {
+  ActorTypes,
   refreshTokenSchema,
   requestAdminOtpSchema,
   requestStudentOtpSchema,
@@ -17,7 +18,7 @@ import {
   type VerifyStudentOtpBody,
 } from '@iace/contracts';
 import { AuthService } from './auth.service';
-import { CurrentUser, Public, type AuthenticatedUser } from '../common/security';
+import { Actors, CurrentUser, Public, type AuthenticatedUser } from '../common/security';
 import { AuthRateLimit, OtpRequestRateLimit } from '../common/throttling';
 import { deviceFrom } from './device';
 import { ZodBody } from '../common/zod-validation.pipe';
@@ -87,12 +88,14 @@ export class AuthController {
 
   /** Returns no payload: the envelope's `success` is the entire answer. */
   @Post('logout')
+  @Actors(ActorTypes.ADMIN, ActorTypes.STUDENT)
   @HttpCode(HttpStatus.OK)
   logout(@CurrentUser() user: AuthenticatedUser): Promise<void> {
     return this.auth.logout(user);
   }
 
   @Get('me')
+  @Actors(ActorTypes.ADMIN, ActorTypes.STUDENT)
   me(@CurrentUser() user: AuthenticatedUser): Promise<AuthIdentity> {
     return this.auth.me(user);
   }
