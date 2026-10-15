@@ -6,6 +6,17 @@ The data model is `prisma/schema.prisma` and is not restated here. Module bounda
 ownership and the event catalog are `docs/03-conventions.md`. The mock-test feature itself —
 render modes, results, the student journey — is `docs/02-domain-rules.md`.
 
+**Contents**
+
+| §   | Section                                                      | Read when…                                                                        |
+| --- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| 1   | [What this is](#1-what-this-is)                              | you are new: the product, the load target, the portals                            |
+| 2   | [Locked stack](#2-locked-stack)                              | you reach for a library or a pattern, or touch sessions or the mobile WebView     |
+| 3   | [V1 boundary](#3-v1-boundary)                                | you wonder whether a feature is in scope                                          |
+| 4   | [System architecture](#4-system-architecture)                | you need the boxes and arrows: clients, API, workers, data                        |
+| 5   | [Live-test scaling](#5-live-test-scaling--the-make-or-break) | you touch start, autosave, submit, scoring, rank or the board — before, not after |
+| 6   | [Deployment topology](#6-deployment-topology)                | you need what each AWS piece is for; sizes and costs are `04`                     |
+
 ---
 
 ## 1. What this is
@@ -37,7 +48,7 @@ TypeScript end to end in one monorepo (Turborepo + pnpm workspaces), so an API s
 | **Cache / queue / state** | Redis + BullMQ                                                        | Live sitting state, OTP, sessions, rate limiting; scoring, flush, sweep and rollup jobs.                                   |
 | **Auth**                  | Self-built JWT + refresh; students by mobile OTP, admins by email OTP | OTP and sessions live in Redis, never the DB.                                                                              |
 | **Outbound messaging**    | SMS for OTP; everything else in-app, web push and FCM                 | A code is what somebody is WAITING on. The rest cost nothing to deliver, so no other kind buys a paid message.             |
-| **OTP transport**         | `OTP_SENDER` selects console or SMS                                   | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.               |
+| **OTP transport**         | `OTP_SENDER` selects console, SMS or WhatsApp                         | India SMS is DLT-registered and the approval has real lead time; the console sender keeps dev off that path.               |
 | **WhatsApp**              | Interakt only, wired and off — future scope                           | One vendor, not a switch between two. An empty key leaves the channel unrouted; turning it on is env plus a restart.       |
 | **Storage**               | S3 SDK in every environment, MinIO locally                            | Exactly one upload path, never branched by environment.                                                                    |
 | **Realtime**              | None — no WebSockets                                                  | A client timer, periodic HTTP autosave and Redis carry the live test. A socket per sitting is the thing that melts.        |
@@ -46,7 +57,7 @@ TypeScript end to end in one monorepo (Turborepo + pnpm workspaces), so an API s
 | **Infra**                 | Docker + env, cloud-agnostic, AWS-leaning                             | Nothing is tied to one host.                                                                                               |
 
 Deliberately out, and the schema blocks none of them: deep per-question time and accuracy analytics,
-question types beyond single-answer MCQ, Word/PDF import, live proctoring, discussion, adaptive
+multi-answer questions, Word/PDF import, live proctoring, discussion, adaptive
 practice, certificates.
 
 **A student holds one web session and one mobile session.**
@@ -91,7 +102,8 @@ practice, certificates.
 
 - **Bilingual questions**, with a per-test language display mode: `SINGLE` (one language, optional
   per-question toggle) or `DUAL` (both languages, stem _and_ options). It is the base config's.
-- **Single-answer MCQ** only; the schema takes other types without a migration.
+- **Question types** (`QuestionType`): single-answer MCQ, a typed short answer (`TEXT_FIELD`), a
+  typing passage (`TYPING`) and a descriptive answer marked by rule (`DESCRIPTIVE`) — `02` §11.
 - **Images in questions**, in both the manual editor and the bulk import.
 - **Sign-in:** a student signs in with a code sent to their mobile, every time, and the first time
   is the signup — one path, with no PIN. Admins use email + OTP. What keeps a code rare is the
@@ -142,7 +154,7 @@ flowchart TB
 
     subgraph Data
         PG[(PostgreSQL - RDS)]
-        RD[(Redis - ElastiCache)]
+        RD[(Valkey - EC2)]
         S3[(S3 - content & imports)]
     end
 

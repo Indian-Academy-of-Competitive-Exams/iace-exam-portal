@@ -46,6 +46,27 @@ a target group as they scale — so the two go together or not at all, and at th
 one box serves eight times the load `CLAUDE.md` asks for. §3 carries the arithmetic. Nothing in
 this file is shaped to keep a migration back open.
 
+**Contents**
+
+| §   | Section                                                                                    | Read when…                                                              |
+| --- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| 1   | [What it costs](#1-what-it-costs)                                                          | someone asks what the platform costs a month, or a bill moves           |
+| 2   | [The shape](#2-the-shape)                                                                  | you need the VPC, the boxes and what runs where                         |
+| 3   | [Compute](#3-compute--three-containers-one-image)                                          | you touch `API_ROLE`, container memory, or the submit-drain arithmetic  |
+| 4   | [Ingress](#4-ingress)                                                                      | you touch Caddy, TLS, headers or routing to the API                     |
+| 5   | [Frontend delivery](#5-frontend-delivery)                                                  | you ship an SPA build or touch CloudFront                               |
+| 6   | [Database](#6-database)                                                                    | you touch RDS: size, backups, connections, a migration on a live system |
+| 7   | [Cache and queues](#7-cache-and-queues)                                                    | you touch Valkey: persistence, memory, the queues                       |
+| 8   | [Networking](#8-networking)                                                                | you touch security groups, addresses or outbound traffic                |
+| 9   | [Logs, metrics and alarms](#9-logs-metrics-and-alarms)                                     | you change `LOG_LEVEL`, add a metric, or get paged                      |
+| 10  | [Media](#10-media)                                                                         | you touch question images, `MEDIA_BASE_URL` or presigned files          |
+| 11  | [Environment, secrets, DNS and the registry](#11-environment-secrets-dns-and-the-registry) | you add an env var, rotate a secret, or touch DNS or ECR                |
+| 12  | [Non-production](#12-non-production)                                                       | you use or change staging                                               |
+| 13  | [When each piece grows, and commitments](#13-when-each-piece-grows-and-commitments)        | load or cost suggests resizing, or a reservation                        |
+| 14  | [How a release goes out](#14-how-a-release-goes-out)                                       | you deploy, or touch a workflow under `.github/workflows`               |
+| 15  | [Deferred](#15-deferred)                                                                   | you are about to propose something; it may already be weighed here      |
+| 16  | [Figures that have not been re-measured](#16-figures-that-have-not-been-re-measured)       | you are about to build on a number from this file                       |
+
 ---
 
 ## 1. What it costs

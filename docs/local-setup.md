@@ -10,15 +10,16 @@ A **Turborepo + pnpm** monorepo:
 ```
 apps/
   api/      NestJS API            → http://localhost:3000   (health: /health)
-  test/     Vite + React (student/test portal) → http://localhost:5173
+  exams/    Vite + React (student/test portal) → http://localhost:5173
   admin/    Vite + React (admin panel)         → http://localhost:5174
   mobile/   Expo + React Native (student client, Android first) → Metro on :8081
+  e2e/      Playwright: one student sits a paper end to end (`pnpm e2e`)
 packages/
   contracts/  shared types + zod schemas + typed API client
   app-kit/    DOM-free shared logic (auth, api client, query client, hooks)
   ui/         design tokens + shadcn components (web only — mobile has its own)
-  config/     shared tsconfig / eslint / tailwind presets
-prisma/       schema.prisma + migrations
+  config/     shared tsconfig / eslint presets and the enforcement lint rules
+prisma/       schema.prisma + migrations + seed.sql
 docker-compose.yml   Postgres + Valkey + MinIO (local infra)
 docs/         architecture & design docs (read 01–03 + design/ + CLAUDE.md)
 ```
@@ -32,14 +33,15 @@ rate limiting, BullMQ), **MinIO** (S3‑compatible object storage).
 
 ## 1. Prerequisites
 
-| Tool                    | Version                                                   | Notes                                                                     |
-| ----------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Node.js                 | **22.23.2** (see `.nvmrc`; engine floor is 22.13)         | `nvm install && nvm use`                                                  |
-| pnpm                    | **11.21.0** (pinned in `package.json` → `packageManager`) | Get it via Corepack — see below                                           |
-| Docker + Docker Compose | any recent                                                | for Postgres/Valkey/MinIO                                                 |
-| Git                     | any                                                       |                                                                           |
-| SonarQube               | optional                                                  | only if you want the pre‑commit scan; it skips itself if unset            |
-| k6                      | optional                                                  | only to run `scripts/load` — `brew install k6`, or the `grafana/k6` image |
+| Tool                    | Version                                                   | Notes                                                                         |
+| ----------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Node.js                 | **22.23.2** (see `.nvmrc`; engine floor is 22.13)         | `nvm install && nvm use`                                                      |
+| pnpm                    | **11.21.0** (pinned in `package.json` → `packageManager`) | Get it via Corepack — see below                                               |
+| Docker + Docker Compose | any recent                                                | for Postgres/Valkey/MinIO                                                     |
+| Git                     | any                                                       |                                                                               |
+| shellcheck              | any                                                       | the pre-commit hook runs it on staged `.sh` files — `brew install shellcheck` |
+| SonarQube               | optional                                                  | only if you want the pre‑commit scan; it skips itself if unset                |
+| k6                      | optional                                                  | only to run `scripts/load` — `brew install k6`, or the `grafana/k6` image     |
 
 Enable the pinned pnpm with Corepack (don't `npm i -g pnpm` — you'll drift off the pinned version):
 
@@ -72,12 +74,13 @@ cp .env.example .env
 The defaults in `.env.example` are wired to the docker‑compose services, so **it runs as‑is locally** — you don't have to change anything to start. Worth knowing:
 
 - **Database / Valkey / MinIO** point at `localhost` on the compose ports (5432 / 6379 / 9000). `DATABASE_URL` is what Prisma reads.
-- **`TEST_DATABASE_URL`** is the database `pnpm test:db` migrates and runs every test that touches Postgres against, and the one `pnpm test:coverage` uses for the same tier. Committing needs neither: the pre-commit hook does not run either of them (§8). The script refuses the one `DATABASE_URL` names and any whose name does not end in `_test`. Create it once with `docker exec iace-postgres createdb -U iace iace_test`, then run `pnpm test:db`. That script runs outside turbo, so generate the Prisma client and build `@iace/contracts` first: `pnpm db:generate && pnpm --filter @iace/contracts build`, or any `pnpm build`. The database keeps the tests' rows between runs; if its migrations ever end up in a failed state, recreate it with `docker exec iace-postgres dropdb -U iace iace_test && docker exec iace-postgres createdb -U iace iace_test`.
+- **`TEST_DATABASE_URL`** is the database `pnpm test:db` migrates and runs every test that touches Postgres against, and the one `pnpm test:coverage` uses for the same tier. Committing needs neither: the pre-commit hook does not run either of them (§8). The script refuses the one `DATABASE_URL` names and any whose name does not end in `_test`. It also refuses a second run while one is going on the same database, because two runs corrupt each other's rows — a parallel session gives itself another `*_test` database. Create it once with `docker exec iace-postgres createdb -U iace iace_test`, then run `pnpm test:db` (or `pnpm test:db test-db/x.db.test.ts` for one file, the path relative to `apps/api`). That script runs outside turbo, so generate the Prisma client and build `@iace/contracts` first: `pnpm db:generate && pnpm --filter @iace/contracts build`, or any `pnpm build`. The database keeps the tests' rows between runs; if its migrations ever end up in a failed state, recreate it with `docker exec iace-postgres dropdb -U iace iace_test && docker exec iace-postgres createdb -U iace iace_test`.
 - **JWT secrets** ship as `dev_only_…` placeholders (min length 24). Fine for solo local work; generate real ones with `openssl rand -base64 48` for anything shared.
-- **OTP delivery is `console`** — in dev, OTP codes are **printed to the API log**, not sent by SMS/email. That's how you log in locally (see §6).
+- **`OTP_SENDER=console`** — one of `console`, `sms` or `whatsapp`. In dev, codes are **printed to the API log** and shown on the login screen, not sent by SMS/email. That's how you log in locally (see §7). Production refuses `console`.
 - **`SMS_PROVIDER_*` / `MAIL_*`** are blank (the real SMS and Gmail credentials — leave empty locally).
 - **`SONAR_*`** blank → the pre‑commit Sonar scan skips itself. Set them only if you run a local SonarQube.
 - **`VITE_API_URL`** is the only var the frontends read (`http://localhost:3000`).
+- **`pnpm env:check`** compares `.env` with `.env.example` key by key — run it after pulling if the API refuses to boot on a missing variable.
 
 ## 4. Start the infrastructure
 
@@ -123,7 +126,7 @@ Optional GUI: `pnpm db:studio` (Prisma Studio, opens in the browser).
 
 > `db:seed` stays a separate command, not prisma's seed hook, so a `migrate reset` never quietly recreates rows you meant to be rid of. (`db:check` compares the migrations against the schema and needs `SHADOW_DATABASE_URL` — see `.env.example`.)
 
-### Coming from a Redis container or a Postgres 16 volume
+### Coming from a Redis container
 
 The cache service is now Valkey, so the old `iace-redis` container is left behind by
 `docker compose up`: remove it with `docker rm -f iace-redis`. Nothing in it is worth keeping —
@@ -148,9 +151,10 @@ before the `down`, and replay it with `psql` afterwards instead of `db:setup`.
 pnpm db:seed
 ```
 
-That inserts the super admin (`developer@iace.co.in`), the eleven branches, the SSC CGL
-exam and its two tiers, and the SSC CGL Tier 1 default base config with its four
-sections. It is idempotent — every insert is guarded, so running it twice changes nothing.
+That inserts the super admin (`developer@iace.co.in`), the branches (ONLINE among them), the
+SSC CGL Tier 1 default base config with its four sections, and the rest of the exam catalog —
+courses, exams, stages and their default configs (`docs/seed-exam-catalog.md`). It is
+idempotent — every insert is guarded, so running it twice changes nothing.
 
 The ONLINE branch is not optional. A student's branch is what `AccessResolverService` reads
 to decide which STANDARD series they reach, so a student without one sees only what a free
@@ -164,16 +168,16 @@ row there is no way into the admin app at all. To use a different address, edit
 `prisma/seed.sql` before running it, or add yourself afterwards:
 
 ```sql
-INSERT INTO "Admin" (id, email, "isSuperAdmin", "isActive", "allBranches")
-VALUES (gen_random_uuid()::text, 'you@iace.co.in', true, true, true);
+INSERT INTO "Admin" (id, email, "fullName", role, "isSuperAdmin", "isActive")
+VALUES (gen_random_uuid(), 'you@iace.co.in', 'Super Admin', 'SUPER_ADMIN', true, true);
 ```
 
-Then sign in at the **admin app** (http://localhost:5174) with that email. The **login OTP prints to the API log** (because `OTP_SENDER=console`).
+Then sign in at the **admin app** (http://localhost:5174) with that email. The **login OTP prints to the API log** and shows on the login screen (because `OTP_SENDER=console`).
 
 ## 7. Run the apps
 
 ```bash
-pnpm dev          # Turborepo runs api + test + admin together
+pnpm dev          # Turborepo runs api + exams + admin together
 ```
 
 | App                   | URL                                                                |
@@ -200,7 +204,7 @@ machine Metro served it from. Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` on
 elsewhere (see `.env.example`), and restart Metro after changing it, because the value is baked in
 at start.
 
-**How login works locally:** a _student_ enters a mobile number → gets an OTP (printed to the API log) → is signed in; the first time is the signup. An _admin_ enters their email → gets an OTP (API log). All OTP/session/device state lives in Valkey, never Postgres.
+**How login works locally:** a _student_ enters a mobile number → gets a code (printed to the API log and shown on the login screen as the development code) → is signed in; the first time is the signup, and there is no PIN or password. An _admin_ enters their email → gets an OTP the same way. All OTP/session/device state lives in Valkey, never Postgres.
 
 ## 7b. Mobile push (optional, Android)
 
@@ -246,15 +250,23 @@ Expo hands back an APNs token there, which FCM cannot address without the Fireba
 | `pnpm test`                                         | tests that need no database                 |
 | `pnpm test:db`                                      | migrate `TEST_DATABASE_URL`, run DB tests   |
 | `pnpm test:coverage`                                | both tiers with coverage (needs Postgres)   |
+| `pnpm e2e`                                          | sit one paper in Chromium (needs docker up) |
+| `pnpm env:check`                                    | `.env` keys against `.env.example`          |
+| `pnpm docs:check`                                   | doc drift: backticked names, `§` citations  |
 | `pnpm format` / `pnpm format:check`                 | Prettier write / check                      |
 | `pnpm deps:check` / `pnpm deps:fix`                 | syncpack — keep shared dep versions aligned |
 | `pnpm db:setup`                                     | new device: generate + migrate + seed       |
 | `pnpm db:migrate` / `db:generate` / `db:studio`     | Prisma workflows                            |
+| `pnpm db:check`                                     | migrations still produce the schema         |
 | `pnpm db:dbml`                                      | redraw `docs/schema.dbml` from the schema   |
 | `pnpm docker:up` / `docker:down` / `docker:reset`   | infra up / stop / stop+wipe volumes         |
 | `k6 run -e TIER=sitting scripts/load/exam-event.js` | the HTTP load tiers against a running API   |
 
-Before committing, the Husky pre‑commit hook runs prettier on the staged files, then lint and typecheck across the workspace, then one check on what the commit ADDS: one line per comment, and no screen explaining what it already says. **No test runs**, so nothing has to be up to commit.
+`pnpm e2e` builds the API, migrates and seeds its own `iace_e2e` database (never your dev one),
+starts the API on :3100 and a built exams app on :5183, and drives one sitting in Chromium. Install
+the browser once per machine first: `pnpm --filter @iace/e2e exec playwright install chromium`.
+
+Before committing, the Husky pre‑commit hook runs prettier (and `shellcheck` on shell files) on the staged files, then lint and typecheck across the workspace, then one check on what the commit ADDS: one line per comment, and no screen explaining what it already says. **No test runs**, so nothing has to be up to commit.
 
 The SonarQube scan is the exception and is **opt-in**: it regenerates coverage by running every test in the repo, which is minutes per commit. Run it before handing work over with `RUN_SONAR=1 git commit …`. Commits follow the conventional‑commit style.
 
@@ -276,6 +288,7 @@ The SonarQube scan is the exception and is **opt-in**: it regenerates coverage b
 - `CLAUDE.md` — the operating manual (stack, scaling rules, conventions).
 - `docs/01-architecture.md` — architecture, live-test scaling, deployment topology.
 - `docs/02-domain-rules.md` — the mock‑test rules the schema cannot state.
+- `docs/02-domain-rules.md` §15 — the glossary: every domain word with its schema and code name.
 - `docs/03-conventions.md` — what's shared, module boundaries, table ownership, events.
 - `docs/design/design-system.html` — the living style guide, and the admin composition language.
 - `docs/design/student/README.md` — the student composition language, binding for every `apps/exams` screen.

@@ -10,6 +10,23 @@ enforces are `docs/02-domain-rules.md`. On conflict the schema wins for data, th
 > resolve against the numbered rules under a section, and `pnpm docs:check` fails on a citation that
 > lands nowhere. Renumbering is a breaking change; adding at the end is not.
 
+**Contents**
+
+| §   | Section                                                                         | Read when…                                                            |
+| --- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 1   | [What the structure buys](#1-what-the-structure-buys)                           | you are tempted to abstract something, or to split a service          |
+| 2   | [Packaging](#2-packaging--where-a-thing-lives)                                  | you add a file and need to know which package it belongs in           |
+| 3   | [Frontend rules](#3-frontend-rules)                                             | you touch `app-kit`, the exam engine's deps, or a list or picker hook |
+| 4   | [Backend module boundaries](#4-backend-module-boundaries--the-extraction-rules) | you import across API modules, or add a module                        |
+| 5   | [Table-ownership map](#5-table-ownership-map)                                   | you write a table and need to know which module may                   |
+| 6   | [Event catalog](#6-event-catalog)                                               | you add a reaction across modules, or a notification                  |
+| 7   | [Service tiers](#7-service-tiers--deploy-few-design-many)                       | you wonder which container (`API_ROLE`) a module runs in              |
+| 8   | [Autoscaling readiness](#8-autoscaling-readiness)                               | you touch anything on the exam path that could hold state             |
+| 9   | [Conventions for a new model](#9-conventions-for-a-new-model)                   | you add a Prisma model or a raw SQL query                             |
+| 10  | [Cross-cutting backend](#10-cross-cutting-backend)                              | you send a message, limit a route, cache, export or build a report    |
+| 11  | [Repo conventions](#11-repo-conventions)                                        | a pre-commit hook fails and you want to know why it exists            |
+| 12  | [Governance](#12-governance--what-is-mechanically-enforced)                     | a lint rule or a CI gate refuses your change                          |
+
 ---
 
 ## 1. What the structure buys
@@ -171,7 +188,7 @@ erodes.
 | saved         | `SavedQuestion`                                                                                                   |
 | typing        | `TypingPractice`                                                                                                  |
 
-`auth`, `imports`, `me`, `dashboard`, `reports`, `reach`, `roster` and `health` own no table. The rollups belong to `attempts` because the
+`auth`, `imports`, `me`, `dashboard`, `reports`, `exports`, `reach`, `roster` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
 owns the sitting owns the derivation.
 
@@ -263,8 +280,10 @@ Rule: any cross-module _reaction_ goes through this catalog as an event, not a d
 | **Worker service(s)** (autoscale)     | scoring (and drop/bonus re-score), rollups, sweeps, exports, notification delivery                                        | BullMQ queue depth     |
 | **Shared libraries** (never services) | prisma, redis, queue, storage, common, config, contracts                                                                  | —                      |
 
-Today everything ships as core plus the worker. Attempts is the first extraction candidate: its
-request path is Redis-first, so it is stateless and cheap to autoscale.
+Today one image ships as three containers, chosen by `API_ROLE` (`apps/api/src/config/api-role.ts`
+and `onRole`): `exam` serves the sitting, `core` everything else that has a route, and `worker` the
+queues; unset, one process plays all three, as local development does. Attempts is the first
+extraction candidate: its request path is Redis-first, so it is stateless and cheap to autoscale.
 
 **A separate service is not a separate database.** Extract a service that still shares Postgres
 first; split its data only if load demands it. The two are independent decisions.
@@ -440,7 +459,8 @@ push is a worse version of a check that takes five seconds before the commit exi
 - **CI gates** — format → deps:check → env:check → lint → typecheck → test → build, each running
   even if an earlier one failed, so one push reports every problem. A second job applies every migration to a
   scratch database from scratch, checks the result still matches `schema.prisma`, and then runs
-  `pnpm test:db` against a database of its own.
+  `pnpm test:db` against a database of its own. A third, `pnpm e2e`, sits one paper in Chromium
+  against the real API, Postgres and Valkey.
 - **Env keys** — `pnpm env:check`: the API's env schema is the list of keys. `.env.example` names
   all of them plus what a developer's machine alone sets; `deploy/.env.example` names all of them
   minus those, plus what a box alone sets. A real file beside either (`.env`, `deploy/.env.staging`

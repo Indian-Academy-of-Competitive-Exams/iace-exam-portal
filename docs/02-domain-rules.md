@@ -6,6 +6,26 @@ type or a foreign key already enforces lives in `prisma/schema.prisma` and is no
 Stack, scaling and deployment are `docs/01-architecture.md`. Module boundaries, table ownership and
 the event catalog are `docs/03-conventions.md`.
 
+**Contents** — the words below are defined in §15.
+
+| §   | Section                                                                       | Read when…                                                                     |
+| --- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 1   | [What the feature has to fix](#1-what-the-feature-has-to-fix)                 | you want to know what ThinkExam got wrong, and what was discarded on purpose   |
+| 2   | [The catalog and the blueprint](#2-the-catalog-and-the-blueprint)             | you touch exams, stages, base configs or their sections                        |
+| 3   | [Building a test](#3-building-a-test)                                         | you touch the test builder: scope, the paper, typists and readers, the offer   |
+| 4   | [Lock on first attempt](#4-lock-on-first-attempt)                             | you touch dropping a question or paying it as a bonus                          |
+| 5   | [Access](#5-access)                                                           | you touch who reaches a series: kinds, branches, grants, the catalog           |
+| 6   | [Scheduling](#6-scheduling)                                                   | you touch when a test opens, program openings or the Offer step                |
+| 7   | [The sitting](#7-the-sitting)                                                 | you touch start, resume, tabs and devices, pause, autosave or submit           |
+| 8   | [Results, ranking and solutions](#8-results-ranking-and-solutions)            | you touch rank, percentile, the answer key or voiding a sitting                |
+| 9   | [Rollups](#9-rollups)                                                         | you touch `StudentStat`, `TestStat` or any other aggregate                     |
+| 10  | [Render modes and skins](#10-render-modes-and-skins)                          | you touch the exam screen's look: OMR, `ExamTemplate`                          |
+| 11  | [The question bank](#11-the-question-bank)                                    | you touch questions, versions, proof-reading, work time, typing or descriptive |
+| 12  | [Question import](#12-question-import)                                        | you touch the sheet importer                                                   |
+| 13  | [A worked blueprint — SSC CGL Tier 1](#13-a-worked-blueprint--ssc-cgl-tier-1) | you want one real paper shape to reason against                                |
+| 14  | [Reports](#14-reports)                                                        | you touch a report, a printout or the question paper                           |
+| 15  | [Glossary](#15-glossary)                                                      | a word in the code, a ticket or an admin's message is unfamiliar               |
+
 ---
 
 ## 1. What the feature has to fix
@@ -764,3 +784,55 @@ wide enough to hold more sittings than one spreadsheet does is refused, not read
 
 Not reported, because the platform does not hold it: sign-in history (sessions live in Redis),
 class attendance and fees, a student's past branches, and item discrimination.
+
+## 15. Glossary
+
+One line per word a newcomer meets in the code, a ticket or an admin's message. The schema name is
+the target of record; the rule behind each word is in the section named.
+
+| Term                     | What it means                                                                                                        | In the schema and code                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| course                   | The exam family a student enrols on: SSC, RRB, Banking, AP/TS Police                                                 | `ExamCourse`, `Exam.course`, `Student.enrolledCourses`                                    |
+| exam                     | One government exam inside a course, e.g. SSC CGL; its code never changes once held (§2)                             | `Exam`, `Exam.code`                                                                       |
+| stage                    | One paper level of an exam (a tier, a prelim); everything hangs off it (§2)                                          | `ExamStage`, `stageKey`, `StageDisposition` (`CATALOG_ONLY` carries no paper)             |
+| base config, blueprint   | A stage's reusable paper shape — sections, marks, timing, language, skin; a test inherits it (§2)                    | `BaseConfig`, `isDefault`, `locked`, `clonedFromId`; `apps/api/src/configs`               |
+| section                  | One part of a blueprint with its own count, marks, negative marks and optional clock (§2)                            | `BaseConfigSection`                                                                       |
+| module, session          | A timed group of sections above them, for a `SESSION_MODULE_LOCKED` paper (§2)                                       | `BaseConfigModule`, `TimerTemplate`                                                       |
+| series                   | The unit of offering: a student reaches a series, never a test (§5)                                                  | `TestSeries`, `TestSeriesKind` (`FREE`, `STANDARD`, `PROGRAM`, `EVENT`)                   |
+| test                     | One paper inside one series, with its own opening and status (§3)                                                    | `Test`, `TestStatus` (`DRAFT`, `ACTIVE`, `INACTIVE`); `apps/api/src/tests`                |
+| scope                    | Which part of the blueprint a test covers: all of it, one module or one section (§3)                                 | `TestScope` (`FULL`, `MODULE`, `SECTIONAL`), `Test.scope`, `Test.scopeRef`                |
+| paper                    | The fixed questions every sitting of a test is served, in order (§3)                                                 | `PaperQuestion`, `Test.paperSource` (`FRAMED` typed, `PICKED` picked from the bank)       |
+| offer, finalize          | Freezing a whole paper and making the test `ACTIVE`; retire is the same save with `offered` false (§3, §6)           | `OfferingService`, `FinalizeService`, `Test.finalizedAt`, `PUT /admin/tests/:id/offering` |
+| opening                  | The instant a test can first be started, optionally earlier per program; nothing shuts it (§6)                       | `Test.opensAt`, `TestProgramUnlock`, `testIsOpen`, `START_GRACE_MS`                       |
+| drop, bonus              | The one change to a sat paper: pay a question to those who tried it, or to everyone (§4)                             | `PaperQuestionStatus`, `Test.paperRevision`, `Attempt.scoredRevision`                     |
+| sitting, attempt         | One student's run at one test, from start to submit; the code says attempt, the screens say sitting (§7)             | `Attempt`, `AttemptStatus`; `apps/api/src/attempts/sitting`                               |
+| answer sheet             | A sitting's answers, one slot per paper row, and the scorer's verdicts (§7)                                          | `AttemptSheet`, `SLOT_STATES`, the `AttemptSheetAnswer` view                              |
+| live key                 | The Redis copy of an open sitting; its existing is what "open" means (§7)                                            | `AttemptStateService`, `redisKeys`                                                        |
+| set aside, take over     | A tab stood down because the student opened another sitting, or another tab took this one (§7)                       | `SITTING_SET_ASIDE`, `SITTING_TAKEN_OVER`, `SITTING_HELD_ELSEWHERE`                       |
+| pause credit             | Time added back to the deadline after a silence longer than the reload grace (§7)                                    | `PRESENT_GRACE_SEC`, `PAUSE_CREDIT_CAP_SEC`, `PAUSE_LIMIT_SEC`                            |
+| sweeper, flusher         | Workers that end and re-queue stranded sittings, and copy the live key into Postgres (§7)                            | `AttemptSweeperProcessor`, `AttemptFlushProcessor`                                        |
+| graded, retake           | The one sitting per student and test that holds the ranked slot; every other sitting is a retake (§7, §8)            | `Attempt.isGraded`                                                                        |
+| cohort                   | A test's graded, evaluated, scored sittings — what rank, percentile and "N sat" count (§8)                           | `COHORT_WHERE`, `IN_COHORT`, `Attempt_ranking_idx`                                        |
+| void                     | Archiving a sitting from live ops so it counts nowhere, optionally giving the ranked slot back (§8)                  | `AttemptStatus.VOIDED`, `Attempt.voidedAt`, `SITTING_VOIDED`                              |
+| live ops                 | The admin screen that watches every active test and acts on a sitting: force submit, extend, reset, void (§7)        | `LiveOpsService`, `AttemptResolutionService`, `/admin/live-ops`                           |
+| rollup                   | A stored sum or count a read cannot count cheaply; never a rank or an average (§9)                                   | `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat`    |
+| render mode              | How the student answers: the CBT screen or OMR bubbles; presentation only (§10)                                      | `TestUi`, `BaseConfig.defaultTestUi`                                                      |
+| skin, exam template      | Where things sit on the exam screen, after a real board's CBT; copied onto the test at creation (§10)                | `ExamTemplate`, `Test.examTemplate`; `apps/exams/src/features/exam/templates`             |
+| question, version        | A bank question's identity, and its content at one moment; a paper pins a version (§11)                              | `Question`, `QuestionVersion`, `Question.currentVersionId`                                |
+| typist, proof-reader     | The two seats on a section of a test: one writes or fixes its questions, the other checks them (§3, §11)             | `AssignmentRole` (`TYPIST`, `PROOFREADER`), `QuestionAssignment`                          |
+| authoring                | The section's working page where both seats type, check, send back and fix (§11)                                     | `apps/admin/src/features/authoring`                                                       |
+| section work             | The API behind that page: one section of one test, its questions, ticks and time                                     | `SectionWorkService`, `/admin/sections/:testId/:sectionId`                                |
+| Done, hand over, release | A typist finishing a typed section; an owner passing a picked one to its reader; the reader signing it off (§3, §11) | `QuestionAssignment.finalizedAt`, `handedAt`; `TypistDoneController`                      |
+| send back, check         | A reader returning one question to the typist with a reason, or ticking it as read (§11)                             | `QuestionReview`, `SendBackReason`, `checkedAt`, `fixedAt`                                |
+| work time                | Seconds a seat has spent on one question of one test (§11)                                                           | `QuestionWorkTime`                                                                        |
+| branch                   | A coaching centre, or the single ONLINE branch; gates `STANDARD` series alone (§5)                                   | `Branch`, `BranchType` (`VIRTUAL` is ONLINE), `Student.currentBranchId`                   |
+| student type             | Online, offline or outside the institute; decides which branch a student may sit in (§5)                             | `StudentType` (`ONLINE`, `OFFLINE`, `NON_IACE`)                                           |
+| enrolment                | The courses and exams a student is signed up for; courses gate `STANDARD` series (§5)                                | `Student.enrolledCourses`, `Student.enrolledExams` (exam codes, no foreign key)           |
+| program                  | A coaching variant a student carries, reaching its `PROGRAM` series and its earlier openings (§5, §6)                | `Program`, `Student.programs` (codes), `TestSeries.programCode`                           |
+| event                    | A list of candidates, some not students yet, reaching one `EVENT` series (§5)                                        | `Event`, `EventCandidate`                                                                 |
+| grant                    | One student given one series by hand, past every kind but not past a test's status (§5)                              | `StudentGrant`                                                                            |
+| catalog                  | What a student reaches, resolved live by one function for both the list and the start gate (§5)                      | `AccessResolverService` in `apps/api/src/reach`                                           |
+| feature key              | A code-owned admin permission a super admin grants as READ or WRITE                                                  | `FEATURE_KEYS`, `AdminFeaturePermission`                                                  |
+| desk code                | A sign-in code an admin reads to a student whose SMS did not arrive; good once, never sent                           | `issueDeskCode`                                                                           |
+| the bell                 | A student's in-app notification list: their own rows plus the broadcasts that reach them                             | `Notification`, `BellService`                                                             |
+| broadcast                | One message to a cohort — an announcement or a test opening — stored once, resolved when the bell is read            | `Announcement`, `Test.announcedAt`, `BroadcastRead`                                       |
