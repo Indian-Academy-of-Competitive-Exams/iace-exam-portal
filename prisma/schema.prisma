@@ -771,6 +771,7 @@ model Attempt {
   savedQuestions SavedQuestion[]
 
   // One IN_PROGRESS row per (testId, studentId): a partial unique written in the migration.
+  // CHECKs in the migration: EVALUATED carries score and evaluatedAt, endsAt >= startedAt, no negative count.
   @@unique([testId, studentId, attemptNo])
   @@index([studentId, createdAt])
   @@index([testId, status])

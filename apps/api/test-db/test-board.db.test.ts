@@ -245,20 +245,6 @@ describe('the board for one paper', () => {
     assert.deepEqual([read.you?.rank, read.yourPage, read.rows, read.total], [1, null, [], 0]);
   });
 
-  it('draws an empty board for a sitting the cohort does not count', async () => {
-    const testId = await paper();
-    await entrant(testId, 'Priya Sharma', 120);
-    const me = await entrant(testId, 'Harshith Diyyala', 90);
-    await prisma.attempt.update({ where: { id: me.attemptId }, data: { score: null } });
-
-    const read = await board(me.studentId, testId);
-
-    assert.deepEqual(
-      [read.label, read.cohortSize, read.podium, read.rows, read.you],
-      ['Board mock', 0, [], [], null],
-    );
-  });
-
   /** The failure this prevents: a held board quoting a rank the reader's own score card does not. */
   it('counts the reader’s own standing now, however old the ranking around it is', async () => {
     const testId = await paper();

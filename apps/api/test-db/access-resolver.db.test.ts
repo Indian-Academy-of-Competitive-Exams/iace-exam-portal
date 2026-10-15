@@ -611,6 +611,7 @@ describe('AccessResolverService — a series that unlocks in order', () => {
           endsAt: new Date(NOW.getTime() + HOUR_MS),
           shuffleSeed: 1,
           ...(status === ATTEMPT_STATUS.IN_PROGRESS ? {} : { submittedAt: NOW }),
+          ...(status === ATTEMPT_STATUS.EVALUATED ? { evaluatedAt: NOW, score: 0 } : {}),
         },
       });
     }
@@ -775,6 +776,7 @@ describe('AccessResolverService — the sitting Resume reopens', () => {
         endsAt: new Date(NOW.getTime() + HOUR_MS),
         shuffleSeed: 1,
         ...(status === ATTEMPT_STATUS.IN_PROGRESS ? {} : { submittedAt: NOW }),
+        ...(status === ATTEMPT_STATUS.EVALUATED ? { evaluatedAt: NOW, score: 0 } : {}),
       },
       select: { id: true },
     });

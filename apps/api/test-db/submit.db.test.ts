@@ -552,7 +552,7 @@ describe('a key put back from Postgres while the sitting is being ended', () => 
       await answered(built);
       await prisma.attempt.update({
         where: { id: built.attemptId },
-        data: { status, submittedAt: NOW },
+        data: { status, submittedAt: NOW, evaluatedAt: NOW, score: 0 },
       });
       const sheet = () =>
         prisma.attemptSheet.findUniqueOrThrow({

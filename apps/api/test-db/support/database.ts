@@ -507,6 +507,9 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
   const submittedAt = input.submittedAt === undefined ? SAT_ON : input.submittedAt;
   const startedAt =
     input.startedAt ?? new Date((submittedAt ?? SAT_ON).getTime() - HALF_HOUR_SEC * SECOND_MS);
+  const status = input.status ?? ATTEMPT_STATUS.SUBMITTED;
+  // The database refuses an EVALUATED row without its marks, so one built that way carries them.
+  const evaluated = status === ATTEMPT_STATUS.EVALUATED;
   const attempt = await prisma.attempt.create({
     data: {
       id: uid(),
@@ -514,12 +517,15 @@ export async function sitPaper(prisma: PrismaService, input: SitInput): Promise<
       studentId: input.studentId,
       attemptNo: input.attemptNo ?? 1,
       isGraded: input.isGraded ?? true,
-      status: input.status ?? ATTEMPT_STATUS.SUBMITTED,
+      status,
       startedAt,
       endsAt: new Date(startedAt.getTime() + 60 * MINUTE_MS),
       submittedAt,
-      evaluatedAt: input.evaluatedAt ?? null,
-      score: input.score ?? null,
+      evaluatedAt:
+        input.evaluatedAt === undefined && evaluated
+          ? (submittedAt ?? SAT_ON)
+          : (input.evaluatedAt ?? null),
+      score: input.score === undefined && evaluated ? 0 : (input.score ?? null),
       shuffleSeed: input.shuffleSeed ?? 7,
       ...(input.languages ? { languages: input.languages } : {}),
     },

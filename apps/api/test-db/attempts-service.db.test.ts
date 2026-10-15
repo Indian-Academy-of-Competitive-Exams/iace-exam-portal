@@ -402,6 +402,65 @@ describe('AttemptsService — the database holds one live sitting per paper', ()
   });
 });
 
+describe('Attempt — the database refuses a sitting no writer produces', () => {
+  const refusedBy = (constraint: string) => (error: unknown) =>
+    error instanceof Error && error.message.includes(constraint);
+
+  async function handedIn() {
+    const { student, paper } = await hall();
+    return sitPaper(prisma, { paper, studentId: student, chosen: [] });
+  }
+
+  it('refuses an EVALUATED sitting with no score, and takes one that carries it', async () => {
+    const { id } = await handedIn();
+    const evaluatedAt = new Date();
+
+    await assert.rejects(
+      () =>
+        prisma.attempt.update({
+          where: { id },
+          data: { status: ATTEMPT_STATUS.EVALUATED, evaluatedAt },
+        }),
+      refusedBy('Attempt_evaluated_is_scored'),
+    );
+    await prisma.attempt.update({
+      where: { id },
+      data: { status: ATTEMPT_STATUS.EVALUATED, evaluatedAt, score: 0 },
+    });
+    assert.equal(
+      (await prisma.attempt.findUniqueOrThrow({ where: { id } })).status,
+      ATTEMPT_STATUS.EVALUATED,
+    );
+  });
+
+  it('refuses a deadline before the start, and takes one equal to it', async () => {
+    const { id } = await handedIn();
+    const { startedAt } = await prisma.attempt.findUniqueOrThrow({ where: { id } });
+
+    await assert.rejects(
+      () =>
+        prisma.attempt.update({
+          where: { id },
+          data: { endsAt: new Date(startedAt.getTime() - 1000) },
+        }),
+      refusedBy('Attempt_ends_after_start'),
+    );
+    const held = await prisma.attempt.update({ where: { id }, data: { endsAt: startedAt } });
+    assert.equal(held.endsAt.getTime(), startedAt.getTime());
+  });
+
+  it('refuses a negative count or an attempt number below one', async () => {
+    const { id } = await handedIn();
+
+    for (const data of [{ attemptNo: 0 }, { wrongCount: -1 }, { timeTakenSec: -1 }]) {
+      await assert.rejects(
+        () => prisma.attempt.update({ where: { id }, data }),
+        refusedBy('Attempt_counts_not_negative'),
+      );
+    }
+  });
+});
+
 describe('AttemptsService — a reclaim names its sitting', () => {
   /** The failure this prevents: a card's Resume, tapped after a hand-in elsewhere, opening a fresh paper. */
   it('refuses the sitting the catalog named for Resume once it is handed in, and starts no other', async () => {
