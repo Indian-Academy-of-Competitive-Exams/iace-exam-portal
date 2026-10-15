@@ -11,17 +11,7 @@ import { UNREAD_QUERY_KEY } from './constants';
 import { linkGuard } from './link-guard';
 import { loadNotifications } from './notifications';
 import { registerOncePerProcess } from './push-device';
-
-/** Shown while the app is open too: a student reading one screen is not told to look elsewhere. */
-const WHILE_OPEN = {
-  shouldShowBanner: true,
-  shouldShowList: true,
-  shouldPlaySound: false,
-  shouldSetBadge: false,
-};
-
-/** A paper in progress is never covered; the notification still reaches the shade to read after. */
-const WHILE_SITTING = { ...WHILE_OPEN, shouldShowBanner: false };
+import { pushPolicy } from './push-policy';
 
 export function usePushDevice(signedIn: boolean): void {
   const router = useRouter();
@@ -40,17 +30,18 @@ export function usePushDevice(signedIn: boolean): void {
       if (!notifications || !listening) return;
 
       notifications.setNotificationHandler({
-        handleNotification: () =>
-          Promise.resolve(linkGuard.isSitting() ? WHILE_SITTING : WHILE_OPEN),
+        handleNotification: () => Promise.resolve(pushPolicy(linkGuard.isSitting()).presentation),
       });
       held.push(
         notifications.addNotificationResponseReceivedListener(() => {
           // A tap must not take the phone off a running paper; the notification waits in the shade.
-          if (!linkGuard.isSitting()) router.navigate(ACCOUNT_ROUTES.NOTIFICATIONS);
+          if (pushPolicy(linkGuard.isSitting()).tapOpensBell) {
+            router.navigate(ACCOUNT_ROUTES.NOTIFICATIONS);
+          }
         }),
         notifications.addNotificationReceivedListener(() => {
           // The bell waits while a paper is being sat: one broadcast would otherwise be a read per sitting.
-          if (linkGuard.isSitting()) return;
+          if (!pushPolicy(linkGuard.isSitting()).refreshesBell) return;
           void queryClient.invalidateQueries({ queryKey: UNREAD_QUERY_KEY });
         }),
       );

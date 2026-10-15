@@ -9,10 +9,9 @@ import { BackHandler, View } from 'react-native';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AppException, ErrorCodes, type ExamQuestion } from '@iace/contracts';
+import { type ExamQuestion } from '@iace/contracts';
 import {
   HELD_ELSEWHERE_SAYS,
-  isHeldElsewhere,
   SITTING_ENDED_SAYS,
   stoodDownSays,
   useExamView,
@@ -31,6 +30,14 @@ import {
   STORAGE_KEYS,
 } from '../../src/lib/constants';
 import { examLanguagesFrom } from '../../src/lib/exam-routes';
+import {
+  backAsksToSubmit,
+  EXAM_ENTRY,
+  examEntry,
+  SITTING_COVER,
+  SITTING_SCREEN,
+  sittingScreen,
+} from '../../src/lib/exam-screen';
 import { deviceTab, sittingStorage } from '../../src/lib/sitting-store';
 import { DETAIL_ROUTES, ROUTES } from '../../src/lib/nav';
 import { briefQuery, endedSittingQuery } from '../../src/lib/queries';
@@ -55,8 +62,12 @@ export default function ExamScreen() {
   // The paper leaves the hall by screenshot or recording otherwise; Android blanks both, and the app switcher too.
   usePreventScreenCapture();
   const brief = useQuery(briefQuery(testId));
+  const entry = examEntry({
+    isPending: brief.isPending,
+    needsKeyboard: Boolean(brief.data && needsKeyboard(brief.data)),
+  });
 
-  if (brief.data && needsKeyboard(brief.data)) {
+  if (entry === EXAM_ENTRY.NEEDS_KEYBOARD) {
     return (
       <View className="flex-1 justify-center bg-background p-6">
         <EmptyState
@@ -68,8 +79,7 @@ export default function ExamScreen() {
       </View>
     );
   }
-  // A brief that did not load is no reason to keep a candidate from an ordinary paper.
-  return brief.isPending ? (
+  return entry === EXAM_ENTRY.WAIT ? (
     <ExamSkin
       view={null}
       paperQuestions={NO_QUESTIONS}
@@ -128,8 +138,7 @@ function Sitting() {
     setReclaims((count) => count + 1);
   }, [forget, startedId]);
 
-  // Android's Back would drop a running paper; in a sitting the only way out is handing it in.
-  const askToSubmit = view && !view.takenOver && !view.ended ? view.submit.ask : undefined;
+  const askToSubmit = view && backAsksToSubmit(view) ? view.submit.ask : undefined;
   useFocusEffect(
     useCallback(() => {
       if (!askToSubmit) return;
@@ -141,24 +150,31 @@ function Sitting() {
     }, [askToSubmit]),
   );
 
-  if (attempt.isError) {
-    const { error } = attempt;
-    if (resume && AppException.is(error) && error.code === ErrorCodes.SITTING_ENDED) {
-      return <Redirect href={DETAIL_ROUTES.SUBMITTED(resume)} />;
-    }
-    if (isHeldElsewhere(error)) {
-      return (
-        <View className="flex-1 justify-center bg-background p-6">
-          <EmptyState
-            kind={EMPTY_STATE_KINDS.REFUSED}
-            title={HELD_ELSEWHERE_SAYS.title}
-            /* ui-copy-ok: rule — the other device going quiet is the one thing that releases it */
-            hint={HELD_ELSEWHERE_SAYS.hint}
-            action={<Button onPress={() => void attempt.refetch()}>Try again</Button>}
-          />
-        </View>
-      );
-    }
+  const shown = sittingScreen({
+    startError: attempt.isError ? attempt.error : null,
+    resume,
+    paperFailed: paper.isError,
+    view,
+    startedId,
+  });
+
+  if (shown.screen === SITTING_SCREEN.HANDED_IN) {
+    return <Redirect href={DETAIL_ROUTES.SUBMITTED(shown.attemptId)} />;
+  }
+  if (shown.screen === SITTING_SCREEN.HELD_ELSEWHERE) {
+    return (
+      <View className="flex-1 justify-center bg-background p-6">
+        <EmptyState
+          kind={EMPTY_STATE_KINDS.REFUSED}
+          title={HELD_ELSEWHERE_SAYS.title}
+          /* ui-copy-ok: rule — the other device going quiet is the one thing that releases it */
+          hint={HELD_ELSEWHERE_SAYS.hint}
+          action={<Button onPress={() => void attempt.refetch()}>Try again</Button>}
+        />
+      </View>
+    );
+  }
+  if (shown.screen === SITTING_SCREEN.START_REFUSED) {
     return (
       <View className="flex-1 justify-center bg-background p-6">
         <EmptyState
@@ -183,7 +199,7 @@ function Sitting() {
     );
   }
 
-  if (paper.isError) {
+  if (shown.screen === SITTING_SCREEN.PAPER_FAILED) {
     return (
       <View className="flex-1 justify-center bg-background p-6">
         <EmptyState
@@ -225,7 +241,7 @@ function Sitting() {
           tab={tab}
         />
       ) : null}
-      {view?.takenOver ? (
+      {shown.cover === SITTING_COVER.TAKEN_OVER && view ? (
         // Over the skin, not instead of it: the question WebView stays warm for the reclaim.
         <View className="absolute inset-0 justify-center bg-background p-6">
           <EmptyState
@@ -241,7 +257,7 @@ function Sitting() {
           />
         </View>
       ) : null}
-      {view?.ended && startedId ? (
+      {shown.cover === SITTING_COVER.ENDED ? (
         <View className="absolute inset-0 justify-center bg-background p-6">
           <EmptyState
             kind={EMPTY_STATE_KINDS.REFUSED}
@@ -252,7 +268,7 @@ function Sitting() {
               // `replace`: Back must never re-enter a paper that has ended.
               <Button
                 icon={ChartColumn}
-                onPress={() => router.replace(DETAIL_ROUTES.REPORT(startedId))}
+                onPress={() => router.replace(DETAIL_ROUTES.REPORT(shown.attemptId))}
               >
                 See your result
               </Button>
