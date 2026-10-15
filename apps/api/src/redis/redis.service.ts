@@ -50,6 +50,18 @@ end
 return holder
 `;
 
+/** Registered once per connection: ioredis sends EVALSHA and resends the source only on NOSCRIPT. */
+const SCRIPTS = {
+  replaceIfUnchanged: { lua: REPLACE_IF_UNCHANGED, numberOfKeys: 1 },
+  deleteIfHeldBy: { lua: DELETE_IF_HELD_BY, numberOfKeys: 1 },
+  // No fixed key count: the caller passes it first, as EVAL takes it.
+  removeIfUnchanged: { lua: REMOVE_IF_UNCHANGED },
+  deleteIndexedSet: { lua: DELETE_INDEXED_SET, numberOfKeys: 1 },
+  takeOverLock: { lua: TAKE_OVER_LOCK, numberOfKeys: 1 },
+} as const;
+
+type ScriptName = keyof typeof SCRIPTS;
+
 /** A stored value that does not parse is no value at all, rather than a crash in whoever read it. */
 export function parseJsonOrNull<T>(raw: string): T | null {
   try {
@@ -79,6 +91,18 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
       retryStrategy: (attempt) => Math.min(attempt * RETRY_STEP_MS, RETRY_CEILING_MS),
     });
     this.client.on('error', (error: Error) => this.logger.error(`Redis error: ${error.message}`));
+    for (const [name, definition] of Object.entries(SCRIPTS)) {
+      this.client.defineCommand(name, definition);
+    }
+  }
+
+  /** defineCommand adds the method at runtime, so its type is declared here rather than inferred. */
+  private script(name: ScriptName, ...args: (string | number)[]): Promise<unknown> {
+    const commands = this.client as unknown as Record<
+      ScriptName,
+      (...a: (string | number)[]) => Promise<unknown>
+    >;
+    return commands[name](...args);
   }
 
   async onModuleInit(): Promise<void> {
@@ -147,9 +171,8 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
     value: unknown,
     ttlSec: number,
   ): Promise<boolean> {
-    const applied = await this.client.eval(
-      REPLACE_IF_UNCHANGED,
-      1,
+    const applied = await this.script(
+      'replaceIfUnchanged',
       key,
       // No JSON value is empty, so '' can stand for the key being absent.
       was ?? '',
@@ -171,7 +194,7 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
 
   /** Removes a key only while it still holds the bytes given, so a write that landed since is left alone. */
   async deleteIfUnchanged(key: string, was: string): Promise<boolean> {
-    return (await this.client.eval(DELETE_IF_HELD_BY, 1, key, was)) === 1;
+    return (await this.script('deleteIfHeldBy', key, was)) === 1;
   }
 
   /** Drops each member whose key still holds the bytes read, in one script — a write landing since keeps its member. */
@@ -180,8 +203,8 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
     read: readonly { member: string; key: string; was: string | null }[],
   ): Promise<number> {
     if (read.length === 0) return 0;
-    const removed = await this.client.eval(
-      REMOVE_IF_UNCHANGED,
+    const removed = await this.script(
+      'removeIfUnchanged',
       1 + read.length,
       setKey,
       ...read.map((entry) => entry.key),
@@ -193,7 +216,7 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
 
   /** Deletes an index and every `keyPrefix + member` key in one script — a member added after the read cannot outlive it. */
   async deleteIndexedSet(indexKey: string, keyPrefix: string): Promise<string[]> {
-    return this.client.eval(DELETE_INDEXED_SET, 1, indexKey, keyPrefix) as Promise<string[]>;
+    return this.script('deleteIndexedSet', indexKey, keyPrefix) as Promise<string[]>;
   }
 
   /** True only for the caller that took it; everyone else is refused until the TTL runs out. */
@@ -203,7 +226,7 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
 
   /** Releases only what this holder still owns: past the TTL the key is somebody else's. */
   async releaseLock(key: string, holderId: string): Promise<boolean> {
-    return (await this.client.eval(DELETE_IF_HELD_BY, 1, key, holderId)) === 1;
+    return (await this.script('deleteIfHeldBy', key, holderId)) === 1;
   }
 
   /** Null once the caller holds it, else who does. The holder re-enters; `steal` takes it over. */
@@ -213,9 +236,8 @@ export class RedisService implements OnModuleInit, OnApplicationShutdown {
     ttlSec: number,
     steal = false,
   ): Promise<string | null> {
-    const holder = await this.client.eval(
-      TAKE_OVER_LOCK,
-      1,
+    const holder = await this.script(
+      'takeOverLock',
       key,
       holderId,
       String(ttlSec),
