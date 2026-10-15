@@ -171,6 +171,10 @@ the API already stopped. Two is bounded by construction. Nothing is lost by it e
 images on the box are a cache, the archive is ECR**, whose lifecycle policy keeps the last ten. A
 rollback past the local two is `API_TAG=<sha>` and a pull.
 
+A release fails unless `exam`, `core` and `worker` report healthy within three minutes of `up -d`
+(`await-healthy.sh`), and its log names the image it replaced as `rollback-to:`, so the tag to go
+back to is in the failed run.
+
 **Never add `--volumes` to a prune.** They hold Caddy's issued certificates and Box B's
 append-only file. Let's Encrypt rate-limits five certificates per hostname per week, so one
 careless `docker system prune --volumes` can lock you out of your own domain for seven days.

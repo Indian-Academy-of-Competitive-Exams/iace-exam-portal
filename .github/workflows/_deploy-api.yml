@@ -79,6 +79,8 @@ jobs:
       # as whoever owns the checkout, because as root it refuses a directory it does not own.
       # --ff-only so a box somebody edited by hand stops the release instead of losing the edit.
       #
+      # await-healthy fails the release unless exam, core and worker report healthy; rollback-to names the image to go back to.
+      #
       # The restart is for the two mounted configs alone: `up -d` recreates a container whose
       # compose entry changed, never one whose mounted file did, and a running container holds
       # the file it started with. A \$ is the box's variable; a bare $ is expanded here.
@@ -97,8 +99,11 @@ jobs:
               \"sudo -u \$OWNER git merge --quiet --ff-only ${{ github.sha }}\",
               \"aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REGISTRY\",
               \"export API_IMAGE=$REGISTRY/examprep/api MIGRATE_IMAGE=$REGISTRY/examprep/api-migrate API_TAG=${{ inputs.image_tag }}\",
+              \"PREV=\$(docker inspect -f '{{.Config.Image}}' \$($COMPOSE ps -q core) 2>/dev/null || echo none)\",
+              \"echo rollback-to: \$PREV\",
               \"$COMPOSE pull\",
               \"$COMPOSE up -d\",
+              \"COMPOSE='$COMPOSE' ./deploy/await-healthy.sh\",
               \"sudo -u \$OWNER git diff --quiet \$OLD HEAD -- deploy/Caddyfile deploy/alloy || $COMPOSE restart caddy alloy\",
               \"$COMPOSE ps\",
               \"./deploy/prune-disk.sh\"
