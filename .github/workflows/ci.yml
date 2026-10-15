@@ -68,6 +68,13 @@ jobs:
         if: '!cancelled()'
         run: pnpm format:check
 
+      # A workflow mistake otherwise surfaces only when that workflow next runs, often mid-release.
+      - name: Workflows
+        if: '!cancelled()'
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
       # Cheap, and it catches the class of breakage that is hardest to see in a
       # diff: two workspaces asking for different versions of the same library.
       - name: Dependency alignment

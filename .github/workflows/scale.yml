@@ -115,7 +115,8 @@ jobs:
           for _ in $(seq 1 30); do
             ping=$(aws ssm describe-instance-information \
               --query "InstanceInformationList[?InstanceId=='$ID'].PingStatus" --output text)
-            [ "$ping" = "Online" ] && break || sleep 10
+            if [ "$ping" = "Online" ]; then break; fi
+            sleep 10
           done
 
       - name: Scale the containers
