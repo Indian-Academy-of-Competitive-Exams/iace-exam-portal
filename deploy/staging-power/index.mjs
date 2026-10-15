@@ -24,7 +24,7 @@ import {
   ACTIONS,
   CHECKIN_TAG_PREFIX,
   checkedIn,
-  cleanName,
+  allowedEmail,
   healthChecks,
   othersCheckedIn,
   parseAutoOff,
@@ -47,7 +47,7 @@ const MANAGE_SHARED = process.env.MANAGE_SHARED === 'true';
 const PAGE = readFileSync(new URL('./page.html', import.meta.url), 'utf8');
 const HEALTH_TIMEOUT_MS = 3000;
 const RUNNING = 'running';
-const ERRORS = { PASSCODE: 'passcode', NAME: 'name', SETTING: 'setting', OTHERS: 'others' };
+const ERRORS = { PASSCODE: 'passcode', EMAIL: 'email', SETTING: 'setting', OTHERS: 'others' };
 
 const ec2 = new EC2Client();
 const rds = new RDSClient();
@@ -214,29 +214,26 @@ async function runScheduled(action) {
 
 const ROUTES = {
   'GET /status': async () => null,
-  'POST /on': async (state, body, name) => {
-    if (!name) return json(400, { error: ERRORS.NAME });
+  'POST /on': async (state, body, email) => {
     await apply(ACTIONS.ON, state);
-    await checkIn(name);
+    await checkIn(email);
     await saveAutoOff(state.autoOff, true, state.schedule);
     return null;
   },
-  'POST /off': async (state, body, name) => {
-    const others = othersCheckedIn(state.checkedIn, name);
+  'POST /off': async (state, body, email) => {
+    const others = othersCheckedIn(state.checkedIn, email);
     if (others.length > 0 && body.force !== true) {
       return json(409, { error: ERRORS.OTHERS, others: others.map((entry) => entry.name) });
     }
     await turnOff(state);
     return null;
   },
-  'POST /checkin': async (state, body, name) => {
-    if (!name) return json(400, { error: ERRORS.NAME });
-    await checkIn(name);
+  'POST /checkin': async (state, body, email) => {
+    await checkIn(email);
     return null;
   },
-  'POST /checkout': async (state, body, name) => {
-    if (!name) return json(400, { error: ERRORS.NAME });
-    await checkOut([name]);
+  'POST /checkout': async (state, body, email) => {
+    await checkOut([email]);
     return null;
   },
   'POST /auto-off': async (state, body) => {
@@ -269,10 +266,12 @@ export async function handler(event) {
   if (!(await passcodeMatches(event.headers['x-passcode']))) {
     return json(401, { error: ERRORS.PASSCODE });
   }
+  const email = allowedEmail(event.headers['x-email'], process.env.ALLOWED_EMAILS);
+  if (!email) return json(403, { error: ERRORS.EMAIL });
 
   try {
     const body = parseBody(event);
-    const refusal = await route(await readState(), body, cleanName(body.name));
+    const refusal = await route(await readState(), body, email);
     return refusal ?? json(200, view(await readState()));
   } catch (error) {
     console.error(error);

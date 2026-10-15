@@ -5,7 +5,7 @@ import {
   AUTO_OFF_MODES,
   healthChecks,
   checkedIn,
-  cleanName,
+  allowedEmail,
   othersCheckedIn,
   parseAutoOff,
   resourcesToChange,
@@ -52,13 +52,14 @@ test('an unknown action changes nothing', () => {
   assert.deepEqual(resourcesToChange('reboot', ON_STATES, true), []);
 });
 
-test('cleanName keeps letters and digits and refuses a name with none', () => {
-  assert.equal(cleanName('  Ravi   Kumar '), 'Ravi Kumar');
-  assert.equal(cleanName('José Ñ'), 'José Ñ');
-  assert.equal(cleanName('Ravi 🎉 <b>'), 'Ravi b');
-  assert.equal(cleanName('x'.repeat(50)).length, 30);
-  assert.equal(cleanName('!!! ...'), null);
-  assert.equal(cleanName(undefined), null);
+test('allowedEmail admits only a listed email, whatever its case or spacing, and nobody on an empty list', () => {
+  const list = ' developer@iace.co.in , Ops@IACE.co.in ';
+  assert.equal(allowedEmail(' Developer@IACE.co.in ', list), 'developer@iace.co.in');
+  assert.equal(allowedEmail('ops@iace.co.in', list), 'ops@iace.co.in');
+  assert.equal(allowedEmail('someone@gmail.com', list), null);
+  assert.equal(allowedEmail('', list), null);
+  assert.equal(allowedEmail('developer@iace.co.in', ''), null);
+  assert.equal(allowedEmail('developer@iace.co.in', undefined), null);
 });
 
 test('checkedIn lists who checked in, oldest first, and lets a check-in lapse after 12 hours', () => {

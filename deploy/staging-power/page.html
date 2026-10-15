@@ -466,7 +466,7 @@
       <section class="card" id="signin">
         <h2>Sign in</h2>
         <div class="row">
-          <input id="name" placeholder="Your name" autocomplete="name" maxlength="30" />
+          <input id="email" type="email" placeholder="Your email" autocomplete="email" />
           <input id="passcode" type="password" placeholder="Passcode" autocomplete="off" />
           <button id="load" class="primary">Continue</button>
         </div>
@@ -547,7 +547,7 @@
       const READY_POLLS = 2;
       const PROGRESS_CAP = 95;
       const KEYS = {
-        NAME: 'staging-name',
+        EMAIL: 'staging-email',
         PASSCODE: 'staging-passcode',
         ON_AT: 'staging-on-at',
         OFF_AT: 'staging-off-at',
@@ -591,7 +591,7 @@
       let firstSeenWorking = null;
       const isReady = () => readyStreak >= (sawNotReady ? READY_POLLS : 1);
 
-      $('name').value = sessionStorage.getItem(KEYS.NAME) ?? '';
+      $('email').value = sessionStorage.getItem(KEYS.EMAIL) ?? '';
       $('passcode').value = sessionStorage.getItem(KEYS.PASSCODE) ?? '';
 
       const dayOf = (date) => date.toLocaleDateString('en-CA', { timeZone: IST });
@@ -626,14 +626,18 @@
       };
 
       async function call(path, method = 'GET', body) {
-        sessionStorage.setItem(KEYS.NAME, $('name').value);
+        sessionStorage.setItem(KEYS.EMAIL, $('email').value);
         sessionStorage.setItem(KEYS.PASSCODE, $('passcode').value);
         let response;
         try {
           response = await fetch(path, {
             method,
-            headers: { 'x-passcode': $('passcode').value, 'content-type': 'application/json' },
-            body: method === 'GET' ? undefined : JSON.stringify({ name: $('name').value, ...body }),
+            headers: {
+              'x-passcode': $('passcode').value,
+              'x-email': $('email').value.trim(),
+              'content-type': 'application/json',
+            },
+            body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
           });
         } catch {
           fail('Could not reach the switch. Check your connection and try again.');
@@ -641,11 +645,11 @@
         }
         const data = await response.json();
         if (response.status === 401) fail('That passcode is not right.');
-        else if (response.status === 400 && data.error === 'name') fail('Enter your name first.');
+        else if (response.status === 403) fail('This email is not allowed to use this page.');
         else if (response.status === 400) fail('That auto-off setting is not valid.');
         else if (response.status >= 500) fail('Something went wrong. Try again in a moment.');
         else fail('');
-        if (response.status === 401) showSignin(true);
+        if (response.status === 401 || response.status === 403) showSignin(true);
         return { status: response.status, data };
       }
 
@@ -850,7 +854,7 @@
       }
 
       function paintPeople(view) {
-        const me = $('name').value.trim().toLowerCase();
+        const me = $('email').value.trim().toLowerCase();
         const items = view.checkedIn.map((entry) => {
           const li = document.createElement('li');
           const name = entry.name.toLowerCase() === me ? `${entry.name} (you)` : entry.name;
@@ -896,7 +900,7 @@
       }
 
       function paintWho() {
-        const name = $('name').value.trim() || 'Guest';
+        const name = $('email').value.trim().toLowerCase();
         const change = Object.assign(document.createElement('button'), {
           className: 'link',
           textContent: 'Change',

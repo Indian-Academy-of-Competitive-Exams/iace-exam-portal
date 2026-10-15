@@ -7,7 +7,6 @@ export const CHECKIN_TAG_PREFIX = 'checkin:';
 
 const CHECKIN_LAPSE_MS = 12 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
-const NAME_MAX = 30;
 const STOPPED = 'stopped';
 const DB_AVAILABLE = 'available';
 // A valid expression for a schedule that is DISABLED and must never matter.
@@ -31,14 +30,16 @@ export function resourcesToChange(action, states, manageShared) {
   );
 }
 
-// An EC2 tag key takes letters, digits and spaces but no combining marks; anything else fails the write.
-export function cleanName(raw) {
-  const name = String(raw ?? '')
-    .replace(/[^\p{L}\p{N} ]/gu, '')
-    .replace(/ +/g, ' ')
+// An empty or missing list lets nobody in: the page fails closed.
+export function allowedEmail(raw, allowList) {
+  const email = String(raw ?? '')
     .trim()
-    .slice(0, NAME_MAX);
-  return name || null;
+    .toLowerCase();
+  const allowed = String(allowList ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  return email && allowed.includes(email) ? email : null;
 }
 
 export function checkedIn(tags, now) {

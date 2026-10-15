@@ -247,7 +247,7 @@ aws iam put-role-policy --role-name $FN-scheduler --policy-name invoke --policy-
 aws lambda create-function --function-name $FN --runtime nodejs22.x --architectures arm64 \
   --handler index.handler --timeout 20 --memory-size 256 \
   --role arn:aws:iam::$ACCOUNT:role/$FN --zip-file fileb:///tmp/$FN.zip \
-  --environment "Variables={API_INSTANCE_ID=i-0d1a3dd4cce06c993,VALKEY_INSTANCE_ID=i-02d91009dacaa7177,DB_INSTANCE_ID=examprep,API_HEALTH_URL=https://api.staging.examprep.iace.co.in/health/ready,EXAMS_URL=https://staging.examprep.iace.co.in,ADMIN_URL=https://admin.staging.examprep.iace.co.in,PASSCODE_PARAM=/examprep/staging/power-passcode,AUTO_OFF_SCHEDULE=examprep-staging-auto-off,MANAGE_SHARED=true}"
+  --environment "Variables={API_INSTANCE_ID=i-0d1a3dd4cce06c993,VALKEY_INSTANCE_ID=i-02d91009dacaa7177,DB_INSTANCE_ID=examprep,API_HEALTH_URL=https://api.staging.examprep.iace.co.in/health/ready,EXAMS_URL=https://staging.examprep.iace.co.in,ADMIN_URL=https://admin.staging.examprep.iace.co.in,PASSCODE_PARAM=/examprep/staging/power-passcode,AUTO_OFF_SCHEDULE=examprep-staging-auto-off,MANAGE_SHARED=true,ALLOWED_EMAILS=developer@iace.co.in}"
 
 aws lambda create-function-url-config --function-name $FN --auth-type NONE
 aws lambda add-permission --function-name $FN --statement-id url \
@@ -265,6 +265,10 @@ aws scheduler create-schedule --name examprep-staging-keep-off \
   --flexible-time-window Mode=OFF \
   --target "{\"Arn\":\"$TARGET\",\"RoleArn\":\"$ROLE\",\"Input\":\"{\\\"action\\\":\\\"keep-off\\\"}\"}"
 ```
+
+Only the emails in `ALLOWED_EMAILS` get in, beside the passcode; an empty list lets nobody in. Add
+more in the console (Configuration → Environment variables), comma-separated, since the CLI's
+shorthand above splits on commas.
 
 `aws lambda get-function-url-config --function-name examprep-staging-power` prints the address to
 hand to testers. The passcode is read once per warm function, so after changing the parameter,
