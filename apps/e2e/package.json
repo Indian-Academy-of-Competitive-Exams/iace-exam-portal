@@ -1,0 +1,20 @@
+{
+  "name": "@iace/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "clean": "rm -rf dist .turbo test-results playwright-report"
+  },
+  "devDependencies": {
+    "@iace/config": "workspace:*",
+    "@iace/contracts": "workspace:*",
+    "@playwright/test": "1.64.0",
+    "@types/node": "22.20.1",
+    "eslint": "10.8.1",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3"
+  }
+}

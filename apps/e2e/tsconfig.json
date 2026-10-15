@@ -1,0 +1,9 @@
+{
+  "extends": "@iace/config/tsconfig.node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["*.ts", "tests/**/*.ts"]
+}

@@ -169,6 +169,77 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://ci:ci@localhost:5432/iace_ci_test
 
+  # One student sits a real paper in a real browser against the real API, Postgres, Redis and queue.
+  # Its own job so the browser and the two servers never slow Verify. No MinIO: the sitting never
+  # touches S3, and /health answers degraded rather than down without it.
+  e2e:
+    name: End to end
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: iace_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      E2E_DATABASE_URL: postgresql://ci:ci@localhost:5432/iace_e2e?schema=public
+      E2E_REDIS_URL: redis://localhost:6379
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Keyed on the lockfile, which pins the Playwright version and so the browser build it needs.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      # --with-deps installs the OS libraries every run; the browser download is skipped when cached.
+      - name: Install Chromium
+        run: pnpm --filter @iace/e2e exec playwright install --with-deps chromium
+
+      # Migrates and seeds iace_e2e, builds both apps and starts them through Playwright's webServer.
+      - name: Sit a paper end to end
+        run: pnpm e2e
+
+      - name: Keep the report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/e2e/playwright-report
+            apps/e2e/test-results
+          retention-days: 7
+
   # Doc drift, and the one check here that gates nothing (docs/03 §12). It judges
   # the whole doc set against the whole schema, so as a commit gate it would fail
   # your push for prose somebody else left behind. Weekly and on demand only —
