@@ -58,6 +58,9 @@ const DEPLOY_ONLY = [
   'PROM_URL',
   'PROM_USERNAME',
   'PROM_PASSWORD',
+  'API_IMAGE',
+  'MIGRATE_IMAGE',
+  'API_TAG',
 ];
 
 /** The keys of the one `z.object({ … })` the API validates its environment against. */
