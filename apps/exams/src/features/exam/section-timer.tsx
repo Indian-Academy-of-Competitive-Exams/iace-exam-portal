@@ -2,6 +2,7 @@ import { Hourglass } from 'lucide-react';
 import { clockText } from '@iace/contracts';
 import { cn } from '@iace/ui';
 import { useAnchoredCountdown } from '@iace/app-kit';
+import { TimeWarning } from './time-warning';
 
 /** A section's own clock, keyed by the section: entering one starts it and nothing else has to. */
 
@@ -17,6 +18,7 @@ export function SectionTimer({
 
   return (
     <p
+      role="timer"
       aria-live="off"
       className={cn(
         'flex items-center gap-2 rounded-exam-option border px-3 py-1.5 text-sm font-semibold tabular-nums',
@@ -28,6 +30,7 @@ export function SectionTimer({
       {labelled ? null : <Hourglass aria-hidden className="size-4" />}
       <span className={labelled ? 'font-normal' : 'sr-only'}>Time left in this section</span>
       {clockText(left)}
+      <TimeWarning left={left} />
     </p>
   );
 }

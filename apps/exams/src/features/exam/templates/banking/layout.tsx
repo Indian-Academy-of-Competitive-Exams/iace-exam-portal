@@ -36,6 +36,7 @@ import {
   isWrittenQuestion,
 } from '../../../typing/typing-figures';
 import { ExamTyping, ExamWriting } from '../shared/exam-typing';
+import { TimeWarning } from '../../time-warning';
 
 const FONT_STEP = { MIN: -2, MAX: 4 } as const;
 
@@ -377,9 +378,10 @@ function BankingTimer({ view }: Readonly<{ view: ExamView }>) {
 
 function TimeLeft({ left }: Readonly<{ left: number }>) {
   return (
-    <p aria-live="off" className="bk-timer flex shrink-0 items-center">
+    <p role="timer" aria-live="off" className="bk-timer flex shrink-0 items-center">
       <span>Time Left :</span>
       <b>{hourClock(left)}</b>
+      <TimeWarning left={left} />
     </p>
   );
 }

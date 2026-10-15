@@ -28,6 +28,7 @@ import {
   isWrittenQuestion,
 } from '../../../typing/typing-figures';
 import { ExamTyping, ExamWriting } from '../shared/exam-typing';
+import { TimeWarning } from '../../time-warning';
 
 export function RailwayLayout({
   view,
@@ -390,8 +391,9 @@ function RailwayTimer({ view }: Readonly<{ view: ExamView }>) {
   return (
     <Countdown view={view}>
       {(left) => (
-        <p aria-live="off" className="right-time">
+        <p role="timer" aria-live="off" className="right-time">
           Time Left : <b>{minuteClock(left)}</b>
+          <TimeWarning left={left} />
         </p>
       )}
     </Countdown>

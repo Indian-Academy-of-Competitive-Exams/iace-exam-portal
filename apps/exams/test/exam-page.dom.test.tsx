@@ -202,6 +202,21 @@ for (const skin of SKIN_NAMES) {
       assert.ok(screen.getByRole('radio', { name: new RegExp(RIGHT) }));
     });
 
+    /** The failure this prevents: a palette of bare numbers and a clock a screen reader cannot find. */
+    it('names each palette button by number and state, and exposes the clock as a timer', async () => {
+      serve(skin);
+      open();
+      await screen.findByText(STEM);
+
+      assert.equal(screen.getByRole('timer').getAttribute('aria-live'), 'off');
+
+      const drawer = screen.queryByRole('button', { name: 'Palette' });
+      if (drawer) fireEvent.click(drawer);
+      const first = await screen.findByRole('button', { name: /^Question 1, / });
+      assert.equal(first.getAttribute('aria-current'), 'true');
+      assert.ok(screen.getByRole('button', { name: /^Question 2, not visited/i }));
+    });
+
     /** The failure this prevents: an answer that moved on with the student and never reached the server. */
     it('saves the chosen answer on the next autosave after Save & Next', async () => {
       mock.timers.enable({ apis: ['setTimeout'] });

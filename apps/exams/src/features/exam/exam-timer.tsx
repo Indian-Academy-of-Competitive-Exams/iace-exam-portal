@@ -2,6 +2,7 @@ import { AlarmClock } from 'lucide-react';
 import { clockText, type ExamClock } from '@iace/contracts';
 import { cn } from '@iace/ui';
 import { useClockCountdown } from '@iace/app-kit';
+import { TimeWarning } from './time-warning';
 
 /** The countdown. It counts to the SERVER's deadline; the device clock only measures elapsed time. */
 
@@ -17,6 +18,7 @@ export function ExamTimer({
 
   return (
     <p
+      role="timer"
       aria-live="off"
       className={cn(
         'flex items-center gap-2 rounded-exam-option border px-3 py-1.5 text-sm font-semibold tabular-nums',
@@ -28,6 +30,7 @@ export function ExamTimer({
       {labelled ? null : <AlarmClock aria-hidden className="size-4" />}
       <span className={labelled ? 'font-normal' : 'sr-only'}>Time left</span>
       {clockText(left)}
+      <TimeWarning left={left} />
     </p>
   );
 }

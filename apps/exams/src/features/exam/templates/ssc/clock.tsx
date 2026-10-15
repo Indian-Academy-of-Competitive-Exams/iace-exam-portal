@@ -2,6 +2,7 @@ import profileImage from '../railway/assets/profile.png';
 import { CirclePause } from 'lucide-react';
 import { type ExamView } from '@iace/app-kit';
 import { Countdown } from '../shared/countdown';
+import { TimeWarning } from '../../time-warning';
 
 /** The original starts at its smallest and grows a tenth at a time to double. */
 const FONT_STEP = { MIN: 0, MAX: 10 } as const;
@@ -71,8 +72,9 @@ export function SscTimer({ view }: Readonly<{ view: ExamView }>) {
 
 function TimeLeft({ left }: Readonly<{ left: number }>) {
   return (
-    <p aria-live="off" className="sc-timer">
+    <p role="timer" aria-live="off" className="sc-timer">
       Time Left: <b>{minuteClock(left)}</b>
+      <TimeWarning left={left} />
     </p>
   );
 }
