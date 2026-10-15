@@ -59,7 +59,7 @@ export function QuestionContent({
   const [readyTick, setReadyTick] = useState(0);
   // Not a prop: the page follows the phone, never the paper.
   const theme = useColorScheme() === 'dark' ? 'dark' : 'light';
-  // Memoized: both walk a bilingual question and stringify it, and this renders on every tap and every second.
+  // Memoized: both walk a bilingual question and stringify it, and this renders on every tap.
   const screen = useMemo(
     () => ({
       ...(question

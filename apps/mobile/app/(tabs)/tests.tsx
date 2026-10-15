@@ -56,24 +56,32 @@ export default function TestsScreen() {
   const q = asText(state.values.q);
   const course = asText(state.values.course);
   const bucket = asText(state.values.state);
-  const seriesIds = asSet(state.values.series);
+  const seriesValue = state.values.series;
 
-  const now = new Date();
-  const filteredSeries = reaches
-    .filter((row) => course === ANY || row.examStage?.course === course)
-    .filter((row) => seriesIds.length === 0 || seriesIds.includes(row.id));
-  const rows = inState(matching(sittablesOf(filteredSeries), q), bucket);
+  const now = useMemo(() => new Date(), [catalog.dataUpdatedAt]);
+  const filteredSeries = useMemo(() => {
+    const seriesIds = asSet(seriesValue);
+    return reaches
+      .filter((row) => course === ANY || row.examStage?.course === course)
+      .filter((row) => seriesIds.length === 0 || seriesIds.includes(row.id));
+  }, [reaches, course, seriesValue]);
+  const rows = useMemo(
+    () => inState(matching(sittablesOf(filteredSeries), q), bucket),
+    [filteredSeries, q, bucket],
+  );
+  const shelves = useMemo(() => shelvesOf(filteredSeries, rows), [filteredSeries, rows]);
   const emptiness = emptyReason(reaches, rows.length);
-  const results = resultsByTest(everySitting(trend.data));
+  const results = useMemo(() => resultsByTest(everySitting(trend.data)), [trend.data]);
+  const renderItem = useMemo(() => renderShelf(now, results), [now, results]);
 
   return (
     <FlatList
       className="bg-background"
       contentContainerStyle={CONTENT_STYLE}
-      data={shelvesOf(filteredSeries, rows)}
+      data={shelves}
       keyboardShouldPersistTaps="handled"
       keyExtractor={keyOfShelf}
-      renderItem={renderShelf(now, results)}
+      renderItem={renderItem}
       ListHeaderComponent={
         <TestsHeader
           count={rows.length}
