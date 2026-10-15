@@ -351,6 +351,15 @@
       .icon.off {
         background: var(--idle);
       }
+      .icon.down {
+        background: var(--primary);
+      }
+      .icon.down::before {
+        content: '✕';
+      }
+      .row.spread {
+        justify-content: space-between;
+      }
 
       .people {
         list-style: none;
@@ -492,6 +501,15 @@
           <ul class="steps" id="steps"></ul>
         </section>
 
+        <section class="card" id="healthCard" hidden>
+          <div class="row spread">
+            <h2>App health</h2>
+            <button id="ping">Check now</button>
+          </div>
+          <ul class="steps" id="checks"></ul>
+          <span class="note" id="checkedAt"></span>
+        </section>
+
         <section class="card">
           <h2>Who is using it</h2>
           <ul class="people" id="people"></ul>
@@ -555,6 +573,14 @@
         pending: 'starting',
         stopping: 'switching off',
         'shutting-down': 'switching off',
+      };
+      const SETTLED_ON = new Set(['running', 'available']);
+      const IN_TRANSIT = new Set(['starting', 'stopping', 'rebooting', 'pending', 'shutting-down']);
+      const CHECK_LABELS = {
+        database: 'Database',
+        redis: 'Cache (Valkey)',
+        storage: 'File storage',
+        queue: 'Job queue',
       };
       const $ = (id) => document.getElementById(id);
 
@@ -642,10 +668,18 @@
           return view.resources.api.state === 'running' ? 'working' : 'waiting';
         }
         const state = view.resources[name].state;
-        if (state === 'running' || state === 'available') return 'done';
+        if (SETTLED_ON.has(state)) return 'done';
         if (state === 'stopped') return phase === PHASES.STARTING ? 'waiting' : 'off';
+        // The app answering proves the database is up, whatever housekeeping RDS still reports.
+        if (name === 'db' && view.api.ready && !IN_TRANSIT.has(state)) return 'done';
         return 'working';
       }
+
+      const settled = (view) =>
+        managedOf(view).every((name) => {
+          const { state } = view.resources[name];
+          return state === 'stopped' || SETTLED_ON.has(state);
+        });
 
       function stepText(name, view, status) {
         if (name === 'answering') {
@@ -657,7 +691,8 @@
         if (name !== 'db' && since && status === 'done')
           return `on since ${when(since)} · ${span(Date.now() - Date.parse(since))}`;
         if (!view.manageShared && name !== 'api') return 'shared, always on';
-        return STATE_WORDS[state] ?? state.replace(/-/g, ' ');
+        const words = STATE_WORDS[state] ?? state.replace(/-/g, ' ');
+        return status === 'done' && !STATE_WORDS[state] ? `on · ${words}` : words;
       }
 
       function startedAt(view) {
@@ -776,6 +811,44 @@
         );
       }
 
+      function checkRow(label, up, text) {
+        const li = document.createElement('li');
+        li.append(
+          Object.assign(document.createElement('span'), {
+            className: `icon ${up ? 'done' : 'down'}`,
+          }),
+          Object.assign(document.createElement('span'), { className: 'what', textContent: label }),
+          Object.assign(document.createElement('span'), { className: 'when', textContent: text }),
+        );
+        return li;
+      }
+
+      function paintHealth(view, phase) {
+        $('healthCard').hidden = phase === PHASES.OFF;
+        const { checks, latencyMs, checkedAt, ready } = view.api;
+        const rows = [
+          checkRow(
+            'Server response',
+            ready,
+            latencyMs === null || latencyMs === undefined
+              ? 'not answering'
+              : `${ready ? 'healthy' : 'not ready'} · ${latencyMs} ms`,
+          ),
+          ...Object.entries(checks ?? {}).map(([name, check]) =>
+            checkRow(
+              CHECK_LABELS[name] ?? name,
+              check.status === 'up',
+              check.status === 'up' ? `up · ${check.latencyMs} ms` : 'down',
+            ),
+          ),
+        ];
+        $('checks').replaceChildren(...rows);
+        const at = checkedAt
+          ? new Date(checkedAt).toLocaleTimeString('en-IN', { timeZone: IST, timeStyle: 'medium' })
+          : '';
+        $('checkedAt').textContent = at ? `Last checked at ${at}` : '';
+      }
+
       function paintPeople(view) {
         const me = $('name').value.trim().toLowerCase();
         const items = view.checkedIn.map((entry) => {
@@ -862,6 +935,7 @@
         paintHero(view, phase);
         paintSteps(view, phase);
         paintPeople(view);
+        paintHealth(view, phase);
         paintProgress();
 
         for (const [id, href] of [
@@ -880,7 +954,9 @@
         $('autoOffNote').textContent = autoOffText(view.autoOff);
 
         clearTimeout(timer);
-        if (phase !== PHASES.OFF && phase !== PHASES.READY) timer = setTimeout(refresh, POLL_MS);
+        if (!settled(view) || (phase !== PHASES.OFF && phase !== PHASES.READY)) {
+          timer = setTimeout(refresh, POLL_MS);
+        }
         return view;
       }
 
@@ -947,6 +1023,7 @@
             await switchOff();
           }
         });
+      $('ping').onclick = () => busy($('ping'), refresh);
       $('mode').onchange = showModeFields;
       $('saveAutoOff').onclick = () =>
         busy($('saveAutoOff'), () =>

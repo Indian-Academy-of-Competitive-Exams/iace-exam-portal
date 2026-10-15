@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   ACTIONS,
   AUTO_OFF_MODES,
+  healthChecks,
   checkedIn,
   cleanName,
   othersCheckedIn,
@@ -142,4 +143,21 @@ test('sameSecret matches only the exact passcode, whatever is thrown at it', () 
   assert.equal(sameSecret(undefined, 'open-sesame'), false);
   assert.equal(sameSecret('x'.repeat(10_000), 'open-sesame'), false);
   assert.equal(sameSecret('పాస్‌కోడ్', 'open-sesame'), false);
+});
+
+test('healthChecks reads each dependency from a ready answer and from a refusal, and drops the error text', () => {
+  const ready = { success: true, data: { database: { status: 'up', latencyMs: 3 } } };
+  assert.deepEqual(healthChecks(ready), { database: { status: 'up', latencyMs: 3 } });
+
+  const refused = {
+    success: false,
+    error: {
+      details: {
+        redis: { status: 'down', latencyMs: 2000, error: 'connect ECONNREFUSED 10.0.0.5' },
+      },
+    },
+  };
+  assert.deepEqual(healthChecks(refused), { redis: { status: 'down', latencyMs: 2000 } });
+
+  assert.equal(healthChecks(null), null);
 });

@@ -94,3 +94,14 @@ export function sameSecret(given, expected) {
       .digest();
   return timingSafeEqual(digest(given), digest(expected));
 }
+
+// The API's readiness body names each dependency up or down, on success and refusal alike; only status and timing leave.
+export function healthChecks(body) {
+  const dependencies = body?.data ?? body?.error?.details;
+  if (!dependencies || typeof dependencies !== 'object') return null;
+  return Object.fromEntries(
+    Object.entries(dependencies)
+      .filter(([, check]) => check?.status === 'up' || check?.status === 'down')
+      .map(([name, check]) => [name, { status: check.status, latencyMs: check.latencyMs ?? null }]),
+  );
+}

@@ -25,6 +25,7 @@ import {
   CHECKIN_TAG_PREFIX,
   checkedIn,
   cleanName,
+  healthChecks,
   othersCheckedIn,
   parseAutoOff,
   resourcesToChange,
@@ -79,15 +80,18 @@ async function passcodeMatches(given) {
 }
 
 async function probeApi() {
+  const start = Date.now();
+  const checkedAt = new Date(start).toISOString();
   try {
     const response = await fetch(API_HEALTH_URL, {
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
     });
-    if (response.ok) return { ready: true, reason: null };
     const body = await response.json().catch(() => null);
-    return { ready: false, reason: body?.error?.message ?? `HTTP ${response.status}` };
+    const timing = { checkedAt, latencyMs: Date.now() - start, checks: healthChecks(body) };
+    if (response.ok) return { ready: true, reason: null, ...timing };
+    return { ready: false, reason: body?.error?.message ?? `HTTP ${response.status}`, ...timing };
   } catch {
-    return { ready: false, reason: null };
+    return { ready: false, reason: null, checkedAt, latencyMs: null, checks: null };
   }
 }
 
