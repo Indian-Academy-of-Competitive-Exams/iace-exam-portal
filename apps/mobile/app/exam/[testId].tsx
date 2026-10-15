@@ -212,7 +212,7 @@ function Sitting() {
       />
       {paper.data && attempt.data ? (
         <SittingEngine
-          key={reclaims}
+          key={`${paper.data.paper.attemptId}-${reclaims}`}
           paper={paper.data.paper}
           arrivedAt={paper.data.arrivedAt}
           // A paper whose read failed before is opened as a resume: the sitting may have ended while it waited.

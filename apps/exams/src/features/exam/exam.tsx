@@ -101,6 +101,8 @@ export function ExamPage() {
 
   return (
     <ExamHall
+      // A new sitting gets a fresh engine: one mounted hall must never post its answers to another sitting.
+      key={paper.data.paper.attemptId}
       paper={paper.data.paper}
       arrivedAt={paper.data.arrivedAt}
       // A paper whose read failed before is opened as a resume: the sitting may have ended while it waited.
