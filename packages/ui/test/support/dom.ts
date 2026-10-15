@@ -84,6 +84,7 @@ if (!('matchMedia' in globalThis)) {
     removeEventListener() {},
   }));
 }
+win.matchMedia ??= globalThis.matchMedia;
 
 /** Tells React that updates are wrapped in `act`, so a missing one is an error. */
 define('IS_REACT_ACT_ENVIRONMENT', true);
