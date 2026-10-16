@@ -107,6 +107,21 @@ const NotificationSettingsPage = React.lazy(() =>
   })),
 );
 
+const HelpPage = React.lazy(() =>
+  import('./features/support/help').then((module) => ({ default: module.HelpPage })),
+);
+const NewQueryPage = React.lazy(() =>
+  import('./features/support/new-query').then((module) => ({ default: module.NewQueryPage })),
+);
+const QueryThreadPage = React.lazy(() =>
+  import('./features/support/query-thread').then((module) => ({
+    default: module.QueryThreadPage,
+  })),
+);
+const LoginHelpPage = React.lazy(() =>
+  import('./features/support/login-help').then((module) => ({ default: module.LoginHelpPage })),
+);
+
 /** Each chunk waits on the shape it is about to become, never on one spinner standing in for all of them. */
 const whileLoading = (page: React.ReactNode, fallback: React.ReactNode) => (
   <PageErrorBoundary>
@@ -121,6 +136,10 @@ export function App() {
   return (
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+      <Route
+        path={ROUTES.LOGIN_HELP}
+        element={whileLoading(<LoginHelpPage />, <LoadingState>Opening sign-in help</LoadingState>)}
+      />
       {import.meta.env.DEV ? (
         <>
           <Route
@@ -186,6 +205,15 @@ export function App() {
           <Route
             path={ROUTES.LEADERBOARD}
             element={whileLoading(<LeaderboardPage />, <PageSkeleton />)}
+          />
+          <Route path={ROUTES.HELP} element={whileLoading(<HelpPage />, <PageSkeleton />)} />
+          <Route
+            path={ROUTES.HELP_NEW}
+            element={whileLoading(<NewQueryPage />, <PageSkeleton />)}
+          />
+          <Route
+            path={ROUTES.HELP_QUERY_PATTERN}
+            element={whileLoading(<QueryThreadPage />, <PageSkeleton />)}
           />
           <Route
             path={ROUTES.NOTIFICATIONS}

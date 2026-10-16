@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm, type FieldValues, type Path, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Info, MessageSquareText, LogIn } from 'lucide-react';
 import {
   otpCodeFormSchema,
@@ -120,6 +120,10 @@ function MobileStep({
         >
           Send code
         </Button>
+
+        <Button asChild variant="ghost" size="sm">
+          <Link to={ROUTES.LOGIN_HELP}>Can&rsquo;t sign in?</Link>
+        </Button>
       </form>
     </CardStep>
   );
@@ -221,17 +225,22 @@ function CodeStep({
 // Shared bits
 // ---------------------------------------------------------------------------
 
-function MobileField<TValues extends FieldValues>({
+export function MobileField<TValues extends FieldValues>({
   form,
   name,
+  label = 'Mobile number',
+  hint,
   autoFocus,
 }: Readonly<{
   form: UseFormReturn<TValues>;
   name: Path<TValues>;
+  label?: string;
+  hint?: string;
   autoFocus?: boolean;
 }>) {
   return (
-    <FormField form={form} name={name} label="Mobile number">
+    // ui-copy-ok: rule — the caller's own hint, passed through
+    <FormField form={form} name={name} label={label} hint={hint}>
       {(control) => (
         <NumericInput
           {...control}

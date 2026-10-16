@@ -1,6 +1,6 @@
-import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Info } from 'lucide-react';
+import { Info, LifeBuoy } from 'lucide-react';
 import {
   Button,
   Combobox,
@@ -64,20 +64,28 @@ export function ReportShell() {
           title="Report"
           meta={current === null ? undefined : marksOf(current)}
           action={
-            <span data-tour={TOUR_TARGETS.REPORT_PICKER} className="flex w-full sm:w-auto">
-              <Combobox
-                value={attemptId}
-                onChange={(next) => navigate(ROUTES.REPORT_TAB(next, tab))}
-                items={sat.newestFirst.map((point) => ({
-                  value: point.attemptId,
-                  label: point.testTitle ?? UNTITLED,
-                  hint: sittingHint(point),
-                }))}
-                clearable={false}
-                aria-label="Test"
-                className={PICKER_WIDTH.REPORT}
-              />
-            </span>
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <Button asChild variant="outline" size="sm">
+                <Link to={ROUTES.HELP_ABOUT_SITTING(attemptId)}>
+                  <LifeBuoy aria-hidden />
+                  Report a problem
+                </Link>
+              </Button>
+              <span data-tour={TOUR_TARGETS.REPORT_PICKER} className="flex w-full sm:w-auto">
+                <Combobox
+                  value={attemptId}
+                  onChange={(next) => navigate(ROUTES.REPORT_TAB(next, tab))}
+                  items={sat.newestFirst.map((point) => ({
+                    value: point.attemptId,
+                    label: point.testTitle ?? UNTITLED,
+                    hint: sittingHint(point),
+                  }))}
+                  clearable={false}
+                  aria-label="Test"
+                  className={PICKER_WIDTH.REPORT}
+                />
+              </span>
+            </div>
           }
         />
       }

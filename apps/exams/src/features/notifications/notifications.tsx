@@ -223,6 +223,9 @@ function destinationOf(notification: Notification): { to: string; label: string 
   if (notification.testId) {
     return { to: ROUTES.TEST_ABOUT(notification.testId), label: 'Open test' };
   }
+  if (notification.ticketId) {
+    return { to: ROUTES.HELP_QUERY(notification.ticketId), label: 'Open query' };
+  }
   if (notification.testSeriesId) {
     return { to: ROUTES.SERIES(notification.testSeriesId), label: 'Open series' };
   }

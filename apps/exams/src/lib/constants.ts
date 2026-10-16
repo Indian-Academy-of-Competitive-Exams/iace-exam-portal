@@ -6,11 +6,16 @@ import {
   Download,
   KeyRound,
   Keyboard,
+  LifeBuoy,
   Trophy,
   User,
 } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
+import { SUPPORT_CATEGORIES, SUPPORT_STATUSES, type SupportStatus } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
+
+/** What a new query reads its prefill from. */
+export const HELP_PARAMS = { CATEGORY: 'category', ATTEMPT: 'attemptId' } as const;
 
 /** Route paths. Referenced by the router, the guards and every navigate(). */
 export const ROUTES = {
@@ -44,6 +49,18 @@ export const ROUTES = {
   SAVED: '/saved',
   /** Their own reports, to print or keep. */
   DOWNLOADS: '/downloads',
+  HELP: '/help',
+  HELP_NEW: '/help/new',
+  /** A new query already about one sitting, opened from its report. */
+  HELP_ABOUT_SITTING: (attemptId: string) =>
+    `/help/new?${new URLSearchParams({
+      [HELP_PARAMS.CATEGORY]: SUPPORT_CATEGORIES.TEST_OR_RESULT,
+      [HELP_PARAMS.ATTEMPT]: attemptId,
+    }).toString()}`,
+  HELP_QUERY: (ticketId: string) => `/help/${ticketId}`,
+  HELP_QUERY_PATTERN: '/help/:ticketId',
+  /** Signed out, so outside the guard: the student it serves cannot sign in. */
+  LOGIN_HELP: '/login/help',
   NOTIFICATIONS: '/notifications',
   /** Under the bell, so the trail reads Notifications > Settings and the rail stays on the bell. */
   NOTIFICATION_SETTINGS: '/notifications/settings',
@@ -68,6 +85,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TYPING, label: 'Typing', icon: Keyboard },
   { to: ROUTES.SAVED, label: 'Saved questions', icon: Bookmark },
   { to: ROUTES.DOWNLOADS, label: 'Downloads', icon: Download },
+  { to: ROUTES.HELP, label: 'Help', icon: LifeBuoy },
   { to: ROUTES.NOTIFICATIONS, label: 'Notifications', icon: Bell },
 ];
 
@@ -108,6 +126,19 @@ export {
 export const typingPracticesQueryKey = () => ['me', 'typing', 'practices'] as const;
 export const typingPassageQueryKey = (presetKey: string) =>
   ['me', 'typing', 'passage', presetKey] as const;
+
+/** A query's status in the student's words: OPEN means it is IACE's turn. */
+export const SUPPORT_STATUS_LABEL: Readonly<Record<SupportStatus, string>> = {
+  [SUPPORT_STATUSES.OPEN]: 'Waiting on IACE',
+  [SUPPORT_STATUSES.ANSWERED]: 'Answered',
+  [SUPPORT_STATUSES.CLOSED]: 'Closed',
+};
+
+/** One root, so a send, a close or a new query refreshes the list and the thread together. */
+export const SUPPORT_QUERY_KEY = ['me', 'support'] as const;
+export const SUPPORT_LIST_QUERY_KEY = [...SUPPORT_QUERY_KEY, 'list'] as const;
+export const supportTicketQueryKey = (ticketId: string) =>
+  [...SUPPORT_QUERY_KEY, 'ticket', ticketId] as const;
 
 /** The subject filter choosing no scope means every scope, the way a `choice` filter's blank does. */
 export const ANY_SCOPE = '';
