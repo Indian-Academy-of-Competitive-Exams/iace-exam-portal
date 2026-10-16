@@ -8,7 +8,6 @@ import { useState } from 'react';
 import { Alert as NativeAlert, Image, Linking, Pressable, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ACCEPTED_TYPES_FOR,
@@ -19,6 +18,7 @@ import {
   type UploadFile,
 } from '@iace/contracts';
 import { Text } from '../ui/text';
+import { megabytes, withinLimit } from '../../lib/within-limit';
 import { api } from '../../lib/api';
 import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../../lib/constants';
 import { Button } from '../ui/button';
@@ -26,7 +26,7 @@ import { Card } from '../ui/card';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Upload from 'lucide-react-native/icons/upload';
 
-const MEGABYTES = Math.round(DOCUMENT_MAX_BYTES / 1024 / 1024);
+const MEGABYTES = megabytes(DOCUMENT_MAX_BYTES);
 
 /** Which link on the record is each card's. */
 const LINK_FOR = {
@@ -142,7 +142,7 @@ async function pickPhoto(): Promise<UploadFile | null> {
     legacy: true,
   });
   const asset = picked.canceled ? undefined : picked.assets[0];
-  return asset ? withinLimit(asset.uri, asset.fileSize) : null;
+  return asset ? withinLimit(asset.uri, asset.fileSize, DOCUMENT_MAX_BYTES) : null;
 }
 
 async function pickFile(kind: DocumentKind): Promise<UploadFile | null> {
@@ -152,16 +152,7 @@ async function pickFile(kind: DocumentKind): Promise<UploadFile | null> {
     copyToCacheDirectory: true,
   });
   const asset = picked.canceled ? undefined : picked.assets[0];
-  return asset ? withinLimit(asset.uri, asset.size) : null;
-}
-
-/** Refused here rather than after the upload: the server's answer costs them the whole file. */
-function withinLimit(uri: string, reported: number | undefined): UploadFile | null {
-  const file = new File(uri);
-  // Some providers report no size, and the file the upload reads has one.
-  if ((reported ?? file.size) <= DOCUMENT_MAX_BYTES) return file;
-  NativeAlert.alert(`That file is over ${MEGABYTES}MB. Choose a smaller one.`);
-  return null;
+  return asset ? withinLimit(asset.uri, asset.size, DOCUMENT_MAX_BYTES) : null;
 }
 
 /** Said before they choose, not after it is refused. */

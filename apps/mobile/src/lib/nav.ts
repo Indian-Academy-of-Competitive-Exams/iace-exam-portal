@@ -21,6 +21,9 @@ export const ROUTES = {
 /** The sign-in screen: where a signed-out student goes instead of Home. */
 export const LOGIN_ROUTE = '/login';
 
+/** Signed out, beside sign-in: the student it serves is the one who cannot sign in. */
+export const LOGIN_HELP_ROUTE = '/login-help';
+
 /** app-kit's `NavItem` types `icon` for web `lucide-react`, which RN icons do not satisfy. */
 export interface MobileNavItem {
   /** The file expo-router resolves under `app/(tabs)/` — `index` is Home. */
@@ -44,6 +47,8 @@ export const ACCOUNT_ROUTES = {
   PROFILE: '/profile',
   NOTIFICATIONS: '/notifications',
   NOTIFICATION_SETTINGS: '/notification-settings',
+  HELP: '/help',
+  HELP_NEW: '/help/new',
 } as const;
 
 /** What a path starts with while a paper is being sat: nothing pushed over the tabs may refetch behind it. */
@@ -65,4 +70,5 @@ export const DETAIL_ROUTES = {
   /** The web's own path, so the two apps name one sitting the same way. */
   SUBMITTED: (attemptId: string) => `/attempts/${attemptId}/submitted` as const,
   REPORT: (attemptId: string) => `/attempts/${attemptId}/report` as const,
+  HELP_QUERY: (ticketId: string) => `/help/${ticketId}` as const,
 } as const;

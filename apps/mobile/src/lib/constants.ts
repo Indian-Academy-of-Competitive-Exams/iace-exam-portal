@@ -1,3 +1,6 @@
+import { SUPPORT_STATUSES, type SupportStatus } from '@iace/contracts';
+import { type BadgeVariant } from '../components/ui/badge';
+
 /** Storage keys owned by this app, namespaced the way the SPAs name their localStorage keys. */
 export const STORAGE_KEYS = {
   AUTH: 'iace.mobile.auth',
@@ -43,3 +46,26 @@ export const EXAM_RESUME_PARAM = 'resume' as const;
 /** What a sitting knew about itself as it ended. Put in the cache by the exam, never fetched. */
 export const endedSittingQueryKey = (attemptId: string) =>
   ['me', 'attempts', attemptId, 'ended'] as const;
+
+/** One root, so a send, a close or a new query refreshes the list and the thread together. */
+export const SUPPORT_QUERY_KEY = ['me', 'support'] as const;
+export const SUPPORT_LIST_QUERY_KEY = [...SUPPORT_QUERY_KEY, 'list'] as const;
+export const supportTicketQueryKey = (ticketId: string) =>
+  [...SUPPORT_QUERY_KEY, 'ticket', ticketId] as const;
+export const LOGIN_HELP_BRANCHES_QUERY_KEY = ['auth', 'login-help', 'branches'] as const;
+
+/** What a new query reads its prefill from, the web's own names. */
+export const HELP_PARAMS = { CATEGORY: 'category', ATTEMPT: 'attemptId' } as const;
+
+/** A query's status in the student's words, as the web says it: OPEN means it is IACE's turn. */
+export const SUPPORT_STATUS_LABEL: Readonly<Record<SupportStatus, string>> = {
+  [SUPPORT_STATUSES.OPEN]: 'Waiting on IACE',
+  [SUPPORT_STATUSES.ANSWERED]: 'Answered',
+  [SUPPORT_STATUSES.CLOSED]: 'Closed',
+};
+
+export const SUPPORT_STATUS_BADGE: Readonly<Record<SupportStatus, BadgeVariant>> = {
+  [SUPPORT_STATUSES.OPEN]: 'warning',
+  [SUPPORT_STATUSES.ANSWERED]: 'success',
+  [SUPPORT_STATUSES.CLOSED]: 'neutral',
+};

@@ -52,6 +52,7 @@ export function TextField<TValues extends FieldValues>({
             >
               {prefix ? <Text className="text-base text-muted-foreground">{prefix}</Text> : null}
               <TextInput
+                accessibilityLabel={label}
                 {...inputProps}
                 value={typeof field.value === 'string' ? field.value : ''}
                 onBlur={field.onBlur}

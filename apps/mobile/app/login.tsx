@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
 import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
+import LifeBuoy from 'lucide-react-native/icons/life-buoy';
 import LogIn from 'lucide-react-native/icons/log-in';
 import MessageSquareText from 'lucide-react-native/icons/message-square-text';
 import { useForm } from 'react-hook-form';
@@ -25,6 +26,7 @@ import {
 } from '@iace/app-kit';
 import { Text } from '../src/components/ui/text';
 import { api } from '../src/lib/api';
+import { LOGIN_HELP_ROUTE } from '../src/lib/nav';
 import { useAuth } from '../src/providers/auth';
 import { Alert } from '../src/components/ui/alert';
 import { Brandmark } from '../src/components/ui/brandmark';
@@ -80,6 +82,7 @@ export default function LoginScreen() {
 function MobileStep({
   onSent,
 }: Readonly<{ onSent: (mobile: string, response: OtpRequestResponse) => void }>) {
+  const router = useRouter();
   const form = useForm({
     resolver: zodResolver(requestStudentOtpSchema),
     defaultValues: { mobile: '' },
@@ -117,6 +120,15 @@ function MobileStep({
         onPress={form.handleSubmit((values) => requestOtp.mutate(values))}
       >
         Send code
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={LifeBuoy}
+        onPress={() => router.navigate(LOGIN_HELP_ROUTE)}
+      >
+        Can&rsquo;t sign in?
       </Button>
     </View>
   );

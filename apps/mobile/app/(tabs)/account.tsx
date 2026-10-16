@@ -24,6 +24,7 @@ import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 import LogOut from 'lucide-react-native/icons/log-out';
 import UserRound from 'lucide-react-native/icons/user-round';
 import Bell from 'lucide-react-native/icons/bell';
+import LifeBuoy from 'lucide-react-native/icons/life-buoy';
 import Palette from 'lucide-react-native/icons/palette';
 import SmartphoneCharging from 'lucide-react-native/icons/smartphone-charging';
 import Sun from 'lucide-react-native/icons/sun';
@@ -60,6 +61,7 @@ export default function AccountScreen() {
             to: ACCOUNT_ROUTES.NOTIFICATIONS,
             badge: waiting > 0 ? String(waiting) : undefined,
           },
+          { label: 'Help', icon: LifeBuoy, to: ACCOUNT_ROUTES.HELP, badge: undefined },
         ].map((row, index) => (
           <MenuRow
             key={row.label}

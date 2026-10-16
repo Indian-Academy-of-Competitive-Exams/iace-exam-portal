@@ -60,6 +60,7 @@ export default function NotificationsScreen() {
     if (!row.isRead) read.mutate(row.id);
     if (row.testId) router.navigate(DETAIL_ROUTES.TEST(row.testId));
     else if (row.testSeriesId) router.navigate(DETAIL_ROUTES.SERIES(row.testSeriesId));
+    else if (row.ticketId) router.navigate(DETAIL_ROUTES.HELP_QUERY(row.ticketId));
   };
 
   return (
