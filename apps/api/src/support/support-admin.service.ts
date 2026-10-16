@@ -13,6 +13,7 @@ import {
   type AdminTicketListQuery,
   type AdminTicketPatch,
   type AdminTicketSummary,
+  type LoginHelpBody,
   type Paginated,
   type SupportAttachment,
 } from '@iace/contracts';
@@ -27,6 +28,7 @@ import { pageArgs, paged } from '../common/pagination';
 import { NotificationsService, PushService } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { claimChecks, type ClaimStudent } from './claim';
 import {
   assertKeyUnder,
   checkSupportImage,
@@ -59,6 +61,10 @@ const DETAIL_SELECT = {
       id: true,
       fullName: true,
       mobile: true,
+      externalRef: true,
+      currentBranchId: true,
+      mobileHistory: { select: { mobile: true } },
+      profile: { select: { dob: true, fatherName: true } },
       enrolledExams: true,
       currentBranch: { select: { name: true } },
     },
@@ -195,7 +201,7 @@ export class SupportAdminService {
         testName: row.attempt.test.title ?? 'Untitled test',
         submittedAt: row.attempt.submittedAt?.toISOString() ?? null,
       },
-      claim: null,
+      claim: await this.claimOf(row.claim, row.student),
       messages,
     };
   }
@@ -318,6 +324,16 @@ export class SupportAdminService {
     const key = `${supportKeyPrefix(id)}${randomUUID()}.${extension}`;
     await this.storage.upload(key, buffer, contentType);
     return { key, url: await this.storage.createDownloadUrl(key) };
+  }
+
+  private async claimOf(raw: Prisma.JsonValue, student: ClaimStudent | null) {
+    if (!raw) return null;
+    const claim = raw as unknown as LoginHelpBody;
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: claim.branchId },
+      select: { name: true },
+    });
+    return claimChecks(claim, student, branch?.name ?? null);
   }
 
   private async existing(id: string) {

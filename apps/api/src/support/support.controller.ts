@@ -7,19 +7,24 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { type Request } from 'express';
 import { z } from 'zod';
 import {
   ActorTypes,
   SUPPORT_ATTACHMENT_FIELD,
   SUPPORT_ATTACHMENT_MAX_BYTES,
   createTicketSchema,
+  loginHelpSchema,
   myTicketListQuerySchema,
   ticketReplySchema,
+  type BranchOption,
   type CreateTicketBody,
+  type LoginHelpBody,
   type MyTicketListQuery,
   type Paginated,
   type SupportAttachment,
@@ -27,8 +32,10 @@ import {
   type TicketReplyBody,
   type TicketSummary,
 } from '@iace/contracts';
-import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
+import { Actors, CurrentUser, Public, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
+import { AuthRateLimit } from '../common/throttling';
+import { LoginHelpService } from './login-help.service';
 import { type SupportUpload } from './support-attachments';
 import { SupportService } from './support.service';
 
@@ -97,5 +104,29 @@ export class SupportController {
     @UploadedFile() file?: SupportUpload,
   ): Promise<SupportAttachment> {
     return this.support.uploadForStudent(user.id, id, file);
+  }
+}
+
+/** The signed-out help form: no token, so counted per address and always answered the same. */
+@Controller('auth/login-help')
+export class LoginHelpController {
+  constructor(private readonly loginHelp: LoginHelpService) {}
+
+  @Public()
+  @AuthRateLimit()
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  submit(
+    @Body(new ZodBody(loginHelpSchema)) body: LoginHelpBody,
+    @Req() request: Request,
+  ): Promise<{ received: true }> {
+    return this.loginHelp.submit(body, request.ip ?? 'unknown');
+  }
+
+  @Public()
+  @AuthRateLimit()
+  @Get('branches')
+  branches(): Promise<BranchOption[]> {
+    return this.loginHelp.branches();
   }
 }

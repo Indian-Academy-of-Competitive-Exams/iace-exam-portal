@@ -1,4 +1,11 @@
+import { z } from 'zod';
 import { noContentSchema, type NoContent } from '../envelope';
+import {
+  LOGIN_HELP_ROUTES,
+  branchOptionSchema,
+  type BranchOption,
+  type LoginHelpInput,
+} from '../support';
 import {
   AUTH_ROUTES,
   authIdentitySchema,
@@ -51,6 +58,23 @@ export function authClient(core: ApiCore) {
         schema: authSessionResponseSchema,
         anonymous: true,
       }),
+
+    loginHelp: {
+      /** A signed-out student's request for help; the answer is the same whoever they are. */
+      submit: (input: LoginHelpInput): Promise<{ received: true }> =>
+        request(LOGIN_HELP_ROUTES.submit, {
+          method: 'POST',
+          body: input,
+          schema: z.object({ received: z.literal(true) }),
+          anonymous: true,
+        }),
+      branches: (): Promise<BranchOption[]> =>
+        request(LOGIN_HELP_ROUTES.branches, {
+          method: 'GET',
+          schema: z.array(branchOptionSchema),
+          anonymous: true,
+        }),
+    },
 
     me: (): Promise<AuthIdentity> => get(AUTH_ROUTES.me, authIdentitySchema),
 

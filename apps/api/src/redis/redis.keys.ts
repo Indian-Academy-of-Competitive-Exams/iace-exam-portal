@@ -18,6 +18,12 @@ export const redisKeys = {
   /** The address-wide twin of `otpDaily`: a mobile's cap alone does not stop one address minting new numbers. */
   otpDailyByIp: (ip: string) => `otp:daily:ip:${ip}`,
 
+  /** Signed-out help requests from one address today. */
+  loginHelpByIp: (ip: string) => `login-help:ip:${ip}`,
+
+  /** Signed-out help requests naming one registered mobile today. */
+  loginHelpByMobile: (mobile: string) => `login-help:mobile:${mobile}`,
+
   /** Every OTP sent platform-wide today — the one number the daily SMS/WhatsApp bill is checked against. */
   otpDailyGlobal: 'otp:daily:global',
   /** The same count for numbers with no account, so they are paid for out of a budget of their own. */

@@ -5,10 +5,12 @@ import { ActorTypes, AppException, ErrorCodes, SUPPORT_CATEGORIES } from '@iace/
 import { NotificationsService } from '../src/notifications';
 import { PushService } from '../src/notifications/push.service';
 import { redisKeys } from '../src/redis/redis.keys';
+import { LoginHelpService } from '../src/support/login-help.service';
 import { SupportAdminService } from '../src/support/support-admin.service';
 import { SupportService } from '../src/support/support.service';
 import {
   makeAdmin,
+  makeBranch,
   makeCatalog,
   makeSitting,
   makeStudent,
@@ -379,5 +381,127 @@ describe('admins working the queue', () => {
     assert.ok(!(await ids('unclaimed')).includes(old.id));
     assert.ok((await ids('unclaimed')).includes(newer.id));
     assert.equal(await admins.unclaimedCount(), 2);
+  });
+});
+
+describe('login help', () => {
+  let loginHelp: LoginHelpService;
+  beforeEach(() => {
+    loginHelp = new LoginHelpService(prisma, new FakeRedis().asService());
+  });
+  const DOB = '2001-04-09';
+  const claimFor = async (over: Record<string, unknown> = {}) => ({
+    fullName: 'Asha Rao',
+    registeredMobile: '9876500001',
+    dob: DOB,
+    fatherName: 'Ravi Rao',
+    branchId: (await makeBranch(prisma)).id,
+    contactEmail: 'asha@x.test',
+    problem: 'OTP_NOT_ARRIVING' as const,
+    body: 'No code arrives',
+    ...over,
+  });
+  const student = async (mobile: string, dob: string | null = DOB, fullName = 'Asha Rao') => {
+    const s = await makeStudent(prisma, { mobile, fullName });
+    await prisma.studentProfile.create({
+      data: { studentId: s.id, dob: dob ? new Date(`${dob}T00:00:00Z`) : null },
+    });
+    return s;
+  };
+  const lastTicket = () =>
+    prisma.supportTicket.findFirstOrThrow({ orderBy: { createdAt: 'desc' } });
+
+  it('links a claim matching mobile, dob and name', async () => {
+    const s = await student('9876500001');
+    await loginHelp.submit(await claimFor(), '1.1.1.1');
+    assert.equal((await lastTicket()).studentId, s.id);
+  });
+
+  it('links through a number the student used to have', async () => {
+    const s = await student('9000000009');
+    await prisma.studentMobileHistory.create({ data: { studentId: s.id, mobile: '9876500001' } });
+    await loginHelp.submit(await claimFor(), '1.1.1.1');
+    assert.equal((await lastTicket()).studentId, s.id);
+  });
+
+  it('leaves a wrong dob unlinked', async () => {
+    await student('9876500001');
+    await loginHelp.submit(await claimFor({ dob: '2001-04-10' }), '1.1.1.1');
+    assert.equal((await lastTicket()).studentId, null);
+  });
+
+  it('leaves a student with no dob on file unlinked', async () => {
+    await student('9876500001', null);
+    await loginHelp.submit(await claimFor(), '1.1.1.1');
+    assert.equal((await lastTicket()).studentId, null);
+  });
+
+  it('leaves an ambiguous claim unlinked', async () => {
+    await student('9876500001');
+    const other = await student('9000000009');
+    await prisma.studentMobileHistory.create({
+      data: { studentId: other.id, mobile: '9876500001' },
+    });
+    await loginHelp.submit(await claimFor(), '1.1.1.1');
+    assert.equal((await lastTicket()).studentId, null);
+  });
+
+  it('answers a matched and an unmatched claim identically', async () => {
+    await student('9876500001');
+    const matched = await loginHelp.submit(await claimFor(), '1.1.1.1');
+    const unmatched = await loginHelp.submit(
+      await claimFor({ registeredMobile: '9876500002' }),
+      '1.1.1.1',
+    );
+    assert.deepEqual(matched, unmatched);
+  });
+
+  it('refuses the 4th request for one registered mobile in a day', async () => {
+    for (let i = 0; i < 3; i++) await loginHelp.submit(await claimFor(), `2.2.2.${i}`);
+    await assert.rejects(
+      async () => loginHelp.submit(await claimFor(), '2.2.2.9'),
+      (e) => codeOf(e) === ErrorCodes.RATE_LIMITED,
+    );
+  });
+
+  it('lists only active branches, and fills the admin claim check', async () => {
+    const live = await makeBranch(prisma, 'Live branch');
+    const dead = await makeBranch(prisma, 'Dead branch');
+    await prisma.branch.update({ where: { id: dead.id }, data: { isActive: false } });
+    assert.deepEqual(
+      (await loginHelp.branches()).filter((b) => b.id === live.id || b.id === dead.id),
+      [{ id: live.id, name: 'Live branch' }],
+    );
+    const s = await student('9876500001');
+    await loginHelp.submit(
+      await claimFor({ branchId: live.id, fatherName: 'Wrong Name' }),
+      '3.3.3.3',
+    );
+    const detail = await admins.detail((await lastTicket()).id);
+    assert.equal(s.id, detail.student?.id);
+    assert.equal(detail.claim?.dob?.matches, true);
+    assert.equal(detail.claim?.fullName?.matches, true);
+    assert.equal(detail.claim?.fatherName?.matches, null);
+    assert.equal(detail.claim?.branch?.claimed, 'Live branch');
+  });
+
+  it('a matched ticket whose student can be pushed to sends no email and stays answered', async () => {
+    const s = await student('9876500001');
+    const sessionId = randomUUID();
+    await redis
+      .asService()
+      .setJson(redisKeys.session(ActorTypes.STUDENT, s.id, sessionId), { client: null }, 3600);
+    await prisma.pushDevice.create({
+      data: { studentId: s.id, token: `t-${s.id}`, platform: 'ANDROID', sessionId },
+    });
+    await loginHelp.submit(await claimFor(), '4.4.4.4');
+    const admin = await makeAdmin(prisma);
+    sender.sent.length = 0;
+    const after = await admins.reply(admin.id, (await lastTicket()).id, {
+      body: 'Try now',
+      internal: false,
+    });
+    assert.equal(after.status, 'ANSWERED');
+    assert.equal(sender.sent.length, 0);
   });
 });
