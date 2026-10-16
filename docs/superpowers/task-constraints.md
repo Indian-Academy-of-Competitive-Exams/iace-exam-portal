@@ -211,8 +211,9 @@ freely on UI and copy.
 
 ## Tests
 
-`node:test` + `node:assert/strict`, named after the unit. **Where a test lives follows what it
-touches.** A test that reads or writes Postgres runs against the real database in `apps/api/test-db`
+`node:test` + `node:assert/strict`, named after the unit. One exception: React Native screens
+render only under Jest, so mobile SCREEN tests live in `apps/mobile/screen-test` on `jest-expo`;
+mobile logic stays on `node:test`. **Where a test lives follows what it touches.** A test that reads or writes Postgres runs against the real database in `apps/api/test-db`
 (`saved-questions.db.test.ts`, `pnpm test:db`), building its rows from
 `apps/api/test-db/support/database.ts` and calling `resetDatabase` first when it reads rows it did
 not write. Pure logic, and code that needs only Redis, S3, a queue, a sender or the clock faked,

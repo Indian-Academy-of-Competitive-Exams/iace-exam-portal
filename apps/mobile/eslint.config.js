@@ -8,7 +8,7 @@ export default [
   ...noWebUi,
   {
     // Metro and Babel load these as plain CommonJS, never through the app's own bundler.
-    files: ['babel.config.js', 'metro.config.js'],
+    files: ['babel.config.js', 'metro.config.js', 'jest.config.js'],
     languageOptions: {
       sourceType: 'commonjs',
       globals: { module: 'writable', require: 'readonly', __dirname: 'readonly' },
@@ -19,5 +19,10 @@ export default [
     // Tailwind loads the preset through jiti, which hands CommonJS globals to ES module syntax.
     files: ['tailwind.preset.native.js'],
     languageOptions: { globals: { __dirname: 'readonly' } },
+  },
+  {
+    // Jest renders these screens once and never hot-reloads them.
+    files: ['screen-test/**'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
 ];

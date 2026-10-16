@@ -8,9 +8,9 @@
     "eas-build-post-install": "turbo run build --filter=@iace/mobile^... && node webview/build.mjs",
     "android": "node webview/build.mjs && expo run:android",
     "build": "node webview/build.mjs && expo export --platform android",
-    "typecheck": "node webview/build.mjs && tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json && tsc -p webview/tsconfig.json",
+    "typecheck": "node webview/build.mjs && tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json && tsc -p webview/tsconfig.json && tsc -p screen-test/tsconfig.json",
     "lint": "eslint . --max-warnings 0",
-    "test": "TSX_TSCONFIG_PATH=test/tsconfig.json node --import tsx --test \"test/**/*.test.ts\"",
+    "test": "TSX_TSCONFIG_PATH=test/tsconfig.json node --import tsx --test \"test/**/*.test.ts\" && node webview/build.mjs && jest --ci",
     "clean": "rm -rf dist webview/dist .expo .turbo"
   },
   "dependencies": {
@@ -53,12 +53,18 @@
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "7.29.7",
     "@iace/config": "workspace:*",
+    "@react-native/jest-preset": "0.86.3",
+    "@testing-library/react-native": "14.1.0",
+    "@types/jest": "29.5.14",
     "@types/node": "22.20.1",
     "@types/react": "19.2.18",
     "babel-preset-expo": "57.0.12",
     "esbuild": "0.28.2",
     "eslint": "10.8.1",
+    "jest": "29.7.0",
+    "jest-expo": "57.0.6",
     "tailwindcss": "3.4.19",
+    "test-renderer": "1.2.0",
     "tsx": "4.23.12",
     "typescript": "5.9.3"
   }
