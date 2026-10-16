@@ -187,6 +187,7 @@ erodes.
 | notifications | `Notification`, `BroadcastRead`, `NotificationDelivery`, `PushSubscription`, `PushDevice`, `Announcement`         |
 | saved         | `SavedQuestion`                                                                                                   |
 | typing        | `TypingPractice`                                                                                                  |
+| support       | `SupportTicket`, `SupportMessage`                                                                                 |
 
 `auth`, `imports`, `me`, `dashboard`, `reports`, `exports`, `reach`, `roster` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that

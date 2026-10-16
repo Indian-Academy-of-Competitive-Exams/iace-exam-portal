@@ -25,6 +25,7 @@ the event catalog are `docs/03-conventions.md`.
 | 13  | [A worked blueprint — SSC CGL Tier 1](#13-a-worked-blueprint--ssc-cgl-tier-1) | you want one real paper shape to reason against                                |
 | 14  | [Reports](#14-reports)                                                        | you touch a report, a printout or the question paper                           |
 | 15  | [Glossary](#15-glossary)                                                      | a word in the code, a ticket or an admin's message is unfamiliar               |
+| 16  | [Support queries](#16-support-queries)                                        | you touch a student's query, its replies or login help                         |
 
 ---
 
@@ -849,3 +850,23 @@ the target of record; the rule behind each word is in the section named.
 | desk code                | A sign-in code an admin reads to a student whose SMS did not arrive; good once, never sent                           | `issueDeskCode`                                                                           |
 | the bell                 | A student's in-app notification list: their own rows plus the broadcasts that reach them                             | `Notification`, `BellService`                                                             |
 | broadcast                | One message to a cohort — an announcement or a test opening — stored once, resolved when the bell is read            | `Announcement`, `Test.announcedAt`, `BroadcastRead`                                       |
+
+## 16. Support queries
+
+A student's question to the institute, answered later by an admin. `apps/api/src/support`.
+
+- **Five categories:** `ACCESS`, `TEST_OR_RESULT`, `APP_PROBLEM`, `LOGIN_OR_ACCOUNT`, `OTHER`. A
+  query opens with text only; no attachment starts one.
+- **At most 3 open per student**, across all categories. There is no per-category limit.
+- **Answered closes itself after 4 quiet days** (the `support-autoclose` queue). Closed is final: a
+  student who needs more opens a new query.
+- **Internal notes and priority are admin-only.** A student never sees either.
+- **A reply goes by the bell and push first.** Email is sent only when the student has no live push
+  target. A signed-out login ticket nothing matched is emailed its answer and closed.
+- **Login help is the signed-out door** (`LOGIN_OR_ACCOUNT`). It links to a student only when the
+  registered mobile (current or in `StudentMobileHistory`), the date of birth and the normalised name
+  all match exactly one student; otherwise the ticket is unlinked. The asker gets the same answer
+  either way, so the form never tells a stranger whether a student exists. A matched ticket becomes
+  that student's own.
+- **A ticket never grants access.** Changing a number or restoring a sign-in happens on the admin
+  student edit screen, by an admin, and the reply only says so.
