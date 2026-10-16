@@ -33,6 +33,7 @@ export const NOTIFICATION_TYPE = {
   RESULT_UPDATED: 'RESULT_UPDATED',
   PIN_CHANGED: 'PIN_CHANGED',
   WELCOME: 'WELCOME',
+  SUPPORT_REPLY: 'SUPPORT_REPLY',
 } as const;
 const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
@@ -277,6 +278,8 @@ export const notificationSchema = z.object({
   /** Deep links. Both are null for a GENERIC notification. */
   testId: z.string().nullable(),
   testSeriesId: z.string().nullable(),
+  /** The query a SUPPORT_REPLY is about; null for every other kind. */
+  ticketId: z.string().nullable(),
   isRead: z.boolean(),
   createdAt: z.string(),
 });

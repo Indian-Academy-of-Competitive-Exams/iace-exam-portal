@@ -47,6 +47,8 @@ const GROUPS = [
       'NotificationDelivery',
       'PushSubscription',
       'PushDevice',
+      'SupportTicket',
+      'SupportMessage',
     ],
   ],
   ['Events', '#A85A2E', ['Event', 'EventCandidate']],

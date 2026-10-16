@@ -27,6 +27,8 @@ export const ErrorCodes = {
   ADMIN_NOT_REGISTERED: 'ADMIN_NOT_REGISTERED',
   DRAW_SHORTFALL: 'DRAW_SHORTFALL',
   EXPORT_TOO_LARGE: 'EXPORT_TOO_LARGE',
+  TICKET_CLOSED: 'TICKET_CLOSED',
+  TICKET_LIMIT: 'TICKET_LIMIT',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL: 'INTERNAL',
 } as const;
@@ -56,6 +58,8 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   // The request was fine; the bank simply does not hold enough to build the paper it asked for.
   [ErrorCodes.DRAW_SHORTFALL]: 422,
   [ErrorCodes.EXPORT_TOO_LARGE]: 422,
+  [ErrorCodes.TICKET_CLOSED]: 409,
+  [ErrorCodes.TICKET_LIMIT]: 409,
   // A dependency is down, not the request: 503 is what tells a load balancer to send this elsewhere.
   [ErrorCodes.SERVICE_UNAVAILABLE]: 503,
   [ErrorCodes.INTERNAL]: 500,
@@ -83,6 +87,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
     'The question bank does not hold enough questions to fill every section of this paper.',
   [ErrorCodes.EXPORT_TOO_LARGE]:
     'That is too many rows for one file. Narrow the filters and try again.',
+  [ErrorCodes.TICKET_CLOSED]: 'This query is closed',
+  [ErrorCodes.TICKET_LIMIT]: 'You already have 3 open queries',
   [ErrorCodes.SERVICE_UNAVAILABLE]: 'The service is not ready. Please try again in a moment.',
   [ErrorCodes.INTERNAL]: 'Something went wrong. Please try again.',
 };

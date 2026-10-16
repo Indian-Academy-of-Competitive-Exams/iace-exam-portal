@@ -144,6 +144,7 @@ Enum NotificationType {
   RESULT_UPDATED
   PIN_CHANGED
   WELCOME
+  SUPPORT_REPLY
 }
 
 Enum DeliveryChannel {
@@ -249,6 +250,25 @@ Enum AdminRole {
   PROOFREADER
   ADMIN
   SUPER_ADMIN
+}
+
+Enum SupportCategory {
+  ACCESS
+  TEST_OR_RESULT
+  APP_PROBLEM
+  LOGIN_OR_ACCOUNT
+  OTHER
+}
+
+Enum SupportStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+Enum SupportPriority {
+  NORMAL
+  HIGH
 }
 
 Enum DevicePlatform {
@@ -832,6 +852,43 @@ Table Notification {
   }
 }
 
+Table SupportTicket {
+  id uuid [pk, default: `uuid(7)`]
+  studentId uuid
+  category SupportCategory [not null]
+  attemptId uuid
+  status SupportStatus [not null, default: 'OPEN']
+  priority SupportPriority [not null, default: 'NORMAL']
+  assigneeId uuid
+  claim jsonb
+  contactEmail text
+  lastMessageAt timestamptz(3) [not null, default: `now()`]
+  answeredAt timestamptz(3)
+  closedAt timestamptz(3)
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (status, priority, lastMessageAt)
+    (studentId, status)
+    (status, answeredAt)
+  }
+}
+
+Table SupportMessage {
+  id uuid [pk, default: `uuid(7)`]
+  ticketId uuid [not null]
+  authorType ActorType [not null]
+  adminId uuid
+  body text [not null]
+  attachmentKey text
+  internal boolean [not null, default: false]
+  emailFailedAt timestamptz(3)
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (ticketId, createdAt)
+  }
+}
+
 Table BroadcastRead {
   studentId uuid [not null]
   broadcastId uuid [not null]
@@ -1059,6 +1116,11 @@ Ref: Notification.adminId > Admin.id [delete: cascade]
 Ref: Notification.testId > Test.id
 Ref: Notification.testSeriesId > TestSeries.id
 Ref: Notification.announcementId > Announcement.id [delete: cascade]
+Ref: SupportTicket.studentId > Student.id [delete: cascade]
+Ref: SupportTicket.attemptId > Attempt.id [delete: set null]
+Ref: SupportTicket.assigneeId > Admin.id [delete: set null]
+Ref: SupportMessage.ticketId > SupportTicket.id [delete: cascade]
+Ref: SupportMessage.adminId > Admin.id [delete: set null]
 Ref: BroadcastRead.studentId > Student.id [delete: cascade]
 Ref: Announcement.createdById > Admin.id [delete: restrict]
 Ref: NotificationDelivery.notificationId > Notification.id [delete: cascade]
@@ -1156,6 +1218,8 @@ TableGroup "Audit, Notifications & Durability" { // color: #6B6B6B
   NotificationDelivery
   PushSubscription
   PushDevice
+  SupportTicket
+  SupportMessage
 }
 
 TableGroup "Events" { // color: #A85A2E

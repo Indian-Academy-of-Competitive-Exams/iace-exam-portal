@@ -176,6 +176,7 @@ enum NotificationType {
   // Their PIN changed, which is the one security fact the bell carries.
   PIN_CHANGED
   WELCOME
+  SUPPORT_REPLY
 }
 
 // Mirrors MESSAGE_CHANNELS in apps/api/src/common/messaging — the two are edited together.
@@ -733,6 +734,7 @@ model SectionComment {
 // ============================================================================
 
 model Attempt {
+  supportTickets   SupportTicket[]
   id               String              @id @default(uuid(7)) @db.Uuid
   testId           String              @db.Uuid
   studentId        String              @db.Uuid
@@ -800,26 +802,27 @@ model AttemptSheet {
 // (WHERE deletedAt IS NULL) written in the migration, so a soft-deleted row
 // releases its number.
 model Student {
-  id              String       @id @default(uuid(7)) @db.Uuid
+  supportTickets  SupportTicket[]
+  id              String          @id @default(uuid(7)) @db.Uuid
   mobile          String
   externalRef     String?
   studentType     StudentType
-  enrolledCourses ExamCourse[] @default([])
+  enrolledCourses ExamCourse[]    @default([])
   // Program.code values — the student is a candidate for these.
-  programs        String[]     @default([])
+  programs        String[]        @default([])
   // Exam.code values, app-validated against Exam.
-  enrolledExams   String[]     @default([])
-  currentBranchId String?      @db.Uuid
+  enrolledExams   String[]        @default([])
+  currentBranchId String?         @db.Uuid
   fullName        String?
-  isActive        Boolean      @default(true)
-  isTestBlocked   Boolean      @default(false)
-  deletedAt       DateTime?    @db.Timestamptz(3)
+  isActive        Boolean         @default(true)
+  isTestBlocked   Boolean         @default(false)
+  deletedAt       DateTime?       @db.Timestamptz(3)
   // Set by an erasure request. deletedAt says the account is closed; this says the PII is gone,
   // and the two are separate facts a regulator asks about separately.
-  anonymizedAt    DateTime?    @db.Timestamptz(3)
-  createdById     String?      @db.Uuid
-  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  anonymizedAt    DateTime?       @db.Timestamptz(3)
+  createdById     String?         @db.Uuid
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
 
   profile           StudentProfile?
   currentBranch     Branch?                @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
@@ -893,16 +896,18 @@ model StudentProfile {
 }
 
 model Admin {
-  id           String    @id @default(uuid(7)) @db.Uuid
-  email        String    @unique
-  fullName     String?
+  assignedTickets SupportTicket[]
+  supportMessages SupportMessage[]
+  id              String           @id @default(uuid(7)) @db.Uuid
+  email           String           @unique
+  fullName        String?
   // Seeds the grants at create, labels the person, and decides isSuperAdmin on every write.
-  role         AdminRole @default(ADMIN)
-  isSuperAdmin Boolean   @default(false)
-  isActive     Boolean   @default(true)
-  createdById  String?   @db.Uuid
-  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  role            AdminRole        @default(ADMIN)
+  isSuperAdmin    Boolean          @default(false)
+  isActive        Boolean          @default(true)
+  createdById     String?          @db.Uuid
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
 
   permissions       AdminFeaturePermission[]
   notifications     Notification[]
@@ -1145,6 +1150,71 @@ model Notification {
   @@index([testId])
   @@index([testSeriesId])
   @@index([announcementId])
+}
+
+enum SupportCategory {
+  ACCESS
+  TEST_OR_RESULT
+  APP_PROBLEM
+  LOGIN_OR_ACCOUNT
+  OTHER
+}
+
+enum SupportStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+// Declaration order is the sort order: HIGH sorts after NORMAL, so the queue orders desc.
+enum SupportPriority {
+  NORMAL
+  HIGH
+}
+
+// A student's query, answered asynchronously. studentId is null only for a signed-out login ticket nothing matched.
+model SupportTicket {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  studentId     String?         @db.Uuid
+  category      SupportCategory
+  attemptId     String?         @db.Uuid
+  status        SupportStatus   @default(OPEN)
+  priority      SupportPriority @default(NORMAL)
+  assigneeId    String?         @db.Uuid
+  // A signed-out ticket's submitted details; shown to the admin, never queried.
+  claim         Json?
+  contactEmail  String?
+  lastMessageAt DateTime        @default(now()) @db.Timestamptz(3)
+  answeredAt    DateTime?       @db.Timestamptz(3)
+  closedAt      DateTime?       @db.Timestamptz(3)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+
+  student  Student?         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attempt  Attempt?         @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+  assignee Admin?           @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  messages SupportMessage[]
+
+  @@index([status, priority, lastMessageAt])
+  @@index([studentId, status])
+  @@index([status, answeredAt])
+}
+
+model SupportMessage {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  ticketId      String    @db.Uuid
+  authorType    ActorType
+  adminId       String?   @db.Uuid
+  body          String
+  attachmentKey String?
+  internal      Boolean   @default(false)
+  emailFailedAt DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  admin  Admin?        @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
 }
 
 // A broadcast (in-app announcement, test opening) is one row the bell resolves; only a read is per student.

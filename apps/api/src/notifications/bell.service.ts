@@ -285,7 +285,14 @@ const textHolding = (q: string) => ({ contains: q, mode: 'insensitive' }) as con
 const unreadAsOf = (asOf: string | undefined): Prisma.NotificationWhereInput =>
   asOf ? { OR: [{ isRead: false }, { readAt: { gt: new Date(asOf) } }] } : { isRead: false };
 
-function toNotification(entry: Omit<Entry, 'readAt'> & { readAt?: Date | null }): Notification {
+function ticketIdIn(data: Prisma.JsonValue | undefined): string | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  return typeof data.ticketId === 'string' ? data.ticketId : null;
+}
+
+function toNotification(
+  entry: Omit<Entry, 'readAt'> & { readAt?: Date | null; data?: Prisma.JsonValue },
+): Notification {
   return {
     id: entry.id,
     type: entry.type,
@@ -293,6 +300,7 @@ function toNotification(entry: Omit<Entry, 'readAt'> & { readAt?: Date | null })
     body: entry.body,
     testId: entry.testId,
     testSeriesId: entry.testSeriesId,
+    ticketId: ticketIdIn(entry.data),
     isRead: entry.isRead,
     createdAt: entry.createdAt.toISOString(),
   };

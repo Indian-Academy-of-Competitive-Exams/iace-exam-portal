@@ -7,6 +7,7 @@ export * from './naming';
 export * from './students';
 export * from './me';
 export * from './saved';
+export * from './support';
 export * from './branches';
 export * from './exams';
 export * from './configs';

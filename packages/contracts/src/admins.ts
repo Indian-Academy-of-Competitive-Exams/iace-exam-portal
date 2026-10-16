@@ -30,6 +30,7 @@ export const FEATURE_KEYS = {
   NOTIFICATION_MANAGEMENT: 'NOTIFICATION_MANAGEMENT',
   DATA_EXPORT: 'DATA_EXPORT',
   REPORTS: 'REPORTS',
+  SUPPORT: 'SUPPORT',
 } as const;
 export const featureKeySchema = z.enum(FEATURE_KEYS);
 export type FeatureKey = z.infer<typeof featureKeySchema>;
@@ -80,6 +81,10 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   [FEATURE_KEYS.REPORTS]: {
     label: 'Reports',
     description: 'Every printable report, across tests, students, branches and staff.',
+  },
+  [FEATURE_KEYS.SUPPORT]: {
+    label: 'Support',
+    description: 'Student queries: reading, replying, priority and closing.',
   },
 };
 
