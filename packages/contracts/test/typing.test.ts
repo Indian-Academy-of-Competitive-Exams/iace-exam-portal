@@ -7,6 +7,7 @@ import {
   typablePassage,
   typingKeyDepressions,
   typingPassageNeed,
+  typingPassageOf,
   typingPassageText,
 } from '../src/index';
 
@@ -191,5 +192,25 @@ describe('typingPassageText', () => {
       typingPassageText('<p>one<br>two<br />three</p><p>four</p>'),
       'one two three four',
     );
+  });
+});
+
+describe('typingPassageOf', () => {
+  const written = (text: string) => ({ stem: [{ type: 'TEXT' as const, text: `<p>${text}</p>` }] });
+
+  it('reads a passage written only in Hindi, as a language subject writes it', () => {
+    assert.equal(typingPassageOf({ hi: written('नमस्ते दुनिया') }), 'नमस्ते दुनिया');
+  });
+
+  it('reads English first where the passage has it, whatever else it carries', () => {
+    assert.equal(
+      typingPassageOf({ hi: written('नमस्ते दुनिया'), en: written('hello world') }),
+      'hello world',
+    );
+  });
+
+  it('skips a language whose stem is markup alone, and is empty for no content', () => {
+    assert.equal(typingPassageOf({ en: written(''), hi: written('नमस्ते') }), 'नमस्ते');
+    assert.equal(typingPassageOf(null), '');
   });
 });

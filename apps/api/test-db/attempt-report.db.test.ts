@@ -459,12 +459,12 @@ describe('what was typed in a sitting', () => {
   const PASSAGE = 'the quick brown fox jumps over the lazy dog';
 
   /** A paper of one ordinary section and one typing section holding the passage. */
-  async function typingPaper() {
+  async function typingPaper(written: { stem?: string; content?: object } = { stem: PASSAGE }) {
     const paper = await makePaper(prisma, {
       sections: ['Reasoning', 'Typing'],
       questions: [
         'Reasoning',
-        { subject: 'Typing', section: 1, type: QUESTION_TYPE.TYPING, stem: PASSAGE },
+        { subject: 'Typing', section: 1, type: QUESTION_TYPE.TYPING, ...written },
       ],
     });
     const section = paper.items[1]?.sectionId ?? '';
@@ -494,6 +494,19 @@ describe('what was typed in a sitting', () => {
       },
     ]);
     assert.equal(card.unattemptedCount, 0, 'a typed passage is not an unattempted question');
+  });
+
+  /** The failure this prevents: a language subject's passage measured against an English one it never had. */
+  it('gives a passage written only in Hindi in Hindi, so what was typed is measured against it', async () => {
+    const hindi = 'तेज़ भूरी लोमड़ी आलसी कुत्ते के ऊपर कूदती है';
+    const { paper } = await typingPaper({ content: { hi: { stem: text(`<p>${hindi}</p>`) } } });
+    const { studentId, attemptId } = await sat(paper, [RIGHT_OPTION, null], {
+      typed: [null, hindi],
+    });
+
+    const [typing] = await reports().typing(studentId, attemptId);
+
+    assert.equal(typing?.passage, hindi);
   });
 
   /** The failure this prevents: a typed passage reported as a skipped question, and a subject scored on it. */
@@ -555,6 +568,37 @@ describe('a written answer in a sitting', () => {
     assert.ok((essay?.score ?? 0) < 2, 'and less than its two marks');
     assert.equal(card.score, 2 + (essay?.score ?? 0));
     assert.equal(card.correctCount, 2);
+  });
+
+  /** The failure this prevents: a Hindi-only question's answers judged against English key points it never had. */
+  it('is judged against key points written only in Hindi', async () => {
+    const paper = await makePaper(prisma, {
+      sections: ['Reasoning', 'Essay'],
+      questions: [
+        'Reasoning',
+        {
+          subject: 'Hindi',
+          section: 1,
+          type: QUESTION_TYPE.DESCRIPTIVE,
+          content: { hi: { stem: text('<p>ग्रामीण बैंकिंग पर लिखिए।</p>') } },
+          answerKey: { mode: 'EXACT', answers: { hi: 'ग्रामीण शाखाएँ\nडिजिटल भुगतान' } },
+        },
+      ],
+    });
+    const essayOf = async (typed: string) => {
+      const { studentId, attemptId } = await sat(paper, [RIGHT_OPTION, null], {
+        typed: [null, typed],
+      });
+      const card = await analytics().scoreCard(studentId, attemptId);
+      return card.sections.find((section) => section.name === 'Essay')?.score ?? 0;
+    };
+
+    const madeOne = await essayOf('ग्रामीण शाखाएँ गाँव के लोगों के लिए बहुत मायने रखती हैं।');
+    const madeNone = await essayOf('यह उत्तर किसी बिंदु को नहीं छूता है।');
+
+    assert.ok(madeOne > 0, 'something for the point it made');
+    assert.ok(madeOne < 2, 'and less than its two marks');
+    assert.equal(madeNone, 0, 'nothing for an answer that made none');
   });
 });
 

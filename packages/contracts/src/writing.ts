@@ -1,4 +1,4 @@
-import { previewTextOf } from './question-content';
+import { LANGUAGE_ORDER, previewTextOf, type LocalizedText } from './question-content';
 import { WRITING_FORMAT, type WritingFormat, type WritingRubric } from './questions';
 
 // ============================================================================
@@ -159,4 +159,10 @@ export function scoreWriting(
     score: shares.keyPoints === 0 ? 0 : round(score),
     attemptOnly: false,
   };
+}
+
+/** A key's points in its first language: English where they are written in it, else the language they are (docs/02 §7). */
+export function keyPointsIn(answers: LocalizedText | undefined): string[] {
+  const written = LANGUAGE_ORDER.map((language) => keyPointsOf(answers?.[language]));
+  return written.find((points) => points.length > 0) ?? [];
 }

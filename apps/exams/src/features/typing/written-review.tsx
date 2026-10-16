@@ -1,8 +1,7 @@
 /** A written answer in the review: what they wrote, what each check made of it, and who did the marking. */
 import {
-  DEFAULT_LANGUAGE,
   WRITING_WEIGHTS,
-  keyPointsOf,
+  keyPointsIn,
   scoreWriting,
   type AnswerKey,
   type WritingCheck,
@@ -22,11 +21,7 @@ export function WrittenReview({
   answer,
   answerKey,
 }: Readonly<{ answer: string | null; answerKey: AnswerKey | null | undefined }>) {
-  const result = scoreWriting(
-    answer ?? '',
-    answerKey?.rubric,
-    keyPointsOf(answerKey?.answers[DEFAULT_LANGUAGE]),
-  );
+  const result = scoreWriting(answer ?? '', answerKey?.rubric, keyPointsIn(answerKey?.answers));
 
   return (
     <div className="flex flex-col gap-4">

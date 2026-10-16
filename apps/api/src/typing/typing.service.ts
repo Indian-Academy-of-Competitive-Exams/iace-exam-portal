@@ -7,10 +7,9 @@ import {
   QUESTION_STATUS,
   QUESTION_TYPE,
   TYPING_PRESETS,
-  plainTextOf,
   scoreTyping,
   typingPassageNeed,
-  typingPassageText,
+  typingPassageOf,
   type FinishTypingPracticeBody,
   type LocalizedContent,
   type Paginated,
@@ -108,10 +107,9 @@ export class TypingService {
 }
 
 function toPassage(row: PassageRow): TypingPracticePassage {
-  const content = (row.currentVersion?.content ?? {}) as LocalizedContent;
   return {
     questionId: row.id,
-    text: typingPassageText(plainTextOf(content[DEFAULT_LANGUAGE]?.stem)),
+    text: typingPassageOf(row.currentVersion?.content as LocalizedContent | undefined),
   };
 }
 

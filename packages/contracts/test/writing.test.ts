@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { WRITING_FORMAT, keyPointsOf, scoreWriting } from '../src/index';
+import { WRITING_FORMAT, keyPointsIn, keyPointsOf, scoreWriting } from '../src/index';
 
 const POINTS = ['financial inclusion', 'rural branches', 'digital payments'];
 const words = (count: number, word = 'word') => Array.from({ length: count }, () => word).join(' ');
@@ -90,5 +90,21 @@ describe('keyPointsOf', () => {
       'rural branches',
     ]);
     assert.deepEqual(keyPointsOf('one\ntwo'), ['one', 'two']);
+  });
+});
+
+describe('keyPointsIn', () => {
+  it('reads the points in English where the key has them', () => {
+    assert.deepEqual(keyPointsIn({ en: 'rural branches', hi: 'ग्रामीण शाखाएँ' }), [
+      'rural branches',
+    ]);
+  });
+
+  it('reads them in the language they are written in when there is no English', () => {
+    assert.deepEqual(keyPointsIn({ hi: 'ग्रामीण शाखाएँ\nडिजिटल भुगतान' }), [
+      'ग्रामीण शाखाएँ',
+      'डिजिटल भुगतान',
+    ]);
+    assert.deepEqual(keyPointsIn(undefined), []);
   });
 });

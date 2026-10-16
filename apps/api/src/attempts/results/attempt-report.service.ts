@@ -22,10 +22,8 @@ import {
   scopedSections,
   servedQuestions,
   type TypingPresetKey,
-  DEFAULT_LANGUAGE,
   QUESTION_TYPE,
-  plainTextOf,
-  typingPassageText,
+  typingPassageOf,
   type TypingSitting,
 } from '@iace/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -159,13 +157,12 @@ export class AttemptReportService {
           held.baseConfigSectionId === section.id && held.question.type === QUESTION_TYPE.TYPING,
       );
       if (!row || section.typingPreset === null) return [];
-      const content = row.questionVersion.content as LocalizedContent;
       return [
         {
           sectionId: section.id,
           sectionName: section.name,
           presetKey: section.typingPreset as TypingPresetKey,
-          passage: typingPassageText(plainTextOf(content[DEFAULT_LANGUAGE]?.stem)),
+          passage: typingPassageOf(row.questionVersion.content as LocalizedContent),
           typed: row.typedAnswer ?? '',
         },
       ];

@@ -5,7 +5,6 @@
  */
 import {
   ATTEMPT_STATUS,
-  DEFAULT_LANGUAGE,
   MERIT_TYPE,
   PAPER_QUESTION_STATUS,
   QUESTION_TYPE,
@@ -13,9 +12,8 @@ import {
   REPORT_TOP_DEFAULT,
   TYPING_PRESETS,
   instituteDateTimeLabel,
-  plainTextOf,
   scoreTyping,
-  typingPassageText,
+  typingPassageOf,
   typingPresetKeySchema,
   type LocalizedContent,
   type PaperQuestionStatus,
@@ -344,7 +342,7 @@ async function typingPartsOf(sources: ReportSources, testId: string): Promise<Ty
         id: section.id,
         name: section.name,
         preset: TYPING_PRESETS[preset],
-        passage: typingPassageText(plainTextOf(content?.[DEFAULT_LANGUAGE]?.stem)),
+        passage: typingPassageOf(content),
         slot,
       },
     ];

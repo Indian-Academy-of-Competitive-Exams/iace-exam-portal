@@ -8,6 +8,7 @@ import {
   EXAM_MODE,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
+  QUESTION_TYPE,
   STAGE_DISPOSITION,
   TEST_STATUS,
   TEST_UI,
@@ -337,6 +338,28 @@ describe('AttemptPaperService — language', () => {
 
     assert.deepEqual(Object.keys(paper.questions[0]?.content ?? {}).sort(), ['en', 'hi']);
     assert.equal(paper.languageMode, LANGUAGE_MODE.DUAL);
+  });
+
+  /** The failure this prevents: a passage typed in English served to a Hindi sitting as nothing, while its result reads English. */
+  it('serves a typing passage in the language it is written in, whatever the sitting picked', async () => {
+    const paper = await makePaper(prisma, {
+      sections: ['Typing'],
+      questions: [{ subject: 'Typing', type: QUESTION_TYPE.TYPING, stem: 'the quick brown fox' }],
+    });
+    const student = (await makeStudent(prisma)).id;
+    const attempt = await sitPaper(prisma, {
+      paper,
+      studentId: student,
+      chosen: [null],
+      status: ATTEMPT_STATUS.IN_PROGRESS,
+      startedAt: new Date(Date.parse(ENDS_AT) - HOUR_MS),
+      submittedAt: null,
+      languages: [LANGUAGE_CODE.HI],
+    });
+
+    const served = await service.paper(student, attempt.id);
+
+    assert.deepEqual(Object.keys(served.questions[0]?.content ?? {}), ['en']);
   });
 
   it('leaves out a language the question was never authored in', async () => {

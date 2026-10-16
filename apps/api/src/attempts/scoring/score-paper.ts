@@ -7,8 +7,7 @@ import {
   type AttemptSectionScore,
   type PaperQuestionStatus,
   type QuestionType,
-  DEFAULT_LANGUAGE,
-  keyPointsOf,
+  keyPointsIn,
   scoreWriting,
 } from '@iace/contracts';
 
@@ -158,11 +157,7 @@ function awardFor(row: ScorableQuestion, verdict: boolean | null): number {
 /** How much of its marks a written answer earns, by rule: nobody reads it, and no answer is charged for. */
 function writtenShare(row: ScorableQuestion): number {
   const key = row.answerKey;
-  return scoreWriting(
-    row.typedAnswer ?? '',
-    key?.rubric,
-    keyPointsOf(key?.answers[DEFAULT_LANGUAGE]),
-  ).score;
+  return scoreWriting(row.typedAnswer ?? '', key?.rubric, keyPointsIn(key?.answers)).score;
 }
 
 /** Left blank is unattempted; written, it is right where it earned anything and wrong where it earned nothing. */

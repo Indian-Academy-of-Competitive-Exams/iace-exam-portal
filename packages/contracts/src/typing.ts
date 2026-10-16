@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { previewTextOf } from './question-content';
+import {
+  LANGUAGE_ORDER,
+  plainTextOf,
+  previewTextOf,
+  type LocalizedContent,
+} from './question-content';
 
 // ============================================================================
 // Typing and data-entry skill tests: the standards, and the one evaluator the
@@ -120,6 +125,14 @@ export function typablePassage(text: string): string {
 /** The passage a TYPING question's stem holds, as the candidate is shown it and held to it. */
 export function typingPassageText(stemHtml: string | undefined): string {
   return typablePassage(previewTextOf((stemHtml ?? '').replace(LINE_BREAK, ' ')));
+}
+
+/** A TYPING question's passage in its first language: English where it has it, else the one it is written in (docs/02 §7). */
+export function typingPassageOf(content: LocalizedContent | null | undefined): string {
+  const passages = LANGUAGE_ORDER.map((language) =>
+    typingPassageText(plainTextOf(content?.[language]?.stem)),
+  );
+  return passages.find((passage) => passage !== '') ?? '';
 }
 
 /** `previewTextOf` drops a `<br>` outright, which would join the words either side of it. */

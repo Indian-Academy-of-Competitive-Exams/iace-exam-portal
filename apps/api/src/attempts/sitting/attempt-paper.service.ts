@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  LANGUAGE_CODES,
+  QUESTION_TYPE,
   optionLetter,
   scopedSections,
   servedQuestions,
@@ -360,7 +362,8 @@ function toExamQuestion(row: ServedQuestion, languages: readonly LanguageCode[])
     // What is ASKED only: `solution` explains the answer, so it stays behind.
     content: narrowTo(
       row.questionVersion.content as LocalizedContent | null,
-      languages,
+      // A passage is typed in its first language whatever the sitting picked, as its result is measured (docs/02 §7).
+      row.question.type === QUESTION_TYPE.TYPING ? LANGUAGE_CODES : languages,
       (held) => ({ stem: held.stem, ...(held.passage ? { passage: held.passage } : {}) }),
     ),
     options: visible,
