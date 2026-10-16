@@ -5,7 +5,8 @@
  */
 import { useEffect, useRef, type ReactNode } from 'react';
 import { contentLanguageOf, LANGUAGE_LABELS, type LanguageCode } from '@iace/contracts';
-import { Brandmark } from '@iace/ui';
+import { NEEDS_KEYBOARD_SAYS, needsKeyboard } from '@iace/app-kit';
+import { Alert, Brandmark } from '@iace/ui';
 import { type InstructionsView } from '../../use-instructions';
 import profileImage from '../railway/assets/profile.png';
 import './ssc.css';
@@ -28,6 +29,11 @@ export function SscInstructions({ view }: Readonly<{ view: InstructionsView }>) 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="sc-guide min-h-0 flex-1">
+            {needsKeyboard(brief) ? (
+              <Alert variant="info" className="mb-2">
+                {NEEDS_KEYBOARD_SAYS}
+              </Alert>
+            ) : null}
             <SscGuide
               sections={brief.sections.map((section) => ({
                 ...section,

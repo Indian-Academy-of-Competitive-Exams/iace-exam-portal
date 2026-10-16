@@ -13,6 +13,8 @@ import {
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
+import { NEEDS_KEYBOARD_SAYS, needsKeyboard } from '@iace/app-kit';
+import { Alert } from '@iace/ui';
 import { type InstructionsView } from '../../use-instructions';
 import profileImage from '../railway/assets/profile.png';
 import { STATE_CLASS } from './states';
@@ -38,6 +40,11 @@ export function BankingInstructions({ view }: Readonly<{ view: InstructionsView 
 
           <div className="bi-scroll min-h-0 flex-1">
             <div className="bi-content">
+              {needsKeyboard(view.brief) ? (
+                <Alert variant="info" className="mt-2.5">
+                  {NEEDS_KEYBOARD_SAYS}
+                </Alert>
+              ) : null}
               {general ? (
                 <BankingGeneral
                   minutes={Math.round(view.brief.durationSec / 60)}

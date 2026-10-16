@@ -3,7 +3,7 @@
  * confirmation are here rather than in a template, so a new skin cannot ship
  * without them — and the data attribute is what scopes that skin's tokens.
  */
-import { useState, type ReactNode, type SyntheticEvent } from 'react';
+import { useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { Send } from 'lucide-react';
 import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG, type ExamTemplate } from '@iace/contracts';
 import { Alert, Button, Calculator, ConfirmDialog } from '@iace/ui';
@@ -33,6 +33,7 @@ export function ExamShell({
   const [calculating, setCalculating] = useState(false);
   const online = useNetworkStatus();
   useLockedZoom();
+  useNothingPrints();
   // A skin nothing is configured for falls back rather than leaving a candidate on a blank page.
   const template = EXAM_TEMPLATE_CONFIG[examTemplate] ? examTemplate : EXAM_TEMPLATE.DEFAULT;
   const { Skin, Nag, asksItself } = SKINS[template];
@@ -41,8 +42,8 @@ export function ExamShell({
     <div
       // Lowercased for CSS, where the skin's whole palette hangs off this one attribute.
       data-exam-template={template.toLowerCase()}
-      // A sitting is not a document to copy from: not selected, copied, dragged out or printed.
-      className="relative flex h-dvh select-none flex-col bg-exam-surface text-exam-ink print:hidden"
+      // A sitting is not a document to copy from: not selected, copied or dragged out.
+      className="relative flex h-dvh select-none flex-col bg-exam-surface text-exam-ink"
       onCopy={refuse}
       onCut={refuse}
       onContextMenu={refuse}
@@ -141,3 +142,13 @@ function CalculatorPanel({ onClose }: Readonly<{ onClose: () => void }>) {
 }
 
 const refuse = (event: SyntheticEvent) => event.preventDefault();
+
+const PRINTS_NOTHING = 'print:hidden';
+
+/** Nor printed: a dialog is portalled to the body, outside the frame, so it is the body that prints nothing. */
+function useNothingPrints() {
+  useEffect(() => {
+    document.body.classList.add(PRINTS_NOTHING);
+    return () => document.body.classList.remove(PRINTS_NOTHING);
+  }, []);
+}

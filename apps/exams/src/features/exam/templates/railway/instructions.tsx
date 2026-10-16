@@ -11,7 +11,8 @@ import {
   type ExamBrief,
   type LanguageCode,
 } from '@iace/contracts';
-import { cn, plural } from '@iace/ui';
+import { NEEDS_KEYBOARD_SAYS, needsKeyboard } from '@iace/app-kit';
+import { Alert, cn, plural } from '@iace/ui';
 import { LEGEND_ORDER, STATE_CLASS } from './states';
 import { useAuth } from '../../../../providers/auth';
 import { type InstructionsView } from '../../use-instructions';
@@ -47,6 +48,11 @@ export function RailwayInstructions({ view }: Readonly<{ view: InstructionsView 
               view.step === 'PAPER' && 'flex flex-col',
             )}
           >
+            {needsKeyboard(view.brief) ? (
+              <Alert variant="info" className="mb-3">
+                {NEEDS_KEYBOARD_SAYS}
+              </Alert>
+            ) : null}
             {view.step === 'GENERAL' ? (
               <GeneralScreen forwardOnly={view.forwardOnly} sectional={view.sectional} />
             ) : (
