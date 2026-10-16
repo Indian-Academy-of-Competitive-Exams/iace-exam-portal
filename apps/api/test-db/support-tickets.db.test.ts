@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ActorTypes, AppException, ErrorCodes, SUPPORT_CATEGORIES } from '@iace/contracts';
+import { MS_PER_DAY, MS_PER_MINUTE } from '../src/common/time/units';
 import { NotificationsService } from '../src/notifications';
 import { PushService } from '../src/notifications/push.service';
 import { redisKeys } from '../src/redis/redis.keys';
@@ -503,5 +504,40 @@ describe('login help', () => {
     });
     assert.equal(after.status, 'ANSWERED');
     assert.equal(sender.sent.length, 0);
+  });
+});
+
+describe('auto-closing quiet tickets', () => {
+  const NOW = new Date('2026-10-16T12:00:00.000Z');
+  const answeredAgo = async (ms: number, status: 'OPEN' | 'ANSWERED' = 'ANSWERED') => {
+    const { id: studentId } = await makeStudent(prisma);
+    const { id } = await ask(studentId);
+    await prisma.supportTicket.update({
+      where: { id },
+      data: { status, answeredAt: new Date(NOW.getTime() - ms) },
+    });
+    return id;
+  };
+  const statusOf = async (id: string) =>
+    (await prisma.supportTicket.findUniqueOrThrow({ where: { id } })).status;
+
+  it('closes an answered ticket quiet for four days and a minute', async () => {
+    const id = await answeredAgo(4 * MS_PER_DAY + MS_PER_MINUTE);
+    assert.equal(await support.closeStale(NOW), 1);
+    const ticket = await prisma.supportTicket.findUniqueOrThrow({ where: { id } });
+    assert.equal(ticket.status, 'CLOSED');
+    assert.deepEqual(ticket.closedAt, NOW);
+  });
+
+  it('leaves one answered three days and 23 hours ago', async () => {
+    const id = await answeredAgo(3 * MS_PER_DAY + 23 * 60 * MS_PER_MINUTE);
+    assert.equal(await support.closeStale(NOW), 0);
+    assert.equal(await statusOf(id), 'ANSWERED');
+  });
+
+  it('never touches an open ticket, however old', async () => {
+    const id = await answeredAgo(30 * MS_PER_DAY, 'OPEN');
+    assert.equal(await support.closeStale(NOW), 0);
+    assert.equal(await statusOf(id), 'OPEN');
   });
 });

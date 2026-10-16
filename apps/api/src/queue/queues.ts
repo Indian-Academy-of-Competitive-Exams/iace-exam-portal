@@ -11,6 +11,7 @@ export const QUEUE_NAMES = {
   NOTIFICATIONS: 'notifications',
   NOTIFICATION_DELIVERY: 'notification-delivery',
   EXPORTS: 'exports',
+  SUPPORT_AUTOCLOSE: 'support-autoclose',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -34,6 +35,7 @@ export const QUEUE_POLICY = {
   [QUEUE_NAMES.NOTIFICATION_DELIVERY]: { concurrency: 2, attempts: 4, backoffMs: 15000 },
   // A workbook holds its rows in memory while it is written, so two at once is the ceiling.
   [QUEUE_NAMES.EXPORTS]: { concurrency: 2, attempts: 2, backoffMs: 5000 },
+  [QUEUE_NAMES.SUPPORT_AUTOCLOSE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
 } as const satisfies Record<
   QueueName,
   { concurrency: number; attempts: number; backoffMs: number }
@@ -178,3 +180,6 @@ export const AUDIT_ARCHIVE_CRON = '15 21 * * *';
 
 /** 02:30 IST, at an hour no Indian coaching branch is running a test, clear of the audit archive. */
 export const NOTIFICATION_PRUNE_CRON = '0 21 * * *';
+
+/** Hourly, at a quarter past: a quiet ticket closes within the hour of its fourth day. */
+export const SUPPORT_AUTOCLOSE_CRON = '15 * * * *';

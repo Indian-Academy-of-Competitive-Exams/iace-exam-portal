@@ -5,6 +5,7 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
+  SUPPORT_AUTOCLOSE_DAYS,
   SUPPORT_MAX_OPEN,
   SUPPORT_STATUSES,
   type CreateTicketBody,
@@ -15,6 +16,7 @@ import {
   type TicketReplyBody,
   type TicketSummary,
 } from '@iace/contracts';
+import { MS_PER_DAY } from '../common/time/units';
 import { pageArgs, paged } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -166,6 +168,15 @@ export class SupportService {
       });
     }
     return this.detailMine(studentId, id);
+  }
+
+  async closeStale(now = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - SUPPORT_AUTOCLOSE_DAYS * MS_PER_DAY);
+    const { count } = await this.prisma.supportTicket.updateMany({
+      where: { status: SUPPORT_STATUSES.ANSWERED, answeredAt: { lt: cutoff } },
+      data: { status: SUPPORT_STATUSES.CLOSED, closedAt: now },
+    });
+    return count;
   }
 
   async uploadForStudent(
