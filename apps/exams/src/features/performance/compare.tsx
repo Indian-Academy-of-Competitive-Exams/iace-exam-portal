@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Alert, ComparisonCards, plural, type ComparisonItem } from '@iace/ui';
+import {
+  Alert,
+  ComparisonCards,
+  EMPTY_STATE_KINDS,
+  EmptyState,
+  plural,
+  type ComparisonItem,
+} from '@iace/ui';
 import { percentLabel, type CohortCurve } from '@iace/contracts';
 import { everySitting } from '@iace/app-kit';
 import { api } from '../../lib/api';
@@ -46,7 +53,14 @@ export function ComparePanel() {
             {placed ? (
               <Section title="Leaderboard">
                 {board.isLoading ? <RowsSkeleton rows={5} /> : null}
-                {board.data ? (
+                {board.isError ? (
+                  <EmptyState
+                    kind={EMPTY_STATE_KINDS.FAILURE}
+                    title="This leaderboard did not load"
+                    onRetry={() => void board.refetch()}
+                  />
+                ) : null}
+                {board.data && !board.isError ? (
                   <>
                     <Podium rows={board.data.podium} />
                     <Standings

@@ -46,4 +46,8 @@ describe('resultLine', () => {
     assert.equal(resultLine(point(91)), '60 of 100 marks · 91st percentile · rank 4');
     assert.equal(resultLine(point(null)), '60 of 100 marks');
   });
+
+  it('leaves the marks out of a paper that carries none', () => {
+    assert.equal(resultLine({ ...point(null), score: 0, maxMarks: 0 }), '');
+  });
 });

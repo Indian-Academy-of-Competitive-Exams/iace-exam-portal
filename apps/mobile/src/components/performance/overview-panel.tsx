@@ -7,6 +7,7 @@ import {
   everySitting,
   minutes,
   newestFirst,
+  marksOf,
   ordinalSuffix,
   sittingHint,
   bestLine,
@@ -214,7 +215,7 @@ function Sittings({ sittings }: Readonly<{ sittings: readonly PerformancePoint[]
               {point.testTitle ?? 'Untitled test'}
             </Text>
             <Text variant="meta">
-              {`${point.score} of ${point.maxMarks} marks · ${sittingHint(point)}`}
+              {[marksOf(point), sittingHint(point)].filter(Boolean).join(' · ')}
             </Text>
           </Pressable>
         ))}

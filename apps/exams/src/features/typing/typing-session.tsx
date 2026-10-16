@@ -17,6 +17,7 @@ import {
   type TypingResult,
 } from '@iace/contracts';
 import { Button, ConfirmDialog, EMPTY_STATE_KINDS, EmptyState, LoadingState } from '@iace/ui';
+import { useLeaveGuard } from '@iace/app-kit/browser';
 import { api } from '../../lib/api';
 import { ROUTES, typingPassageQueryKey, typingPracticesQueryKey } from '../../lib/constants';
 import { ExamTimer } from '../exam/exam-timer';
@@ -24,6 +25,9 @@ import { TypingPane } from './typing-pane';
 import { TypingResultView } from './typing-result';
 
 const MILLISECONDS_PER_SECOND = 1000;
+
+const sessionUnderWay = () => true;
+const nothingToSend = () => undefined;
 
 export function TypingSessionPage() {
   const { presetKey = '' } = useParams();
@@ -55,10 +59,11 @@ function Session({ presetKey }: Readonly<{ presetKey: TypingPresetKey }>) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: typingPracticesQueryKey() }),
   });
 
-  if (passage.isPending || passage.isFetching) {
+  // Paused offline the read never ran: it is pending with nothing fetching, a failure rather than a wait.
+  if ((passage.isPending && !passage.isPaused) || passage.isFetching) {
     return <LoadingState>Fetching a passage</LoadingState>;
   }
-  if (passage.isError) {
+  if (passage.isError || passage.isPending) {
     const none = AppException.is(passage.error) && passage.error.code === ErrorCodes.NOT_FOUND;
     return none ? (
       <EmptyState title="No passages yet" />
@@ -111,6 +116,7 @@ function Sitting({
   const [confirming, setConfirming] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const navigate = useNavigate();
+  useLeaveGuard(sessionUnderWay, nothingToSend);
   // The countdown calls whichever of these the latest render made, so it sees all that was typed.
   const finish = () => onFinish(typed);
 

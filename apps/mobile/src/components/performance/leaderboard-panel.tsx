@@ -66,7 +66,11 @@ export function LeaderboardPanel() {
           <Podium rows={board.data.podium} />
           <Standings
             board={board.data}
-            empty="Nobody has been ranked here yet"
+            empty={
+              board.data.cohortSize === 0
+                ? 'Nobody has been ranked here yet'
+                : 'Everyone on this board is on the podium'
+            }
             onPage={(next) => setTurned({ paper, page: next })}
           />
           {board.data.you === null ? (

@@ -25,7 +25,7 @@ export const laneOf = (row: Sittable): Lane => {
 export const papersLine = (row: Sittable, now: Date): string =>
   [
     row.seriesName,
-    `${plural(row.test.totalQuestions, 'question')} · ${Math.round(row.test.durationSec / 60)} minutes`,
+    `${plural(row.test.totalQuestions, 'question')} · ${plural(Math.round(row.test.durationSec / 60), 'minute')}`,
     whenLine(row, now),
   ]
     .filter((part) => part !== null)

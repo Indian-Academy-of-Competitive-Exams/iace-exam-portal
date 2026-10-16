@@ -1,5 +1,6 @@
 /** The line a student's sittings draw on both clients: which figure it plots, and what it is read against. */
 import { type PerformancePoint } from '@iace/contracts';
+import { marksOf } from './report-copy';
 
 /** Where a percentile stops being a middle and starts being a placing worth chasing. */
 export const TOP_QUARTER = { from: 75, to: 100, label: 'Top quarter' } as const;
@@ -8,7 +9,7 @@ export interface Trendline {
   title: string;
   suffix: string;
   /** A null value is nothing to plot, which is not zero: it draws no marker and breaks the line. */
-  points: { key: string; label: string; value: number | null; caption: string }[];
+  points: { key: string; label: string; value: number | null; caption?: string }[];
   band?: { from: number; to: number; label: string };
   reference?: { value: number; label: string };
 }
@@ -23,7 +24,7 @@ export function trendOf(points: readonly PerformancePoint[]): Trendline | null {
     key: point.attemptId,
     label: point.testTitle ?? 'Untitled test',
     value: ranked ? point.percentile : point.percentage,
-    caption: `${point.score} of ${point.maxMarks} marks`,
+    caption: marksOf(point),
   }));
   const mean = average(plotted.map((point) => point.value));
 

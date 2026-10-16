@@ -120,10 +120,12 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
   if (result && row.action !== 'RESUME') {
     return (
       <View className="flex-row items-center justify-between gap-2">
-        <Text className="text-lg font-semibold tabular-nums text-foreground">
-          {result.score}
-          <Text variant="metaStrong"> /{result.maxMarks}</Text>
-        </Text>
+        {result.maxMarks > 0 ? (
+          <Text className="text-lg font-semibold tabular-nums text-foreground">
+            {result.score}
+            <Text variant="metaStrong"> /{result.maxMarks}</Text>
+          </Text>
+        ) : null}
         <ReportLink attemptId={result.attemptId} />
       </View>
     );

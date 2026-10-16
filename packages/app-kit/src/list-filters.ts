@@ -90,10 +90,29 @@ export const NOTIFICATION_FILTERS: readonly FilterSpec[] = [
     key: 'kind',
     kind: 'multi',
     label: 'Type',
-    items: KIND_ENTRIES.map(([value, kind]) => ({ value, label: kind.label })),
+    // Nothing sends a Security notification now; the kind stays only to name old ones.
+    items: KIND_ENTRIES.filter(([value]) => value !== 'SECURITY').map(([value, kind]) => ({
+      value,
+      label: kind.label,
+    })),
   },
-  { key: 'from', kind: 'date', label: 'From', max: todayISO() },
-  { key: 'to', kind: 'date', label: 'To', max: todayISO() },
+  // A getter, so a tab left open past midnight reads the new day at its next render.
+  {
+    key: 'from',
+    kind: 'date',
+    label: 'From',
+    get max() {
+      return todayISO();
+    },
+  },
+  {
+    key: 'to',
+    kind: 'date',
+    label: 'To',
+    get max() {
+      return todayISO();
+    },
+  },
 ];
 
 /** The filters as the endpoint takes them; `unreadAsOf` holds a paged Unread list still while its rows are read. */

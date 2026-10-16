@@ -83,10 +83,12 @@ function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult
   if (result && row.action !== 'RESUME') {
     return (
       <div className="flex items-center justify-between gap-2">
-        <span className="text-lg font-semibold tabular-nums text-foreground">
-          {result.score}
-          <span className="text-xs font-medium text-muted-foreground">/{result.maxMarks}</span>
-        </span>
+        {result.maxMarks > 0 ? (
+          <span className="text-lg font-semibold tabular-nums text-foreground">
+            {result.score}
+            <span className="text-xs font-medium text-muted-foreground">/{result.maxMarks}</span>
+          </span>
+        ) : null}
         <Link
           className={cn(
             linkVariants(),

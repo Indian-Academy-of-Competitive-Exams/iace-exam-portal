@@ -48,7 +48,9 @@ function Attempt({ point, first }: Readonly<{ point: PerformancePoint; first: bo
         <Text variant="label" numberOfLines={1} className="flex-1">
           {point.submittedAt ? instituteDateTimeLabel(point.submittedAt) : DASH}
         </Text>
-        <Text variant="subsection">{`${point.score} / ${point.maxMarks}`}</Text>
+        {point.maxMarks > 0 ? (
+          <Text variant="subsection">{`${point.score} / ${point.maxMarks}`}</Text>
+        ) : null}
       </View>
       <Text variant="meta">
         {`Rank ${point.rank ?? DASH} · Percentile ${point.percentile ?? DASH}`}

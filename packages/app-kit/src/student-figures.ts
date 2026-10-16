@@ -19,6 +19,7 @@ import {
   type QuestionReportRow,
   type TimerTemplate,
 } from '@iace/contracts';
+import { marksOf } from './report-copy';
 
 const DASH = '—';
 
@@ -76,7 +77,7 @@ export const ordinal = (value: number): string => `${value}${ordinalSuffix(value
 /** What a result reads as under a test's name: the marks, where it placed, and the day it was sat. */
 export const resultLine = (point: PerformancePoint): string =>
   [
-    `${point.score} of ${point.maxMarks} marks`,
+    marksOf(point) ?? null,
     point.percentile === null ? null : `${ordinal(point.percentile)} percentile`,
     point.rank === null ? null : `rank ${point.rank}`,
     point.submittedAt === null ? null : `sat ${instituteDayLabel(point.submittedAt)}`,
