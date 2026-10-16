@@ -9,6 +9,7 @@ import { redisKeys } from '../src/redis/redis.keys';
 import { LoginHelpService } from '../src/support/login-help.service';
 import { SupportAdminService } from '../src/support/support-admin.service';
 import { SupportService } from '../src/support/support.service';
+import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import {
   makeAdmin,
   makeBranch,
@@ -21,6 +22,7 @@ import {
 } from './support/database';
 import {
   FakeConfig,
+  FakeEventBus,
   FakeFcmSender,
   FakeMessageSender,
   FakePushSender,
@@ -358,6 +360,21 @@ describe('admins working the queue', () => {
     );
   });
 
+  it('refuses a priority change and an upload on a closed ticket', async () => {
+    const { id: studentId } = await studentWith();
+    const ticket = await ask(studentId);
+    await admins.close(ticket.id);
+    await assert.rejects(
+      admins.patch(ticket.id, { priority: 'HIGH' }),
+      (e) => codeOf(e) === ErrorCodes.TICKET_CLOSED,
+    );
+    const png = Buffer.from('89504e470d0a1a0a', 'hex');
+    await assert.rejects(
+      admins.upload(ticket.id, { buffer: png, size: png.length, mimetype: 'image/png' }),
+      (e) => codeOf(e) === ErrorCodes.TICKET_CLOSED,
+    );
+  });
+
   it('lists HIGH first then oldest, and filters by assignee', async () => {
     const me = await makeAdmin(prisma);
     const other = await makeAdmin(prisma);
@@ -451,6 +468,31 @@ describe('login help', () => {
     assert.equal((await lastTicket()).studentId, null);
   });
 
+  it('leaves a claim under the wrong name unlinked', async () => {
+    await student('9876500001');
+    await loginHelp.submit(await claimFor({ fullName: 'Someone Else' }), '1.1.1.1');
+    assert.equal((await lastTicket()).studentId, null);
+  });
+
+  it('never links a deleted student', async () => {
+    const s = await student('9876500001');
+    await prisma.student.update({ where: { id: s.id }, data: { deletedAt: new Date() } });
+    await loginHelp.submit(await claimFor(), '1.1.1.1');
+    assert.equal((await lastTicket()).studentId, null);
+  });
+
+  it('links the one right name among more candidates than a page once held', async () => {
+    for (let i = 0; i < 5; i++) {
+      const other = await student(`900000000${i}`, DOB, `Other ${i}`);
+      await prisma.studentMobileHistory.create({
+        data: { studentId: other.id, mobile: '9876500001' },
+      });
+    }
+    const s = await student('9876500001');
+    await loginHelp.submit(await claimFor(), '1.1.1.1');
+    assert.equal((await lastTicket()).studentId, s.id);
+  });
+
   it('answers a matched and an unmatched claim identically', async () => {
     await student('9876500001');
     const matched = await loginHelp.submit(await claimFor(), '1.1.1.1');
@@ -478,19 +520,25 @@ describe('login help', () => {
       [{ id: live.id, name: 'Live branch' }],
     );
     const s = await student('9876500001');
+    await prisma.studentProfile.update({
+      where: { studentId: s.id },
+      data: { fatherName: 'Ravi Rao' },
+    });
     await loginHelp.submit(
-      await claimFor({ branchId: live.id, fatherName: 'Wrong Name' }),
+      await claimFor({ branchId: live.id, fatherName: 'Wrong Name', contactMobile: '9123456780' }),
       '3.3.3.3',
     );
     const detail = await admins.detail((await lastTicket()).id);
     assert.equal(s.id, detail.student?.id);
-    assert.equal(detail.claim?.dob?.matches, true);
-    assert.equal(detail.claim?.fullName?.matches, true);
-    assert.equal(detail.claim?.fatherName?.matches, null);
-    assert.equal(detail.claim?.branch?.claimed, 'Live branch');
+    assert.equal(detail.claim?.checks.dob.matches, true);
+    assert.equal(detail.claim?.checks.fullName.matches, true);
+    assert.equal(detail.claim?.checks.fatherName.matches, false);
+    assert.equal(detail.claim?.checks.branch.claimed, 'Live branch');
+    assert.equal(detail.claim?.contactMobile, '9123456780');
+    assert.equal(detail.claim?.problem, 'OTP_NOT_ARRIVING');
   });
 
-  it('a matched ticket whose student can be pushed to sends no email and stays answered', async () => {
+  it('a matched ticket raised signed out is emailed even when its student can be pushed to', async () => {
     const s = await student('9876500001');
     const sessionId = randomUUID();
     await redis
@@ -507,7 +555,59 @@ describe('login help', () => {
       internal: false,
     });
     assert.equal(after.status, 'ANSWERED');
-    assert.equal(sender.sent.length, 0);
+    assert.deepEqual(
+      sender.sent.map((m) => m.to),
+      ['asha@x.test'],
+    );
+    assert.equal(await prisma.notification.count({ where: { studentId: s.id } }), 1);
+  });
+});
+
+describe('erasing a student', () => {
+  it('deletes their queries, messages and all, and removes the pictures', async () => {
+    const storage = new FakeStorage();
+    const owned = new SupportService(prisma, storage as never);
+    const privacy = new StudentPrivacyService(
+      prisma,
+      new FakeEventBus().asService(),
+      storage as never,
+      owned,
+    );
+    const { id: studentId } = await makeStudent(prisma);
+    const ticket = await owned.create(studentId, { category: 'OTHER', body: 'help' });
+    const key = `support/t/${ticket.id}/a.png`;
+    await storage.upload(key, Buffer.from('x'));
+    await owned.replyAsStudent(studentId, ticket.id, { body: 'see', attachmentKey: key });
+    await prisma.supportTicket.update({
+      where: { id: ticket.id },
+      data: { contactEmail: 'me@x.test' },
+    });
+
+    await privacy.anonymize(studentId);
+
+    assert.equal(await prisma.supportTicket.count({ where: { id: ticket.id } }), 0);
+    assert.equal(await prisma.supportMessage.count({ where: { ticketId: ticket.id } }), 0);
+    assert.equal(storage.objects.has(key), false);
+  });
+
+  it('still erases when a picture cannot be removed', async () => {
+    const storage = new FakeStorage();
+    const owned = new SupportService(prisma, storage as never);
+    const privacy = new StudentPrivacyService(
+      prisma,
+      new FakeEventBus().asService(),
+      storage as never,
+      owned,
+    );
+    const { id: studentId } = await makeStudent(prisma);
+    const ticket = await owned.create(studentId, { category: 'OTHER', body: 'help' });
+    const key = `support/t/${ticket.id}/a.png`;
+    await owned.replyAsStudent(studentId, ticket.id, { body: 'see', attachmentKey: key });
+    storage.failNextRemove = true;
+
+    await privacy.anonymize(studentId);
+
+    assert.equal(await prisma.supportTicket.count({ where: { id: ticket.id } }), 0);
   });
 });
 

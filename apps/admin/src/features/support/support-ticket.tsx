@@ -4,7 +4,9 @@ import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Flag, Lock, UserCheck, UserCog, X } from 'lucide-react';
 import {
+  CLAIM_FIELDS,
   FEATURE_KEYS,
+  LOGIN_PROBLEM_LABELS,
   PERMISSION_LEVELS,
   QUESTION_IMAGE_ACCEPTED_TYPES,
   SUPPORT_CATEGORY_INFO,
@@ -13,6 +15,7 @@ import {
   instituteDateTimeLabel,
   type AdminTicketDetail,
   type AdminTicketPatch,
+  type ClaimField,
 } from '@iace/contracts';
 import { PageCrumbs, shrunkForUpload } from '@iace/app-kit/browser';
 import {
@@ -57,13 +60,13 @@ const MODE_ITEMS = [
 ];
 
 /** The signed-out form's fields, as the claim names them. */
-const CLAIM_LABELS: Readonly<Record<string, string>> = {
-  fullName: 'Name',
-  registeredMobile: 'Registered mobile',
-  dob: 'DOB',
-  fatherName: "Father's name",
-  branch: 'Branch',
-  enrolmentId: 'Enrolment ID',
+const CLAIM_LABELS: Readonly<Record<ClaimField, string>> = {
+  [CLAIM_FIELDS.FULL_NAME]: 'Name',
+  [CLAIM_FIELDS.REGISTERED_MOBILE]: 'Registered mobile',
+  [CLAIM_FIELDS.DOB]: 'DOB',
+  [CLAIM_FIELDS.FATHER_NAME]: "Father's name",
+  [CLAIM_FIELDS.BRANCH]: 'Branch',
+  [CLAIM_FIELDS.ENROLMENT_ID]: 'Enrolment ID',
 };
 
 /** One image a message: the server takes a single attachment key. */
@@ -175,7 +178,13 @@ export function SupportTicketPage() {
         </div>
       </div>
 
-      {ticket && canWrite && !closed ? <ReplyBox ticketId={id} onSent={settle} /> : null}
+      {ticket && canWrite && !closed ? (
+        <ReplyBox
+          ticketId={id}
+          closesOnReply={ticket.linked ? null : ticket.contactEmail}
+          onSent={settle}
+        />
+      ) : null}
 
       {closing ? (
         <ConfirmDialog
@@ -207,8 +216,14 @@ export function SupportTicketPage() {
 
 function ReplyBox({
   ticketId,
+  closesOnReply,
   onSent,
-}: Readonly<{ ticketId: string; onSent: () => Promise<void> }>) {
+}: Readonly<{
+  ticketId: string;
+  /** An unlinked ticket's contact address: a reply is mailed there and closes it. */
+  closesOnReply: string | null;
+  onSent: () => Promise<void>;
+}>) {
   const { identity } = useAuth();
   const [composing, setComposing] = useState<ThreadDraft>(BLANK_THREAD_DRAFT);
   const [mode, setMode] = useState<Mode>(MODES.REPLY);
@@ -245,14 +260,22 @@ function ReplyBox({
       accept={QUESTION_IMAGE_ACCEPTED_TYPES.join(',')}
       maxImages={MAX_IMAGES}
       placeholder={mode === MODES.NOTE ? 'Write a note' : 'Write a reply'}
+      requireText
       head={
-        <SegmentedControl
-          aria-label="Send as"
-          value={mode}
-          onChange={(next) => setMode(next as Mode)}
-          items={MODE_ITEMS}
-          className="self-start"
-        />
+        <>
+          <SegmentedControl
+            aria-label="Send as"
+            value={mode}
+            onChange={(next) => setMode(next as Mode)}
+            items={MODE_ITEMS}
+            className="self-start"
+          />
+          {closesOnReply !== null && mode === MODES.REPLY ? (
+            <Alert variant="warning">
+              A reply is emailed to {closesOnReply} and closes this query
+            </Alert>
+          ) : null}
+        </>
       }
     />
   );
@@ -363,6 +386,7 @@ function ReassignDialog({
 }
 
 function TicketFacts({ ticket }: Readonly<{ ticket: AdminTicketDetail }>) {
+  const { claim } = ticket;
   return (
     <>
       <FormSection title="Query">
@@ -390,22 +414,27 @@ function TicketFacts({ ticket }: Readonly<{ ticket: AdminTicketDetail }>) {
         </FormSection>
       ) : null}
 
-      {ticket.claim ? (
+      {claim ? (
         <FormSection title="Claim">
           <div className="flex flex-col gap-2">
-            {Object.entries(ticket.claim).map(([field, { claimed, matches }]) => (
-              <StatRow
-                key={field}
-                className="items-start"
-                label={CLAIM_LABELS[field] ?? field}
-                value={
-                  <span className="flex items-center justify-end gap-1.5 text-right [&_svg]:size-4 [&_svg]:shrink-0">
-                    {claimed ?? DASH}
-                    <MatchMark matches={matches} />
-                  </span>
-                }
-              />
-            ))}
+            <StatRow label="Problem" value={LOGIN_PROBLEM_LABELS[claim.problem]} />
+            {Object.values(CLAIM_FIELDS).map((field) => {
+              const { claimed, matches } = claim.checks[field];
+              return (
+                <StatRow
+                  key={field}
+                  className="items-start"
+                  label={CLAIM_LABELS[field]}
+                  value={
+                    <span className="flex items-center justify-end gap-1.5 text-right [&_svg]:size-4 [&_svg]:shrink-0">
+                      {claimed ?? DASH}
+                      <MatchMark matches={matches} />
+                    </span>
+                  }
+                />
+              );
+            })}
+            <StatRow label="Contact mobile" value={claim.contactMobile ?? DASH} />
             {ticket.student ? null : (
               <StatRow label="Contact email" value={ticket.contactEmail ?? DASH} />
             )}

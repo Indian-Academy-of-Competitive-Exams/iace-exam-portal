@@ -8,6 +8,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   EARLIEST_BIRTH_DATE,
   LOGIN_PROBLEMS,
+  LOGIN_PROBLEM_LABELS,
   SUPPORT_FALLBACK_EMAIL,
   loginHelpSchema,
   todayISO,
@@ -24,14 +25,9 @@ import { DateField } from '../src/components/ui/date-field';
 import { FormPicker } from '../src/components/ui/form-picker';
 import { TextField } from '../src/components/ui/text-field';
 
-const PROBLEM_LABELS: Readonly<Record<keyof typeof LOGIN_PROBLEMS, string>> = {
-  [LOGIN_PROBLEMS.OTP_NOT_ARRIVING]: 'The code never arrives',
-  [LOGIN_PROBLEMS.NUMBER_CHANGED]: 'My number changed',
-  [LOGIN_PROBLEMS.OTHER]: 'Something else',
-};
 const PROBLEM_ITEMS = Object.values(LOGIN_PROBLEMS).map((problem) => ({
   value: problem,
-  label: PROBLEM_LABELS[problem],
+  label: LOGIN_PROBLEM_LABELS[problem],
 }));
 
 const FIELDS = [

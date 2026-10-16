@@ -8,6 +8,7 @@ import {
   QUESTION_IMAGE_ACCEPTED_TYPES,
   SUPPORT_CATEGORY_INFO,
   SUPPORT_STATUSES,
+  SUPPORT_STATUS_STUDENT_LABEL,
   instituteDateTimeLabel,
   type TicketDetail,
 } from '@iace/contracts';
@@ -29,13 +30,7 @@ import {
 } from '@iace/ui';
 import { RowsSkeleton } from '../../components/ui';
 import { api } from '../../lib/api';
-import {
-  NAV_ITEMS,
-  ROUTES,
-  SUPPORT_QUERY_KEY,
-  SUPPORT_STATUS_LABEL,
-  supportTicketQueryKey,
-} from '../../lib/constants';
+import { NAV_ITEMS, ROUTES, SUPPORT_QUERY_KEY, supportTicketQueryKey } from '../../lib/constants';
 
 const STAFF_NAME = 'IACE';
 const OWN_NAME = 'You';
@@ -79,7 +74,7 @@ export function QueryThreadPage() {
         <PageHeader
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label }]} />}
           title={label}
-          meta={ticket ? SUPPORT_STATUS_LABEL[ticket.status] : undefined}
+          meta={ticket ? SUPPORT_STATUS_STUDENT_LABEL[ticket.status] : undefined}
           action={
             ticket && !closed ? (
               <Button
@@ -147,25 +142,16 @@ const ClosedAlert = () => (
   </Alert>
 );
 
+const isClosedRefusal = (error: unknown) =>
+  AppException.is(error) && error.code === ErrorCodes.TICKET_CLOSED;
+
+/** One optional picture a message: the server takes a single attachment key. */
 function Footer({
   ticket,
   onSent,
 }: Readonly<{ ticket: TicketDetail; onSent: (fresh: TicketDetail) => Promise<unknown> }>) {
-  if (ticket.status === SUPPORT_STATUSES.CLOSED) {
-    return (
-      <div className="mx-auto w-full max-w-3xl pt-4">
-        <ClosedAlert />
-      </div>
-    );
-  }
-  return <Composer ticketId={ticket.id} onSent={onSent} />;
-}
-
-/** One optional picture a message: the server takes a single attachment key. */
-function Composer({
-  ticketId,
-  onSent,
-}: Readonly<{ ticketId: string; onSent: (fresh: TicketDetail) => Promise<unknown> }>) {
+  const ticketId = ticket.id;
+  const queryClient = useQueryClient();
   const [composing, setComposing] = useState<ThreadDraft>(BLANK_THREAD_DRAFT);
 
   const upload = useMutation({
@@ -185,11 +171,23 @@ function Composer({
       setComposing(BLANK_THREAD_DRAFT);
       await onSent(fresh);
     },
+    onError: (error) =>
+      isClosedRefusal(error)
+        ? queryClient.invalidateQueries({ queryKey: SUPPORT_QUERY_KEY })
+        : undefined,
   });
 
   // The words stay in the box, so a student whose query closed meanwhile can carry them over.
-  const refusedClosed = AppException.is(send.error) && send.error.code === ErrorCodes.TICKET_CLOSED;
+  const refusedClosed = isClosedRefusal(send.error);
   const failure = send.isError && !refusedClosed ? bannerMessage(send.error) : null;
+
+  if (ticket.status === SUPPORT_STATUSES.CLOSED && !refusedClosed) {
+    return (
+      <div className="mx-auto w-full max-w-3xl pt-4">
+        <ClosedAlert />
+      </div>
+    );
+  }
 
   return (
     <ThreadComposer
@@ -202,6 +200,7 @@ function Composer({
       uploading={upload.isPending}
       accept={QUESTION_IMAGE_ACCEPTED_TYPES.join(',')}
       placeholder="Write a reply"
+      requireText
       disabled={refusedClosed}
       head={
         <>

@@ -112,6 +112,8 @@ export interface ThreadComposerProps {
   head?: React.ReactNode;
   /** Keeps the words in the box but takes nothing more from it. */
   disabled?: boolean;
+  /** Send waits for words even when a picture is attached. */
+  requireText?: boolean;
   className?: string;
 }
 
@@ -128,10 +130,12 @@ export function ThreadComposer({
   placeholder,
   head,
   disabled = false,
+  requireText = false,
   className,
 }: Readonly<ThreadComposerProps>) {
   const editing = composing.editingId !== null;
-  const empty = composing.body.trim() === '' && composing.images.length === 0;
+  const noText = composing.body.trim() === '';
+  const empty = noText && (requireText || composing.images.length === 0);
 
   return (
     <div className={cn('flex shrink-0 flex-col gap-2 border-t border-border pt-3', className)}>

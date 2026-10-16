@@ -7,6 +7,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import {
   EARLIEST_BIRTH_DATE,
   LOGIN_PROBLEMS,
+  LOGIN_PROBLEM_LABELS,
   SUPPORT_FALLBACK_EMAIL,
   loginHelpSchema,
   todayISO,
@@ -31,14 +32,9 @@ import { api } from '../../lib/api';
 import { ROUTES } from '../../lib/constants';
 import { MobileField } from '../auth/login';
 
-const PROBLEM_LABELS: Readonly<Record<keyof typeof LOGIN_PROBLEMS, string>> = {
-  [LOGIN_PROBLEMS.OTP_NOT_ARRIVING]: 'The code never arrives',
-  [LOGIN_PROBLEMS.NUMBER_CHANGED]: 'My number changed',
-  [LOGIN_PROBLEMS.OTHER]: 'Something else',
-};
 const PROBLEM_ITEMS = Object.values(LOGIN_PROBLEMS).map((problem) => ({
   value: problem,
-  label: PROBLEM_LABELS[problem],
+  label: LOGIN_PROBLEM_LABELS[problem],
 }));
 
 const FIELDS = [

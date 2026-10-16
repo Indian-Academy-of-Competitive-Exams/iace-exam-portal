@@ -127,6 +127,20 @@ export const LOGIN_PROBLEMS = {
   OTHER: 'OTHER',
 } as const;
 
+/** The student's words for each problem; admin reads the same. */
+export const LOGIN_PROBLEM_LABELS: Readonly<Record<keyof typeof LOGIN_PROBLEMS, string>> = {
+  [LOGIN_PROBLEMS.OTP_NOT_ARRIVING]: 'The code never arrives',
+  [LOGIN_PROBLEMS.NUMBER_CHANGED]: 'My number changed',
+  [LOGIN_PROBLEMS.OTHER]: 'Something else',
+};
+
+/** A query's status in the student's words: OPEN means it is IACE's turn. */
+export const SUPPORT_STATUS_STUDENT_LABEL: Readonly<Record<SupportStatus, string>> = {
+  [SUPPORT_STATUSES.OPEN]: 'Waiting on IACE',
+  [SUPPORT_STATUSES.ANSWERED]: 'Answered',
+  [SUPPORT_STATUSES.CLOSED]: 'Closed',
+};
+
 export const loginHelpSchema = z.object({
   fullName: z.string().trim().min(2, 'Enter your full name').max(120),
   registeredMobile: mobileSchema,
@@ -177,6 +191,25 @@ export const adminSupportMessageSchema = supportMessageSchema.extend({
 
 const claimCheck = z.object({ claimed: z.string().nullable(), matches: z.boolean().nullable() });
 
+/** The claimed fields compared against the matched student's record. */
+export const CLAIM_FIELDS = {
+  FULL_NAME: 'fullName',
+  REGISTERED_MOBILE: 'registeredMobile',
+  DOB: 'dob',
+  FATHER_NAME: 'fatherName',
+  BRANCH: 'branch',
+  ENROLMENT_ID: 'enrolmentId',
+} as const;
+export type ClaimField = (typeof CLAIM_FIELDS)[keyof typeof CLAIM_FIELDS];
+
+export const adminClaimSchema = z.object({
+  checks: z.record(z.enum(CLAIM_FIELDS), claimCheck),
+  /** Plain facts the form collected; nothing on file to compare them with. */
+  contactMobile: z.string().nullable(),
+  problem: z.enum(LOGIN_PROBLEMS),
+});
+export type AdminClaim = z.infer<typeof adminClaimSchema>;
+
 export const adminTicketSummarySchema = ticketSummarySchema.extend({
   priority: supportPrioritySchema,
   /** Tied to a student record; false is the signed-out ticket nobody matched. */
@@ -203,7 +236,7 @@ export const adminTicketDetailSchema = adminTicketSummarySchema.extend({
     .object({ id: z.string(), testName: z.string(), submittedAt: z.string().nullable() })
     .nullable(),
   /** Each claimed field beside whether it agrees with the linked student's record (null: nothing to compare). */
-  claim: z.record(z.string(), claimCheck).nullable(),
+  claim: adminClaimSchema.nullable(),
   messages: z.array(adminSupportMessageSchema),
 });
 export type AdminTicketDetail = z.infer<typeof adminTicketDetailSchema>;

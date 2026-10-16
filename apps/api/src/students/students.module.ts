@@ -7,6 +7,7 @@ import { BranchesModule } from '../branches';
 import { ConfigsModule } from '../configs';
 import { AccessModule } from '../access';
 import { NotificationsModule } from '../notifications';
+import { SupportModule } from '../support';
 import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
 import { StudentPrivacyService } from './student-privacy.service';
@@ -24,6 +25,7 @@ import { API_ROLES, onRole } from '../config/api-role';
     ConfigsModule,
     AccessModule,
     NotificationsModule,
+    SupportModule,
   ],
   controllers: onRole([API_ROLES.CORE], [StudentsController]),
   providers: [StudentsService, StudentPrivacyService],

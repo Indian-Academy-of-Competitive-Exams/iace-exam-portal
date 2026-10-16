@@ -8,6 +8,7 @@ import {
   NOTIFICATION_TYPE,
   SUPPORT_ASSIGNEE_FILTERS,
   SUPPORT_STATUSES,
+  type AdminClaim,
   type AdminReplyBody,
   type AdminTicketDetail,
   type AdminTicketListQuery,
@@ -39,6 +40,7 @@ import {
 const NO_SUCH_TICKET = 'No such query';
 const REPLY_SUBJECT = 'Your IACE query';
 const REPLY_TITLE = 'IACE answered your query';
+const SUPPORT_DEDUPE_PREFIX = 'support:';
 
 const SUMMARY_SELECT = {
   id: true,
@@ -270,7 +272,7 @@ export class SupportAdminService {
       });
       if (!admin) throw new AppException(ErrorCodes.NOT_FOUND, 'No such admin');
     }
-    await this.existing(id);
+    await this.existingOpen(id);
     await this.prisma.supportTicket.update({
       where: { id },
       data: { priority: patch.priority, assigneeId: patch.assigneeId },
@@ -321,21 +323,28 @@ export class SupportAdminService {
   }
 
   async upload(id: string, file?: SupportUpload): Promise<SupportAttachment> {
-    await this.existing(id);
+    await this.existingOpen(id);
     const { contentType, extension, buffer } = checkSupportImage(file);
     const key = `${supportKeyPrefix(id)}${randomUUID()}.${extension}`;
     await this.storage.upload(key, buffer, contentType);
     return { key, url: await this.storage.createDownloadUrl(key) };
   }
 
-  private async claimOf(raw: Prisma.JsonValue, student: ClaimStudent | null) {
+  private async claimOf(
+    raw: Prisma.JsonValue,
+    student: ClaimStudent | null,
+  ): Promise<AdminClaim | null> {
     if (!raw) return null;
     const claim = raw as unknown as LoginHelpBody;
     const branch = await this.prisma.branch.findUnique({
       where: { id: claim.branchId },
       select: { name: true },
     });
-    return claimChecks(claim, student, branch?.name ?? null);
+    return {
+      checks: claimChecks(claim, student, branch?.name ?? null),
+      contactMobile: claim.contactMobile ?? null,
+      problem: claim.problem,
+    };
   }
 
   private async existing(id: string) {
@@ -347,29 +356,35 @@ export class SupportAdminService {
     return ticket;
   }
 
-  // Push first (the bell row's sweep pushes to web and mobile); email only when nothing can be pushed to.
+  private async existingOpen(id: string): Promise<void> {
+    const ticket = await this.existing(id);
+    if (ticket.status === SUPPORT_STATUSES.CLOSED) throw new AppException(ErrorCodes.TICKET_CLOSED);
+  }
+
+  // A ticket raised signed out (contactEmail set) is always emailed; otherwise email only when nothing can be pushed to.
   private async deliver(ticket: TicketForDelivery, message: { id: string; body: string }) {
-    if (!ticket.studentId) {
+    if (ticket.studentId) await this.ring(ticket.studentId, ticket.id, message.id);
+    if (ticket.contactEmail) {
       await this.emailReply(ticket.contactEmail, ticket.id, message);
       return;
     }
+    if (!ticket.studentId || (await this.push.canReach(ticket.studentId))) return;
+    await this.emailReply(ticket.student?.profile?.email ?? null, ticket.id, message);
+  }
+
+  /** The bell row; its sweep pushes to web and mobile. */
+  private async ring(studentId: string, ticketId: string, messageId: string): Promise<void> {
     try {
       await this.notifications.tell(this.prisma, {
-        studentId: ticket.studentId,
+        studentId,
         type: NOTIFICATION_TYPE.SUPPORT_REPLY,
         title: REPLY_TITLE,
-        data: { ticketId: ticket.id },
-        dedupeKey: `support:${message.id}`,
+        data: { ticketId },
+        dedupeKey: `${SUPPORT_DEDUPE_PREFIX}${messageId}`,
       });
     } catch (error) {
-      this.logger.error(`Bell row for ticket ${ticket.id} failed`, error);
+      this.logger.error(`Bell row for ticket ${ticketId} failed`, error);
     }
-    if (await this.push.canReach(ticket.studentId)) return;
-    await this.emailReply(
-      ticket.contactEmail ?? ticket.student?.profile?.email ?? null,
-      ticket.id,
-      message,
-    );
   }
 
   private async emailReply(

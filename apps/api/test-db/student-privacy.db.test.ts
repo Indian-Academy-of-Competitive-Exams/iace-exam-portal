@@ -4,6 +4,7 @@ import { AppException, ErrorCodes, readinessOf } from '@iace/contracts';
 import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import { TOMBSTONE_MOBILE } from '../src/students/anonymize';
 import { DOMAIN_EVENTS } from '../src/common/events';
+import { SupportService } from '../src/support/support.service';
 import { FakeEventBus, FakeStorage } from '../test/support/fakes';
 import {
   makeCatalog,
@@ -20,7 +21,12 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 const build = (events = new FakeEventBus(), storage = new FakeStorage()) =>
-  new StudentPrivacyService(prisma, events.asService(), storage as never);
+  new StudentPrivacyService(
+    prisma,
+    events.asService(),
+    storage as never,
+    new SupportService(prisma, storage as never),
+  );
 
 describe('erasure is anonymisation', () => {
   it('takes the person out of the row and leaves the row', async () => {
@@ -169,6 +175,7 @@ describe('erasure is anonymisation', () => {
       racing,
       new FakeEventBus().asService(),
       new FakeStorage() as never,
+      new SupportService(racing, new FakeStorage() as never),
     );
 
     await assert.rejects(

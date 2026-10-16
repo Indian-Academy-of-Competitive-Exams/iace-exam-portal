@@ -57,13 +57,6 @@ export const LOGIN_HELP_BRANCHES_QUERY_KEY = ['auth', 'login-help', 'branches'] 
 /** What a new query reads its prefill from, the web's own names. */
 export const HELP_PARAMS = { CATEGORY: 'category', ATTEMPT: 'attemptId' } as const;
 
-/** A query's status in the student's words, as the web says it: OPEN means it is IACE's turn. */
-export const SUPPORT_STATUS_LABEL: Readonly<Record<SupportStatus, string>> = {
-  [SUPPORT_STATUSES.OPEN]: 'Waiting on IACE',
-  [SUPPORT_STATUSES.ANSWERED]: 'Answered',
-  [SUPPORT_STATUSES.CLOSED]: 'Closed',
-};
-
 export const SUPPORT_STATUS_BADGE: Readonly<Record<SupportStatus, BadgeVariant>> = {
   [SUPPORT_STATUSES.OPEN]: 'warning',
   [SUPPORT_STATUSES.ANSWERED]: 'success',

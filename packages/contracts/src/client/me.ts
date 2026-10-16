@@ -252,7 +252,6 @@ export function meClient(core: ApiCore) {
     bookmarkQuestion: (input: BookmarkQuestionInput): Promise<SavedQuestion> =>
       write('POST', SAVED_ROUTES.bookmark, savedQuestionSchema, input),
 
-    /** Every choice both saved-list filters can offer, off their own set — never the whole catalog. */
     support: {
       list: (query: MyTicketListQuery): Promise<Paginated<TicketSummary>> =>
         list(SUPPORT_ROUTES.list, query, ticketSummarySchema),
@@ -271,6 +270,7 @@ export function meClient(core: ApiCore) {
       },
     },
 
+    /** Every choice both saved-list filters can offer, off their own set — never the whole catalog. */
     savedFacets: (): Promise<SavedFacets> => get(SAVED_ROUTES.facets, savedFacetsSchema),
 
     removeSavedQuestion: (id: string): Promise<NoContent> =>

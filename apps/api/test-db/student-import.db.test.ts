@@ -5,6 +5,7 @@ import { IMPORT_LOG_STATUS, STUDENT_TYPE, readinessOf } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
 import { type PrismaService } from '../src/prisma/prisma.service';
+import { SupportService } from '../src/support/support.service';
 import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import {
   FakeEventBus,
@@ -247,6 +248,7 @@ describe('a student erased around a roster import', () => {
       prisma,
       new FakeEventBus().asService(),
       new FakeStorage() as never,
+      new SupportService(prisma, new FakeStorage() as never),
     ).anonymize(id);
   /** Everything the sheet could have put back: the name, the profile, an enrolment. */
   const writtenBack = async (id: string) => {

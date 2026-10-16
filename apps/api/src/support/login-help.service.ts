@@ -18,7 +18,6 @@ import { sameName } from './claim';
 const PER_MOBILE_PER_DAY = 3;
 const PER_IP_PER_DAY = 10;
 const DAY_SEC = 86_400;
-const MATCH_CANDIDATES = 5;
 
 /** A signed-out student's help request: linked to a student only on an exact match, answered the same either way. */
 @Injectable()
@@ -61,7 +60,6 @@ export class LoginHelpService {
         OR: [{ mobile }, { mobileHistory: { some: { mobile } } }],
       },
       select: { id: true, fullName: true },
-      take: MATCH_CANDIDATES,
     });
     const matched = candidates.filter((c) => sameName(c.fullName, input.fullName));
     return matched.length === 1 ? (matched[0]?.id ?? null) : null;

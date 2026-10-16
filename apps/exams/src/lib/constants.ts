@@ -11,7 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
-import { SUPPORT_CATEGORIES, SUPPORT_STATUSES, type SupportStatus } from '@iace/contracts';
+import { SUPPORT_CATEGORIES } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
 /** What a new query reads its prefill from. */
@@ -126,13 +126,6 @@ export {
 export const typingPracticesQueryKey = () => ['me', 'typing', 'practices'] as const;
 export const typingPassageQueryKey = (presetKey: string) =>
   ['me', 'typing', 'passage', presetKey] as const;
-
-/** A query's status in the student's words: OPEN means it is IACE's turn. */
-export const SUPPORT_STATUS_LABEL: Readonly<Record<SupportStatus, string>> = {
-  [SUPPORT_STATUSES.OPEN]: 'Waiting on IACE',
-  [SUPPORT_STATUSES.ANSWERED]: 'Answered',
-  [SUPPORT_STATUSES.CLOSED]: 'Closed',
-};
 
 /** One root, so a send, a close or a new query refreshes the list and the thread together. */
 export const SUPPORT_QUERY_KEY = ['me', 'support'] as const;

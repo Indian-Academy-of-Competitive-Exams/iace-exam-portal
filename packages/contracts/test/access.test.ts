@@ -3,7 +3,10 @@ import { describe, it } from 'node:test';
 import {
   TEST_BUCKET,
   TEST_SERIES_KIND,
+  NOTIFICATION_TYPE,
   createEventSchema,
+  notificationListQuerySchema,
+  notificationSchema,
   eventListQuerySchema,
   isAllowedPushEndpoint,
   pushSubscriptionSchema,
@@ -217,5 +220,29 @@ describe('pushSubscriptionSchema', () => {
     });
     assert.equal(result.success, false);
     assert.equal(result.success ? null : result.error.issues[0]?.path.join('.'), 'endpoint');
+  });
+});
+
+describe('notificationSchema', () => {
+  const row = {
+    id: 'ntf_1',
+    title: 'Hello',
+    body: null,
+    testId: null,
+    testSeriesId: null,
+    ticketId: null,
+    isRead: false,
+    createdAt: '2026-10-16T00:00:00.000Z',
+  };
+
+  it('reads a type this build does not know as GENERIC, so one new kind cannot empty the inbox', () => {
+    const parsed = notificationSchema.parse({ ...row, type: 'SOMETHING_NEW' });
+    assert.equal(parsed.type, NOTIFICATION_TYPE.GENERIC);
+  });
+
+  it('keeps a known type, and still refuses an unknown one in a request', () => {
+    assert.equal(notificationSchema.parse({ ...row, type: 'RESULT_READY' }).type, 'RESULT_READY');
+    const query = notificationListQuerySchema.safeParse({ type: 'SOMETHING_NEW' });
+    assert.equal(query.success, false);
   });
 });

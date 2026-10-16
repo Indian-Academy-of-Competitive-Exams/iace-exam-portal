@@ -1,4 +1,9 @@
-import { normaliseMobile, type LoginHelpBody } from '@iace/contracts';
+import {
+  CLAIM_FIELDS,
+  normaliseMobile,
+  type ClaimField,
+  type LoginHelpBody,
+} from '@iace/contracts';
 import { fromDateColumn } from '../common/time/institute-day';
 
 export interface ClaimStudent {
@@ -32,27 +37,30 @@ export function claimChecks(
   claim: LoginHelpBody,
   student: ClaimStudent | null,
   branchName: string | null,
-): Record<string, ClaimCheck> {
+): Record<ClaimField, ClaimCheck> {
   const mobile = normaliseMobile(claim.registeredMobile);
   const dob = student?.profile?.dob;
   const father = student?.profile?.fatherName;
   return {
-    fullName: check(
+    [CLAIM_FIELDS.FULL_NAME]: check(
       claim.fullName,
       student?.fullName ? sameName(student.fullName, claim.fullName) : null,
     ),
-    registeredMobile: check(
+    [CLAIM_FIELDS.REGISTERED_MOBILE]: check(
       claim.registeredMobile,
       student &&
         (student.mobile === mobile || student.mobileHistory.some((h) => h.mobile === mobile)),
     ),
-    dob: check(claim.dob, dob ? fromDateColumn(dob) === claim.dob : null),
-    fatherName: check(claim.fatherName, father ? sameName(father, claim.fatherName) : null),
-    branch: check(
+    [CLAIM_FIELDS.DOB]: check(claim.dob, dob ? fromDateColumn(dob) === claim.dob : null),
+    [CLAIM_FIELDS.FATHER_NAME]: check(
+      claim.fatherName,
+      father ? sameName(father, claim.fatherName) : null,
+    ),
+    [CLAIM_FIELDS.BRANCH]: check(
       branchName,
       student?.currentBranchId ? student.currentBranchId === claim.branchId : null,
     ),
-    enrolmentId: check(
+    [CLAIM_FIELDS.ENROLMENT_ID]: check(
       claim.enrolmentId,
       student?.externalRef ? student.externalRef === claim.enrolmentId : null,
     ),

@@ -862,7 +862,11 @@ A student's question to the institute, answered later by an admin. `apps/api/src
   student who needs more opens a new query.
 - **Internal notes and priority are admin-only.** A student never sees either.
 - **A reply goes by the bell and push first.** Email is sent only when the student has no live push
-  target. A signed-out login ticket nothing matched is emailed its answer and closed.
+  target. A ticket raised signed out (it carries `contactEmail`) is always emailed there as well,
+  matched or not: the asker could not sign in, so a push may never reach them. A matched one stays
+  answered like any other; one nothing matched is closed by the reply.
+- **Erasure deletes the student's queries**, threads and pictures with them: the support module does
+  it inside the erasure transaction and removes the S3 objects after it commits.
 - **Login help is the signed-out door** (`LOGIN_OR_ACCOUNT`). It links to a student only when the
   registered mobile (current or in `StudentMobileHistory`), the date of birth and the normalised name
   all match exactly one student; otherwise the ticket is unlinked. The asker gets the same answer

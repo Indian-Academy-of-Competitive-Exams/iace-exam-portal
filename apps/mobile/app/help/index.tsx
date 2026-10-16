@@ -10,14 +10,11 @@ import {
   SUPPORT_CATEGORY_INFO,
   instituteDateTimeLabel,
   type TicketSummary,
+  SUPPORT_STATUS_STUDENT_LABEL,
 } from '@iace/contracts';
 import { Text } from '../../src/components/ui/text';
 import { api } from '../../src/lib/api';
-import {
-  SUPPORT_LIST_QUERY_KEY,
-  SUPPORT_STATUS_BADGE,
-  SUPPORT_STATUS_LABEL,
-} from '../../src/lib/constants';
+import { SUPPORT_LIST_QUERY_KEY, SUPPORT_STATUS_BADGE } from '../../src/lib/constants';
 import { ACCOUNT_ROUTES, DETAIL_ROUTES } from '../../src/lib/nav';
 import { useRefetchOnFocus } from '../../src/lib/use-refetch-on-focus';
 import { useTokenColor } from '../../src/lib/use-token-color';
@@ -31,7 +28,7 @@ import { Skeleton } from '../../src/components/ui/skeleton';
 
 const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, gap: 12 };
 
-/** Their own queries, the latest reply first. */
+/** Their own queries, open first, then latest reply. */
 export default function HelpScreen() {
   useRefetchOnFocus();
   const router = useRouter();
@@ -121,7 +118,7 @@ function Row({ row, onPress }: Readonly<{ row: TicketSummary; onPress: () => voi
             {SUPPORT_CATEGORY_INFO[row.category].label}
           </Text>
           <Badge variant={SUPPORT_STATUS_BADGE[row.status]}>
-            {SUPPORT_STATUS_LABEL[row.status]}
+            {SUPPORT_STATUS_STUDENT_LABEL[row.status]}
           </Badge>
         </View>
         <Text variant="meta">{instituteDateTimeLabel(row.lastMessageAt)}</Text>

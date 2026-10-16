@@ -28,6 +28,7 @@ import {
   type SupportMessage,
   type TicketDetail,
   type UploadFile,
+  SUPPORT_STATUS_STUDENT_LABEL,
 } from '@iace/contracts';
 import { bannerMessage } from '@iace/app-kit';
 import { Text } from '../../src/components/ui/text';
@@ -36,7 +37,6 @@ import { cn } from '../../src/lib/cn';
 import {
   SUPPORT_QUERY_KEY,
   SUPPORT_STATUS_BADGE,
-  SUPPORT_STATUS_LABEL,
   supportTicketQueryKey,
 } from '../../src/lib/constants';
 import { ACCOUNT_ROUTES } from '../../src/lib/nav';
@@ -100,7 +100,7 @@ export default function QueryThreadScreen() {
       >
         {ticket ? (
           <Badge variant={SUPPORT_STATUS_BADGE[ticket.status]}>
-            {SUPPORT_STATUS_LABEL[ticket.status]}
+            {SUPPORT_STATUS_STUDENT_LABEL[ticket.status]}
           </Badge>
         ) : null}
         <Thread
@@ -206,25 +206,16 @@ function ClosedAlert() {
   );
 }
 
+const isClosedRefusal = (error: unknown) =>
+  AppException.is(error) && error.code === ErrorCodes.TICKET_CLOSED;
+
+/** One optional picture a message: the server takes a single attachment key, and needs words with it. */
 function Footer({
   ticket,
   onSent,
 }: Readonly<{ ticket: TicketDetail; onSent: (fresh: TicketDetail) => Promise<unknown> }>) {
-  if (ticket.status === SUPPORT_STATUSES.CLOSED) {
-    return (
-      <View className="border-t border-border bg-surface px-5 py-3">
-        <ClosedAlert />
-      </View>
-    );
-  }
-  return <Composer ticketId={ticket.id} onSent={onSent} />;
-}
-
-/** One optional picture a message: the server takes a single attachment key, and needs words with it. */
-function Composer({
-  ticketId,
-  onSent,
-}: Readonly<{ ticketId: string; onSent: (fresh: TicketDetail) => Promise<unknown> }>) {
+  const ticketId = ticket.id;
+  const queryClient = useQueryClient();
   const [body, setBody] = useState('');
   const [image, setImage] = useState<SupportAttachment | null>(null);
   const [picking, setPicking] = useState(false);
@@ -245,6 +236,10 @@ function Composer({
       setImage(null);
       await onSent(fresh);
     },
+    onError: (error) =>
+      isClosedRefusal(error)
+        ? queryClient.invalidateQueries({ queryKey: SUPPORT_QUERY_KEY })
+        : undefined,
   });
 
   const pick = async () => {
@@ -266,9 +261,17 @@ function Composer({
   };
 
   // The words stay in the box, so a student whose query closed meanwhile can carry them over.
-  const refusedClosed = AppException.is(send.error) && send.error.code === ErrorCodes.TICKET_CLOSED;
+  const refusedClosed = isClosedRefusal(send.error);
   const failure = send.isError && !refusedClosed ? bannerMessage(send.error) : null;
   const busy = send.isPending || upload.isPending;
+
+  if (ticket.status === SUPPORT_STATUSES.CLOSED && !refusedClosed) {
+    return (
+      <View className="border-t border-border bg-surface px-5 py-3">
+        <ClosedAlert />
+      </View>
+    );
+  }
 
   return (
     <View className="gap-3 border-t border-border bg-surface px-5 py-3">

@@ -272,7 +272,8 @@ export type ToggleSeriesBranchBody = z.infer<typeof toggleSeriesBranchSchema>;
 /** No recipient: `/me/notifications` is always the caller's own, so naming them is dead weight. */
 export const notificationSchema = z.object({
   id: z.string(),
-  type: notificationTypeSchema,
+  /** A kind newer than this build reads as GENERIC: a strict enum here would fail the whole inbox. */
+  type: notificationTypeSchema.catch(NOTIFICATION_TYPE.GENERIC),
   title: z.string(),
   body: z.string().nullable(),
   /** Deep links. Both are null for a GENERIC notification. */

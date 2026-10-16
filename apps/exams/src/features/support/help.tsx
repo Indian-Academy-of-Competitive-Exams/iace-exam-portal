@@ -6,6 +6,7 @@ import {
   instituteDateTimeLabel,
   type SupportStatus,
   type TicketSummary,
+  SUPPORT_STATUS_STUDENT_LABEL,
 } from '@iace/contracts';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
@@ -22,12 +23,7 @@ import {
 } from '@iace/ui';
 import { DividedList, DividedRow, RowsSkeleton } from '../../components/ui';
 import { api } from '../../lib/api';
-import {
-  NAV_ITEMS,
-  ROUTES,
-  SUPPORT_LIST_QUERY_KEY,
-  SUPPORT_STATUS_LABEL,
-} from '../../lib/constants';
+import { NAV_ITEMS, ROUTES, SUPPORT_LIST_QUERY_KEY } from '../../lib/constants';
 
 const STATUS_BADGE: Readonly<Record<SupportStatus, BadgeProps['variant']>> = {
   [SUPPORT_STATUSES.OPEN]: 'warning',
@@ -98,7 +94,7 @@ function Queries({
           key={ticket.id}
           lead={
             <Badge variant={STATUS_BADGE[ticket.status]} className="self-start">
-              {SUPPORT_STATUS_LABEL[ticket.status]}
+              {SUPPORT_STATUS_STUDENT_LABEL[ticket.status]}
             </Badge>
           }
           title={

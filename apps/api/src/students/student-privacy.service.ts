@@ -7,6 +7,7 @@ import { AppException, ErrorCodes, type ErasureReceipt } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { StorageService } from '../storage/storage.service';
+import { SupportService } from '../support';
 import { anonymizedProfile, anonymizedStudent } from './anonymize';
 
 const NO_STUDENT = 'No such student';
@@ -21,6 +22,7 @@ export class StudentPrivacyService {
     private readonly prisma: PrismaService,
     private readonly events: DomainEventBus,
     private readonly storage: StorageService,
+    private readonly support: SupportService,
   ) {}
 
   /** One transaction: a nameless student whose profile still holds their mother's is worse than both. */
@@ -40,7 +42,7 @@ export class StudentPrivacyService {
     await this.forgetDocuments(student.profile);
 
     const at = new Date();
-    const attemptsKept = await this.prisma.$transaction(async (tx) => {
+    const { attemptsKept, supportKeys } = await this.prisma.$transaction(async (tx) => {
       // Guarded by what was read, so of two erasures landing together one writes and one is refused.
       const erased = await tx.student.updateMany({
         where: { id: studentId, anonymizedAt: null },
@@ -50,8 +52,12 @@ export class StudentPrivacyService {
       await tx.studentProfile.updateMany({ where: { studentId }, data: anonymizedProfile() });
       // An old number names them as surely as the current one does.
       await tx.studentMobileHistory.deleteMany({ where: { studentId } });
-      return tx.attempt.count({ where: { studentId } });
+      return {
+        supportKeys: await this.support.eraseFor(studentId, tx),
+        attemptsKept: await tx.attempt.count({ where: { studentId } }),
+      };
     }, TX_LIMITS.SHORT);
+    await this.support.removeAttachments(supportKeys);
 
     // An erased account keeps no session: this writes `isActive` itself, so `setActive` never sees it.
     this.events.emit(DOMAIN_EVENTS.STUDENT_DEACTIVATED, { studentId });

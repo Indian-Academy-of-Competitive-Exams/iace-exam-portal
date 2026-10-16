@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   ActorTypes,
@@ -66,6 +66,8 @@ const summaryOf = (
 
 @Injectable()
 export class SupportService {
+  private readonly logger = new Logger(SupportService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -189,6 +191,26 @@ export class SupportService {
     const key = `${supportKeyPrefix(id)}${randomUUID()}.${extension}`;
     await this.storage.upload(key, buffer, contentType);
     return { key, url: await this.storage.createDownloadUrl(key) };
+  }
+
+  /** Inside the erasure transaction: deletes the student's tickets (messages cascade) and returns their picture keys. */
+  async eraseFor(studentId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+    const messages = await tx.supportMessage.findMany({
+      where: { ticket: { studentId }, attachmentKey: { not: null } },
+      select: { attachmentKey: true },
+    });
+    await tx.supportTicket.deleteMany({ where: { studentId } });
+    return messages.flatMap((m) => (m.attachmentKey ? [m.attachmentKey] : []));
+  }
+
+  /** After the commit, so a failed delete leaves an orphan object rather than a row pointing at nothing. */
+  async removeAttachments(keys: string[]): Promise<void> {
+    const results = await Promise.allSettled(keys.map((key) => this.storage.remove(key)));
+    results.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        this.logger.error(`Support attachment ${keys[i]} was not removed`, result.reason);
+      }
+    });
   }
 
   private async ownTicket(studentId: string, id: string) {
