@@ -18,7 +18,7 @@ import { redisKeys } from '../redis/redis.keys';
 import { AppConfigService } from '../config/app-config.service';
 import { FcmSender } from './fcm.sender';
 import { PUSH_OUTCOMES, WebPushSender, pushLine, type PushOutcome } from './web-push.sender';
-import { MS_PER_MINUTE } from '../common/time/units';
+import { MS_PER_DAY, MS_PER_MINUTE, MS_PER_SECOND } from '../common/time/units';
 
 /** A broadcast's push: its title, its line, and the id the bell lists it under. */
 export interface BroadcastPush {
@@ -106,11 +106,16 @@ export class PushService {
     }
   }
 
-  /** A broadcast has no ledger: a send that fails is not retried, and the bell still holds it. */
+  /** A broadcast has no ledger: a send that fails is not retried, and a student is claimed before theirs, so a replay never repeats it. */
   async broadcast(studentIds: readonly string[], message: BroadcastPush): Promise<void> {
     if (studentIds.length === 0) return;
     try {
-      const { browsers, phones } = await this.targetsOf(studentIds);
+      const reach = await this.targetsOf(studentIds);
+      const fresh = await this.claimBroadcast(message.broadcastId, [
+        ...new Set([...reach.browsers.keys(), ...reach.phones.keys()]),
+      ]);
+      const browsers = new Map([...reach.browsers].filter(([id]) => fresh.has(id)));
+      const phones = new Map([...reach.phones].filter(([id]) => fresh.has(id)));
       const payload = {
         title: message.title,
         ...lineOf(message.body),
@@ -135,6 +140,22 @@ export class PushService {
     } catch (error) {
       this.logger.warn(`Pushing broadcast ${message.broadcastId} failed`, error);
     }
+  }
+
+  /** The students nobody has pushed this broadcast to yet, each claimed on the way. */
+  private async claimBroadcast(
+    broadcastId: string,
+    studentIds: readonly string[],
+  ): Promise<Set<string>> {
+    const claimed = await Promise.all(
+      studentIds.map(async (studentId) => {
+        const key = redisKeys.broadcastPush(broadcastId, studentId);
+        return (await this.redis.acquireLock(key, broadcastId, BROADCAST_CLAIM_TTL_SEC))
+          ? studentId
+          : null;
+      }),
+    );
+    return new Set(claimed.filter((studentId) => studentId !== null));
   }
 
   private async reachOf(inputs: readonly PushDelivery[]): Promise<Reach> {
@@ -365,6 +386,9 @@ export class PushService {
 
 /** The free channels this service books; the paid ones belong to the delivery processor. */
 const PUSH_CHANNELS: DeliveryChannel[] = [DeliveryChannel.WEB_PUSH, DeliveryChannel.MOBILE_PUSH];
+
+/** Long enough to outlast any retry of a delivery job. */
+const BROADCAST_CLAIM_TTL_SEC = (7 * MS_PER_DAY) / MS_PER_SECOND;
 
 /** Lanes, because a push is an HTTP call each and a hall's worth of them is not a loop to await. */
 const PUSH_LANES = 8;

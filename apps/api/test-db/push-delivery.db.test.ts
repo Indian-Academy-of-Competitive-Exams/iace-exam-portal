@@ -472,3 +472,56 @@ describe('When nothing accepted a free push', () => {
     assert.notEqual(await swept(push, delivery), null);
   });
 });
+
+describe('Pushing a broadcast', () => {
+  const NOTICE = {
+    broadcastId: uid(),
+    title: 'Branch closed on Friday',
+    body: 'Classes move online.',
+  };
+
+  /** The failure this prevents: a replayed announcement job buzzing every phone and browser a second time. */
+  it('reaches each student once however many times the delivery runs', async () => {
+    const { push, student, sender, fcm } = await build();
+    await push.subscribe(student, SESSION, SUBSCRIPTION);
+    await push.registerDevice(student, SESSION, DEVICE);
+
+    await push.broadcast([student], NOTICE);
+    await push.broadcast([student], NOTICE);
+
+    assert.equal(sender.sent.length, 1);
+    assert.equal(fcm.sent.length, 1);
+    assert.equal(sender.sent[0]?.payload.notificationId, NOTICE.broadcastId);
+  });
+
+  it('still reaches a student a replayed page did not hold the first time', async () => {
+    const { push, student, sender, redis } = await build();
+    const other = await makeStudent(prisma);
+    await redis
+      .asService()
+      .setJson(redisKeys.session(ActorTypes.STUDENT, other.id, SESSION), { client: null }, 3600);
+    await push.subscribe(student, SESSION, SUBSCRIPTION);
+    await push.subscribe(other.id, SESSION, {
+      ...SUBSCRIPTION,
+      endpoint: `${SUBSCRIPTION.endpoint}-2`,
+    });
+
+    await push.broadcast([student], NOTICE);
+    await push.broadcast([student, other.id], NOTICE);
+
+    assert.deepEqual(sender.sent.map((row) => row.endpoint).sort(), [
+      SUBSCRIPTION.endpoint,
+      `${SUBSCRIPTION.endpoint}-2`,
+    ]);
+  });
+
+  it('keeps one broadcast from silencing another', async () => {
+    const { push, student, sender } = await build();
+    await push.subscribe(student, SESSION, SUBSCRIPTION);
+
+    await push.broadcast([student], NOTICE);
+    await push.broadcast([student], { ...NOTICE, broadcastId: uid() });
+
+    assert.equal(sender.sent.length, 2);
+  });
+});

@@ -60,6 +60,10 @@ export const redisKeys = {
   /** One caller's hits in one rate-limit window. The tracker is a subject id or an address, never a credential. */
   rateLimit: (name: string, tracker: string) => `ratelimit:${name}:${tracker}`,
 
+  /** Held once a broadcast's push has been sent to one student, so a replayed delivery does not send it again. */
+  broadcastPush: (broadcastId: string, studentId: string) =>
+    `broadcast:push:${broadcastId}:${studentId}`,
+
   /** The admin building one test's paper. Holds their id, so a refusal can name them. */
   testEditLock: (testId: string) => `test:edit:${testId}`,
 
