@@ -46,12 +46,6 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     ],
   },
   {
-    label: 'Support',
-    icon: LifeBuoy,
-    featureKey: FEATURE_KEYS.SUPPORT,
-    children: [{ to: ROUTES.SUPPORT, label: 'Queries', icon: Inbox }],
-  },
-  {
     label: 'Question bank',
     icon: BookOpen,
     featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT,
@@ -128,5 +122,11 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.AUDIT, label: 'Activity', icon: History },
       { to: ROUTES.AUDIT_IMPORTS, label: 'Imports', icon: Upload },
     ],
+  },
+  {
+    label: 'Support',
+    icon: LifeBuoy,
+    featureKey: FEATURE_KEYS.SUPPORT,
+    children: [{ to: ROUTES.SUPPORT, label: 'Queries', icon: Inbox }],
   },
 ];
