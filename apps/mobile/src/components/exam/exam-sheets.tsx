@@ -14,7 +14,6 @@ import {
   CALCULATOR_KEYPAD,
   htmlOf,
   shownLanguages,
-  TIMER_KIND,
   useCalculator,
   type ExamView,
 } from '@iace/app-kit';
@@ -160,9 +159,10 @@ export function PaperSheet({
 
 export function RulesSheet({
   view,
+  sectional,
   open,
   onClose,
-}: Readonly<{ view: ExamView; open: boolean; onClose: () => void }>) {
+}: Readonly<{ view: ExamView; sectional: boolean; open: boolean; onClose: () => void }>) {
   return (
     <ExamSheet open={open} title="Instructions" icon={BookOpen} onClose={onClose}>
       <ScrollView className="shrink grow-0" contentContainerClassName="gap-4 px-4">
@@ -170,7 +170,7 @@ export function RulesSheet({
           inkClass="text-exam-ink"
           mutedClass="text-exam-ink-muted"
           forwardOnly={view.forwardOnly}
-          sectional={view.timer.kind === TIMER_KIND.SECTION}
+          sectional={sectional}
           omr={view.testUi === TEST_UI.OMR}
         />
         <View className="gap-2">

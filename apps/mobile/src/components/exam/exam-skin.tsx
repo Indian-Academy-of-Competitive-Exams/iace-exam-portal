@@ -15,11 +15,19 @@ import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import { useUnstableNativeVariable } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNetworkState } from 'expo-network';
-import { EXAM_TEMPLATE, LANGUAGE_MODE, TEST_UI, type ExamQuestion } from '@iace/contracts';
+import {
+  ANSWER_STATE,
+  EXAM_TEMPLATE,
+  LANGUAGE_MODE,
+  TEST_UI,
+  type ExamQuestion,
+} from '@iace/contracts';
 import {
   answersByKeyboard,
+  mayPause,
   PAPER_LOCK,
   PAUSE_SAYS,
+  plural,
   sectionTally,
   submittingSays,
   TIMER_KIND,
@@ -64,6 +72,8 @@ export interface ExamSkinProps {
   /** The paper's full question list, all sections, so a dead zone still shows a figure not yet reached. */
   paperQuestions: readonly ExamQuestion[];
   calculatorEnabled: boolean;
+  /** Whether the paper's sections run on clocks of their own, said by the paper and not by the clock on screen. */
+  sectional: boolean;
   /** Leaves the paper to be come back to; the server gives the time away back when it is reopened. */
   onPause: () => Promise<boolean>;
 }
@@ -72,6 +82,7 @@ export function ExamSkin({
   view,
   paperQuestions,
   calculatorEnabled,
+  sectional,
   onPause,
 }: Readonly<ExamSkinProps>) {
   const insets = useSafeAreaInsets();
@@ -80,7 +91,9 @@ export function ExamSkin({
   const [rulesOpen, setRulesOpen] = useState(false);
   const [paperOpen, setPaperOpen] = useState(false);
   const [calculating, setCalculating] = useState(false);
-  const pause = usePause(onPause);
+  const holdsSitting = view !== null && mayPause(view);
+  const pause = usePause(onPause, holdsSitting);
+  const [handingIn, setHandingIn] = useHandingIn(holdsSitting);
   const offline = network.isConnected === false || network.isInternetReachable === false;
 
   return (
@@ -97,6 +110,7 @@ export function ExamSkin({
           onPaper={() => setPaperOpen(true)}
           onCalculator={calculatorEnabled ? () => setCalculating(true) : undefined}
           onPause={pause.ask}
+          onSection={() => setHandingIn(view.sectionId)}
         />
       ) : (
         <OpeningBar />
@@ -118,6 +132,7 @@ export function ExamSkin({
           paperOpen={paperOpen}
           onClosePaper={() => setPaperOpen(false)}
           calculating={calculating}
+          sectional={sectional}
           onCloseCalculator={() => setCalculating(false)}
           onClosePalette={() => setPaletteOpen(false)}
         />
@@ -133,8 +148,57 @@ export function ExamSkin({
         onConfirm={pause.confirm}
         onCancel={pause.cancel}
       />
+      {view ? (
+        <SectionHandIn
+          view={view}
+          open={handingIn === view.sectionId}
+          onClose={() => setHandingIn(null)}
+        />
+      ) : null}
     </View>
   );
+}
+
+/** The section being handed in, held by id so a clock that closes it first takes the question away too. */
+function useHandingIn(holdsSitting: boolean) {
+  const [handingIn, setHandingIn] = useState<string | null>(null);
+  // Goes down for good with the pause prompt: once the sitting is not held there is nothing to hand in.
+  if (!holdsSitting && handingIn !== null) setHandingIn(null);
+  return [handingIn, setHandingIn] as const;
+}
+
+function SectionHandIn({
+  view,
+  open,
+  onClose,
+}: Readonly<{ view: ExamView; open: boolean; onClose: () => void }>) {
+  if (!view.submitSection) return null;
+
+  return (
+    <ConfirmDialog
+      // iOS presents one Modal at a time, so the focus warning stands this one down.
+      open={open && !view.fullscreen.nagging}
+      // ui-copy-ok: consequence — a confirm names what it is about to do
+      title="Submit this section?"
+      description={submittingSectionSays(view)}
+      confirmLabel="Submit section"
+      icon={Send}
+      onConfirm={() => {
+        onClose();
+        view.submitSection?.();
+      }}
+      onCancel={onClose}
+    />
+  );
+}
+
+/** The section's own tally, in the confirm's own words: what is left unanswered, and that it cannot be reopened. */
+function submittingSectionSays(view: ExamView): string {
+  const counts = view.sectionCounts(view.sectionId);
+  const unanswered = counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED];
+  const marked = counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED];
+  const review = view.forwardOnly ? '' : ` and ${marked} marked for review`;
+  return `${plural(unanswered, 'question')} unanswered${review} in this section. Once submitted the section closes and its questions cannot be opened again.`;
 }
 
 function OpeningBar() {
@@ -165,6 +229,7 @@ function SittingHead({
   onPaper,
   onCalculator,
   onPause,
+  onSection,
 }: Readonly<{
   view: ExamView;
   onPalette: () => void;
@@ -172,6 +237,7 @@ function SittingHead({
   onPaper: () => void;
   onCalculator: (() => void) | undefined;
   onPause: () => void;
+  onSection: () => void;
 }>) {
   return (
     <Fragment>
@@ -187,7 +253,7 @@ function SittingHead({
         <HeadIcon icon={Pause} label="Pause" disabled={view.locked !== null} onPress={onPause} />
       </View>
 
-      <View className="flex-row items-center justify-between gap-2 border-b border-exam-border px-4 py-2">
+      <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-exam-border px-4 py-2">
         <SittingClock view={view} />
         <View className="flex-row gap-2">
           <Button variant="outline" icon={LayoutGrid} onPress={onPalette}>
@@ -198,9 +264,9 @@ function SittingHead({
             icon={Send}
             loading={view.submit.isPending}
             disabled={view.locked !== null}
-            onPress={view.submit.ask}
+            onPress={view.submitSection ? onSection : view.submit.ask}
           >
-            Submit
+            {view.submitSection ? 'Submit section' : 'Submit'}
           </Button>
         </View>
       </View>
@@ -344,6 +410,7 @@ function SittingFoot({
   paperOpen,
   onClosePaper,
   calculating,
+  sectional,
   onCloseCalculator,
 }: Readonly<{
   view: ExamView;
@@ -354,6 +421,7 @@ function SittingFoot({
   paperOpen: boolean;
   onClosePaper: () => void;
   calculating: boolean;
+  sectional: boolean;
   onCloseCalculator: () => void;
 }>) {
   const { submit, fullscreen } = view;
@@ -424,7 +492,12 @@ function SittingFoot({
         onCancel={submit.cancel}
       />
 
-      <RulesSheet view={view} open={rulesOpen && !fullscreen.nagging} onClose={onCloseRules} />
+      <RulesSheet
+        view={view}
+        sectional={sectional}
+        open={rulesOpen && !fullscreen.nagging}
+        onClose={onCloseRules}
+      />
       <PaperSheet view={view} open={paperOpen && !fullscreen.nagging} onClose={onClosePaper} />
       <CalculatorSheet open={calculating && !fullscreen.nagging} onClose={onCloseCalculator} />
 

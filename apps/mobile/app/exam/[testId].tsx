@@ -9,9 +9,10 @@ import { BackHandler, View } from 'react-native';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ExamQuestion } from '@iace/contracts';
+import { SECTION_ANSWER_KIND, sectionAnswerKindOf, type ExamQuestion } from '@iace/contracts';
 import {
   HELD_ELSEWHERE_SAYS,
+  isSectionalPaper,
   SITTING_ENDED_SAYS,
   stoodDownSays,
   useExamView,
@@ -68,27 +69,30 @@ export default function ExamScreen() {
     needsKeyboard: Boolean(brief.data && needsKeyboard(brief.data)),
   });
 
-  if (entry === EXAM_ENTRY.NEEDS_KEYBOARD) {
-    return (
-      <View className="flex-1 justify-center bg-background p-6">
-        <EmptyState
-          kind={EMPTY_STATE_KINDS.REFUSED}
-          title="This test is not sat on a phone"
-          /* ui-copy-ok: rule — where it can be sat is the one thing that resolves it */
-          hint={NEEDS_KEYBOARD_SAYS}
-        />
-      </View>
-    );
-  }
+  if (entry === EXAM_ENTRY.NEEDS_KEYBOARD) return <NotOnAPhone />;
   return entry === EXAM_ENTRY.WAIT ? (
     <ExamSkin
       view={null}
       paperQuestions={NO_QUESTIONS}
       calculatorEnabled={false}
+      sectional={false}
       onPause={refuse}
     />
   ) : (
     <Sitting />
+  );
+}
+
+function NotOnAPhone() {
+  return (
+    <View className="flex-1 justify-center bg-background p-6">
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.REFUSED}
+        title="This test is not sat on a phone"
+        /* ui-copy-ok: rule — where it can be sat is the one thing that resolves it */
+        hint={NEEDS_KEYBOARD_SAYS}
+      />
+    </View>
   );
 }
 
@@ -213,12 +217,19 @@ function Sitting() {
     );
   }
 
+  // The brief may have failed to load, so the paper itself is checked before it is ever drawn.
+  const keyboardPaper = paper.data?.paper.sections.some(
+    (section) => sectionAnswerKindOf(section) !== SECTION_ANSWER_KIND.CHOICE,
+  );
+  if (keyboardPaper) return <NotOnAPhone />;
+
   return (
     <View className="flex-1">
       <ExamSkin
         view={view}
         paperQuestions={paper.data?.paper.questions ?? NO_QUESTIONS}
         calculatorEnabled={paper.data?.paper.calculatorEnabled ?? false}
+        sectional={paper.data ? isSectionalPaper(paper.data.paper) : false}
         // Silence is what pauses a sitting, so it is left only once its answers are on the server.
         onPause={async () => {
           if (!view || !(await view.saveNow())) return false;
