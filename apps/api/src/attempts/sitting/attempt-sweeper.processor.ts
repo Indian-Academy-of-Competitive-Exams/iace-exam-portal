@@ -25,7 +25,7 @@ import { MS_PER_MINUTE, MS_PER_SECOND } from '../../common/time/units';
 })
 export class AttemptSweeperProcessor extends ReportingWorkerHost {
   private readonly logger = new Logger(AttemptSweeperProcessor.name);
-  private staleAskedAt = 0;
+  private readonly staleAskedAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -98,6 +98,7 @@ export class AttemptSweeperProcessor extends ReportingWorkerHost {
     this.metrics.setScoringBacklog(await this.unscoredCount(settled));
     const unscored = await this.neverScored(now);
     await this.scoring.queue(unscored);
+    for (const row of unscored) if (row.stale) this.staleAskedAt.set(row.id, now.getTime());
     // Most are a job still in the queue, swallowed by its id; a count that stays up is a lost one.
     if (unscored.length > 0)
       this.logger.log(`Queued ${unscored.length} ended, unscored sittings again`);
@@ -147,18 +148,26 @@ export class AttemptSweeperProcessor extends ReportingWorkerHost {
   }
 
   /** Past the grace a submit gets to queue its own job; one the queue still holds is not queued twice. */
-  private neverScored(now: Date): Promise<{ id: string; testId: string }[]> {
+  private async neverScored(now: Date): Promise<Unscored[]> {
     const settling = new Date(now.getTime() - SUBMIT_QUEUE_GRACE_SEC * MS_PER_SECOND);
-    // A sitting that keeps failing is asked hourly once it is stale, so it cannot spin the worker or hold the batch.
-    const staleDue = now.getTime() - this.staleAskedAt >= STALE_UNSCORED_EVERY_MS;
-    if (staleDue) this.staleAskedAt = now.getTime();
-    const fresh = staleDue
-      ? Prisma.empty
-      : Prisma.sql`AND "submittedAt" > ${new Date(now.getTime() - STALE_UNSCORED_AFTER_MS)}`;
-    // Caps one sweep's re-asks, not the scoring queue, which drains at its own pace.
-    return this.prisma.$queryRaw<{ id: string; testId: string }[]>`
+    const staleBefore = new Date(now.getTime() - STALE_UNSCORED_AFTER_MS);
+    const fresh = await this.unscoredBetween(staleBefore, settling);
+    const stale = await this.unscoredBetween(null, staleBefore);
+    const still = new Set(stale.map((row) => row.id));
+    for (const id of this.staleAskedAt.keys()) if (!still.has(id)) this.staleAskedAt.delete(id);
+    // Each stale sitting is asked hourly, so a failing one cannot spin the worker yet a lost backlog drains at once.
+    const due = stale.filter(
+      (row) => now.getTime() - (this.staleAskedAt.get(row.id) ?? 0) >= STALE_UNSCORED_EVERY_MS,
+    );
+    return [...fresh, ...due.map((row) => ({ ...row, stale: true }))];
+  }
+
+  /** Caps one sweep's re-asks per arm, not the scoring queue, which drains at its own pace. */
+  private unscoredBetween(after: Date | null, before: Date): Promise<Unscored[]> {
+    const since = after === null ? Prisma.empty : Prisma.sql`AND "submittedAt" >= ${after}`;
+    return this.prisma.$queryRaw<Unscored[]>`
       SELECT "id", "testId" FROM "Attempt"
-      WHERE ${UNSCORED} AND "submittedAt" < ${settling} ${fresh}
+      WHERE ${UNSCORED} AND "submittedAt" < ${before} ${since}
       ORDER BY "submittedAt" ASC
       LIMIT ${NEVER_SCORED_BATCH_CEILING}`;
   }
@@ -186,6 +195,13 @@ const IN_PROGRESS = Prisma.raw(`'${ATTEMPT_STATUS.IN_PROGRESS}'`);
 /** Literal, not a parameter: a bound enum cannot prove Attempt_rescore_idx's predicate, so the planner skips it. */
 const EVALUATED = Prisma.raw(`a."status" = '${ATTEMPT_STATUS.EVALUATED}'`);
 
+/** An ended, unscored sitting; `stale` marks one past the half hour, asked at most hourly. */
+interface Unscored {
+  id: string;
+  testId: string;
+  stale?: boolean;
+}
+
 /** An expired sitting as a page reads it: its deadline and id are the sweep's keyset. */
 interface Expired {
   id: string;
@@ -203,7 +219,7 @@ interface Behind {
 /** The never-scored arm's own ceiling: wide enough to drain 6,000 in minutes, not hours. */
 export const NEVER_SCORED_BATCH_CEILING = 1000;
 
-/** Unscored this long has failed every retry a pass gives it; it is asked again once an hour, not every pass. */
+/** Unscored this long has failed every retry a pass gives it; each is asked again once an hour, not every pass. */
 export const STALE_UNSCORED_AFTER_MS = 30 * MS_PER_MINUTE;
 export const STALE_UNSCORED_EVERY_MS = 60 * MS_PER_MINUTE;
 

@@ -406,6 +406,20 @@ describe('AttemptSweeperProcessor — two clocks for an unscored sitting', () =>
     await sweeper.process();
     assert.deepEqual(asked(), [fresh]);
   });
+
+  /** The failure this prevents: a backlog left by a queue outage drained a thousand an hour. */
+  it('asks at once for a stale one it has not asked before, whatever it asked this hour', async () => {
+    const [first] = await unscored(1);
+    const { sweeper, scoring } = build();
+    const asked = () => scoring.jobs.map((job) => (job.data as { attemptId: string }).attemptId);
+    await sweeper.process();
+    assert.deepEqual(asked(), [first]);
+
+    const [lost] = await unscored(1);
+    scoring.jobs.length = 0;
+    await sweeper.process();
+    assert.deepEqual(asked(), [lost]);
+  });
 });
 
 describe('AttemptSweeperProcessor — the clock the cohort counting runs on', () => {
