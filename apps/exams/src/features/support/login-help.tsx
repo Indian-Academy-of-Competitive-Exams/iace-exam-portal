@@ -178,7 +178,7 @@ function HelpForm({ onSent }: Readonly<{ onSent: (email: string) => void }>) {
           form={form}
           name="branchId"
           label="Branch"
-          placeholder={branches.isPending ? 'Loading branches' : 'Choose your branch'}
+          placeholder={branches.isPending ? 'Loading branches' : 'Choose a branch'}
           items={branchItems}
         />
         {/* ui-copy-ok: rule */}

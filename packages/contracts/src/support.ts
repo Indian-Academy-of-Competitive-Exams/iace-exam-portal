@@ -67,12 +67,16 @@ export const SUPPORT_CATEGORY_INFO: Readonly<
   },
 };
 
-const body = z.string().trim().min(1).max(SUPPORT_BODY_MAX);
+const body = z.string().trim().min(1, 'Write a message').max(SUPPORT_BODY_MAX);
 const attachmentKey = z.string().min(1).optional();
 
 /** Text only: an image attaches to a later message, once the ticket exists to hold it. */
 export const createTicketSchema = z
-  .object({ category: supportCategorySchema, attemptId: z.uuid().optional(), body })
+  .object({
+    category: z.enum(SUPPORT_CATEGORIES, { error: 'Choose a category' }),
+    attemptId: z.uuid().optional(),
+    body,
+  })
   .refine((v) => !SUPPORT_CATEGORY_INFO[v.category].needsSitting || Boolean(v.attemptId), {
     path: ['attemptId'],
     message: 'Choose the test this is about',
@@ -124,15 +128,15 @@ export const LOGIN_PROBLEMS = {
 } as const;
 
 export const loginHelpSchema = z.object({
-  fullName: z.string().trim().min(2).max(120),
+  fullName: z.string().trim().min(2, 'Enter your full name').max(120),
   registeredMobile: mobileSchema,
-  dob: z.iso.date(),
-  fatherName: z.string().trim().min(2).max(120),
-  branchId: z.uuid(),
+  dob: z.iso.date({ error: 'Enter your date of birth' }),
+  fatherName: z.string().trim().min(2, "Enter your father's name").max(120),
+  branchId: z.uuid({ error: 'Choose your branch' }),
   enrolmentId: z.string().trim().max(60).optional(),
   contactMobile: mobileSchema.optional(),
   contactEmail: emailSchema,
-  problem: z.enum(LOGIN_PROBLEMS),
+  problem: z.enum(LOGIN_PROBLEMS, { error: 'Choose what is wrong' }),
   body,
 });
 export type LoginHelpBody = z.infer<typeof loginHelpSchema>;

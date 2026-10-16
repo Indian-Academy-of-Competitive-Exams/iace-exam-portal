@@ -25,6 +25,15 @@ export { Checkbox } from './components/ui/checkbox';
 export { FillBubble } from './components/ui/fill-bubble';
 export { RadioGroup, RadioGroupItem } from './components/ui/radio-group';
 export { Textarea } from './components/ui/textarea';
+export {
+  BLANK_THREAD_DRAFT,
+  ThreadComposer,
+  ThreadMessage,
+  withThreadImage,
+  type ThreadAttachment,
+  type ThreadComposerProps,
+  type ThreadDraft,
+} from './components/ui/thread';
 export { SegmentedControl } from './components/ui/segmented-control';
 export { Separator } from './components/ui/separator';
 export { Skeleton, SkeletonParagraph } from './components/ui/skeleton';

@@ -86,4 +86,23 @@ describe('sign-in help', () => {
     assert.equal(sent?.contactMobile, undefined);
     assert.ok(screen.getByText(new RegExp(SUPPORT_FALLBACK_EMAIL)));
   });
+
+  /** The failure this prevents: a student shown a parser's words for a field they left blank. */
+  it('names what each blank field needs in plain words', async () => {
+    mount();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    for (const message of [
+      'Enter your full name',
+      "Enter your father's name",
+      'Enter your date of birth',
+      'Choose your branch',
+      'Choose what is wrong',
+      'Write a message',
+    ]) {
+      assert.ok(await screen.findByText(message), message);
+    }
+    assert.equal(screen.queryByText(/Invalid/), null);
+  });
 });

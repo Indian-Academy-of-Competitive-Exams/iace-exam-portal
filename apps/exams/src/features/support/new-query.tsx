@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -157,6 +157,15 @@ function SittingField({ form }: Readonly<{ form: ReturnType<typeof useForm<Creat
       })),
     [trend.data],
   );
+
+  // A sitting handed in by the address but not among theirs would show as a bare id.
+  const held = useWatch({ control: form.control, name: 'attemptId' });
+  const loaded = trend.data !== undefined;
+  useEffect(() => {
+    if (loaded && held && !items.some((item) => item.value === held)) {
+      form.setValue('attemptId', undefined);
+    }
+  }, [loaded, held, items, form]);
 
   return (
     <FormCombobox

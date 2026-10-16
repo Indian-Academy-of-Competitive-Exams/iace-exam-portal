@@ -239,7 +239,7 @@ export function MobileField<TValues extends FieldValues>({
   autoFocus?: boolean;
 }>) {
   return (
-    // ui-copy-ok: rule — the caller's own hint, passed through
+    // ui-copy-ok: rule
     <FormField form={form} name={name} label={label} hint={hint}>
       {(control) => (
         <NumericInput

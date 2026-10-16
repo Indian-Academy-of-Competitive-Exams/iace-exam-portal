@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ImagePlus, MessageSquare, Send, X } from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
 import {
   COMMENT_MAX_IMAGES,
-  INSTITUTE_TIME_ZONE,
   QUESTION_IMAGE_ACCEPTED_TYPES,
   type SectionComment,
 } from '@iace/contracts';
 import {
-  Avatar,
+  BLANK_THREAD_DRAFT,
   Button,
   ConfirmDialog,
   EmptyState,
@@ -18,37 +17,31 @@ import {
   SheetContent,
   SheetTitle,
   SkeletonParagraph,
-  Textarea,
+  ThreadComposer,
+  ThreadMessage,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
   plural,
+  withThreadImage,
+  type ThreadDraft,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { uploadQuestionImage } from '../lib/upload-question-image';
 import { useAuth } from '../providers/auth';
 import { ADMIN_ROLE_LABELS } from '../lib/labels';
 import { sectionThreadQueryKey } from '../lib/query-keys';
-import { BLANK, type Attachment, type Composing } from './thread-composing';
+import { saidAt } from '../lib/said-at';
 
 /** The discussion on one (test, section) — spec §9, read as a conversation rather than a log. */
 
 const PANEL = 'w-[--modal-w-lg]';
 
-const SAID_AT = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  day: 'numeric',
-  month: 'short',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
 /** How much of an unsent comment a confirm quotes back before it is dropped. */
 const UNSENT_QUOTE_CHARS = 80;
 
 /** What the box holds unsent, named for the confirm that would drop it. */
-function unsentOf({ body, images }: Composing): string {
+function unsentOf({ body, images }: ThreadDraft): string {
   const words = body.trim();
   const cut = words.length > UNSENT_QUOTE_CHARS ? `${words.slice(0, UNSENT_QUOTE_CHARS)}…` : words;
   const named = [
@@ -90,7 +83,7 @@ function Thread({
 }: Readonly<{ testId: string; sectionId: string; canWrite: boolean }>) {
   const { identity } = useAuth();
   const queryClient = useQueryClient();
-  const [composing, setComposing] = useState<Composing>(BLANK);
+  const [composing, setComposing] = useState<ThreadDraft>(BLANK_THREAD_DRAFT);
   const [replacing, setReplacing] = useState<SectionComment | null>(null);
 
   const thread = useQuery({
@@ -100,12 +93,12 @@ function Thread({
   const rows = thread.data ?? [];
 
   const settle = async () => {
-    setComposing(BLANK);
+    setComposing(BLANK_THREAD_DRAFT);
     await queryClient.invalidateQueries({ queryKey: sectionThreadQueryKey(testId, sectionId) });
   };
 
   const say = useMutation({
-    mutationFn: ({ body, images, editingId }: Composing) =>
+    mutationFn: ({ body, images, editingId }: ThreadDraft) =>
       editingId === null
         ? api.admin.sectionWork.comment(testId, sectionId, {
             body,
@@ -113,6 +106,12 @@ function Thread({
           })
         : api.admin.sectionWork.editComment(testId, sectionId, editingId, { body }),
     onSuccess: settle,
+  });
+
+  // A mutation, so a picture the server refuses is announced like any other failed write.
+  const upload = useMutation({
+    mutationFn: uploadQuestionImage,
+    onSuccess: (image) => setComposing(withThreadImage(image)),
   });
 
   const edit = (comment: SectionComment) =>
@@ -169,7 +168,7 @@ function Thread({
               key={comment.id}
               authorName={comment.authorName}
               label={ADMIN_ROLE_LABELS[comment.authorRole]}
-              at={comment.createdAt}
+              at={saidAt(comment.createdAt)}
               body={comment.body}
               images={comment.images}
               mine={comment.authorId === identity?.id}
@@ -202,7 +201,9 @@ function Thread({
           name={identity?.fullName ?? null}
           onChange={setComposing}
           onSend={() => say.mutate(composing)}
-          upload={uploadQuestionImage}
+          onPickImage={(file) => upload.mutate(file)}
+          uploading={upload.isPending}
+          accept={QUESTION_IMAGE_ACCEPTED_TYPES.join(',')}
           maxImages={COMMENT_MAX_IMAGES}
           placeholder="Write a comment"
         />
@@ -226,72 +227,6 @@ function Thread({
   );
 }
 
-/** One said thing in a thread: who, when, the words and any pictures; `aside` trails the byline. */
-export function ThreadMessage({
-  authorName,
-  label,
-  at,
-  body,
-  images,
-  mine,
-  tone,
-  aside,
-  children,
-}: Readonly<{
-  authorName: string | null;
-  label?: string;
-  at: string;
-  body: string;
-  images: readonly string[];
-  mine: boolean;
-  tone?: 'warning';
-  aside?: React.ReactNode;
-  children?: React.ReactNode;
-}>) {
-  return (
-    <div className={cn('flex items-end gap-2', mine && 'flex-row-reverse')}>
-      <Avatar name={authorName} size="sm" />
-
-      <div className={cn('flex min-w-0 max-w-[80%] flex-col gap-1', mine && 'items-end')}>
-        <div
-          className={cn(
-            'flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground',
-            mine && 'flex-row-reverse',
-          )}
-        >
-          <span className="font-medium text-foreground">{authorName}</span>
-          {label ? <span>{label}</span> : null}
-          <span>{SAID_AT.format(new Date(at))}</span>
-          {aside}
-        </div>
-
-        <div
-          className={cn(
-            'flex flex-col gap-2 rounded-lg border px-3 py-2 text-sm',
-            BUBBLE_TONE[tone ?? (mine ? 'mine' : 'theirs')],
-          )}
-        >
-          {body ? <p className="whitespace-pre-wrap break-words">{body}</p> : null}
-
-          {images.map((url) => (
-            <a key={url} href={url} target="_blank" rel="noreferrer">
-              <img src={url} alt="" className="max-h-64 rounded-md border border-border" />
-            </a>
-          ))}
-        </div>
-
-        {children}
-      </div>
-    </div>
-  );
-}
-
-const BUBBLE_TONE = {
-  mine: 'border-primary/30 bg-primary/[0.08]',
-  theirs: 'border-border bg-surface',
-  warning: 'border-warning/40 bg-warning-subtle',
-} as const;
-
 /** The trail is why editing is allowed at all, so the last wording is one hover away. */
 function EditedMark({ comment }: Readonly<{ comment: SectionComment }>) {
   const previous = comment.revisions.at(-1)?.body;
@@ -303,133 +238,5 @@ function EditedMark({ comment }: Readonly<{ comment: SectionComment }>) {
       </TooltipTrigger>
       <TooltipContent>{previous ? `Before: ${previous}` : 'Edited'}</TooltipContent>
     </Tooltip>
-  );
-}
-
-export function ThreadComposer({
-  composing,
-  sending,
-  name,
-  onChange,
-  onSend,
-  upload: uploadImage,
-  maxImages,
-  placeholder,
-  head,
-}: Readonly<{
-  composing: Composing;
-  sending: boolean;
-  name: string | null;
-  /** An updater, never a value: a picture lands after the render that picked it has gone stale. */
-  onChange: React.Dispatch<React.SetStateAction<Composing>>;
-  onSend: () => void;
-  upload: (file: File) => Promise<Attachment>;
-  maxImages: number;
-  placeholder: string;
-  head?: React.ReactNode;
-}>) {
-  const editing = composing.editingId !== null;
-  const empty = composing.body.trim() === '' && composing.images.length === 0;
-
-  // A mutation, so a picture the server refuses is announced like any other failed write.
-  const upload = useMutation({
-    mutationFn: uploadImage,
-    onSuccess: (image) =>
-      onChange((current) =>
-        current.editingId === null ? { ...current, images: [...current.images, image] } : current,
-      ),
-  });
-
-  return (
-    <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
-      {head}
-
-      {editing ? (
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Editing a comment. Its pictures stay as they are.</span>
-          <Button variant="ghost" size="sm" onClick={() => onChange(BLANK)}>
-            Cancel
-          </Button>
-        </div>
-      ) : null}
-
-      {composing.images.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">
-          {composing.images.map((image) => (
-            <li key={image.key} className="relative">
-              <img
-                src={image.url}
-                alt=""
-                className="size-16 rounded-md border border-border object-cover"
-              />
-              <Button
-                variant="ghost"
-                size="iconSm"
-                aria-label="Remove this picture"
-                className="absolute -right-2 -top-2 bg-surface"
-                onClick={() =>
-                  onChange((current) => ({
-                    ...current,
-                    images: current.images.filter((held) => held.key !== image.key),
-                  }))
-                }
-              >
-                <X aria-hidden />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <div className="flex items-end gap-2">
-        <Avatar name={name} size="sm" />
-
-        <Textarea
-          value={composing.body}
-          onChange={(event) => {
-            const body = event.target.value;
-            onChange((current) => ({ ...current, body }));
-          }}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          rows={2}
-          className="min-h-0 flex-1 resize-none"
-        />
-
-        <label className="relative shrink-0">
-          <span className="sr-only">Add a picture</span>
-          <input
-            type="file"
-            className="peer sr-only"
-            accept={QUESTION_IMAGE_ACCEPTED_TYPES.join(',')}
-            disabled={editing || upload.isPending || composing.images.length >= maxImages}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) upload.mutate(file);
-              event.target.value = '';
-            }}
-          />
-          <span
-            className={cn(
-              'inline-flex size-9 items-center justify-center rounded-md border border-border',
-              'cursor-pointer text-muted-foreground hover:bg-muted',
-              'peer-disabled:pointer-events-none peer-disabled:border-disabled-border peer-disabled:bg-disabled peer-disabled:text-disabled-foreground',
-            )}
-          >
-            <ImagePlus className="size-4" aria-hidden />
-          </span>
-        </label>
-
-        <Button
-          size="icon"
-          loading={sending}
-          disabled={empty || upload.isPending}
-          onClick={onSend}
-          aria-label="Send"
-        >
-          <Send aria-hidden />
-        </Button>
-      </div>
-    </div>
   );
 }

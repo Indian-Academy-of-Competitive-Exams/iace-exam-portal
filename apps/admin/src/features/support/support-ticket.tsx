@@ -6,6 +6,7 @@ import { Check, Flag, Lock, UserCheck, UserCog, X } from 'lucide-react';
 import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  QUESTION_IMAGE_ACCEPTED_TYPES,
   SUPPORT_CATEGORY_INFO,
   SUPPORT_PRIORITIES,
   SUPPORT_STATUSES,
@@ -16,6 +17,7 @@ import {
 import { PageCrumbs, shrunkForUpload } from '@iace/app-kit/browser';
 import {
   Alert,
+  BLANK_THREAD_DRAFT,
   Button,
   ConfirmDialog,
   DropdownMenuItem,
@@ -30,6 +32,10 @@ import {
   SkeletonParagraph,
   SplitFrame,
   StatRow,
+  ThreadComposer,
+  ThreadMessage,
+  withThreadImage,
+  type ThreadDraft,
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { NAV_ITEMS } from '../../lib/nav';
@@ -37,8 +43,7 @@ import { QUERY_KEYS, supportTicketQueryKey } from '../../lib/query-keys';
 import { SUPPORT_PRIORITY_LABELS, SUPPORT_STATUS_LABELS } from '../../lib/labels';
 import { useAuth } from '../../providers/auth';
 import { AdminPicker } from '../../components/admin-multi-picker';
-import { ThreadComposer, ThreadMessage } from '../../components/section-thread';
-import { BLANK, type Composing } from '../../components/thread-composing';
+import { saidAt } from '../../lib/said-at';
 
 const DASH = '—';
 
@@ -151,7 +156,7 @@ export function SupportTicketPage() {
               key={message.id}
               authorName={message.fromStaff ? message.authorName : asker}
               label={message.internal ? 'Note' : undefined}
-              at={message.createdAt}
+              at={saidAt(message.createdAt)}
               body={message.body}
               images={message.attachmentUrl ? [message.attachmentUrl] : []}
               mine={message.fromStaff}
@@ -205,8 +210,15 @@ function ReplyBox({
   onSent,
 }: Readonly<{ ticketId: string; onSent: () => Promise<void> }>) {
   const { identity } = useAuth();
-  const [composing, setComposing] = useState<Composing>(BLANK);
+  const [composing, setComposing] = useState<ThreadDraft>(BLANK_THREAD_DRAFT);
   const [mode, setMode] = useState<Mode>(MODES.REPLY);
+
+  // A mutation, so a picture the server refuses is announced like any other failed write.
+  const upload = useMutation({
+    mutationFn: async (file: File) =>
+      api.admin.support.upload(ticketId, await shrunkForUpload(file)),
+    onSuccess: (image) => setComposing(withThreadImage(image)),
+  });
 
   const say = useMutation({
     mutationFn: () =>
@@ -216,7 +228,7 @@ function ReplyBox({
         internal: mode === MODES.NOTE,
       }),
     onSuccess: async () => {
-      setComposing(BLANK);
+      setComposing(BLANK_THREAD_DRAFT);
       await onSent();
     },
   });
@@ -228,7 +240,9 @@ function ReplyBox({
       name={identity?.fullName ?? null}
       onChange={setComposing}
       onSend={() => say.mutate()}
-      upload={async (file) => api.admin.support.upload(ticketId, await shrunkForUpload(file))}
+      onPickImage={(file) => upload.mutate(file)}
+      uploading={upload.isPending}
+      accept={QUESTION_IMAGE_ACCEPTED_TYPES.join(',')}
       maxImages={MAX_IMAGES}
       placeholder={mode === MODES.NOTE ? 'Write a note' : 'Write a reply'}
       head={
