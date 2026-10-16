@@ -10,6 +10,7 @@ import {
   contentLanguageOf,
   optionLetter,
   type ExamQuestion,
+  type ExamSection,
   type LanguageCode,
   type PrintablePaper,
 } from '@iace/contracts';
@@ -17,6 +18,7 @@ import { htmlOf, logoUrl, passagesOf } from '@iace/app-kit';
 import { PageCrumbs, printElement, useFilterSpec, useFilters } from '@iace/app-kit/browser';
 import {
   EMPTY_STATE_KINDS,
+  Alert,
   Button,
   Card,
   EmptyState,
@@ -37,6 +39,16 @@ import { durationLabel } from '../../lib/duration';
 import { useAuth } from '../../providers/auth';
 
 const UNTITLED = 'Untitled test';
+
+const languageNames = (languages: readonly LanguageCode[]): string =>
+  languages.map((language) => LANGUAGE_LABELS[contentLanguageOf(language)]).join(' and ');
+
+/** A section sat in a language of its own prints in it whatever the filter says, so the filter does not blank it. */
+const printedIn = (section: ExamSection, paper: PrintablePaper): readonly LanguageCode[] =>
+  section.languages ?? paper.languages;
+
+const isPrintedApart = (section: ExamSection, paper: PrintablePaper): boolean =>
+  printedIn(section, paper).join() !== paper.languages.join();
 /** A drawing, not `Brandmark`: a printer drops the plate a background would paint. */
 const SHEET_LOGO = logoUrl(28);
 const WITH_KEY = 'true';
@@ -174,10 +186,20 @@ function Body({
   }
   if (paper.data.questions.length === 0) return <EmptyState title="No questions on the paper" />;
 
+  const printable = paper.data;
+  const apart = printable.sections
+    .filter((section) => isPrintedApart(section, printable))
+    .map((section) => `${section.name} in ${languageNames(printedIn(section, printable))}`);
+
   return (
-    <Card className="mx-auto w-full max-w-4xl p-8">
-      <Sheet ref={sheet} paper={paper.data} />
-    </Card>
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+      {apart.length > 0 ? (
+        <Alert variant="info">{`Printed in its own language, whatever is chosen above: ${apart.join(', ')}`}</Alert>
+      ) : null}
+      <Card className="p-8">
+        <Sheet ref={sheet} paper={printable} />
+      </Card>
+    </div>
   );
 }
 
@@ -206,7 +228,11 @@ function Sheet({ paper, ref }: Readonly<{ paper: PrintablePaper; ref: React.Ref<
           {paper.questions
             .filter((question) => question.baseConfigSectionId === section.id)
             .map((question) => (
-              <PrintedQuestion key={question.questionId} question={question} paper={paper} />
+              <PrintedQuestion
+                key={question.questionId}
+                question={question}
+                languages={printedIn(section, paper)}
+              />
             ))}
         </section>
       ))}
@@ -242,9 +268,9 @@ function Fact({ label, value }: Readonly<{ label: string; value: React.ReactNode
 /** Never split across two pages: a candidate should not turn the sheet to find a question's options. */
 function PrintedQuestion({
   question,
-  paper,
-}: Readonly<{ question: ExamQuestion; paper: PrintablePaper }>) {
-  const passages = passagesOf(question.content, paper.languages, LANGUAGE_MODE.DUAL);
+  languages,
+}: Readonly<{ question: ExamQuestion; languages: readonly LanguageCode[] }>) {
+  const passages = passagesOf(question.content, languages, LANGUAGE_MODE.DUAL);
 
   return (
     // A passage can outrun a page, and a block that may not break would be cut off at the foot of one.
@@ -258,7 +284,7 @@ function PrintedQuestion({
             html={passage.html}
           />
         ))}
-        {paper.languages.map((language) => (
+        {languages.map((language) => (
           <RichContent
             key={language}
             lang={language.toLowerCase()}
@@ -273,7 +299,7 @@ function PrintedQuestion({
               <li key={option.id} className="flex gap-2">
                 <span className="shrink-0 font-medium">({optionLetter(place)})</span>
                 <div className="flex min-w-0 flex-col gap-1">
-                  {paper.languages.map((language) => (
+                  {languages.map((language) => (
                     <RichContent
                       key={language}
                       lang={language.toLowerCase()}
