@@ -13,6 +13,8 @@ import {
   QUESTION_TYPES,
   TAG_SEPARATOR,
   TAGS_MAX,
+  TYPING_PASSAGE_MAX_KEY_DEPRESSIONS,
+  TYPING_PASSAGE_MIN_KEY_DEPRESSIONS,
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { type TaxonomyCatalog } from './taxonomy-context';
@@ -281,6 +283,11 @@ const INSTRUCTIONS = [
   '  EXACT compares the text, ignoring case and spacing.',
   `  NUMERIC compares the number, and ${headerOf('answer_tolerance')} is how far either side`,
   '  still counts (0.01 accepts 3.13 to 3.15 for an answer of 3.14).',
+  `TYPING: the passage candidates type is the ${headerOf('stem_en')} cell, plain text with no picture or`,
+  `  formula, ${TYPING_PASSAGE_MIN_KEY_DEPRESSIONS} to ${TYPING_PASSAGE_MAX_KEY_DEPRESSIONS} key depressions. Leave the options and the answer empty.`,
+  `DESCRIPTIVE: leave the options empty. ${headerOf('answer_en')} takes the key points an answer should`,
+  '  make, one to a line (Alt+Enter starts a new line inside a cell). With none, any answer of fair',
+  '  length takes full marks. Word limits are not on this sheet; set them on the question in the bank.',
   '',
   `${headerOf('tags')}: separate several with "${TAG_SEPARATOR}". ${headerOf('question_code')} is your own reference and`,
   'must be unique across the bank; leave it blank if you do not use one.',
