@@ -5,6 +5,8 @@ name: Staging
 on:
   push:
     branches: [staging]
+    # Safe to skip: the next run diffs from the last green one, so nothing a skipped push held is lost.
+    paths-ignore: ['docs/**', '**/*.md', '.claude/**', '.vscode/**']
   workflow_dispatch:
     inputs:
       image_tag:
@@ -26,6 +28,7 @@ jobs:
   what-changed:
     name: What changed
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       actions: read
