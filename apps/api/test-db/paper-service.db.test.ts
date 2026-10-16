@@ -293,6 +293,8 @@ describe('PaperService — picking a draft paper by hand', () => {
 
       assert.equal(elsewhere.code, ErrorCodes.VALIDATION_ERROR);
       assert.equal(choiceInside.code, ErrorCodes.VALIDATION_ERROR);
+      assert.match(elsewhere.fieldErrors?.questionId?.[0] ?? '', /another kind/);
+      assert.match(choiceInside.fieldErrors?.questionId?.[0] ?? '', /another kind/);
       assert.deepEqual(await heldIds(), [idFor('q1')]);
     });
   }

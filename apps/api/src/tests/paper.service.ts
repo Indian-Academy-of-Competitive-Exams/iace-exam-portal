@@ -25,7 +25,9 @@ import {
   type TestScope,
   type TypistDoneBody,
   scopedSections,
+  SECTION_QUESTION_TYPES,
   sectionAnswerKindOf,
+  type SectionAnswerKind,
 } from '@iace/contracts';
 import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -55,6 +57,7 @@ import { scopeRefOf } from '../common/prisma-json';
 const NOT_DRAWABLE_MESSAGE =
   'That question is archived, or has no version to pin, so no paper can serve it.';
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
+const WRONG_KIND_MESSAGE = 'That question is of another kind than this section takes.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 const NOT_ON_THE_PAPER_MESSAGE = 'That question is not on this paper';
 const NOT_FROZEN_MESSAGE =
@@ -689,16 +692,18 @@ export class PaperService {
       }),
       this.prisma.question.findMany({
         where: { id: { in: ids } },
-        select: { id: true, subjectId: true, currentVersionId: true, difficulty: true },
+        select: { id: true, type: true, subjectId: true, currentVersionId: true, difficulty: true },
       }),
     ]);
+    const sectionKind = sectionAnswerKindOf(section ?? {});
     // Asked of the database, not of the row: drawability turns on other rows as well as this one.
     const drawable = await this.prisma.question.findMany({
-      where: { id: { in: ids }, ...drawableFor(testId, sectionAnswerKindOf(section ?? {})) },
+      where: { id: { in: ids }, ...drawableFor(testId, sectionKind) },
       select: { id: true },
     });
 
     return {
+      sectionKind,
       sectionSubjectId: section?.subjectId ?? null,
       byId: new Map(questions.map((question) => [question.id, question])),
       drawable: new Set(drawable.map((row) => row.id)),
@@ -934,6 +939,7 @@ const selectionRefused = (issue: string) =>
 
 /** Every question the request named, with what its drawability turns on, read once. */
 interface DrawableContext {
+  sectionKind: SectionAnswerKind;
   sectionSubjectId: string | null;
   byId: Map<string, DrawableQuestion>;
   drawable: Set<string>;
@@ -941,12 +947,13 @@ interface DrawableContext {
 
 interface DrawableQuestion {
   id: string;
+  type: Question['type'];
   subjectId: string;
   currentVersionId: string | null;
   difficulty: Question['difficulty'];
 }
 
-/** The three refusals in the order a caller meets them, off the context rather than the database. */
+/** The four refusals in the order a caller meets them, off the context rather than the database. */
 function assertDrawableIn(
   context: DrawableContext,
   questionId: string,
@@ -954,6 +961,11 @@ function assertDrawableIn(
   const question = context.byId.get(questionId);
   if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
 
+  if (!SECTION_QUESTION_TYPES[context.sectionKind].includes(question.type)) {
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, WRONG_KIND_MESSAGE, {
+      fieldErrors: { questionId: [WRONG_KIND_MESSAGE] },
+    });
+  }
   if (!context.drawable.has(questionId) || !question.currentVersionId) {
     throw new AppException(ErrorCodes.VALIDATION_ERROR, NOT_DRAWABLE_MESSAGE, {
       fieldErrors: { questionId: [NOT_DRAWABLE_MESSAGE] },
