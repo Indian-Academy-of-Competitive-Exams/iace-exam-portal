@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  IMPORT_WARNING_KIND,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_SECTION_COLUMN,
   QUESTION_IMPORT_MAX_ROWS,
@@ -334,8 +335,8 @@ describe('the question sheet', () => {
     assert.equal(row.draft?.passage?.en, undefined);
     assert.match(row.draft?.stem.en ?? '', /Directions: Read the table\..*What is 20% of 150\?/s);
     assert.deepEqual(
-      row.warnings.map((warning) => warning.column),
-      ['stem_en'],
+      row.warnings.map((warning) => [warning.kind, warning.column]),
+      [[IMPORT_WARNING_KIND.INLINE_PASSAGE, 'stem_en']],
     );
   });
 
@@ -746,8 +747,8 @@ describe('planQuestionImport — pictures placed over the sheet', () => {
     assert.equal(row?.action, 'create');
     assert.deepEqual(row?.issues, []);
     assert.deepEqual(
-      row?.warnings.map((warning) => warning.column),
-      ['option2_en'],
+      row?.warnings.map((warning) => [warning.kind, warning.column]),
+      [[IMPORT_WARNING_KIND.BLURRY_PICTURE, 'option2_en']],
     );
     const [key] = [...(row?.pictures.keys() ?? [])];
     assert.match(key ?? '', /^questions\/images\/[0-9a-f]{32}\.png$/);

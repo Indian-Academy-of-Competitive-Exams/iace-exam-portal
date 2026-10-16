@@ -151,8 +151,16 @@ export const QUESTION_IMPORT_TAG = 'imported';
 const questionImportActionSchema = z.enum(['create', 'duplicate', 'skip', 'left_out']);
 export type QuestionImportAction = z.infer<typeof questionImportActionSchema>;
 
+/** What a warning is about, so a screen counts and names each by its own kind. */
+export const IMPORT_WARNING_KIND = {
+  BLURRY_PICTURE: 'BLURRY_PICTURE',
+  INLINE_PASSAGE: 'INLINE_PASSAGE',
+} as const;
+export type ImportWarningKind = (typeof IMPORT_WARNING_KIND)[keyof typeof IMPORT_WARNING_KIND];
+
 /** Worth knowing but not wrong: the row still imports. `column` names the cell, by import key. */
 const importWarningSchema = z.object({
+  kind: z.enum(IMPORT_WARNING_KIND),
   column: z.string(),
   message: z.string(),
 });

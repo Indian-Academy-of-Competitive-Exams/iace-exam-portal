@@ -4,6 +4,7 @@ import { ArrowLeft, Ban, PanelsTopLeft, Undo2, Upload } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
+  IMPORT_WARNING_KIND,
   LANGUAGE_LABELS,
   QUESTION_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
@@ -44,6 +45,7 @@ import { IMPORT_QUESTIONS_TOUR, TOUR_IDS } from '../../lib/tours';
 import { useErrorRows } from './use-error-rows';
 import { ImportCauses } from './import-causes';
 import { ImportWorkspace } from '../authoring/import-workspace';
+import { warningTally, warningsOfKind } from '../authoring/workspace-helpers';
 
 /** Where the sheet lands: one section's typist, a whole typed test (no section), or the bank (null). */
 interface IntoSection {
@@ -107,12 +109,23 @@ function ImportOutcome({
   );
 }
 
-function BlurryNotice({ count }: Readonly<{ count: number }>) {
-  if (count === 0) return null;
+function WarningNotices({ plan }: Readonly<{ plan: QuestionImportPlan | null }>) {
+  const warnings = plan?.rows.flatMap((row) => row.warnings) ?? [];
+  const blurry = warningsOfKind(warnings, IMPORT_WARNING_KIND.BLURRY_PICTURE);
+  const inline = warningsOfKind(warnings, IMPORT_WARNING_KIND.INLINE_PASSAGE);
   return (
-    <Alert variant="warning">
-      {String.raw`${count} ${count === 1 ? 'picture looks' : 'pictures look'} like a formula saved at text size. They import, but read blurry: type each as \( … \) in the sheet to make it a real equation.`}
-    </Alert>
+    <>
+      {blurry > 0 ? (
+        <Alert variant="warning">
+          {String.raw`${blurry} ${blurry === 1 ? 'picture looks' : 'pictures look'} like a formula saved at text size. They import, but read blurry: type each as \( … \) in the sheet to make it a real equation.`}
+        </Alert>
+      ) : null}
+      {inline > 0 ? (
+        <Alert variant="warning">
+          {`${plural(inline, 'question cell')} may open with a passage. They import as typed: move each to its Passage cell to show it beside the question.`}
+        </Alert>
+      ) : null}
+    </>
   );
 }
 
@@ -218,7 +231,6 @@ export function ImportQuestionsPage() {
       api.admin.imports.leaveOutQuestionRow(run, line, { leftOut }),
     onSuccess: (judged) => intake.stage(intake.file, judged),
   });
-  const blurry = plan?.rows.reduce((count, row) => count + row.warnings.length, 0) ?? 0;
   const repeated = plan?.rows.filter((row) => repeatedLineOf(row.duplicateOf) !== null).length ?? 0;
   // A section's typist previews through authoring, which this bank-wide route does not answer for.
   const errorRows = useErrorRows(into ? null : intake.file, plan?.summary.invalid ?? 0, (file) =>
@@ -318,7 +330,7 @@ export function ImportQuestionsPage() {
       errorRows={errorRows}
       stats={plan ? statsOf(plan, repeated) : undefined}
     >
-      <BlurryNotice count={blurry} />
+      <WarningNotices plan={plan} />
       <ImportCauses
         plan={plan}
         run={plan && !intake.result && plan.importLogId ? plan.importLogId : null}
@@ -432,7 +444,7 @@ function RowOutcome({ row }: Readonly<{ row: QuestionImportRow }>) {
                 type="button"
                 className="rounded-sm text-xs text-warning-ink focus-visible:shadow-focus focus-visible:outline-none"
               >
-                {`${row.warnings.length} blurry ${row.warnings.length === 1 ? 'picture' : 'pictures'}`}
+                {warningTally(row.warnings)}
               </button>
             </TooltipTrigger>
             <TooltipContent>

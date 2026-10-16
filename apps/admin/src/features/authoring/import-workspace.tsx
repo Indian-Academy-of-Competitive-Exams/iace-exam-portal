@@ -13,6 +13,7 @@ import { importDraftQueryKey, importDraftsQueryKey } from '../../lib/query-keys'
 import { AuthoringWorkspace } from './authoring-workspace';
 import type { Held, WorkspaceSource } from './workspace-types';
 import { NoticeChip } from './notice-chip';
+import { warningTally } from './workspace-helpers';
 import { headerOfDraft, stateOfDraft, toDraft } from './question-scaffold';
 
 /** What Import will do with a row, said the way the preview table says it. */
@@ -56,8 +57,6 @@ function SheetReasons({ row }: Readonly<{ row: QuestionImportRow }>) {
   );
 }
 
-const pictures = (count: number) => `${count} blurry ${count === 1 ? 'picture' : 'pictures'}`;
-
 function RowLead({
   row,
   index,
@@ -68,7 +67,7 @@ function RowLead({
       <span className="text-sm font-semibold tabular-nums">{`Question ${index + 1} of ${total}`}</span>
       <Outcome row={row} />
       {row.warnings.length > 0 ? (
-        <Badge variant="warning">{pictures(row.warnings.length)}</Badge>
+        <Badge variant="warning">{warningTally(row.warnings)}</Badge>
       ) : null}
       {row.edited ? <Badge variant="neutral">Edited</Badge> : null}
     </>

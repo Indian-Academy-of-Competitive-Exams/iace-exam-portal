@@ -1,4 +1,5 @@
 import {
+  IMPORT_WARNING_KIND,
   QUESTION_VALIDATION_CODE,
   LANGUAGE_LABELS,
   ANSWER_MODE,
@@ -110,6 +111,7 @@ export function rowContent(
       }
       if (judged.height <= FORMULA_PICTURE_MAX_HEIGHT) {
         warnings.push({
+          kind: IMPORT_WARNING_KIND.BLURRY_PICTURE,
           column: key,
           message: String.raw`${LABEL_BY_KEY.get(key)}: this picture looks like a formula saved at text size (${judged.width}×${judged.height} px), so it will look blurry. Type it as \( … \) to make it a real equation.`,
         });
@@ -265,6 +267,7 @@ export function warnOfInlinePassage(draft: QuestionDraft, warnings: ImportWarnin
     if (!blank(draft.passage?.[language] ?? '')) continue;
     if (!opensWithPassage(draft.stem[language] ?? '')) continue;
     warnings.push({
+      kind: IMPORT_WARNING_KIND.INLINE_PASSAGE,
       column: `stem_${language}`,
       message: `The ${LANGUAGE_LABELS[language]} question may open with a passage. Move it to passage_${language} to show it beside the question`,
     });

@@ -1,4 +1,10 @@
-import { AppException } from '@iace/contracts';
+import {
+  AppException,
+  IMPORT_WARNING_KIND,
+  type ImportWarning,
+  type ImportWarningKind,
+} from '@iace/contracts';
+import { plural } from '@iace/ui';
 import { QUESTION_CODE_FIELD } from '../../lib/labels';
 import { toDraft } from './question-scaffold';
 import { issuesOf } from './use-question-checks';
@@ -47,3 +53,20 @@ export function scrollToCard(card: HTMLElement | undefined) {
   if (box) box.focus({ preventScroll: true });
   else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 }
+
+const WARNING_NOUNS: Record<ImportWarningKind, readonly [string, string]> = {
+  BLURRY_PICTURE: ['blurry picture', 'blurry pictures'],
+  INLINE_PASSAGE: ['inline passage', 'inline passages'],
+};
+
+/** How many warnings of one kind a row carries. */
+export const warningsOfKind = (warnings: readonly ImportWarning[], kind: ImportWarningKind) =>
+  warnings.filter((warning) => warning.kind === kind).length;
+
+/** "1 blurry picture, 2 inline passages": each warning counted under its own kind. */
+export const warningTally = (warnings: readonly ImportWarning[]): string =>
+  Object.values(IMPORT_WARNING_KIND)
+    .map((kind) => [kind, warningsOfKind(warnings, kind)] as const)
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => plural(count, ...WARNING_NOUNS[kind]))
+    .join(', ');
