@@ -18,7 +18,7 @@ import {
 } from '@iace/ui';
 import { api } from '../../lib/api';
 import { ROUTES } from '../../lib/constants';
-import { applyFieldErrors, resendSays, signedOutMessage, useCountdown } from '@iace/app-kit';
+import { applyFieldErrors, resendSays, useCountdown } from '@iace/app-kit';
 import { useAuth } from '../../providers/auth';
 
 // Same names the server keys `fieldErrors` by — it validates with the same schemas.
@@ -28,7 +28,7 @@ const NOTHING_ON_EXPIRY = () => undefined;
 
 /** Email + OTP. No self-signup: an unknown address simply never receives a code. */
 export function LoginPage() {
-  const { identity: admin, signIn, signedOutReason } = useAuth();
+  const { identity: admin, signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState<string | null>(null);
@@ -48,12 +48,6 @@ export function LoginPage() {
       <main className="flex flex-1 items-center justify-center px-5 pb-24">
         <Card className="w-full max-w-[26rem] shadow-md">
           <Brandmark size="lg" portal="Admin" className="justify-center px-6 pt-7" />
-
-          {signedOutMessage(signedOutReason) ? (
-            <div className="px-6 pt-4">
-              <Alert variant="warning">{signedOutMessage(signedOutReason)}</Alert>
-            </div>
-          ) : null}
 
           {email === null || challenge === null ? (
             <EmailStep
