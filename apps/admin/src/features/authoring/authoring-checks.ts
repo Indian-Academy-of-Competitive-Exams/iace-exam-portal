@@ -1,7 +1,9 @@
 import {
+  LANGUAGE_LABELS,
   QUESTION_TYPE,
   keyPointsOf,
   typingPassageText,
+  type QuestionLanguage,
   type ValidationIssue,
 } from '@iace/contracts';
 import { answerIndexOf, optionLetter, type AuthoringState } from './question-scaffold';
@@ -14,14 +16,18 @@ export function checksFor(
   issues: readonly ValidationIssue[],
   missing: readonly string[],
   duplicate: string | null,
+  /** The language the question is written in first: its subject's, else English. */
+  lead: QuestionLanguage,
 ): Check[] {
   const failing = (...codes: string[]) => issues.find((issue) => codes.includes(issue.code));
   const isMcq = state.type === QUESTION_TYPE.SINGLE_MCQ;
   const isTyping = state.type === QUESTION_TYPE.TYPING;
-  const keyDepressions = typingPassageText(state.content.en.stem).length;
+  const keyDepressions = typingPassageText(state.content[lead].stem).length;
 
   const structure = failing(
     'ENGLISH_STEM_REQUIRED',
+    'SUBJECT_LANGUAGE_REQUIRED',
+    'LANGUAGE_OUTSIDE_SUBJECT',
     'TRANSLATION_WITHOUT_STEM',
     'OPTION_COUNT_INVALID',
     'OPTION_TEXT_REQUIRED',
@@ -52,7 +58,7 @@ export function checksFor(
 
   const structured: Check = {
     key: 'structure',
-    label: structure?.message ?? (isMcq ? 'English text and every option' : 'English text'),
+    label: structure?.message ?? structureLabel(LANGUAGE_LABELS[lead], isMcq),
     state: structure ? 'fail' : 'pass',
     meta: structureMeta(state, keyDepressions),
   };
@@ -95,6 +101,9 @@ export function checksFor(
 
   return checks;
 }
+
+const structureLabel = (language: string, isMcq: boolean): string =>
+  isMcq ? `${language} text and every option` : `${language} text`;
 
 function structureMeta(state: AuthoringState, keyDepressions: number): string | undefined {
   if (state.type === QUESTION_TYPE.SINGLE_MCQ) return `${state.optionCount} options`;

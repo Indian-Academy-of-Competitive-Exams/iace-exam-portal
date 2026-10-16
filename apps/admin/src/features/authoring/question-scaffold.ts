@@ -23,11 +23,10 @@ import {
   type WritingFormat,
   type WritingRubric,
 } from '@iace/contracts';
-import { optionalNumber } from '@iace/app-kit';
 import { INDIC_SCRIPTS, type IndicScript } from '@iace/ui';
 import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { REGION_KIND } from '@iace/ui/scaffold-region';
-import { subjectLanguageOf } from './subject-languages';
+import { subjectLanguageOf, subjectNameOf } from './subject-languages';
 
 /** The box read as slots, never as text between delimiters, into the draft the sheet also builds. */
 
@@ -334,6 +333,9 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
   };
 }
 
+/** Blank is no limit; letters stay NaN so the rules refuse them rather than read them as none. */
+const wordLimitOf = (typed: string): number | null => (typed.trim() === '' ? null : Number(typed));
+
 function answerKeyOf(
   state: AuthoringState,
   isMcq: boolean,
@@ -348,8 +350,8 @@ function answerKeyOf(
       answers: localized((language) => (hasText(state.content[language].stem) ? points : '')),
       rubric: {
         format: state.format,
-        minWords: optionalNumber(state.minWords),
-        maxWords: optionalNumber(state.maxWords),
+        minWords: wordLimitOf(state.minWords),
+        maxWords: wordLimitOf(state.maxWords),
       },
     };
   }
@@ -485,7 +487,7 @@ export function taxonomyFor(header: AuthoringHeader): TaxonomyContext {
   if (header.subjectId) {
     taxonomy.subjects.set(header.subjectId, {
       id: header.subjectId,
-      name: 'This subject',
+      name: subjectNameOf(header.subjectId) ?? 'This subject',
       language: subjectLanguageOf(header.subjectId),
     });
   }

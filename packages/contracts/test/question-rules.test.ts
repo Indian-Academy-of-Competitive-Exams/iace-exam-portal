@@ -487,3 +487,43 @@ describe('validateQuestion — a subject that is a language', () => {
     );
   });
 });
+
+describe('validateQuestion — the word limits of a descriptive question', () => {
+  const limited = (minWords: number | null, maxWords: number | null) =>
+    sound({
+      type: QUESTION_TYPE.DESCRIPTIVE,
+      options: [],
+      answerKey: {
+        mode: ANSWER_MODE.EXACT,
+        answers: { en: 'a point' },
+        rubric: { format: 'ESSAY', minWords, maxWords },
+      },
+    });
+  const messages = (draft: QuestionDraft) =>
+    validateQuestion(draft, taxonomy()).map((issue) => issue.message);
+
+  it('takes limits inside the range, or none at all', () => {
+    assert.deepEqual(codes(limited(250, 300)), []);
+    assert.deepEqual(codes(limited(1, 2000)), []);
+    assert.deepEqual(codes(limited(null, null)), []);
+  });
+
+  /** THE failure this prevents: a limit the server refuses after Save, with the checklist clear. */
+  it('refuses a limit that is zero, past the ceiling, or not a whole number', () => {
+    for (const bad of [0, 2001, 12.5, -3]) {
+      assert.deepEqual(codes(limited(bad, null)), [CODE.WORD_LIMIT_INVALID], `lower ${bad}`);
+      assert.deepEqual(codes(limited(null, bad)), [CODE.WORD_LIMIT_INVALID], `upper ${bad}`);
+    }
+  });
+
+  it('refuses what a box of letters becomes, by name', () => {
+    assert.deepEqual(messages(limited(Number.NaN, null)), [
+      'Enter a whole number for the lower word limit',
+    ]);
+  });
+
+  it('refuses a lower limit above the upper one, once each is a limit', () => {
+    assert.deepEqual(codes(limited(300, 250)), [CODE.WORD_LIMIT_INVALID]);
+    assert.deepEqual(codes(limited(0, 250)), [CODE.WORD_LIMIT_INVALID]);
+  });
+});

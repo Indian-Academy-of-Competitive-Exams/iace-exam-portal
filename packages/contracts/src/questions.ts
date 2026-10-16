@@ -143,7 +143,7 @@ export type WritingFormat = z.infer<typeof writingFormatSchema>;
 export const WRITING_FORMATS = writingFormatSchema.options;
 
 export const WRITING_WORDS_MAX = 2000;
-const wordLimitSchema = z.number().int().min(1).max(WRITING_WORDS_MAX);
+export const wordLimitSchema = z.number().int().min(1).max(WRITING_WORDS_MAX);
 
 /** DESCRIPTIVE only: the format and the word limits an answer is held to. Its key points are the key's `answers`. */
 export const writingRubricSchema = z.object({
@@ -221,7 +221,7 @@ export const QUESTION_VALIDATION_CODE = {
   /** A typing passage shorter than any standard could use. */
   TYPING_PASSAGE_TOO_SHORT: 'TYPING_PASSAGE_TOO_SHORT',
   TYPING_PASSAGE_TOO_LONG: 'TYPING_PASSAGE_TOO_LONG',
-  /** A descriptive question whose lower word limit is above its upper one. */
+  /** A descriptive question whose word limit is not a whole number in range, or whose lower limit is above its upper one. */
   WORD_LIMIT_INVALID: 'WORD_LIMIT_INVALID',
   SUBJECT_REQUIRED: 'SUBJECT_REQUIRED',
   SUBJECT_UNKNOWN: 'SUBJECT_UNKNOWN',

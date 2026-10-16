@@ -101,6 +101,7 @@ export function useChecked(
       issues,
       missing.map((code) => LANGUAGE_LABELS[code]),
       duplicate,
+      subjectLanguage ?? DEFAULT_LANGUAGE,
     );
   }, [state, issues, duplicate, expected, subjectLanguage]);
 

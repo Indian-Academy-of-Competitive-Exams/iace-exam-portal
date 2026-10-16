@@ -4,7 +4,9 @@ import {
   MCQ_OPTION_MIN,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
+  WRITING_WORDS_MAX,
   toleranceSchema,
+  wordLimitSchema,
   type QuestionDraft,
   type QuestionIdentity,
   type QuestionType,
@@ -443,7 +445,23 @@ function checkDescriptive(draft: QuestionDraft, issues: ValidationIssue[]): void
     });
   }
   const { minWords, maxWords } = draft.answerKey?.rubric ?? {};
-  if (minWords != null && maxWords != null && minWords > maxWords) {
+  const limits = [
+    ['lower', 'minWords', minWords],
+    ['upper', 'maxWords', maxWords],
+  ] as const;
+  let refused = false;
+  for (const [which, key, words] of limits) {
+    const message = words == null ? null : wordLimitProblem(which, words);
+    if (message === null) continue;
+    refused = true;
+    issues.push({
+      code: CODE.WORD_LIMIT_INVALID,
+      message,
+      field: `answerKey.rubric.${key}`,
+      column: 'answer_en',
+    });
+  }
+  if (!refused && minWords != null && maxWords != null && minWords > maxWords) {
     issues.push({
       code: CODE.WORD_LIMIT_INVALID,
       message: `The lower word limit (${minWords}) is above the upper one (${maxWords})`,
@@ -451,6 +469,14 @@ function checkDescriptive(draft: QuestionDraft, issues: ValidationIssue[]): void
       column: 'answer_en',
     });
   }
+}
+
+/** The schema's own bounds, said where the editor can show them; NaN is what a box of letters becomes. */
+function wordLimitProblem(which: 'lower' | 'upper', words: number): string | null {
+  if (!Number.isFinite(words)) return `Enter a whole number for the ${which} word limit`;
+  return wordLimitSchema.safeParse(words).success
+    ? null
+    : `The ${which} word limit is a whole number from 1 to ${WRITING_WORDS_MAX}`;
 }
 
 /** The topic-under-its-subject check no foreign key can make: the question carries both ids. */
