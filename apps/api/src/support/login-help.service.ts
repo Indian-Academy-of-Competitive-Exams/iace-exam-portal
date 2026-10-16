@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
-  ActorTypes,
   AppException,
   ErrorCodes,
   SUPPORT_CATEGORIES,
@@ -14,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { redisKeys } from '../redis/redis.keys';
 import { RedisService } from '../redis/redis.service';
 import { sameName } from './claim';
+import { openingMessages } from './support.service';
 
 const PER_MOBILE_PER_DAY = 3;
 const PER_IP_PER_DAY = 10;
@@ -38,7 +38,7 @@ export class LoginHelpService {
         category: SUPPORT_CATEGORIES.LOGIN_OR_ACCOUNT,
         claim: input as Prisma.InputJsonObject,
         contactEmail: input.contactEmail,
-        messages: { create: { authorType: ActorTypes.STUDENT, body: input.body } },
+        messages: { create: openingMessages(input.body) },
       },
     });
     return { received: true };

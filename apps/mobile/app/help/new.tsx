@@ -28,7 +28,7 @@ import { Button } from '../../src/components/ui/button';
 import { FormPicker } from '../../src/components/ui/form-picker';
 import { TextField } from '../../src/components/ui/text-field';
 
-const FIELDS = ['category', 'attemptId', 'body'] as const;
+const FIELDS = ['title', 'category', 'attemptId', 'body'] as const;
 const UNTITLED = 'Untitled test';
 
 const CATEGORY_ITEMS = Object.values(SUPPORT_CATEGORIES).map((category) => ({
@@ -57,6 +57,7 @@ export default function NewQueryScreen() {
     defaultValues: {
       category: supportCategorySchema.safeParse(params[HELP_PARAMS.CATEGORY]).data,
       attemptId: params[HELP_PARAMS.ATTEMPT] || undefined,
+      title: '',
       body: '',
     },
   });
@@ -102,6 +103,9 @@ export default function NewQueryScreen() {
             You have {SUPPORT_MAX_OPEN} open queries. Close one in Help to raise another.
           </Alert>
         ) : null}
+
+        {/* ui-copy-ok: rule */}
+        <TextField control={form.control} name="title" label="Title" hint="Optional" />
 
         <FormPicker
           control={form.control}

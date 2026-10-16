@@ -88,7 +88,9 @@ export default function QueryThreadScreen() {
     >
       <Stack.Screen
         options={{
-          title: ticket ? SUPPORT_CATEGORY_INFO[ticket.category].label : QUERY_TITLE,
+          title: ticket
+            ? (ticket.title ?? SUPPORT_CATEGORY_INFO[ticket.category].label)
+            : QUERY_TITLE,
           headerRight: ticket && !closed ? closeAction(() => setClosing(true)) : undefined,
         }}
       />

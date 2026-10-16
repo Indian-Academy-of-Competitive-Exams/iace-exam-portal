@@ -7,6 +7,8 @@ import {
   ErrorCodes,
   NOTIFICATION_TYPE,
   SUPPORT_ASSIGNEE_FILTERS,
+  SUPPORT_CATEGORIES,
+  SUPPORT_UNREAD_EMAIL_HOURS,
   SUPPORT_STATUSES,
   type AdminClaim,
   type AdminReplyBody,
@@ -17,6 +19,7 @@ import {
   type LoginHelpBody,
   type Paginated,
   type SupportAttachment,
+  type SupportCategory,
 } from '@iace/contracts';
 import {
   MESSAGE_CHANNELS,
@@ -26,7 +29,8 @@ import {
 } from '../common/messaging';
 import { everyTermMatches } from '../common/search-terms';
 import { pageArgs, paged } from '../common/pagination';
-import { NotificationsService, PushService } from '../notifications';
+import { MS_PER_HOUR } from '../common/time/units';
+import { NotificationsService } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { claimChecks, type ClaimStudent } from './claim';
@@ -44,6 +48,7 @@ const SUPPORT_DEDUPE_PREFIX = 'support:';
 
 const SUMMARY_SELECT = {
   id: true,
+  title: true,
   category: true,
   status: true,
   priority: true,
@@ -92,6 +97,7 @@ type SummaryRow = Prisma.SupportTicketGetPayload<{ select: typeof SUMMARY_SELECT
 
 const summaryOf = (row: SummaryRow): AdminTicketSummary => ({
   id: row.id,
+  title: row.title,
   category: row.category,
   status: row.status,
   priority: row.priority,
@@ -118,6 +124,7 @@ function assigneeWhere(
 
 interface TicketForDelivery {
   id: string;
+  category: SupportCategory;
   studentId: string | null;
   contactEmail: string | null;
   student: { profile: { email: string | null } | null } | null;
@@ -132,7 +139,6 @@ export class SupportAdminService {
     private readonly storage: StorageService,
     private readonly notifications: NotificationsService,
     @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
-    private readonly push: PushService,
   ) {}
 
   async list(adminId: string, query: AdminTicketListQuery): Promise<Paginated<AdminTicketSummary>> {
@@ -215,6 +221,7 @@ export class SupportAdminService {
       where: { id },
       select: {
         id: true,
+        category: true,
         status: true,
         studentId: true,
         assigneeId: true,
@@ -236,6 +243,8 @@ export class SupportAdminService {
           status: oneShot ? SUPPORT_STATUSES.CLOSED : SUPPORT_STATUSES.ANSWERED,
           answeredAt: now,
           lastMessageAt: now,
+          studentReadAt: null,
+          unreadEmailedAt: null,
           ...(oneShot && { closedAt: now }),
         };
     const message = await this.prisma.$transaction(async (tx) => {
@@ -361,15 +370,49 @@ export class SupportAdminService {
     if (ticket.status === SUPPORT_STATUSES.CLOSED) throw new AppException(ErrorCodes.TICKET_CLOSED);
   }
 
-  // A ticket raised signed out (contactEmail set) is always emailed; otherwise email only when nothing can be pushed to.
+  /** Answered replies the student has not opened in a day get one email each; the hourly sweep calls this. */
+  async emailUnread(now = new Date()): Promise<number> {
+    const tickets = await this.prisma.supportTicket.findMany({
+      where: {
+        status: SUPPORT_STATUSES.ANSWERED,
+        answeredAt: { lt: new Date(now.getTime() - SUPPORT_UNREAD_EMAIL_HOURS * MS_PER_HOUR) },
+        studentReadAt: null,
+        unreadEmailedAt: null,
+        category: { not: SUPPORT_CATEGORIES.LOGIN_OR_ACCOUNT },
+        student: { profile: { email: { not: null } } },
+      },
+      select: {
+        id: true,
+        student: { select: { profile: { select: { email: true } } } },
+        messages: {
+          where: { authorType: ActorTypes.ADMIN, internal: false },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, body: true },
+        },
+      },
+    });
+    for (const ticket of tickets) {
+      // Stamped first: a failed send shows as "Email not sent" with Resend, never a retry every hour.
+      await this.prisma.supportTicket.update({
+        where: { id: ticket.id },
+        data: { unreadEmailedAt: now },
+      });
+      const [latest] = ticket.messages;
+      if (latest) await this.emailReply(ticket.student?.profile?.email ?? null, ticket.id, latest);
+    }
+    return tickets.length;
+  }
+
+  // Login trouble is emailed at once, since the app may be what they cannot reach; the rest wait on the unread sweep.
   private async deliver(ticket: TicketForDelivery, message: { id: string; body: string }) {
     if (ticket.studentId) await this.ring(ticket.studentId, ticket.id, message.id);
-    if (ticket.contactEmail) {
-      await this.emailReply(ticket.contactEmail, ticket.id, message);
-      return;
-    }
-    if (!ticket.studentId || (await this.push.canReach(ticket.studentId))) return;
-    await this.emailReply(ticket.student?.profile?.email ?? null, ticket.id, message);
+    if (ticket.category !== SUPPORT_CATEGORIES.LOGIN_OR_ACCOUNT) return;
+    await this.emailReply(
+      ticket.contactEmail ?? ticket.student?.profile?.email ?? null,
+      ticket.id,
+      message,
+    );
   }
 
   /** The bell row; its sweep pushes to web and mobile. */

@@ -1174,21 +1174,25 @@ enum SupportPriority {
 
 // A student's query, answered asynchronously. studentId is null only for a signed-out login ticket nothing matched.
 model SupportTicket {
-  id            String          @id @default(uuid(7)) @db.Uuid
-  studentId     String?         @db.Uuid
-  category      SupportCategory
-  attemptId     String?         @db.Uuid
-  status        SupportStatus   @default(OPEN)
-  priority      SupportPriority @default(NORMAL)
-  assigneeId    String?         @db.Uuid
+  id              String          @id @default(uuid(7)) @db.Uuid
+  studentId       String?         @db.Uuid
+  title           String?
+  category        SupportCategory
+  attemptId       String?         @db.Uuid
+  status          SupportStatus   @default(OPEN)
+  priority        SupportPriority @default(NORMAL)
+  assigneeId      String?         @db.Uuid
   // A signed-out ticket's submitted details; shown to the admin, never queried.
-  claim         Json?
-  contactEmail  String?
-  lastMessageAt DateTime        @default(now()) @db.Timestamptz(3)
-  answeredAt    DateTime?       @db.Timestamptz(3)
-  closedAt      DateTime?       @db.Timestamptz(3)
-  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  claim           Json?
+  contactEmail    String?
+  lastMessageAt   DateTime        @default(now()) @db.Timestamptz(3)
+  answeredAt      DateTime?       @db.Timestamptz(3)
+  closedAt        DateTime?       @db.Timestamptz(3)
+  // Cleared by each public reply: when the student opened it since, and when the unread reminder went.
+  studentReadAt   DateTime?       @db.Timestamptz(3)
+  unreadEmailedAt DateTime?       @db.Timestamptz(3)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
 
   student  Student?         @relation(fields: [studentId], references: [id], onDelete: Cascade)
   attempt  Attempt?         @relation(fields: [attemptId], references: [id], onDelete: SetNull)

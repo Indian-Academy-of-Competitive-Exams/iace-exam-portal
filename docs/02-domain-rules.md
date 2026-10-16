@@ -856,15 +856,17 @@ the target of record; the rule behind each word is in the section named.
 A student's question to the institute, answered later by an admin. `apps/api/src/support`.
 
 - **Five categories:** `ACCESS`, `TEST_OR_RESULT`, `APP_PROBLEM`, `LOGIN_OR_ACCOUNT`, `OTHER`. A
-  query opens with text only; no attachment starts one.
+  query opens with text only; no attachment starts one. The title is optional. IACE's
+  acknowledgement is written into the thread as the query opens, with no admin as its author.
 - **At most 3 open per student**, across all categories. There is no per-category limit.
 - **Answered closes itself after 4 quiet days** (the `support-autoclose` queue). Closed is final: a
   student who needs more opens a new query.
 - **Internal notes and priority are admin-only.** A student never sees either.
-- **A reply goes by the bell and push first.** Email is sent only when the student has no live push
-  target. A ticket raised signed out (it carries `contactEmail`) is always emailed there as well,
-  matched or not: the asker could not sign in, so a push may never reach them. A matched one stays
-  answered like any other; one nothing matched is closed by the reply.
+- **A reply goes by the bell and push; email is the exception.** A `LOGIN_OR_ACCOUNT` reply is
+  emailed at once, to `contactEmail` when the ticket carries one, else the profile address: the
+  asker may be unable to open the app. Any other reply is emailed only if the student has not opened
+  the query 24 hours after it (the hourly `support-autoclose` sweep; once per reply). A matched
+  signed-out ticket stays answered like any other; one nothing matched is closed by the reply.
 - **Erasure deletes the student's queries**, threads and pictures with them: the support module does
   it inside the erasure transaction and removes the S3 objects after it commits.
 - **Login help is the signed-out door** (`LOGIN_OR_ACCOUNT`). It links to a student only when the

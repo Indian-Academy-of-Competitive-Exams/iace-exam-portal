@@ -49,6 +49,8 @@ import { AdminPicker } from '../../components/admin-multi-picker';
 import { saidAt } from '../../lib/said-at';
 
 const DASH = '—';
+/** Who wrote a staff message no admin did: the acknowledgement on opening. */
+const STAFF_NAME = 'IACE';
 
 /** A reply reaches the student; a note stays among the admins. */
 const MODES = { REPLY: 'reply', NOTE: 'note' } as const;
@@ -123,7 +125,7 @@ export function SupportTicketPage() {
       header={
         <PageHeader
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label }]} />}
-          title={label}
+          title={ticket?.title ?? label}
           meta={ticket ? SUPPORT_STATUS_LABELS[ticket.status] : undefined}
           action={
             ticket && canWrite && !closed ? (
@@ -157,7 +159,7 @@ export function SupportTicketPage() {
           {ticket?.messages.map((message) => (
             <ThreadMessage
               key={message.id}
-              authorName={message.fromStaff ? message.authorName : asker}
+              authorName={message.fromStaff ? (message.authorName ?? STAFF_NAME) : asker}
               label={message.internal ? 'Note' : undefined}
               at={saidAt(message.createdAt)}
               body={message.body}
@@ -392,6 +394,7 @@ function TicketFacts({ ticket }: Readonly<{ ticket: AdminTicketDetail }>) {
       <FormSection title="Query">
         <Facts
           rows={[
+            ['Category', SUPPORT_CATEGORY_INFO[ticket.category].label],
             ['Status', SUPPORT_STATUS_LABELS[ticket.status]],
             ['Priority', SUPPORT_PRIORITY_LABELS[ticket.priority]],
             ['Assignee', ticket.assigneeName ?? 'Unclaimed'],

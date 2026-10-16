@@ -855,6 +855,7 @@ Table Notification {
 Table SupportTicket {
   id uuid [pk, default: `uuid(7)`]
   studentId uuid
+  title text
   category SupportCategory [not null]
   attemptId uuid
   status SupportStatus [not null, default: 'OPEN']
@@ -865,6 +866,8 @@ Table SupportTicket {
   lastMessageAt timestamptz(3) [not null, default: `now()`]
   answeredAt timestamptz(3)
   closedAt timestamptz(3)
+  studentReadAt timestamptz(3)
+  unreadEmailedAt timestamptz(3)
   createdAt timestamptz(3) [not null, default: `now()`]
   updatedAt timestamptz(3) [not null, default: `now()`]
   indexes {

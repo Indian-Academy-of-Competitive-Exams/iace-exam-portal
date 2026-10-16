@@ -25,6 +25,8 @@ export const SUPPORT_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
 export const SUPPORT_BODY_MAX = 4000;
 export const SUPPORT_MAX_OPEN = 3;
 export const SUPPORT_AUTOCLOSE_DAYS = 4;
+export const SUPPORT_UNREAD_EMAIL_HOURS = 24;
+export const SUPPORT_TITLE_MAX = 120;
 export const SUPPORT_FALLBACK_EMAIL = 'donotreply@iace.co.in';
 
 export const SUPPORT_CATEGORY_INFO: Readonly<
@@ -73,6 +75,12 @@ const attachmentKey = z.string().min(1).optional();
 /** Text only: an image attaches to a later message, once the ticket exists to hold it. */
 export const createTicketSchema = z
   .object({
+    title: z
+      .string()
+      .trim()
+      .max(SUPPORT_TITLE_MAX)
+      .transform((v) => v || undefined)
+      .optional(),
     category: z.enum(SUPPORT_CATEGORIES, { error: 'Choose a category' }),
     attemptId: z.uuid().optional(),
     body,
@@ -118,7 +126,11 @@ export const adminTicketListQuerySchema = paginationQuerySchema.extend({
 });
 export type AdminTicketListQuery = z.infer<typeof adminTicketListQuerySchema>;
 
-export const myTicketListQuerySchema = paginationQuerySchema;
+export const myTicketListQuerySchema = paginationQuerySchema.extend({
+  q: z.string().trim().optional(),
+  status: supportStatusSchema.optional(),
+  category: supportCategorySchema.optional(),
+});
 export type MyTicketListQuery = z.infer<typeof myTicketListQuerySchema>;
 
 export const LOGIN_PROBLEMS = {
@@ -171,6 +183,7 @@ export type SupportMessage = z.infer<typeof supportMessageSchema>;
 
 export const ticketSummarySchema = z.object({
   id: z.string(),
+  title: z.string().nullable(),
   category: supportCategorySchema,
   status: supportStatusSchema,
   lastMessageAt: z.string(),

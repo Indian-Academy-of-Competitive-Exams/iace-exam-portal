@@ -11,11 +11,12 @@ import {
   User,
 } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
-import { SUPPORT_CATEGORIES } from '@iace/contracts';
+import { SUPPORT_CATEGORIES, SUPPORT_STATUSES, type SupportStatus } from '@iace/contracts';
+import { type BadgeProps } from '@iace/ui';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
-/** What a new query reads its prefill from. */
-export const HELP_PARAMS = { CATEGORY: 'category', ATTEMPT: 'attemptId' } as const;
+/** Opens the new-query dialog; its value is the category to start on, its partner the sitting. */
+export const HELP_PARAMS = { RAISE: 'raise', ATTEMPT: 'attemptId' } as const;
 
 /** Route paths. Referenced by the router, the guards and every navigate(). */
 export const ROUTES = {
@@ -50,11 +51,10 @@ export const ROUTES = {
   /** Their own reports, to print or keep. */
   DOWNLOADS: '/downloads',
   HELP: '/help',
-  HELP_NEW: '/help/new',
   /** A new query already about one sitting, opened from its report. */
   HELP_ABOUT_SITTING: (attemptId: string) =>
-    `/help/new?${new URLSearchParams({
-      [HELP_PARAMS.CATEGORY]: SUPPORT_CATEGORIES.TEST_OR_RESULT,
+    `/help?${new URLSearchParams({
+      [HELP_PARAMS.RAISE]: SUPPORT_CATEGORIES.TEST_OR_RESULT,
       [HELP_PARAMS.ATTEMPT]: attemptId,
     }).toString()}`,
   HELP_QUERY: (ticketId: string) => `/help/${ticketId}`,
@@ -128,6 +128,12 @@ export const typingPassageQueryKey = (presetKey: string) =>
   ['me', 'typing', 'passage', presetKey] as const;
 
 /** One root, so a send, a close or a new query refreshes the list and the thread together. */
+export const SUPPORT_STATUS_BADGE: Readonly<Record<SupportStatus, BadgeProps['variant']>> = {
+  [SUPPORT_STATUSES.OPEN]: 'warning',
+  [SUPPORT_STATUSES.ANSWERED]: 'success',
+  [SUPPORT_STATUSES.CLOSED]: 'neutral',
+};
+
 export const SUPPORT_QUERY_KEY = ['me', 'support'] as const;
 export const SUPPORT_LIST_QUERY_KEY = [...SUPPORT_QUERY_KEY, 'list'] as const;
 export const supportTicketQueryKey = (ticketId: string) =>

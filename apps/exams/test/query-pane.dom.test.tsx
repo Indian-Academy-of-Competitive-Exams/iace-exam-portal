@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AppException, ErrorCodes, type TicketDetail } from '@iace/contracts';
 import { ThemeProvider, TooltipProvider } from '@iace/ui';
 import './support/offline';
 import { api } from '../src/lib/api';
-import { ROUTES } from '../src/lib/constants';
-import { QueryThreadPage } from '../src/features/support/query-thread';
+import { QueryPane } from '../src/features/support/query-pane';
 
 /** gcTime 0 on both: a mutation's default 5-minute timer keeps the run alive after it passes. */
 const client = new QueryClient({
@@ -23,6 +21,7 @@ afterEach(() => {
 
 const TICKET: TicketDetail = {
   id: '00000000-0000-4000-8000-000000000001',
+  title: null,
   category: 'OTHER',
   status: 'ANSWERED',
   lastMessageAt: '2026-10-16T05:00:00.000Z',
@@ -33,21 +32,17 @@ const TICKET: TicketDetail = {
 
 function mount() {
   render(
-    <MemoryRouter initialEntries={[ROUTES.HELP_QUERY(TICKET.id)]}>
-      <QueryClientProvider client={client}>
-        <ThemeProvider>
-          <TooltipProvider>
-            <Routes>
-              <Route path={ROUTES.HELP_QUERY_PATTERN} element={<QueryThreadPage />} />
-            </Routes>
-          </TooltipProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <ThemeProvider>
+        <TooltipProvider>
+          <QueryPane ticketId={TICKET.id} onRaise={() => undefined} />
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>,
   );
 }
 
-describe('a query thread', () => {
+describe('a query pane', () => {
   /** The failure this prevents: a header still offering Close on a query the server already closed. */
   it('refetches after a reply is refused as closed, and keeps the words in the box', async () => {
     let status: TicketDetail['status'] = 'ANSWERED';

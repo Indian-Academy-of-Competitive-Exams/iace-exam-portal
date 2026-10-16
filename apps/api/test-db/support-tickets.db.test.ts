@@ -2,9 +2,8 @@ import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
 import { ActorTypes, AppException, ErrorCodes, SUPPORT_CATEGORIES } from '@iace/contracts';
-import { MS_PER_DAY, MS_PER_MINUTE } from '../src/common/time/units';
+import { MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE } from '../src/common/time/units';
 import { NotificationsService } from '../src/notifications';
-import { PushService } from '../src/notifications/push.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { LoginHelpService } from '../src/support/login-help.service';
 import { SupportAdminService } from '../src/support/support-admin.service';
@@ -20,38 +19,18 @@ import {
   resetDatabase,
   testPrisma,
 } from './support/database';
-import {
-  FakeConfig,
-  FakeEventBus,
-  FakeFcmSender,
-  FakeMessageSender,
-  FakePushSender,
-  FakeRedis,
-  FakeStorage,
-} from '../test/support/fakes';
+import { FakeEventBus, FakeMessageSender, FakeRedis, FakeStorage } from '../test/support/fakes';
 
 const prisma = testPrisma();
 const support = new SupportService(prisma, new FakeStorage() as never);
 const sender = new FakeMessageSender();
 const redis = new FakeRedis();
-const pushService = new PushService(
-  prisma,
-  new FakeConfig({
-    VAPID_PUBLIC_KEY: 'BPublicKey',
-    VAPID_PRIVATE_KEY: 'private',
-    VAPID_SUBJECT: 'mailto:a@b.c',
-  }).asService(),
-  new FakePushSender() as never,
-  new FakeFcmSender() as never,
-  redis.asService(),
-);
 const adminsWith = (messages: FakeMessageSender) =>
   new SupportAdminService(
     prisma,
     new FakeStorage() as never,
     new NotificationsService(prisma),
     messages,
-    pushService,
   );
 const admins = adminsWith(sender);
 const codeOf = (error: unknown) => (AppException.is(error) ? error.code : null);
@@ -62,11 +41,33 @@ beforeEach(() => resetDatabase(prisma));
 after(() => prisma.$disconnect());
 
 describe('a student ticket', () => {
-  it('opens as the admin’s turn, carrying the first message', async () => {
+  it('opens as the admin’s turn, carrying the first message and IACE’s acknowledgement', async () => {
     const { id: studentId } = await makeStudent(prisma);
     const ticket = await ask(studentId);
     assert.equal(ticket.status, 'OPEN');
-    assert.equal(ticket.messages.length, 1);
+    assert.deepEqual(
+      ticket.messages.map((m) => m.fromStaff),
+      [false, true],
+    );
+    assert.equal(ticket.title, null);
+  });
+
+  it('keeps a title, and finds a query by its title or its words', async () => {
+    const { id: studentId } = await makeStudent(prisma);
+    const titled = await support.create(studentId, {
+      category: 'OTHER',
+      title: 'Fee receipt',
+      body: 'Need a copy',
+    });
+    const other = await ask(studentId, 'ACCESS');
+    assert.equal(titled.title, 'Fee receipt');
+    const ids = async (query: Record<string, string>) =>
+      (await support.listMine(studentId, { page: 1, pageSize: 20, ...query })).items.map(
+        (t) => t.id,
+      );
+    assert.deepEqual(await ids({ q: 'receipt' }), [titled.id]);
+    assert.deepEqual(await ids({ q: 'paper' }), [other.id]);
+    assert.deepEqual(await ids({ category: 'ACCESS' }), [other.id]);
   });
 
   it('refuses a fourth open query', async () => {
@@ -109,7 +110,7 @@ describe('a student ticket', () => {
     const after = await support.replyAsStudent(studentId, ticket.id, { body: 'thanks' });
     assert.equal(after.status, 'OPEN');
     assert.deepEqual(
-      after.messages.map((m) => m.body),
+      after.messages.filter((m) => !m.fromStaff).map((m) => m.body),
       ['Where is my paper?', 'thanks'],
     );
   });
@@ -234,7 +235,7 @@ describe('admins working the queue', () => {
     assert.equal(row.answeredAt, null);
     const mine = await support.detailMine(studentId, ticket.id);
     assert.ok(!mine.messages.some((m) => m.body === 'SECRET-NOTE'));
-    assert.equal((await admins.detail(ticket.id)).messages.length, 2);
+    assert.equal((await admins.detail(ticket.id)).messages.length, 3);
   });
 
   it('a public reply writes one bell row that does not carry the internal note', async () => {
@@ -250,26 +251,30 @@ describe('admins working the queue', () => {
     assert.ok(!JSON.stringify(rows[0]).includes('SECRET-NOTE'));
   });
 
-  it('emails only a student with nothing live to push to, and still writes the bell row', async () => {
+  it('emails no reply at once outside login trouble, and still writes the bell row', async () => {
     const admin = await makeAdmin(prisma);
-    const device = await studentWith({ email: 'a@x.test', push: 'device' });
-    const browser = await studentWith({ email: 'e@x.test', push: 'subscription' });
-    const unreachable = await studentWith({ email: 'b@x.test' });
-    const dead = await studentWith({ email: 'f@x.test' });
-    await pushTo(dead.id, 'device', false);
-    const noAddress = await studentWith();
-    for (const s of [device, browser, unreachable, dead, noAddress]) {
-      const t = await ask(s.id);
-      await admins.reply(admin.id, t.id, { body: 'Hello', internal: false });
-    }
-    assert.deepEqual(sender.sent.map((m) => m.to).sort(), ['b@x.test', 'f@x.test']);
-    assert.equal(await prisma.notification.count({ where: { studentId: unreachable.id } }), 1);
+    const { id: studentId } = await studentWith({ email: 'b@x.test' });
+    const t = await ask(studentId);
+    await admins.reply(admin.id, t.id, { body: 'Hello', internal: false });
+    assert.equal(sender.sent.length, 0);
+    assert.equal(await prisma.notification.count({ where: { studentId } }), 1);
+  });
+
+  it('emails a login reply at once, to the profile address', async () => {
+    const admin = await makeAdmin(prisma);
+    const { id: studentId } = await studentWith({ email: 'profile@x.test', push: 'device' });
+    const ticket = await ask(studentId, 'LOGIN_OR_ACCOUNT');
+    await admins.reply(admin.id, ticket.id, { body: 'Hello', internal: false });
+    assert.deepEqual(
+      sender.sent.map((m) => m.to),
+      ['profile@x.test'],
+    );
   });
 
   it('emails the ticket contact address ahead of the profile address', async () => {
     const admin = await makeAdmin(prisma);
     const { id: studentId } = await studentWith({ email: 'profile@x.test' });
-    const ticket = await ask(studentId);
+    const ticket = await ask(studentId, 'LOGIN_OR_ACCOUNT');
     await prisma.supportTicket.update({
       where: { id: ticket.id },
       data: { contactEmail: 'contact@x.test' },
@@ -335,14 +340,14 @@ describe('admins working the queue', () => {
     const admin = await makeAdmin(prisma);
     const down = adminsWith(new FakeMessageSender(['email']));
     const { id: studentId } = await studentWith({ email: 'd@x.test' });
-    const ticket = await ask(studentId);
+    const ticket = await ask(studentId, 'LOGIN_OR_ACCOUNT');
     const after = await down.reply(admin.id, ticket.id, { body: 'Hello', internal: false });
     assert.equal(after.status, 'ANSWERED');
-    const flagged = after.messages.find((m) => m.fromStaff);
-    assert.ok(flagged?.emailFailedAt);
+    const flagged = after.messages.find((m) => m.emailFailedAt);
+    assert.equal(flagged?.body, 'Hello');
     const again = await admins.resendEmail(ticket.id, flagged.id);
-    assert.equal(again.messages.length, 2);
-    assert.equal(again.messages.find((m) => m.fromStaff)?.emailFailedAt, null);
+    assert.equal(again.messages.length, 3);
+    assert.ok(again.messages.every((m) => m.emailFailedAt === null));
     assert.deepEqual(
       sender.sent.map((m) => m.to),
       ['d@x.test'],
@@ -608,6 +613,46 @@ describe('erasing a student', () => {
     await privacy.anonymize(studentId);
 
     assert.equal(await prisma.supportTicket.count({ where: { id: ticket.id } }), 0);
+  });
+});
+
+describe('emailing a reply left unread', () => {
+  const NOW = new Date('2026-10-16T12:00:00.000Z');
+  const answered = async (hoursAgo: number, email = 'u@x.test') => {
+    const admin = await makeAdmin(prisma);
+    const student = await makeStudent(prisma);
+    await prisma.studentProfile.create({ data: { studentId: student.id, email } });
+    const { id } = await ask(student.id);
+    await admins.reply(admin.id, id, { body: 'Your answer', internal: false });
+    await prisma.supportTicket.update({
+      where: { id },
+      data: { answeredAt: new Date(NOW.getTime() - hoursAgo * MS_PER_HOUR) },
+    });
+    sender.sent.length = 0;
+    return { id, studentId: student.id };
+  };
+
+  it('emails the reply once after a day unread', async () => {
+    await answered(25);
+    assert.equal(await admins.emailUnread(NOW), 1);
+    assert.deepEqual(
+      sender.sent.map((m) => [m.to, m.body.startsWith('Your answer')]),
+      [['u@x.test', true]],
+    );
+    assert.equal(await admins.emailUnread(NOW), 0);
+    assert.equal(sender.sent.length, 1);
+  });
+
+  it('sends nothing before a day has passed', async () => {
+    await answered(23);
+    assert.equal(await admins.emailUnread(NOW), 0);
+  });
+
+  it('sends nothing once the student has opened the reply', async () => {
+    const { id, studentId } = await answered(25);
+    await support.detailMine(studentId, id);
+    assert.equal(await admins.emailUnread(NOW), 0);
+    assert.equal(sender.sent.length, 0);
   });
 });
 

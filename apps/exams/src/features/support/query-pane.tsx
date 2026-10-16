@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Lock } from 'lucide-react';
 import {
@@ -13,30 +12,37 @@ import {
   type TicketDetail,
 } from '@iace/contracts';
 import { bannerMessage } from '@iace/app-kit';
-import { PageCrumbs, shrunkForUpload } from '@iace/app-kit/browser';
+import { shrunkForUpload } from '@iace/app-kit/browser';
 import {
   Alert,
   BLANK_THREAD_DRAFT,
+  Badge,
   Button,
   ConfirmDialog,
   EMPTY_STATE_KINDS,
   EmptyState,
-  PageFrame,
-  PageHeader,
+  SkeletonParagraph,
   ThreadComposer,
   ThreadMessage,
+  TruncatedText,
   withThreadImage,
   type ThreadDraft,
 } from '@iace/ui';
-import { RowsSkeleton } from '../../components/ui';
 import { api } from '../../lib/api';
-import { NAV_ITEMS, ROUTES, SUPPORT_QUERY_KEY, supportTicketQueryKey } from '../../lib/constants';
+import {
+  SUPPORT_QUERY_KEY,
+  SUPPORT_STATUS_BADGE,
+  supportTicketQueryKey,
+} from '../../lib/constants';
 
 const STAFF_NAME = 'IACE';
 const OWN_NAME = 'You';
 
-export function QueryThreadPage() {
-  const { ticketId = '' } = useParams();
+/** One query's thread, held beside the list: its head, the messages scrolling, the reply box pinned. */
+export function QueryPane({
+  ticketId,
+  onRaise,
+}: Readonly<{ ticketId: string; onRaise: () => void }>) {
   const queryClient = useQueryClient();
   const [closing, setClosing] = useState(false);
 
@@ -65,55 +71,63 @@ export function QueryThreadPage() {
     foot.current?.scrollIntoView({ block: 'end' });
   }, [messageCount]);
 
-  const label = ticket ? SUPPORT_CATEGORY_INFO[ticket.category].label : 'Query';
-  const closed = ticket?.status === SUPPORT_STATUSES.CLOSED;
+  if (detail.isError && !ticket) {
+    return (
+      <EmptyState
+        kind={EMPTY_STATE_KINDS.FAILURE}
+        size="sm"
+        title="Could not load this query"
+        onRetry={detail.refetch}
+      />
+    );
+  }
 
   return (
-    <PageFrame
-      header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label }]} />}
-          title={label}
-          meta={ticket ? SUPPORT_STATUS_STUDENT_LABEL[ticket.status] : undefined}
-          action={
-            ticket && !closed ? (
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<Lock aria-hidden />}
-                onClick={() => setClosing(true)}
-              >
-                Close query
-              </Button>
-            ) : undefined
-          }
-        />
-      }
-      footer={ticket ? <Footer ticket={ticket} onSent={settle} /> : null}
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-        {detail.isPending ? <RowsSkeleton /> : null}
+    <>
+      {ticket ? (
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <h2 className="min-w-0 font-semibold">
+              <TruncatedText>
+                {ticket.title ?? SUPPORT_CATEGORY_INFO[ticket.category].label}
+              </TruncatedText>
+            </h2>
+            <Badge variant={SUPPORT_STATUS_BADGE[ticket.status]} className="self-start">
+              {SUPPORT_STATUS_STUDENT_LABEL[ticket.status]}
+            </Badge>
+          </div>
+          {ticket.status === SUPPORT_STATUSES.CLOSED ? null : (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Lock aria-hidden />}
+              onClick={() => setClosing(true)}
+            >
+              Close query
+            </Button>
+          )}
+        </div>
+      ) : null}
 
-        {detail.isError && !ticket ? (
-          <EmptyState
-            kind={EMPTY_STATE_KINDS.FAILURE}
-            title="Could not load this query"
-            onRetry={detail.refetch}
-          />
-        ) : null}
-
-        {ticket?.messages.map((message) => (
-          <ThreadMessage
-            key={message.id}
-            authorName={message.fromStaff ? STAFF_NAME : OWN_NAME}
-            at={instituteDateTimeLabel(message.createdAt)}
-            body={message.body}
-            images={message.attachmentUrl ? [message.attachmentUrl] : []}
-            mine={!message.fromStaff}
-          />
-        ))}
-        <div ref={foot} />
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
+        {/* mt-auto, never justify-end: a justified flex scroller clips its overflow out of reach. */}
+        <div className="mt-auto flex flex-col gap-4">
+          {detail.isPending ? <SkeletonParagraph lines={6} /> : null}
+          {ticket?.messages.map((message) => (
+            <ThreadMessage
+              key={message.id}
+              authorName={message.fromStaff ? STAFF_NAME : OWN_NAME}
+              at={instituteDateTimeLabel(message.createdAt)}
+              body={message.body}
+              images={message.attachmentUrl ? [message.attachmentUrl] : []}
+              mine={!message.fromStaff}
+            />
+          ))}
+          <div ref={foot} />
+        </div>
       </div>
+
+      {ticket ? <Footer ticket={ticket} onSent={settle} onRaise={onRaise} /> : null}
 
       <ConfirmDialog
         open={closing}
@@ -127,17 +141,17 @@ export function QueryThreadPage() {
         loading={close.isPending}
         onConfirm={() => close.mutate()}
       />
-    </PageFrame>
+    </>
   );
 }
 
-const ClosedAlert = () => (
+const ClosedAlert = ({ onRaise }: Readonly<{ onRaise: () => void }>) => (
   <Alert variant="info">
     <span>
       This query is closed.{' '}
-      <Link to={ROUTES.HELP_NEW} className="font-medium underline">
+      <button type="button" className="font-medium underline" onClick={onRaise}>
         Raise a new query
-      </Link>
+      </button>
     </span>
   </Alert>
 );
@@ -149,7 +163,12 @@ const isClosedRefusal = (error: unknown) =>
 function Footer({
   ticket,
   onSent,
-}: Readonly<{ ticket: TicketDetail; onSent: (fresh: TicketDetail) => Promise<unknown> }>) {
+  onRaise,
+}: Readonly<{
+  ticket: TicketDetail;
+  onSent: (fresh: TicketDetail) => Promise<unknown>;
+  onRaise: () => void;
+}>) {
   const ticketId = ticket.id;
   const queryClient = useQueryClient();
   const [composing, setComposing] = useState<ThreadDraft>(BLANK_THREAD_DRAFT);
@@ -182,16 +201,11 @@ function Footer({
   const failure = send.isError && !refusedClosed ? bannerMessage(send.error) : null;
 
   if (ticket.status === SUPPORT_STATUSES.CLOSED && !refusedClosed) {
-    return (
-      <div className="mx-auto w-full max-w-3xl pt-4">
-        <ClosedAlert />
-      </div>
-    );
+    return <ClosedAlert onRaise={onRaise} />;
   }
 
   return (
     <ThreadComposer
-      className="mx-auto w-full max-w-3xl"
       composing={composing}
       sending={send.isPending}
       onChange={setComposing}
@@ -204,7 +218,7 @@ function Footer({
       disabled={refusedClosed}
       head={
         <>
-          {refusedClosed ? <ClosedAlert /> : null}
+          {refusedClosed ? <ClosedAlert onRaise={onRaise} /> : null}
           {failure ? <Alert variant="danger">{failure}</Alert> : null}
         </>
       }

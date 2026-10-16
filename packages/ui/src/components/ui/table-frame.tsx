@@ -304,6 +304,8 @@ export interface SplitFrameProps {
   fills?: boolean;
   /** Lets the reader fold the side card away, for a body that wants the width once it is asked. */
   collapsible?: boolean;
+  /** Two fifths of the width, its scrolling handed to its children: a pane read beside the body, like a thread. */
+  wideSide?: boolean;
   /** Tour stops, for a screen the tour walks. */
   anchors?: { body?: string; side?: string };
   children?: React.ReactNode;
@@ -311,6 +313,18 @@ export interface SplitFrameProps {
 
 /** Below `lg` the two stack and the page scrolls, so neither card is held to a height there. */
 const SPLIT_PANE = 'relative flex flex-col p-4 lg:min-h-0';
+
+function splitColumns(folded: boolean, wideSide: boolean): string {
+  if (folded) return 'lg:grid-cols-[minmax(0,1fr)_auto]';
+  return wideSide
+    ? 'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]'
+    : 'lg:grid-cols-[minmax(0,1fr)_360px]';
+}
+
+function sidePane(folded: boolean, wideSide: boolean): string {
+  if (folded) return 'items-end p-2';
+  return wideSide ? 'gap-4 lg:overflow-hidden' : 'gap-6 lg:overflow-y-auto';
+}
 
 /** A body beside the card it is read through: two cards, each its own scroller from `lg` up. */
 export function SplitFrame({
@@ -320,6 +334,7 @@ export function SplitFrame({
   tabs,
   fills = false,
   collapsible = false,
+  wideSide = false,
   anchors,
   children,
 }: Readonly<SplitFrameProps>) {
@@ -333,7 +348,7 @@ export function SplitFrame({
         className={cn(
           // A bare track is as wide as its widest table, which on a phone is wider than the page.
           'grid grid-cols-[minmax(0,1fr)] gap-5 lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
-          folded ? 'lg:grid-cols-[minmax(0,1fr)_auto]' : 'lg:grid-cols-[minmax(0,1fr)_360px]',
+          splitColumns(folded, wideSide),
         )}
       >
         <Card
@@ -345,11 +360,7 @@ export function SplitFrame({
         {/* First on a phone: what the body is asked by is chosen before there is a body to read. */}
         <Card
           data-tour={anchors?.side}
-          className={cn(
-            SPLIT_PANE,
-            'order-1 lg:order-2',
-            folded ? 'items-end p-2' : 'gap-6 lg:overflow-y-auto',
-          )}
+          className={cn(SPLIT_PANE, 'order-1 lg:order-2', sidePane(folded, wideSide))}
         >
           {collapsible ? (
             <Button

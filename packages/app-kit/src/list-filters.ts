@@ -11,7 +11,14 @@ import {
   type NotificationListQueryInput,
   type NotificationType,
   QUESTION_FILTERS,
+  SUPPORT_CATEGORIES,
+  SUPPORT_CATEGORY_INFO,
+  SUPPORT_STATUSES,
+  SUPPORT_STATUS_STUDENT_LABEL,
   TEST_BUCKET,
+  type MyTicketListQuery,
+  type SupportCategory,
+  type SupportStatus,
   type ExamCourse,
   type SavedFacets,
   type StudentCatalogSeries,
@@ -213,3 +220,42 @@ export function courseItems(series: readonly StudentCatalogSeries[]): FilterItem
 /** A set-valued filter has no "Any …" row: choosing none of them already means every one. */
 const facetItems = (rows: SavedFacets['subjects'] | undefined): FilterItem[] =>
   (rows ?? []).map((row) => ({ value: row.id, label: row.name }));
+
+/** A student's own queries: by their words, where each stands, and what it is about. */
+export const SUPPORT_FILTERS: readonly FilterSpec[] = [
+  { key: 'q', kind: 'search', label: 'Search', primary: true, placeholder: 'Search your queries' },
+  {
+    key: 'status',
+    kind: 'choice',
+    label: 'Status',
+    primary: true,
+    items: [
+      { value: ANY_CHOICE, label: 'Any status' },
+      ...Object.values(SUPPORT_STATUSES).map((status) => ({
+        value: status,
+        label: SUPPORT_STATUS_STUDENT_LABEL[status],
+      })),
+    ],
+  },
+  {
+    key: 'category',
+    kind: 'choice',
+    label: 'Category',
+    items: [
+      { value: ANY_CHOICE, label: 'Any category' },
+      ...Object.values(SUPPORT_CATEGORIES).map((category) => ({
+        value: category,
+        label: SUPPORT_CATEGORY_INFO[category].label,
+      })),
+    ],
+  },
+];
+
+/** The support filters as the list endpoint takes them. */
+export const supportQuery = (
+  values: Readonly<Record<string, FilterValue>>,
+): Omit<MyTicketListQuery, 'page' | 'pageSize'> => ({
+  q: asText(values.q) || undefined,
+  status: (asText(values.status) || undefined) as SupportStatus | undefined,
+  category: (asText(values.category) || undefined) as SupportCategory | undefined,
+});

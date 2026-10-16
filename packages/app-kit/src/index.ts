@@ -199,6 +199,8 @@ export {
   asSet,
   asText,
   NOTIFICATION_FILTERS,
+  SUPPORT_FILTERS,
+  supportQuery,
   NOTIFICATION_KINDS,
   notificationQuery,
   notificationKindOf,

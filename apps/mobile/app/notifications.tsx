@@ -1,5 +1,5 @@
 /// <reference types="nativewind/types" />
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { FlatList, Pressable, View, type ViewToken } from 'react-native';
 import Settings from 'lucide-react-native/icons/settings';
 import { Stack, useRouter } from 'expo-router';
@@ -17,6 +17,7 @@ import { api } from '../src/lib/api';
 import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
 import { ACCOUNT_ROUTES, DETAIL_ROUTES } from '../src/lib/nav';
 import { asText, useFilterState, type FilterState } from '../src/lib/filters';
+import { useSettled } from '../src/lib/use-settled';
 import { Badge } from '../src/components/ui/badge';
 import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
@@ -97,18 +98,6 @@ export default function NotificationsScreen() {
 }
 
 const VIEWABLE = { itemVisiblePercentThreshold: 50, minimumViewTime: 500 };
-
-const SEARCH_SETTLE_MS = 300;
-
-/** What was typed once the typing pauses, so a word asks the server once rather than per letter. */
-function useSettled(typed: string): string {
-  const [settled, setSettled] = useState(typed);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(typed), SEARCH_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [typed]);
-  return settled;
-}
 
 const CONTENT_STYLE = { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, gap: 12 };
 

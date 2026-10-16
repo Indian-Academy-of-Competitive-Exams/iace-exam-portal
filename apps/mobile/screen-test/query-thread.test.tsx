@@ -6,6 +6,7 @@ import { renderRoutes } from './support/render';
 
 const TICKET: TicketDetail = {
   id: '6f1c2b0e-8a43-4c1d-9d2e-3b5a7c9e1f21',
+  title: null,
   category: 'OTHER',
   status: 'ANSWERED',
   lastMessageAt: '2026-10-16T05:00:00.000Z',

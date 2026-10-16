@@ -160,7 +160,10 @@ function Navigation() {
           <Stack.Screen name="notifications" options={{ ...page, title: 'Notifications' }} />
           <Stack.Screen name="notification-settings" options={{ ...page, title: 'Settings' }} />
           <Stack.Screen name="help/index" options={{ ...page, title: 'Help' }} />
-          <Stack.Screen name="help/new" options={{ ...page, title: 'New query' }} />
+          <Stack.Screen
+            name="help/new"
+            options={{ ...page, title: 'New query', presentation: 'modal' }}
+          />
           <Stack.Screen name="help/[id]" options={{ ...page, title: 'Query' }} />
         </Stack.Protected>
         <Stack.Protected guard={!identity}>

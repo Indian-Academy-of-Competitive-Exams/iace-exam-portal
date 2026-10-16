@@ -127,9 +127,14 @@ const COLUMNS: DataTableColumn<AdminTicketSummary>[] = [
     className: 'max-w-48 font-medium',
     cell: (row) => (
       <Link to={ROUTES.SUPPORT_TICKET(row.id)} className={linkVariants()}>
-        <TruncatedText>{SUPPORT_CATEGORY_INFO[row.category].label}</TruncatedText>
+        <TruncatedText>{row.title ?? SUPPORT_CATEGORY_INFO[row.category].label}</TruncatedText>
       </Link>
     ),
+  },
+  {
+    key: 'categoryLabel',
+    header: 'Category',
+    cell: (row) => SUPPORT_CATEGORY_INFO[row.category].label,
   },
   {
     key: 'priority',

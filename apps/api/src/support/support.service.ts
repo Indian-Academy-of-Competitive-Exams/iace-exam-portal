@@ -29,6 +29,7 @@ import {
 
 const SUMMARY_SELECT = {
   id: true,
+  title: true,
   category: true,
   status: true,
   lastMessageAt: true,
@@ -53,11 +54,21 @@ const DETAIL_SELECT = {
 } as const satisfies Prisma.SupportTicketSelect;
 
 const NO_SUCH_TICKET = 'No such query';
+const ACK_BODY = 'Thanks for contacting us. We will review your query at the earliest.';
+
+/** The student's words, then IACE's acknowledgement a millisecond later so the order never ties. */
+export function openingMessages(body: string, at = new Date()) {
+  return [
+    { authorType: ActorTypes.STUDENT, body, createdAt: at },
+    { authorType: ActorTypes.ADMIN, body: ACK_BODY, createdAt: new Date(at.getTime() + 1) },
+  ];
+}
 
 const summaryOf = (
   row: Prisma.SupportTicketGetPayload<{ select: typeof SUMMARY_SELECT }>,
 ): TicketSummary => ({
   id: row.id,
+  title: row.title,
   category: row.category,
   status: row.status,
   lastMessageAt: row.lastMessageAt.toISOString(),
@@ -89,9 +100,10 @@ export class SupportService {
     const ticket = await this.prisma.supportTicket.create({
       data: {
         studentId,
+        title: input.title ?? null,
         category: input.category,
         attemptId: input.attemptId ?? null,
-        messages: { create: { authorType: ActorTypes.STUDENT, body: input.body } },
+        messages: { create: openingMessages(input.body) },
       },
       select: { id: true },
     });
@@ -99,7 +111,21 @@ export class SupportService {
   }
 
   async listMine(studentId: string, query: MyTicketListQuery): Promise<Paginated<TicketSummary>> {
-    const where = { studentId };
+    const where: Prisma.SupportTicketWhereInput = {
+      studentId,
+      ...(query.status && { status: query.status }),
+      ...(query.category && { category: query.category }),
+      ...(query.q && {
+        OR: [
+          { title: { contains: query.q, mode: 'insensitive' } },
+          {
+            messages: {
+              some: { internal: false, body: { contains: query.q, mode: 'insensitive' } },
+            },
+          },
+        ],
+      }),
+    };
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.supportTicket.findMany({
         where,
@@ -118,6 +144,10 @@ export class SupportService {
       select: DETAIL_SELECT,
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_TICKET);
+    await this.prisma.supportTicket.updateMany({
+      where: { id, studentReadAt: null },
+      data: { studentReadAt: new Date() },
+    });
     const messages = await Promise.all(
       row.messages.map(async (m) => {
         const fromStaff = m.authorType === ActorTypes.ADMIN;
