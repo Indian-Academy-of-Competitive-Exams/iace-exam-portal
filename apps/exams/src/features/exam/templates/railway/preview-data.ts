@@ -134,6 +134,7 @@ export function previewView(): ExamView {
     sectionId: SECTION_ID,
     reachable: [SECTION_ID],
     forwardOnly: false,
+    sectional: false,
 
     questions: PREVIEW_QUESTIONS,
     question: PREVIEW_QUESTIONS[1],

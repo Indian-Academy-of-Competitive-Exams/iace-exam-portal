@@ -1,4 +1,4 @@
-import { TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { type ExamView } from '@iace/app-kit';
 import { SscPhotoColumn } from './instructions';
 import { summaryOf } from './states';
 
@@ -9,7 +9,6 @@ export function SscLeaving({
   onClose,
 }: Readonly<{ view: ExamView; ofSection: boolean; onClose: () => void }>) {
   const { submitSection } = view;
-  const sectional = view.timer.kind === TIMER_KIND.SECTION;
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -27,7 +26,7 @@ export function SscLeaving({
       ) : (
         <ExamSummary
           view={view}
-          sectionIds={sectional ? [view.sectionId] : view.sections.map((row) => row.id)}
+          sectionIds={view.sectional ? [view.sectionId] : view.sections.map((row) => row.id)}
           confirmLabel="Submit Test"
           pending={view.submit.isPending}
           onConfirm={view.submit.confirm}

@@ -91,6 +91,14 @@ export const PAUSE_SAYS = {
   confirm: 'Pause',
 } as const;
 
+/** Whether a pause may be asked for: never while the paper is going in, nor once this screen no longer holds the sitting. */
+export const mayPause = ({
+  locked,
+  takenOver,
+  ended,
+}: Pick<ExamView, 'locked' | 'takenOver' | 'ended'>): boolean =>
+  locked === null && !takenOver && !ended;
+
 /** The ended screen's words, the same on both apps: what happened, and which answers stand. */
 export const SITTING_ENDED_SAYS = {
   title: 'This test has ended',
@@ -138,6 +146,8 @@ export interface ExamView {
   reachable: readonly string[];
   /** A seat left is closed for good: no palette jump back, and nothing to mark for review. */
   forwardOnly: boolean;
+  /** The paper's sections lock on clocks of their own: said by the paper, not by whichever clock is on screen. */
+  sectional: boolean;
 
   /** This section's questions in the candidate's own order, and the one on screen. */
   questions: readonly ExamQuestion[];
@@ -178,7 +188,7 @@ export interface ExamView {
   canOpen: (questionId: string) => boolean;
   nextQuestion: () => void;
   chooseOption: (optionId: string) => void;
-  /** A typing passage's one write: the whole of what the box now holds. */
+  /** What a typing box holds, at every key: taken in after a second of quiet, or first by whatever ends the question. */
   typeAnswer: (text: string) => void;
   /** OMR's one write: the option and the flag together, because two records are two saves. */
   bubbleAnswer: (optionId: string, fill: number) => void;

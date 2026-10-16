@@ -65,6 +65,7 @@ export {
   PAUSE_SAYS,
   SITTING_ENDED_SAYS,
   TIMER_KIND,
+  mayPause,
   submittingSays,
   stoodDownSays,
   type ExamView,

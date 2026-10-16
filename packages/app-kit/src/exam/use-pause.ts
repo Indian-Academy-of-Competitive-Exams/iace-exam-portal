@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { PAUSE_SAYS } from './exam-view';
 
 /** Asking before a pause, and staying on the paper when its answers could not be saved first. */
-export function usePause(onPause: (() => Promise<boolean>) | undefined) {
+export function usePause(onPause: (() => Promise<boolean>) | undefined, allowed = true) {
   const [asking, setAsking] = useState(false);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
+  // A hand-in starting, or the sitting going elsewhere, takes the question down for good, as it does Submit's.
+  if (asking && !allowed) setAsking(false);
 
   return {
     asking,

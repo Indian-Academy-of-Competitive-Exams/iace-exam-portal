@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { X, Pause, LayoutGrid } from 'lucide-react';
 import { EXAM_TEMPLATE } from '@iace/contracts';
-import { passagesOf, PAUSE_SAYS, usePause } from '@iace/app-kit';
+import { mayPause, passagesOf, PAUSE_SAYS, usePause } from '@iace/app-kit';
 import { DESKTOP_QUERY, useMediaQuery } from '@iace/app-kit/browser';
 import {
   Button,
@@ -38,7 +38,7 @@ export function Layout({ view, config, onOpenCalculator, onPause }: Readonly<Exa
   // Below the rail's breakpoint the palette would take the paper's own room, so it waits in a drawer.
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const pause = usePause(onPause);
+  const pause = usePause(onPause, mayPause(view));
 
   return (
     <>

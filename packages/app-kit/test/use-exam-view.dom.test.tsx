@@ -20,13 +20,16 @@ import {
   type SectionProgress,
 } from '@iace/contracts';
 import {
+  mayPause,
   PAPER_LOCK,
   TIMER_KIND,
   useExamView,
+  usePause,
   type AppApiClient,
   type EndedSitting,
   type ExamEngineDeps,
   type FullscreenHandle,
+  type KeyValueStorage,
 } from '../src';
 import {
   autosaveDelayMs,
@@ -79,11 +82,11 @@ const focus: FullscreenHandle = {
   exit: async () => {},
 };
 
-function depsFor(api: AppApiClient): ExamEngineDeps {
+function depsFor(api: AppApiClient, storage: KeyValueStorage = fakeStorage()): ExamEngineDeps {
   return {
     api,
     tab: 'tab-1',
-    answerQueue: { storage: fakeStorage(), keyPrefix: 'test.queued' },
+    answerQueue: { storage, keyPrefix: 'test.queued' },
     focus,
     catalogQueryKey: ['catalog'],
   };
@@ -119,8 +122,9 @@ function mounted(
   sitting: ExamPaper = paper(),
   onEnded: (ended: EndedSitting) => void = () => {},
   startedByThisCall = false,
+  storage: KeyValueStorage = fakeStorage(),
 ) {
-  const deps = depsFor(api);
+  const deps = depsFor(api, storage);
   // Built once, the way a caller holds it: rebuilding the sitting per render would restart the paper's clock.
   const held = {
     paper: sitting,
@@ -1792,4 +1796,281 @@ test('once that hand-in fails for good, the ended sitting is said', async (t) =>
     await settle();
   });
   assert.equal(result.current.ended, true);
+});
+
+/** The failure this prevents: a pause pressed as the bell rings calling for the tests page while the paper goes in. */
+test('a pause is refused while the paper goes in, though nothing is left to save', async (t) => {
+  let going: (done: unknown) => void = () => {};
+  const saves: SaveCall[] = [];
+  const api = {
+    me: {
+      ...(apiWith({}, (body) => saves.push(body)) as unknown as { me: object }).me,
+      submitAttempt: () =>
+        new Promise((resolve) => {
+          going = resolve;
+        }),
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = await seated(api, onePaperClock());
+  t.after(() => {
+    going({ attemptId: 'attempt-1' });
+    unmount();
+  });
+
+  await act(async () => {
+    result.current.timer.onExpire();
+    await settle();
+  });
+  assert.equal(result.current.submit.isPending, true);
+  assert.equal(mayPause(result.current), false, 'no skin offers it');
+
+  const sentBefore = saves.length;
+  let paused = true;
+  await act(async () => {
+    const pausing = result.current.saveNow();
+    await settle();
+    going({ attemptId: 'attempt-1' });
+    paused = await pausing;
+  });
+  assert.equal(paused, false, 'the student stays with the paper going in');
+  assert.equal(saves.length, sentBefore, 'and nothing is saved beside it');
+});
+
+/** The failure this prevents: the bell ringing while a pause saves, and the pause leaving the hand-in unseen. */
+test('a bell that rings while a pause saves keeps the student on the paper, and hands it in', async (t) => {
+  const gated = apiGatedSave();
+  const submits: SubmitCall[] = [];
+  const api = {
+    me: {
+      ...(gated.api as unknown as { me: object }).me,
+      submitAttempt: async (_id: string, body: SubmitCall) => {
+        submits.push(body);
+        return { attemptId: 'attempt-1' };
+      },
+    },
+  } as unknown as AppApiClient;
+  const { result, unmount } = await seated(api, onePaperClock());
+  t.after(unmount);
+
+  act(() => result.current.chooseOption('opt-a'));
+  let paused = true;
+  await act(async () => {
+    const pausing = result.current.saveNow();
+    await settle();
+    result.current.timer.onExpire();
+    await settle();
+    gated.saved({
+      revision: 1,
+      applied: true,
+      endsAt: paper().endsAt,
+      serverNow: paper().serverNow,
+    });
+    paused = await pausing;
+    await settle();
+  });
+
+  assert.equal(paused, false, 'the pause does not take the student from it');
+  assert.equal(submits.length, 1, 'and the paper went in');
+});
+
+/** The failure this prevents: a pause question left standing over a paper the bell is handing in. */
+test('a pause question comes down for good once a pause is no longer allowed', (t) => {
+  const { result, rerender, unmount } = renderHook(
+    ({ allowed }) => usePause(async () => true, allowed),
+    { initialProps: { allowed: true } },
+  );
+  t.after(unmount);
+
+  act(() => result.current.ask());
+  assert.equal(result.current.asking, true);
+
+  rerender({ allowed: false });
+  assert.equal(result.current.asking, false, 'the hand-in took it down');
+
+  rerender({ allowed: true });
+  assert.equal(result.current.asking, false, 'and a paper open again does not raise it unasked');
+});
+
+type TypedCall = { last?: { answers: { questionId: string; typedAnswer?: string | null }[] } };
+
+/** The failure this prevents: the words typed in the last second before the bell missing from the paper handed in. */
+test('what a typing box holds at the bell rides the hand-in, though the typing never paused', async (t) => {
+  const { api, submits } = apiThatSubmits(() => Promise.resolve({ attemptId: 'attempt-1' }));
+  const { result, unmount } = await seated(api, onePaperClock());
+  t.after(unmount);
+
+  for (const text of ['t', 'th', 'the']) act(() => result.current.typeAnswer(text));
+  assert.equal(result.current.answers['sec1-q1'], undefined, 'a key is not a save');
+
+  await act(async () => {
+    result.current.timer.onExpire();
+    await settle();
+  });
+
+  assert.deepEqual(
+    (submits as TypedCall[])
+      .at(-1)
+      ?.last?.answers.map((change) => [change.questionId, change.typedAnswer]),
+    [['sec1-q1', 'the']],
+  );
+});
+
+test('a second of quiet, or moving on, takes the typing in under its own question', async (t) => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  const { result, unmount } = await seated(apiWith({}), twoInSectionOne());
+  t.after(() => {
+    unmount();
+    mock.timers.reset();
+  });
+
+  act(() => result.current.typeAnswer('first'));
+  await advance(1_000);
+  assert.equal(result.current.answers['sec1-q1']?.typedAnswer, 'first');
+
+  act(() => result.current.typeAnswer('first and more'));
+  act(() => result.current.nextQuestion());
+  assert.equal(result.current.answers['sec1-q1']?.typedAnswer, 'first and more');
+  assert.equal(result.current.answers['sec1-q2']?.typedAnswer ?? null, null, 'not the next one');
+});
+
+/** The failure this prevents: a tab closed mid-sentence keeping only what the box had handed over a second before. */
+test('a closing page asks about the typing still in the box, and keeps it with the unsent copy', async (t) => {
+  const storage = fakeStorage();
+  const { result, unmount } = mounted(apiWith({}), twoInSectionOne(), undefined, false, storage);
+  t.after(unmount);
+  await act(async () => {
+    await settle();
+  });
+
+  act(() => result.current.typeAnswer('mid sentence'));
+  assert.equal(result.current.hasUnsent(), true);
+
+  act(() => result.current.leave());
+  const kept = JSON.parse(storage.getItem('test.queued.attempt-1') ?? '[]') as {
+    typedAnswer: string | null;
+  }[];
+  assert.deepEqual(
+    kept.map((change) => change.typedAnswer),
+    ['mid sentence'],
+  );
+});
+
+/** The failure this prevents: a section handed in offline reopening on a reload, because only its answers were kept. */
+test('a section handed in offline stays shut through a reload, and goes up on the next open', async (t) => {
+  const storage = fakeStorage();
+  const first = mounted(apiGatedSave().api, paper(), undefined, false, storage);
+  await act(async () => {
+    await settle();
+  });
+  await act(async () => {
+    first.result.current.submitSection?.();
+    await settle();
+  });
+  assert.deepEqual(first.result.current.reachable, ['sec2']);
+  first.unmount();
+
+  // The server never heard of it: it still holds section one open.
+  const sent: SaveCall[] = [];
+  const reloaded = mounted(
+    apiWith(
+      { sec1: { remainingSec: 1200, closed: false, openedAt: '2026-09-01T04:50:00.000Z' } },
+      (body) => sent.push(body),
+    ),
+    paper(),
+    undefined,
+    false,
+    storage,
+  );
+  t.after(reloaded.unmount);
+  await act(async () => {
+    await settle();
+  });
+  assert.deepEqual(reloaded.result.current.reachable, ['sec2'], 'the reload did not reopen it');
+
+  await act(async () => {
+    await reloaded.result.current.saveNow();
+  });
+  assert.equal(sent.at(-1)?.sections?.sec1?.closed, true, 'and its hand-in went up');
+});
+
+/** The failure this prevents: a skin teaching a sectional paper as one clock because the section on screen has none. */
+test('a paper says it is sectional by its timing, whichever clock is on screen', async (t) => {
+  const unclocked = paper().sections.map((section) => ({ ...section, durationSec: null }));
+  const sectional = await seated(apiWith({}), { ...paper(), sections: unclocked });
+  const composite = await seated(apiWith({}), onePaperClock());
+  t.after(() => {
+    sectional.unmount();
+    composite.unmount();
+  });
+
+  assert.equal(sectional.result.current.timer.kind, TIMER_KIND.PAPER);
+  assert.equal(sectional.result.current.sectional, true);
+  assert.equal(composite.result.current.sectional, false);
+});
+
+const KEPT_SECTIONS = 'test.queued.attempt-1.sections';
+
+/** The failure this prevents: a kept entry from a device that went quiet reopening a section the sitting has since closed. */
+test('a kept section the server has since closed stays closed, and is never sent open again', async (t) => {
+  const storage = fakeStorage();
+  storage.setItem(
+    KEPT_SECTIONS,
+    JSON.stringify({
+      sec1: { remainingSec: 0, closed: true },
+      sec2: { remainingSec: 1800, closed: false },
+    }),
+  );
+  const sent: SaveCall[] = [];
+  const api = apiWith(
+    {
+      sec1: { remainingSec: 0, closed: true },
+      sec2: { remainingSec: 0, closed: true },
+      sec3: { remainingSec: 1200, closed: false, openedAt: '2026-09-01T04:50:00.000Z' },
+    },
+    (body) => sent.push(body),
+  );
+  const { result, unmount } = mounted(api, paper(), undefined, false, storage);
+  t.after(unmount);
+  await act(async () => {
+    await settle();
+  });
+
+  assert.deepEqual(result.current.reachable, ['sec3']);
+  await act(async () => {
+    await result.current.saveNow();
+  });
+  assert.ok(
+    sent.every((body) => body.sections?.sec2?.closed !== false),
+    'no save reopens it on the server',
+  );
+});
+
+/** The failure this prevents: a kept entry for a section the server already stamped restarting its clock at full time. */
+test("a kept open section keeps the server's stamp, so its clock does not start again", async (t) => {
+  const storage = fakeStorage();
+  storage.setItem(KEPT_SECTIONS, JSON.stringify({ sec2: { remainingSec: 1800, closed: false } }));
+  const api = apiWith({
+    sec1: { remainingSec: 0, closed: true },
+    sec2: { remainingSec: 1800, closed: false, openedAt: '2026-09-01T04:50:00.000Z' },
+  });
+  const { result, unmount } = mounted(api, paper(), undefined, false, storage);
+  t.after(unmount);
+  await act(async () => {
+    await settle();
+  });
+
+  const { timer } = result.current;
+  assert.equal(timer.kind === TIMER_KIND.SECTION && timer.allowedSec, 1200, 'ten minutes spent');
+});
+
+/** The failure this prevents: Submit counting an answer typed a moment ago as unanswered. */
+test('asking to submit counts the words still in a typing box as an answer', async (t) => {
+  const { result, unmount } = await seated(apiWith({}), twoInSectionOne());
+  t.after(unmount);
+
+  const before = result.current.submit.unanswered;
+  act(() => result.current.typeAnswer('the first words'));
+  act(() => result.current.submit.ask());
+
+  assert.equal(result.current.submit.unanswered, before - 1);
 });

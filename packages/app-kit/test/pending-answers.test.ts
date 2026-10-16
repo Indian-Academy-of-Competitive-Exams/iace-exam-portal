@@ -121,3 +121,25 @@ test('a stored change past the time cap is read back at the cap, neither dropped
 
   assert.deepEqual(queueOn(storage).changes(), [{ ...over, timeSpentSec: QUESTION_TIME_MAX_SEC }]);
 });
+
+/** The failure this prevents: a section handed in offline reopening on a reload, because only answers outlived it. */
+test('a section a save never delivered is read back from the store by the next queue', () => {
+  const storage = fakeStorage();
+  queueOn(storage).putSection('sec-1', { remainingSec: 0, closed: true });
+
+  const reloaded = queueOn(storage);
+  assert.equal(reloaded.anyUnsent(), true);
+  assert.deepEqual(reloaded.batch().sections, { 'sec-1': { remainingSec: 0, closed: true } });
+
+  reloaded.acknowledge(reloaded.batch());
+  assert.equal(queueOn(storage).anyUnsent(), false, 'once it landed, nothing is kept to resend');
+});
+
+test('a stored section of a shape no save would take is nothing waiting', () => {
+  for (const held of ['[]', 'null', 'not json', '{"sec-1": {"closed": "yes"}}']) {
+    const storage = fakeStorage();
+    storage.setItem(`${KEY}.sections`, held);
+
+    assert.equal(queueOn(storage).anyUnsent(), false, held);
+  }
+});

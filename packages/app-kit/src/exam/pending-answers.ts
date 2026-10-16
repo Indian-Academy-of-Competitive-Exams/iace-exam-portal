@@ -6,6 +6,7 @@ import {
   answerChangeSchema,
   QUESTION_TIME_MAX_SEC,
   SAVE_BATCH_MAX,
+  saveAttemptStateSchema,
   type AnswerChange,
   type SectionProgress,
 } from '@iace/contracts';
@@ -40,14 +41,15 @@ export function createPendingAnswers(storage: KeyValueStorage, key: string): Pen
   const answers = new Map<string, AnswerChange>(
     storedIn(storage, key).map((change) => [change.questionId, change]),
   );
-  const sections = new Map<string, SectionProgress>();
+  const sectionsKey = `${key}.sections`;
+  const sections = new Map<string, SectionProgress>(storedSectionsIn(storage, sectionsKey));
   let mirrored = true;
 
   const keep = () => {
     if (!mirrored) return;
     try {
-      if (answers.size === 0) storage.removeItem(key);
-      else storage.setItem(key, JSON.stringify([...answers.values()]));
+      keepIn(storage, key, answers.size === 0 ? null : [...answers.values()]);
+      keepIn(storage, sectionsKey, sections.size === 0 ? null : Object.fromEntries(sections));
     } catch {
       // A full or refused store only costs the copy that outlives a reload; saving goes on without it.
     }
@@ -63,6 +65,7 @@ export function createPendingAnswers(storage: KeyValueStorage, key: string): Pen
     },
     putSection: (sectionId, progress) => {
       sections.set(sectionId, progress);
+      keep();
     },
     batch: () => ({
       answers: [...answers.values()].slice(0, SAVE_BATCH_MAX),
@@ -89,6 +92,24 @@ export function createPendingAnswers(storage: KeyValueStorage, key: string): Pen
       mirrored = true;
     },
   };
+}
+
+/** One copy written whole, or taken out once nothing is left in it. */
+function keepIn(storage: KeyValueStorage, key: string, held: unknown) {
+  if (held === null) storage.removeItem(key);
+  else storage.setItem(key, JSON.stringify(held));
+}
+
+/** A section handed in offline outlives a reload too, or the reload reopens it. Any other shape is nothing waiting. */
+function storedSectionsIn(storage: KeyValueStorage, key: string): [string, SectionProgress][] {
+  try {
+    const held = saveAttemptStateSchema.shape.sections.safeParse(
+      JSON.parse(storage.getItem(key) ?? '{}'),
+    );
+    return held.success ? Object.entries(held.data ?? {}) : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Undelivered answers outlive a reload here. Read as a save would read them: any other shape is nothing queued. */

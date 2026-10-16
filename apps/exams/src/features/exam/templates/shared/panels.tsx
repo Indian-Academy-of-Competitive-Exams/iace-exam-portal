@@ -1,7 +1,7 @@
 /** The two things a candidate may re-read mid-sitting: the whole paper, and the rules. */
 import { contentLanguageOf, EXAM_TEMPLATE, TEST_UI } from '@iace/contracts';
 import { FileText, BookOpen } from 'lucide-react';
-import { htmlOf, shownLanguages, TIMER_KIND, type ExamView } from '@iace/app-kit';
+import { htmlOf, shownLanguages, type ExamView } from '@iace/app-kit';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, RichContent } from '@iace/ui';
 import { PaperRules } from '../../default-instructions';
 import { PaletteLegend } from '../../question-palette';
@@ -77,7 +77,7 @@ export function RulesPanel({
         >
           <PaperRules
             forwardOnly={view.forwardOnly}
-            sectional={view.timer.kind === TIMER_KIND.SECTION}
+            sectional={view.sectional}
             omr={view.testUi === TEST_UI.OMR}
           />
           <PaletteLegend forwardOnly={view.forwardOnly} />

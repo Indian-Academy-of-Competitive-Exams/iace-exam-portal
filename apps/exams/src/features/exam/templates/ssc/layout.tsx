@@ -4,7 +4,7 @@
  * the view, as in the other skins, so only the markup and the class names differ.
  */
 import { useState, type CSSProperties } from 'react';
-import { TIMER_KIND, usePause, type ExamView } from '@iace/app-kit';
+import { mayPause, usePause, type ExamView } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Button } from '@iace/ui';
 import { PaperWatermark, type ExamSlotProps } from '../shared/slots';
@@ -26,7 +26,7 @@ export function SscLayout({ view, config, onOpenCalculator, onPause }: Readonly<
   const [paletteOpen, setPaletteOpen] = useState(!phone);
   const [reading, setReading] = useState<Reading | null>(null);
   const [fontStep, setFontStep] = useState(0);
-  const pause = usePause(onPause);
+  const pause = usePause(onPause, mayPause(view));
   // Held by id, so a clock that closes the section first takes the question about it away too.
   const [handingIn, setHandingIn] = useState<string | null>(null);
   const { submitSection, fullscreen } = view;
@@ -100,8 +100,6 @@ function SscLeft({
   reading,
   onBack,
 }: Readonly<{ view: ExamView; reading: Reading | null; onBack: () => void }>) {
-  const sectional = view.timer.kind === TIMER_KIND.SECTION;
-
   return (
     <div className="sc-left flex min-w-0 flex-1 flex-col">
       {reading ? (
@@ -111,7 +109,7 @@ function SscLeft({
             <SscGuide
               sections={view.sections}
               forwardOnly={view.forwardOnly}
-              sectional={sectional}
+              sectional={view.sectional}
               startAtSymbols={reading === READING.SYMBOLS}
             />
           </div>

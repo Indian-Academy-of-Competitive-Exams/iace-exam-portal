@@ -100,6 +100,9 @@ async function retriedInGrace<T>(handIn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** How long a typing box is quiet before what it holds is taken in; a key is not a save. */
+const TYPED_QUIET_MS = 1000;
+
 /** The kinds whose answer is typed at length, so nothing but the keyboard may remove it. */
 const KEYBOARD_TYPES: ReadonlySet<string | undefined> = new Set([
   QUESTION_TYPE.TYPING,
@@ -124,6 +127,9 @@ export function useExamView(
   const ranOut = useRef<ExamClock | null>(null);
   // The same fact for the render, which may not read the ref: it is what the skins draw shut from.
   const [lapsed, setLapsed] = useState(false);
+  // What a typing box holds but has not handed in yet, under its own question: the bell or a closing page takes it first.
+  const draft = useRef<{ questionId: string; text: string } | null>(null);
+  const draftQuiet = useRef<ReturnType<typeof setTimeout>>(undefined);
   const paperClock = useMemo<ExamClock>(
     () => ({ endsAt: paper.endsAt, serverNow: paper.serverNow, arrivedAt }),
     [paper.endsAt, paper.serverNow, arrivedAt],
@@ -195,7 +201,16 @@ export function useExamView(
     [paper.sections, paper.questions, state.answers],
   );
 
+  const settleDraft = () => {
+    clearTimeout(draftQuiet.current);
+    const held = draft.current;
+    draft.current = null;
+    if (held) state.type(held.questionId, held.text);
+  };
+  useEffect(() => () => clearTimeout(draftQuiet.current), []);
+
   const handIn = () => {
+    settleDraft();
     // The question still on screen has cost time too; bank it before the last batch goes.
     state.bankOpen();
     // The last batch rides the submit: one request at the deadline, and a failed one keeps it for the retry.
@@ -267,11 +282,14 @@ export function useExamView(
   // Out of time only while its hand-in is in the air or has failed: forgotten above, the paper draws open again.
   if (lapsed && submit.isIdle) setLapsed(false);
 
+  // A pause leaves the paper, which a hand-in in the air must keep: whichever starts first holds it.
+  const goingIn = () => ranOut.current !== null || ending.current;
   // Asked when a tap lands, never at render: the clock can run out, or the paper go in, between the two.
-  const locked = () => inert || shut || ranOut.current !== null || ending.current;
+  const locked = () => inert || shut || goingIn();
 
   const move = (to: string | null): void => {
     if (locked()) return;
+    settleDraft();
     state.open(to);
     setQuestionId(to);
   };
@@ -283,6 +301,7 @@ export function useExamView(
   const openSection = (next: string) => {
     // The section already open is not a move: re-entering it would drop the candidate back on its first question.
     if (locked() || next === sectionId) return;
+    settleDraft();
     state.bankOpen();
     const allowed = paper.sections.find((row) => row.id === next)?.durationSec;
     // Told, not asked: the server stamps when this clock started, so a reload cannot restart it.
@@ -293,6 +312,7 @@ export function useExamView(
   };
 
   const endSection = () => {
+    settleDraft();
     state.closeSection(sectionId, 0);
     const next = nextOpenSectionId(paper.sections, state.sections, sectionId);
     if (next) openSection(next);
@@ -310,7 +330,11 @@ export function useExamView(
   };
 
   const type = (text: string): void => {
-    if (current && !locked()) state.type(current.questionId, text);
+    if (!current || locked()) return;
+    if (draft.current?.questionId !== current.questionId) settleDraft();
+    draft.current = { questionId: current.questionId, text };
+    clearTimeout(draftQuiet.current);
+    draftQuiet.current = setTimeout(settleDraft, TYPED_QUIET_MS);
   };
 
   // One click must not empty minutes of typing or writing: such an answer is cleared with the keyboard.
@@ -351,9 +375,18 @@ export function useExamView(
     counts,
     focus,
     marked: isReviewState(current ? state.answers[current.questionId]?.state : undefined),
-    saveNow: () => {
+    saveNow: async () => {
+      if (goingIn()) return false;
+      settleDraft();
       state.bankOpen();
-      return state.flush();
+      // A bell that rang while this save flew is handing the paper in; leaving now would leave that behind.
+      return (await state.flush()) && !goingIn();
+    },
+    settleDraft,
+    hasUnsent: () => draft.current !== null || state.hasUnsent(),
+    leave: () => {
+      settleDraft();
+      state.leave();
     },
   };
   const live = useRef(now);
@@ -389,6 +422,8 @@ export function useExamView(
       },
       toggleMark: () => live.current.record({ marked: !live.current.marked }),
       saveNow: () => live.current.saveNow(),
+      hasUnsent: () => live.current.hasUnsent(),
+      leave: () => live.current.leave(),
       clearResponse: () => live.current.clear(),
       openSection: (id: string) => live.current.openSection(id),
       sectionCounts: (id: string) => live.current.sectionCounts[id] ?? live.current.counts,
@@ -397,9 +432,11 @@ export function useExamView(
         if (!live.current.inert) live.current.endSection();
       },
       retry: () => live.current.end(),
-      // The confirmation counts what is unanswered, which a paper still waiting on its saved state cannot know.
+      // The confirmation counts what is unanswered: unknowable before the saved state, and a box's words count first.
       ask: () => {
-        if (!live.current.inert) setAsking(true);
+        if (live.current.inert) return;
+        live.current.settleDraft();
+        setAsking(true);
       },
       cancel: () => setAsking(false),
       confirm: () => {
@@ -453,8 +490,7 @@ export function useExamView(
 
   const lock = lockOf(inert, submit.isPending || submit.isSuccess, shut || lapsed);
 
-  const { answers, isSaving, hasUnsaved, hasUnsent, leave, takenOver, setAside, answersLoaded } =
-    state;
+  const { answers, isSaving, hasUnsaved, takenOver, setAside, answersLoaded } = state;
   // Behind the student's own hand-in a late save says ended too: that paper is theirs, and Handed in says so.
   const ended = state.ended && !submit.isPending && !submit.isSuccess;
   return useMemo<ExamView>(
@@ -471,6 +507,7 @@ export function useExamView(
       sectionId,
       reachable,
       forwardOnly,
+      sectional,
 
       questions: inSection,
       question: current,
@@ -487,8 +524,8 @@ export function useExamView(
 
       isSaving,
       hasUnsaved,
-      hasUnsent,
-      leave,
+      hasUnsent: on.hasUnsent,
+      leave: on.leave,
       takenOver,
       setAside,
       ended,
@@ -520,6 +557,7 @@ export function useExamView(
       sectionId,
       reachable,
       forwardOnly,
+      sectional,
       inSection,
       current,
       answers,
@@ -528,8 +566,6 @@ export function useExamView(
       timer,
       isSaving,
       hasUnsaved,
-      hasUnsent,
-      leave,
       takenOver,
       setAside,
       ended,

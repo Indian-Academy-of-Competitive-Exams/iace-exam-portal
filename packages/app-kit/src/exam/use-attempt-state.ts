@@ -135,7 +135,10 @@ export function useAttemptState(
   const [answers, setAnswers] = useState<Record<string, LiveAnswer>>(() =>
     answersFrom(queue.changes()),
   );
-  const [sections, setSections] = useState<Record<string, SectionProgress>>({});
+  // A section handed in before a reload stays shut while its hand-in waits to go up.
+  const [sections, setSections] = useState<Record<string, SectionProgress>>(
+    () => queue.batch().sections,
+  );
   // False until the GET below settles: before it, "never opened" is not yet known. A sitting begun here has none to wait for.
   const [sectionsSettled, setSectionsSettled] = useState(startedByThisCall);
   const [clock, setClock] = useState<ExamClock | null>(null);
@@ -222,7 +225,11 @@ export function useAttemptState(
           if (!live) return;
           // Merged under, never over: an answer given while this flew is the newer one.
           commit({ ...held.answers, ...answersNow.current });
-          setSections((mine) => ({ ...held.sections, ...mine }));
+          // A kept entry for a section the server has since closed is stale: never drawn, never sent.
+          const kept = Object.entries(queue.batch().sections);
+          const stale = kept.filter(([sectionId]) => held.sections[sectionId]?.closed);
+          queue.acknowledge({ answers: [], sections: Object.fromEntries(stale) });
+          setSections((mine) => sectionsOver(held.sections, mine));
           setSectionsSettled(true);
           seeded.current = true;
           setAnswersLoaded(true);
@@ -241,7 +248,7 @@ export function useAttemptState(
       live = false;
       clearTimeout(again);
     };
-  }, [attemptId, commit, loop, refused]);
+  }, [attemptId, commit, loop, queue, refused]);
 
   const hasUnsent = useCallback(() => queue.anyUnsent(), [queue]);
 
@@ -452,6 +459,18 @@ function stateFor(
   const answered = option !== null || (typed ?? '').trim() !== '';
   if (answered) return marked ? ANSWER_STATE.ANSWERED_MARKED : ANSWER_STATE.ANSWERED;
   return marked ? ANSWER_STATE.MARKED_REVIEW : ANSWER_STATE.NOT_ANSWERED;
+}
+
+/** Section by section: one the server holds closed stays so, and elsewhere its stamp survives what the screen adds. */
+function sectionsOver(
+  held: Record<string, SectionProgress>,
+  mine: Record<string, SectionProgress>,
+): Record<string, SectionProgress> {
+  const merged = { ...held };
+  for (const [sectionId, progress] of Object.entries(mine)) {
+    if (!held[sectionId]?.closed) merged[sectionId] = { ...held[sectionId], ...progress };
+  }
+  return merged;
 }
 
 /** An epoch ref as an instant. Zero means the clock never started, which is not a time to record. */

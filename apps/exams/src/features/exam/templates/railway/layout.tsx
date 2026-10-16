@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { Calculator, Pause } from 'lucide-react';
 import { QUESTION_TYPE, isStateShown, type QuestionType } from '@iace/contracts';
-import { passagesOf, usePause, type ExamView } from '@iace/app-kit';
+import { mayPause, passagesOf, usePause, type ExamView } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Button, cn } from '@iace/ui';
 import { Passage } from '../../passage';
@@ -39,7 +39,7 @@ export function RailwayLayout({
   const [openPanel, setOpenPanel] = useState<PanelName>(null);
   const phone = useMediaQuery(PHONE_QUERY);
   const [paletteOpen, setPaletteOpen] = useState(!phone);
-  const pause = usePause(onPause);
+  const pause = usePause(onPause, mayPause(view));
   // Over the paper the palette hides the question it just opened, so opening one puts it away.
   const openQuestion = (questionId: string) => {
     view.openQuestion(questionId);

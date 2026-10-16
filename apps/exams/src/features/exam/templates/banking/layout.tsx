@@ -15,7 +15,7 @@ import {
   Type,
 } from 'lucide-react';
 import { ANSWER_STATE, isStateShown } from '@iace/contracts';
-import { passagesOf, TIMER_KIND, usePause, type ExamView } from '@iace/app-kit';
+import { mayPause, passagesOf, usePause, type ExamView } from '@iace/app-kit';
 import { useMediaQuery } from '@iace/app-kit/browser';
 import { Alert, Brandmark, Button, cn } from '@iace/ui';
 import { ScrollPane } from '../../scroll-pane';
@@ -51,7 +51,7 @@ export function BankingLayout({
   const [paletteOpen, setPaletteOpen] = useState(!phone);
   const [reading, setReading] = useState(false);
   const [fontStep, setFontStep] = useState(0);
-  const pause = usePause(onPause);
+  const pause = usePause(onPause, mayPause(view));
   // Held by id, so a clock that closes the section first takes the question about it away too.
   const [handingIn, setHandingIn] = useState<string | null>(null);
   const { submitSection } = view;
@@ -253,10 +253,7 @@ export function BankingLayout({
 
       {reading ? (
         <BankingInstructionsDialog onClose={() => setReading(false)}>
-          <BankingGeneral
-            forwardOnly={view.forwardOnly}
-            sectional={view.timer.kind === TIMER_KIND.SECTION}
-          />
+          <BankingGeneral forwardOnly={view.forwardOnly} sectional={view.sectional} />
         </BankingInstructionsDialog>
       ) : null}
 

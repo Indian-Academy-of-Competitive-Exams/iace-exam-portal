@@ -1,5 +1,5 @@
 /** A typing passage in a sitting: the practice screen's own pane, fed by the sitting's answer and its lock. */
-import { DEFAULT_LANGUAGE, TYPING_PRESETS, plainTextOf, typingPassageText } from '@iace/contracts';
+import { TYPING_PRESETS, typingPassageOf } from '@iace/contracts';
 import { type ExamView } from '@iace/app-kit';
 import { TypingPane } from '../../../typing/typing-pane';
 import { WritingBox } from '../../../typing/writing-box';
@@ -14,9 +14,9 @@ export function ExamTyping({ view }: Readonly<{ view: ExamView }>) {
     <TypingDraft
       // Keyed on the saved text arriving too, so the box opens on it and never on an empty one.
       key={`${question.questionId}:${view.answersLoaded}`}
-      passage={typingPassageText(plainTextOf(question.content[DEFAULT_LANGUAGE]?.stem))}
+      passage={typingPassageOf(question.content)}
       saved={view.typedAnswer}
-      onHandOver={view.typeAnswer}
+      onType={view.typeAnswer}
       // A section with no standard named is held to none, so nothing is refused.
       backspace={preset ? TYPING_PRESETS[preset].backspace : true}
       disabled={view.locked !== null || !view.answersLoaded}
@@ -24,28 +24,26 @@ export function ExamTyping({ view }: Readonly<{ view: ExamView }>) {
   );
 }
 
-/** The box's own copy of the text, handed to the sitting when the typing pauses, the box is left, or it closes. */
 function TypingDraft({
   passage,
   saved,
-  onHandOver,
+  onType,
   backspace,
   disabled,
 }: Readonly<{
   passage: string;
   saved: string;
-  onHandOver: (text: string) => void;
+  onType: (text: string) => void;
   backspace: boolean;
   disabled: boolean;
 }>) {
-  const { text, setText, handOver } = useDraft(saved, onHandOver);
+  const { text, setText } = useDraft(saved, onType);
 
   return (
     <TypingPane
       passage={passage}
       value={text}
       onChange={setText}
-      onBlur={handOver}
       backspace={backspace}
       disabled={disabled}
     />
@@ -62,7 +60,7 @@ export function ExamWriting({ view }: Readonly<{ view: ExamView }>) {
       // Keyed on the saved text arriving too, so the box opens on it and never on an empty one.
       key={`${question.questionId}:${view.answersLoaded}`}
       saved={view.typedAnswer}
-      onHandOver={view.typeAnswer}
+      onType={view.typeAnswer}
       disabled={view.locked !== null || !view.answersLoaded}
     />
   );
@@ -70,9 +68,9 @@ export function ExamWriting({ view }: Readonly<{ view: ExamView }>) {
 
 function WritingDraft({
   saved,
-  onHandOver,
+  onType,
   disabled,
-}: Readonly<{ saved: string; onHandOver: (text: string) => void; disabled: boolean }>) {
-  const { text, setText, handOver } = useDraft(saved, onHandOver);
-  return <WritingBox value={text} onChange={setText} onBlur={handOver} disabled={disabled} />;
+}: Readonly<{ saved: string; onType: (text: string) => void; disabled: boolean }>) {
+  const { text, setText } = useDraft(saved, onType);
+  return <WritingBox value={text} onChange={setText} disabled={disabled} />;
 }
