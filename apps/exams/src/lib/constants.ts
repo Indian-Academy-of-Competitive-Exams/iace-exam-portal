@@ -85,8 +85,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TYPING, label: 'Typing', icon: Keyboard },
   { to: ROUTES.SAVED, label: 'Saved questions', icon: Bookmark },
   { to: ROUTES.DOWNLOADS, label: 'Downloads', icon: Download },
-  { to: ROUTES.HELP, label: 'Help', icon: LifeBuoy },
   { to: ROUTES.NOTIFICATIONS, label: 'Notifications', icon: Bell },
+  { to: ROUTES.HELP, label: 'Help', icon: LifeBuoy },
 ];
 
 /** A header picker is sized to its own label; left to itself a Combobox takes the whole header. */
