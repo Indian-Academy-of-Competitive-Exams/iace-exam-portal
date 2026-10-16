@@ -178,6 +178,12 @@ export class PushService {
     };
   }
 
+  /** Whether the sweep has a live browser or phone to push this student's bell row to. */
+  async canReach(studentId: string): Promise<boolean> {
+    const { browsers, phones } = await this.targetsOf([studentId]);
+    return browsers.has(studentId) || phones.has(studentId);
+  }
+
   /** Each student's live browsers and phones; a target whose sign-in has ended is dropped as read. */
   private async targetsOf(studentIds: readonly string[]): Promise<Omit<Reach, 'priors'>> {
     const studentId = { in: [...new Set(studentIds)] };

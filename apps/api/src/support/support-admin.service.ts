@@ -24,7 +24,7 @@ import {
 } from '../common/messaging';
 import { everyTermMatches } from '../common/search-terms';
 import { pageArgs, paged } from '../common/pagination';
-import { NotificationsService } from '../notifications';
+import { NotificationsService, PushService } from '../notifications';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import {
@@ -122,6 +122,7 @@ export class SupportAdminService {
     private readonly storage: StorageService,
     private readonly notifications: NotificationsService,
     @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
+    private readonly push: PushService,
   ) {}
 
   async list(adminId: string, query: AdminTicketListQuery): Promise<Paginated<AdminTicketSummary>> {
@@ -297,11 +298,17 @@ export class SupportAdminService {
     });
     if (!message) throw new AppException(ErrorCodes.NOT_FOUND, 'No such message');
     const { ticket } = message;
-    await this.emailReply(
+    const sent = await this.emailReply(
       ticket.contactEmail ?? ticket.student?.profile?.email ?? null,
       ticket.id,
       message,
     );
+    if (sent) {
+      await this.prisma.supportMessage.update({
+        where: { id: message.id },
+        data: { emailFailedAt: null },
+      });
+    }
     return this.detail(id);
   }
 
@@ -324,15 +331,22 @@ export class SupportAdminService {
 
   // Push first (the bell row's sweep pushes to web and mobile); email only when nothing can be pushed to.
   private async deliver(ticket: TicketForDelivery, message: { id: string; body: string }) {
-    if (!ticket.studentId) return this.emailReply(ticket.contactEmail, ticket.id, message);
-    await this.notifications.tell(this.prisma, {
-      studentId: ticket.studentId,
-      type: NOTIFICATION_TYPE.SUPPORT_REPLY,
-      title: REPLY_TITLE,
-      data: { ticketId: ticket.id },
-      dedupeKey: `support:${message.id}`,
-    });
-    if (await this.canPush(ticket.studentId)) return;
+    if (!ticket.studentId) {
+      await this.emailReply(ticket.contactEmail, ticket.id, message);
+      return;
+    }
+    try {
+      await this.notifications.tell(this.prisma, {
+        studentId: ticket.studentId,
+        type: NOTIFICATION_TYPE.SUPPORT_REPLY,
+        title: REPLY_TITLE,
+        data: { ticketId: ticket.id },
+        dedupeKey: `support:${message.id}`,
+      });
+    } catch (error) {
+      this.logger.error(`Bell row for ticket ${ticket.id} failed`, error);
+    }
+    if (await this.push.canReach(ticket.studentId)) return;
     await this.emailReply(
       ticket.contactEmail ?? ticket.student?.profile?.email ?? null,
       ticket.id,
@@ -340,20 +354,12 @@ export class SupportAdminService {
     );
   }
 
-  private async canPush(studentId: string): Promise<boolean> {
-    const [devices, subscriptions] = await Promise.all([
-      this.prisma.pushDevice.count({ where: { studentId } }),
-      this.prisma.pushSubscription.count({ where: { studentId } }),
-    ]);
-    return devices + subscriptions > 0;
-  }
-
   private async emailReply(
     to: string | null,
     ticketId: string,
     message: { id: string; body: string },
-  ): Promise<void> {
-    if (!to) return;
+  ): Promise<boolean> {
+    if (!to) return false;
     try {
       await this.sender.send({
         channel: MESSAGE_CHANNELS.EMAIL,
@@ -363,12 +369,14 @@ export class SupportAdminService {
         subject: REPLY_SUBJECT,
         body: `${message.body}\n\n— IACE`,
       });
+      return true;
     } catch (error) {
       await this.prisma.supportMessage.update({
         where: { id: message.id },
         data: { emailFailedAt: new Date() },
       });
       this.logger.error(`Reply email for ticket ${ticketId} failed`, error);
+      return false;
     }
   }
 }

@@ -1,7 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { after, beforeEach, describe, it } from 'node:test';
-import { AppException, ErrorCodes, SUPPORT_CATEGORIES } from '@iace/contracts';
+import { ActorTypes, AppException, ErrorCodes, SUPPORT_CATEGORIES } from '@iace/contracts';
 import { NotificationsService } from '../src/notifications';
+import { PushService } from '../src/notifications/push.service';
+import { redisKeys } from '../src/redis/redis.keys';
 import { SupportAdminService } from '../src/support/support-admin.service';
 import { SupportService } from '../src/support/support.service';
 import {
@@ -13,17 +16,39 @@ import {
   resetDatabase,
   testPrisma,
 } from './support/database';
-import { FakeMessageSender, FakeStorage } from '../test/support/fakes';
+import {
+  FakeConfig,
+  FakeFcmSender,
+  FakeMessageSender,
+  FakePushSender,
+  FakeRedis,
+  FakeStorage,
+} from '../test/support/fakes';
 
 const prisma = testPrisma();
 const support = new SupportService(prisma, new FakeStorage() as never);
 const sender = new FakeMessageSender();
-const admins = new SupportAdminService(
+const redis = new FakeRedis();
+const pushService = new PushService(
   prisma,
-  new FakeStorage() as never,
-  new NotificationsService(prisma),
-  sender,
+  new FakeConfig({
+    VAPID_PUBLIC_KEY: 'BPublicKey',
+    VAPID_PRIVATE_KEY: 'private',
+    VAPID_SUBJECT: 'mailto:a@b.c',
+  }).asService(),
+  new FakePushSender() as never,
+  new FakeFcmSender() as never,
+  redis.asService(),
 );
+const adminsWith = (messages: FakeMessageSender) =>
+  new SupportAdminService(
+    prisma,
+    new FakeStorage() as never,
+    new NotificationsService(prisma),
+    messages,
+    pushService,
+  );
+const admins = adminsWith(sender);
 const codeOf = (error: unknown) => (AppException.is(error) ? error.code : null);
 const ask = (studentId: string, category: keyof typeof SUPPORT_CATEGORIES = 'OTHER') =>
   support.create(studentId, { category, body: 'Where is my paper?' });
@@ -145,16 +170,41 @@ describe('admins working the queue', () => {
     sender.sent.length = 0;
   });
 
-  const studentWith = async (opts: { email?: string; push?: boolean } = {}) => {
+  type PushKind = 'device' | 'subscription';
+  const pushTo = async (studentId: string, kind: PushKind, live: boolean) => {
+    const sessionId = randomUUID();
+    if (live) {
+      await redis
+        .asService()
+        .setJson(
+          redisKeys.session(ActorTypes.STUDENT, studentId, sessionId),
+          { client: null },
+          3600,
+        );
+    }
+    if (kind === 'device') {
+      await prisma.pushDevice.create({
+        data: { studentId, token: `t-${studentId}`, platform: 'ANDROID', sessionId },
+      });
+    } else {
+      await prisma.pushSubscription.create({
+        data: {
+          studentId,
+          endpoint: `https://fcm.googleapis.com/fcm/send/${studentId}`,
+          p256dh: 'k',
+          auth: 'a',
+          sessionId,
+        },
+      });
+    }
+  };
+
+  const studentWith = async (opts: { email?: string; push?: PushKind } = {}) => {
     const student = await makeStudent(prisma);
     if (opts.email) {
       await prisma.studentProfile.create({ data: { studentId: student.id, email: opts.email } });
     }
-    if (opts.push) {
-      await prisma.pushDevice.create({
-        data: { studentId: student.id, token: `t-${student.id}`, platform: 'ANDROID' },
-      });
-    }
+    if (opts.push) await pushTo(student.id, opts.push, true);
     return student;
   };
 
@@ -184,7 +234,7 @@ describe('admins working the queue', () => {
 
   it('a public reply writes one bell row that does not carry the internal note', async () => {
     const admin = await makeAdmin(prisma);
-    const { id: studentId } = await studentWith({ push: true });
+    const { id: studentId } = await studentWith({ push: 'device' });
     const ticket = await ask(studentId);
     await admins.reply(admin.id, ticket.id, { body: 'SECRET-NOTE', internal: true });
     await admins.reply(admin.id, ticket.id, { body: 'Public answer', internal: false });
@@ -195,18 +245,67 @@ describe('admins working the queue', () => {
     assert.ok(!JSON.stringify(rows[0]).includes('SECRET-NOTE'));
   });
 
-  it('emails only a student with nothing to push to', async () => {
+  it('emails only a student with nothing live to push to, and still writes the bell row', async () => {
     const admin = await makeAdmin(prisma);
-    const pushed = await studentWith({ email: 'a@x.test', push: true });
+    const device = await studentWith({ email: 'a@x.test', push: 'device' });
+    const browser = await studentWith({ email: 'e@x.test', push: 'subscription' });
     const unreachable = await studentWith({ email: 'b@x.test' });
+    const dead = await studentWith({ email: 'f@x.test' });
+    await pushTo(dead.id, 'device', false);
     const noAddress = await studentWith();
-    for (const s of [pushed, unreachable, noAddress]) {
+    for (const s of [device, browser, unreachable, dead, noAddress]) {
       const t = await ask(s.id);
       await admins.reply(admin.id, t.id, { body: 'Hello', internal: false });
     }
+    assert.deepEqual(sender.sent.map((m) => m.to).sort(), ['b@x.test', 'f@x.test']);
+    assert.equal(await prisma.notification.count({ where: { studentId: unreachable.id } }), 1);
+  });
+
+  it('emails the ticket contact address ahead of the profile address', async () => {
+    const admin = await makeAdmin(prisma);
+    const { id: studentId } = await studentWith({ email: 'profile@x.test' });
+    const ticket = await ask(studentId);
+    await prisma.supportTicket.update({
+      where: { id: ticket.id },
+      data: { contactEmail: 'contact@x.test' },
+    });
+    await admins.reply(admin.id, ticket.id, { body: 'Hello', internal: false });
     assert.deepEqual(
       sender.sent.map((m) => m.to),
-      ['b@x.test'],
+      ['contact@x.test'],
+    );
+  });
+
+  it('an internal note sends no email and writes no bell row', async () => {
+    const admin = await makeAdmin(prisma);
+    const { id: studentId } = await studentWith({ email: 'n@x.test' });
+    const ticket = await ask(studentId);
+    await admins.reply(admin.id, ticket.id, { body: 'note', internal: true });
+    assert.equal(sender.sent.length, 0);
+    assert.equal(await prisma.notification.count({ where: { studentId } }), 0);
+  });
+
+  it('refuses to reassign to an inactive admin', async () => {
+    const gone = await makeAdmin(prisma, { isActive: false });
+    const { id: studentId } = await studentWith();
+    const ticket = await ask(studentId);
+    await assert.rejects(
+      admins.patch(ticket.id, { assigneeId: gone.id }),
+      (e) => codeOf(e) === ErrorCodes.NOT_FOUND,
+    );
+  });
+
+  it('refuses an attachment key from another ticket', async () => {
+    const admin = await makeAdmin(prisma);
+    const { id: studentId } = await studentWith();
+    const ticket = await ask(studentId);
+    await assert.rejects(
+      admins.reply(admin.id, ticket.id, {
+        body: 'see',
+        internal: false,
+        attachmentKey: 'support/t/another-ticket/x.png',
+      }),
+      (e) => codeOf(e) === ErrorCodes.VALIDATION_ERROR,
     );
   });
 
@@ -229,12 +328,7 @@ describe('admins working the queue', () => {
 
   it('a failed email is flagged on the message and does not undo the reply', async () => {
     const admin = await makeAdmin(prisma);
-    const down = new SupportAdminService(
-      prisma,
-      new FakeStorage() as never,
-      new NotificationsService(prisma),
-      new FakeMessageSender(['email']),
-    );
+    const down = adminsWith(new FakeMessageSender(['email']));
     const { id: studentId } = await studentWith({ email: 'd@x.test' });
     const ticket = await ask(studentId);
     const after = await down.reply(admin.id, ticket.id, { body: 'Hello', internal: false });
@@ -243,6 +337,7 @@ describe('admins working the queue', () => {
     assert.ok(flagged?.emailFailedAt);
     const again = await admins.resendEmail(ticket.id, flagged.id);
     assert.equal(again.messages.length, 2);
+    assert.equal(again.messages.find((m) => m.fromStaff)?.emailFailedAt, null);
     assert.deepEqual(
       sender.sent.map((m) => m.to),
       ['d@x.test'],
