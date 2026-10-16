@@ -28,6 +28,7 @@ import { AssignmentsModule } from './assignments';
 import { TestsModule } from './tests';
 import { AttemptsModule } from './attempts';
 import { SavedModule } from './saved';
+import { SupportModule } from './support';
 import { TypingModule } from './typing';
 import { DashboardModule } from './dashboard';
 import { ReportsModule } from './reports';
@@ -71,6 +72,7 @@ import { RequestIdMiddleware } from './common/request-id';
     TestsModule,
     AttemptsModule,
     SavedModule,
+    SupportModule,
     TypingModule,
     DashboardModule,
     ReportsModule,

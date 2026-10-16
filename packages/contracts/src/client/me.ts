@@ -23,6 +23,19 @@ import {
   type UploadFile,
 } from '../me';
 import {
+  SUPPORT_ROUTES,
+  SUPPORT_ATTACHMENT_FIELD,
+  supportAttachmentSchema,
+  ticketDetailSchema,
+  ticketSummarySchema,
+  type CreateTicketInput,
+  type MyTicketListQuery,
+  type SupportAttachment,
+  type TicketDetail,
+  type TicketReplyBody,
+  type TicketSummary,
+} from '../support';
+import {
   SAVED_ROUTES,
   bookmarkedInAttemptSchema,
   savedQuestionSchema,
@@ -240,6 +253,24 @@ export function meClient(core: ApiCore) {
       write('POST', SAVED_ROUTES.bookmark, savedQuestionSchema, input),
 
     /** Every choice both saved-list filters can offer, off their own set — never the whole catalog. */
+    support: {
+      list: (query: MyTicketListQuery): Promise<Paginated<TicketSummary>> =>
+        list(SUPPORT_ROUTES.list, query, ticketSummarySchema),
+      detail: (id: string): Promise<TicketDetail> =>
+        get(SUPPORT_ROUTES.detail(id), ticketDetailSchema),
+      create: (input: CreateTicketInput): Promise<TicketDetail> =>
+        write('POST', SUPPORT_ROUTES.create, ticketDetailSchema, input),
+      reply: (id: string, input: TicketReplyBody): Promise<TicketDetail> =>
+        write('POST', SUPPORT_ROUTES.reply(id), ticketDetailSchema, input),
+      close: (id: string): Promise<TicketDetail> =>
+        write('POST', SUPPORT_ROUTES.close(id), ticketDetailSchema),
+      upload: (id: string, file: UploadFile): Promise<SupportAttachment> => {
+        const form = new FormData();
+        form.append(SUPPORT_ATTACHMENT_FIELD, file);
+        return write('POST', SUPPORT_ROUTES.attachments(id), supportAttachmentSchema, form);
+      },
+    },
+
     savedFacets: (): Promise<SavedFacets> => get(SAVED_ROUTES.facets, savedFacetsSchema),
 
     removeSavedQuestion: (id: string): Promise<NoContent> =>
