@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { FEATURE_KEYS } from '@iace/contracts';
 import { Badge, EmptyState, EMPTY_STATE_KINDS, PageHeader } from '@iace/ui';
 import {
   AppShell as Shell,
@@ -7,10 +9,14 @@ import {
   TourProvider,
   TourTrigger,
 } from '@iace/app-kit/browser';
+import { api } from '../lib/api';
 import { NAV_ITEMS } from '../lib/nav';
+import { QUERY_KEYS } from '../lib/query-keys';
 import { ROUTES, STORAGE_KEYS } from '../lib/constants';
 import { filterAdminNav } from '../lib/route-access';
 import { useAuth } from '../providers/auth';
+
+const UNCLAIMED_POLL_MS = 60_000;
 
 // can goes to the shell, which reads featureKey; superAdminOnly and a route's own guard are neither, so both are applied here.
 export function AppShell() {
@@ -26,6 +32,15 @@ export function AppShell() {
     [isDeactivated, isSuperAdmin, can],
   );
 
+  const unclaimed = useQuery({
+    queryKey: QUERY_KEYS.SUPPORT_UNCLAIMED,
+    queryFn: () => api.admin.support.unclaimedCount(),
+    refetchInterval: UNCLAIMED_POLL_MS,
+    enabled: !isDeactivated && can(FEATURE_KEYS.SUPPORT),
+  });
+  const unclaimedCount = unclaimed.data ?? 0;
+  const navBadges = useMemo(() => ({ [ROUTES.SUPPORT]: unclaimedCount }), [unclaimedCount]);
+
   return (
     <TourProvider storage={browserStorage} storageKey={STORAGE_KEYS.TOURS}>
       <Shell
@@ -36,6 +51,7 @@ export function AppShell() {
         homeTo={ROUTES.HOME}
         portal="Admin"
         onSignOut={() => void signOut()}
+        navBadges={navBadges}
         userLabel={admin?.email ?? ''}
         // No account entries: an admin signs in with an emailed code and has no profile screen.
         brandSuffix={admin?.isSuperAdmin ? <Badge variant="primary">Super admin</Badge> : null}

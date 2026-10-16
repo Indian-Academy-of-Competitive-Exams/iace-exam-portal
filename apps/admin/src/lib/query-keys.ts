@@ -35,6 +35,8 @@ export const QUERY_KEYS = {
   STUDENTS: [ADMIN, 'students'],
   SECTION_THREAD: [ADMIN, 'section-thread'],
   SUBJECTS: [ADMIN, 'subjects'],
+  SUPPORT: [ADMIN, 'support'],
+  SUPPORT_UNCLAIMED: [ADMIN, 'support', 'unclaimed'],
   TEST: [ADMIN, 'tests', 'detail'],
   REPORTS: [ADMIN, 'reports'],
   TEST_ANALYTICS: [ADMIN, 'test-analytics'],
@@ -66,6 +68,8 @@ const QUERY_SCOPES = {
 export const adminFilterQueryKey = () => [...QUERY_KEYS.ADMINS, QUERY_SCOPES.FILTER] as const;
 
 export const allAdminsQueryKey = () => [...QUERY_KEYS.ADMINS, QUERY_SCOPES.ALL] as const;
+
+export const adminPickerQueryKey = () => [...QUERY_KEYS.ADMINS, QUERY_SCOPES.PICKER] as const;
 
 export const announcementQueryKey = (id: string) => [...QUERY_KEYS.ANNOUNCEMENTS, id] as const;
 
@@ -234,3 +238,5 @@ export const seriesPickerQueryKey = (notReachedBy: string, forExamStageId: strin
 
 export const sectionThreadQueryKey = (testId: string, sectionId: string) =>
   [...QUERY_KEYS.SECTION_THREAD, testId, sectionId] as const;
+
+export const supportTicketQueryKey = (id: string) => [...QUERY_KEYS.SUPPORT, 'detail', id] as const;

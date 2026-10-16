@@ -148,6 +148,16 @@ const AnnouncementsPage = React.lazy(() =>
     default: module.AnnouncementsPage,
   })),
 );
+const SupportQueuePage = React.lazy(() =>
+  import('./features/support/support-queue').then((module) => ({
+    default: module.SupportQueuePage,
+  })),
+);
+const SupportTicketPage = React.lazy(() =>
+  import('./features/support/support-ticket').then((module) => ({
+    default: module.SupportTicketPage,
+  })),
+);
 const ReportsPage = React.lazy(() =>
   import('./features/reports/reports').then((module) => ({ default: module.ReportsPage })),
 );
@@ -264,6 +274,8 @@ export function App() {
           {screen(ROUTES.ADMINS, <AdminsPage />)}
           {screen(ROUTES.PERMISSIONS, <PermissionsPage />)}
           {screen(ROUTES.ANNOUNCEMENTS, <AnnouncementsPage />)}
+          {screen(ROUTES.SUPPORT, <SupportQueuePage />)}
+          {screen(ROUTES.SUPPORT_TICKET_PATTERN, <SupportTicketPage />)}
           {screen(ROUTES.REPORTS, <ReportsPage />)}
           {screen(ROUTES.REPORT_PATTERN, <ReportPage />)}
           {screen(ROUTES.AUDIT, <AuditActivityPage />)}

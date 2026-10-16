@@ -146,6 +146,13 @@ describe('a screen opened by its address', () => {
     }
   });
 
+  it('opens the support queue and a query by address only with Support', () => {
+    for (const path of [ROUTES.SUPPORT, ROUTES.SUPPORT_TICKET_PATTERN]) {
+      assert.equal(opens(path, { [FEATURE_KEYS.STUDENT_MANAGEMENT]: WRITE }), false, path);
+      assert.equal(opens(path, { [FEATURE_KEYS.SUPPORT]: READ }), true, path);
+    }
+  });
+
   it('names no key for the screen every admin reaches', () => {
     assert.equal(opens(ROUTES.HOME, {}), true);
   });

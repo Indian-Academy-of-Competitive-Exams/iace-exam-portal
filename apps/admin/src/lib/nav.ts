@@ -6,6 +6,8 @@ import {
   FileChartColumn,
   FolderTree,
   GraduationCap,
+  Inbox,
+  LifeBuoy,
   History,
   ListChecks,
   Megaphone,
@@ -42,6 +44,12 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.EXAMS, label: 'Exams', icon: GraduationCap },
       { to: ROUTES.COHORTS, label: 'Programs and events', icon: Route },
     ],
+  },
+  {
+    label: 'Support',
+    icon: LifeBuoy,
+    featureKey: FEATURE_KEYS.SUPPORT,
+    children: [{ to: ROUTES.SUPPORT, label: 'Queries', icon: Inbox }],
   },
   {
     label: 'Question bank',

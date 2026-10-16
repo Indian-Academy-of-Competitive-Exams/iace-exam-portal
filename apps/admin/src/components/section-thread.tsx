@@ -30,6 +30,7 @@ import { uploadQuestionImage } from '../lib/upload-question-image';
 import { useAuth } from '../providers/auth';
 import { ADMIN_ROLE_LABELS } from '../lib/labels';
 import { sectionThreadQueryKey } from '../lib/query-keys';
+import { BLANK, type Attachment, type Composing } from './thread-composing';
 
 /** The discussion on one (test, section) — spec §9, read as a conversation rather than a log. */
 
@@ -42,21 +43,6 @@ const SAID_AT = new Intl.DateTimeFormat('en-IN', {
   hour: 'numeric',
   minute: '2-digit',
 });
-
-/** One picture waiting to be sent: the key goes to the server, the url shows it meanwhile. */
-interface Attachment {
-  key: string;
-  url: string;
-}
-
-/** What a message is being written as: a new one, or an edit of one already said. */
-interface Composing {
-  body: string;
-  images: Attachment[];
-  editingId: string | null;
-}
-
-const BLANK: Composing = { body: '', images: [], editingId: null };
 
 /** How much of an unsent comment a confirm quotes back before it is dropped. */
 const UNSENT_QUOTE_CHARS = 80;
@@ -179,15 +165,28 @@ function Thread({
           ) : null}
 
           {rows.map((comment) => (
-            <Message
+            <ThreadMessage
               key={comment.id}
-              comment={comment}
+              authorName={comment.authorName}
+              label={ADMIN_ROLE_LABELS[comment.authorRole]}
+              at={comment.createdAt}
+              body={comment.body}
+              images={comment.images}
               mine={comment.authorId === identity?.id}
-              // The server takes a reword only from its author, and only while they may still write here.
-              onEdit={
-                canWrite && comment.authorId === identity?.id
-                  ? () => (unsent ? setReplacing(comment) : edit(comment))
-                  : undefined
+              aside={
+                <>
+                  {comment.editedAt ? <EditedMark comment={comment} /> : null}
+                  {/* The server takes a reword only from its author, and only while they may still write here. */}
+                  {canWrite && comment.authorId === identity?.id ? (
+                    <button
+                      type="button"
+                      onClick={() => (unsent ? setReplacing(comment) : edit(comment))}
+                      className="underline decoration-dotted hover:text-foreground"
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                </>
               }
             />
           ))}
@@ -197,12 +196,15 @@ function Thread({
       </div>
 
       {canWrite ? (
-        <Composer
+        <ThreadComposer
           composing={composing}
           sending={say.isPending}
           name={identity?.fullName ?? null}
           onChange={setComposing}
           onSend={() => say.mutate(composing)}
+          upload={uploadQuestionImage}
+          maxImages={COMMENT_MAX_IMAGES}
+          placeholder="Write a comment"
         />
       ) : null}
 
@@ -224,19 +226,31 @@ function Thread({
   );
 }
 
-function Message({
-  comment,
+/** One said thing in a thread: who, when, the words and any pictures; `aside` trails the byline. */
+export function ThreadMessage({
+  authorName,
+  label,
+  at,
+  body,
+  images,
   mine,
-  onEdit,
+  tone,
+  aside,
+  children,
 }: Readonly<{
-  comment: SectionComment;
+  authorName: string | null;
+  label?: string;
+  at: string;
+  body: string;
+  images: readonly string[];
   mine: boolean;
-  /** Absent where the viewer could not reword it. */
-  onEdit: (() => void) | undefined;
+  tone?: 'warning';
+  aside?: React.ReactNode;
+  children?: React.ReactNode;
 }>) {
   return (
     <div className={cn('flex items-end gap-2', mine && 'flex-row-reverse')}>
-      <Avatar name={comment.authorName} size="sm" />
+      <Avatar name={authorName} size="sm" />
 
       <div className={cn('flex min-w-0 max-w-[80%] flex-col gap-1', mine && 'items-end')}>
         <div
@@ -245,39 +259,38 @@ function Message({
             mine && 'flex-row-reverse',
           )}
         >
-          <span className="font-medium text-foreground">{comment.authorName}</span>
-          <span>{ADMIN_ROLE_LABELS[comment.authorRole]}</span>
-          <span>{SAID_AT.format(new Date(comment.createdAt))}</span>
-          {comment.editedAt ? <EditedMark comment={comment} /> : null}
-          {onEdit ? (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="underline decoration-dotted hover:text-foreground"
-            >
-              Edit
-            </button>
-          ) : null}
+          <span className="font-medium text-foreground">{authorName}</span>
+          {label ? <span>{label}</span> : null}
+          <span>{SAID_AT.format(new Date(at))}</span>
+          {aside}
         </div>
 
         <div
           className={cn(
             'flex flex-col gap-2 rounded-lg border px-3 py-2 text-sm',
-            mine ? 'border-primary/30 bg-primary/[0.08]' : 'border-border bg-surface',
+            BUBBLE_TONE[tone ?? (mine ? 'mine' : 'theirs')],
           )}
         >
-          {comment.body ? <p className="whitespace-pre-wrap break-words">{comment.body}</p> : null}
+          {body ? <p className="whitespace-pre-wrap break-words">{body}</p> : null}
 
-          {comment.images.map((url) => (
+          {images.map((url) => (
             <a key={url} href={url} target="_blank" rel="noreferrer">
               <img src={url} alt="" className="max-h-64 rounded-md border border-border" />
             </a>
           ))}
         </div>
+
+        {children}
       </div>
     </div>
   );
 }
+
+const BUBBLE_TONE = {
+  mine: 'border-primary/30 bg-primary/[0.08]',
+  theirs: 'border-border bg-surface',
+  warning: 'border-warning/40 bg-warning-subtle',
+} as const;
 
 /** The trail is why editing is allowed at all, so the last wording is one hover away. */
 function EditedMark({ comment }: Readonly<{ comment: SectionComment }>) {
@@ -293,12 +306,16 @@ function EditedMark({ comment }: Readonly<{ comment: SectionComment }>) {
   );
 }
 
-function Composer({
+export function ThreadComposer({
   composing,
   sending,
   name,
   onChange,
   onSend,
+  upload: uploadImage,
+  maxImages,
+  placeholder,
+  head,
 }: Readonly<{
   composing: Composing;
   sending: boolean;
@@ -306,13 +323,17 @@ function Composer({
   /** An updater, never a value: a picture lands after the render that picked it has gone stale. */
   onChange: React.Dispatch<React.SetStateAction<Composing>>;
   onSend: () => void;
+  upload: (file: File) => Promise<Attachment>;
+  maxImages: number;
+  placeholder: string;
+  head?: React.ReactNode;
 }>) {
   const editing = composing.editingId !== null;
   const empty = composing.body.trim() === '' && composing.images.length === 0;
 
   // A mutation, so a picture the server refuses is announced like any other failed write.
   const upload = useMutation({
-    mutationFn: uploadQuestionImage,
+    mutationFn: uploadImage,
     onSuccess: (image) =>
       onChange((current) =>
         current.editingId === null ? { ...current, images: [...current.images, image] } : current,
@@ -321,6 +342,8 @@ function Composer({
 
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
+      {head}
+
       {editing ? (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Editing a comment. Its pictures stay as they are.</span>
@@ -367,8 +390,8 @@ function Composer({
             const body = event.target.value;
             onChange((current) => ({ ...current, body }));
           }}
-          placeholder="Write a comment"
-          aria-label="Write a comment"
+          placeholder={placeholder}
+          aria-label={placeholder}
           rows={2}
           className="min-h-0 flex-1 resize-none"
         />
@@ -379,7 +402,7 @@ function Composer({
             type="file"
             className="peer sr-only"
             accept={QUESTION_IMAGE_ACCEPTED_TYPES.join(',')}
-            disabled={editing || upload.isPending || composing.images.length >= COMMENT_MAX_IMAGES}
+            disabled={editing || upload.isPending || composing.images.length >= maxImages}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) upload.mutate(file);

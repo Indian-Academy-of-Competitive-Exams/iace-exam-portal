@@ -96,6 +96,9 @@ export const ROUTES = {
   REPORT: (key: ReportKey) => `/reports/${key}`,
   REPORT_PATTERN: '/reports/:key',
   ANNOUNCEMENTS: '/announcements',
+  SUPPORT: '/support',
+  SUPPORT_TICKET: (id: string) => `/support/${id}`,
+  SUPPORT_TICKET_PATTERN: '/support/:id',
   /** Every admin reaches these — the service, not the route, scopes what they see. */
   AUDIT: '/audit',
   AUDIT_IMPORTS: '/audit/imports',

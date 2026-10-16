@@ -24,6 +24,8 @@ import {
   STUDENT_TYPE,
   type StudentSeriesSource,
   type StudentType,
+  type SupportPriority,
+  type SupportStatus,
   type TestBuilderStep,
   type TestSeriesKind,
   type TestStatus,
@@ -309,4 +311,15 @@ export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
 export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
   [PERFORMANCE_SCOPES.ATTEMPT]: 'This sitting',
   [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
+};
+
+export const SUPPORT_STATUS_LABELS: Readonly<Record<SupportStatus, string>> = {
+  OPEN: 'Open',
+  ANSWERED: 'Answered',
+  CLOSED: 'Closed',
+};
+
+export const SUPPORT_PRIORITY_LABELS: Readonly<Record<SupportPriority, string>> = {
+  NORMAL: 'Normal',
+  HIGH: 'High',
 };
