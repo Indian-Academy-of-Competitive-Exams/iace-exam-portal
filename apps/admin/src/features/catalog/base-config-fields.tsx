@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import { Trash2 } from 'lucide-react';
 import {
@@ -12,6 +12,7 @@ import {
   typingPresetKeySchema,
 } from '@iace/contracts';
 import {
+  Alert,
   Button,
   Checkbox,
   Combobox,
@@ -118,6 +119,7 @@ export function SectionCard({
   const typingPreset = useWatch({ control: form.control, name: `sections.${index}.typingPreset` });
   const isTyping = typingPreset !== '';
   const descriptive = useWatch({ control: form.control, name: `sections.${index}.descriptive` });
+  const [clearedDescriptive, setClearedDescriptive] = useState(false);
   const paperLanguages = useWatch({ control: form.control, name: 'languages' }) ?? [];
   const language = useWatch({ control: form.control, name: `sections.${index}.language` });
   const tested = useSubjectLanguage(subjectId || undefined);
@@ -133,7 +135,15 @@ export function SectionCard({
   const chooseTyping = (key: string) => {
     form.setValue(`sections.${index}.typingPreset`, key, { shouldDirty: true });
     const preset = typingPresetKeySchema.safeParse(key).data;
-    if (!preset) return;
+    if (!preset) {
+      setClearedDescriptive(false);
+      return;
+    }
+    // The tick a typing test hides must not stay set where no one can untick it.
+    if (descriptive) {
+      form.setValue(`sections.${index}.descriptive`, false, { shouldDirty: true });
+      setClearedDescriptive(true);
+    }
     form.setValue(`sections.${index}.questionCount`, '1');
     form.setValue(`sections.${index}.marksPerQuestion`, '0');
     form.setValue(`sections.${index}.negativeMarks`, '0');
@@ -346,6 +356,11 @@ export function SectionCard({
         ) : null}
       </div>
 
+      {isTyping && clearedDescriptive ? (
+        <Alert variant="warning">
+          Descriptive is cleared: a typing test has no written answers.
+        </Alert>
+      ) : null}
       {isTyping ? null : (
         <Checkbox
           checked={descriptive}
