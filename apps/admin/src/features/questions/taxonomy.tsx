@@ -402,6 +402,10 @@ function NewSubjectDialog({
   });
   // Kept beside the form: "Not a language" is no value at all, which the schema's enum would refuse.
   const [language, setLanguage] = useState('');
+  const close = (next: boolean) => {
+    if (!next) setLanguage('');
+    onOpenChange(next);
+  };
 
   const create = useMutation({
     meta: { success: 'Subject added.', fields: SUBJECT_FIELDS },
@@ -411,14 +415,17 @@ function NewSubjectDialog({
         code: input.code || undefined,
         language: languageCodeSchema.safeParse(language).data ?? null,
       }),
-    onSuccess: onDone,
+    onSuccess: () => {
+      setLanguage('');
+      onDone();
+    },
     onError: (error) => applyFieldErrors(error, form.setError, SUBJECT_FIELDS),
   });
 
   return (
     <FormDialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={close}
       form={form}
       onSubmit={(values) => create.mutate(values)}
       title="New subject"
