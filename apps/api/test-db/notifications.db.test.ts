@@ -4,6 +4,7 @@ import {
   AppException,
   ErrorCodes,
   NOTIFICATION_TYPE,
+  notificationListQuerySchema,
   TEST_SERIES_KIND,
   type AnnouncementAudience,
 } from '@iace/contracts';
@@ -319,11 +320,15 @@ describe('BellService — a broadcast is resolved, never copied', () => {
   const unread = { ...PAGE, unreadOnly: true };
 
   /** An in-app announcement to one branch, sent now: one row for everybody it reaches. */
-  async function announcementTo(audience: AnnouncementAudience, at = new Date()) {
+  async function announcementTo(
+    audience: AnnouncementAudience,
+    at = new Date(),
+    title = 'Branch closed on Friday',
+  ) {
     const admin = await makeAdmin(prisma);
     return prisma.announcement.create({
       data: {
-        title: 'Branch closed on Friday',
+        title,
         body: 'Classes move online.',
         audience,
         paidChannels: [],
@@ -441,6 +446,24 @@ describe('BellService — a broadcast is resolved, never copied', () => {
       (await bell.list(me.id, PAGE)).items.map((item) => item.id),
       [copy.id],
     );
+  });
+
+  /** The failure this prevents: a search that finds a % or _ in an own row but not the same text in a broadcast. */
+  it('finds a broadcast by a search holding a % or _, as it finds an own row', async () => {
+    const me = await makeStudent(prisma, { createdAt: new Date(Date.now() - 60_000) });
+    const own = await makeNotification(prisma, { studentId: me.id, title: 'Fees: 50% off' });
+    const sent = await announcementTo(
+      { match: 'all' } as AnnouncementAudience,
+      new Date(),
+      '50% off',
+    );
+    const named = await announcementTo({ match: 'all' } as AnnouncementAudience, new Date(), 'a_b');
+    const ids = async (q: string) =>
+      (await bell.list(me.id, notificationListQuerySchema.parse({ q }))).items.map((row) => row.id);
+
+    assert.deepEqual((await ids('50%')).sort(), [own.id, sent.id].sort());
+    assert.deepEqual(await ids('a_b'), [named.id]);
+    assert.deepEqual(await ids('a%b'), []);
   });
 
   it('pages one list of rows and broadcasts by cursor, newest first, each once', async () => {

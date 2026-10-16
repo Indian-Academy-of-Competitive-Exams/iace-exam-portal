@@ -262,11 +262,14 @@ function narrowedBy(query: NotificationListQuery): Prisma.NotificationWhereInput
   return filters;
 }
 
+/** The query arrives escaped for LIKE; a broadcast held in memory is matched against the text typed. */
+const ESCAPED_LIKE_CHARACTER = /\\([\\%_])/g;
+
 /** The same filters, read against a broadcast held in memory. */
 function shownBy(query: NotificationListQuery): (entry: Entry) => boolean {
   const range = withinInstituteDays(query.from, query.to);
   const asOf = query.unreadAsOf ? new Date(query.unreadAsOf) : null;
-  const words = query.q?.toLowerCase();
+  const words = query.q?.replace(ESCAPED_LIKE_CHARACTER, '$1').toLowerCase();
   return (entry) =>
     (!query.unreadOnly ||
       !entry.isRead ||
