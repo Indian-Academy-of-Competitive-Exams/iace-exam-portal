@@ -144,13 +144,13 @@ const COLUMNS: DataTableColumn<AdminTicketSummary>[] = [
     header: 'Student',
     className: 'max-w-56',
     cell: (row) =>
-      row.studentName === null && row.claimedName !== null ? (
+      row.linked ? (
+        <TruncatedText>{row.studentName}</TruncatedText>
+      ) : (
         <span className="flex min-w-0 items-center gap-2">
           <TruncatedText>{row.claimedName}</TruncatedText>
           <Badge variant="warning">Unlinked</Badge>
         </span>
-      ) : (
-        <TruncatedText>{row.studentName}</TruncatedText>
       ),
   },
   { key: 'status', header: 'Status', cell: (row) => SUPPORT_STATUS_LABELS[row.status] },

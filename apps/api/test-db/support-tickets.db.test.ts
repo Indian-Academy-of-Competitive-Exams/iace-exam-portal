@@ -379,6 +379,10 @@ describe('admins working the queue', () => {
     assert.deepEqual((await ids()).slice(0, 2), [urgent.id, old.id]);
     assert.deepEqual(await ids('mine'), [old.id]);
     assert.deepEqual(await ids('unlinked'), [unlinked.id]);
+    const linkedOf = async (id: string) =>
+      (await admins.list(me.id, page)).items.find((t) => t.id === id)?.linked;
+    assert.equal(await linkedOf(unlinked.id), false);
+    assert.equal(await linkedOf(old.id), true);
     assert.ok(!(await ids('unclaimed')).includes(old.id));
     assert.ok((await ids('unclaimed')).includes(newer.id));
     assert.equal(await admins.unclaimedCount(), 2);

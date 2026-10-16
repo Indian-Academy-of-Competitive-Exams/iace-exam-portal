@@ -175,6 +175,8 @@ const claimCheck = z.object({ claimed: z.string().nullable(), matches: z.boolean
 
 export const adminTicketSummarySchema = ticketSummarySchema.extend({
   priority: supportPrioritySchema,
+  /** Tied to a student record; false is the signed-out ticket nobody matched. */
+  linked: z.boolean(),
   studentName: z.string().nullable(),
   claimedName: z.string().nullable(),
   assigneeName: z.string().nullable(),

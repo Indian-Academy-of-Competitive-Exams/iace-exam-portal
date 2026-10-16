@@ -166,8 +166,6 @@ export function SupportTicketPage() {
             </ThreadMessage>
           ))}
 
-          {closed ? <Alert variant="info">Closed</Alert> : null}
-
           <div ref={foot} />
         </div>
       </div>
