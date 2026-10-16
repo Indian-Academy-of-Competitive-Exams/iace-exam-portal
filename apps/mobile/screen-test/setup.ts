@@ -12,7 +12,9 @@ jest.mock('expo-sqlite/kv-store', () => {
   const held = new Map<string, string>();
   return {
     getItemSync: (key: string) => held.get(key) ?? null,
-    setItemSync: (key: string, value: string) => void held.set(key, value),
+    setItemSync: (key: string, value: string) => {
+      held.set(key, value);
+    },
     removeItemSync: (key: string) => held.delete(key),
   };
 });

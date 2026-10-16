@@ -40,4 +40,4 @@ export function serve(routes: Record<string, () => Response>) {
 export const sentTo = (route: string): unknown[] =>
   fetchMock.mock.calls
     .filter(([input]) => pathOf(input) === route)
-    .map(([, init]) => JSON.parse(String(init?.body)));
+    .map(([, init]) => JSON.parse(init?.body as string));
