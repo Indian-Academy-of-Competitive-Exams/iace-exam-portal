@@ -77,7 +77,7 @@ export default function RootLayout() {
 /** Every route is registered under a guard; a route with no guard stays reachable either way. */
 function Navigation() {
   const { identity, isLoading, isUnreachable, retry } = useAuth();
-  usePushDevice(Boolean(identity));
+  usePushDevice(Boolean(identity), !isLoading && !isUnreachable && !identity);
   const insets = useSafeAreaInsets();
   const pageColor = useTokenColor('--background');
   const headerColor = useTokenColor('--surface');

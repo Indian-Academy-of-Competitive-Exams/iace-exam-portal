@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { useCallback } from 'react';
-import { FlatList, Pressable, View, type ViewToken } from 'react-native';
+import { FlatList, Pressable, RefreshControl, View, type ViewToken } from 'react-native';
 import Settings from 'lucide-react-native/icons/settings';
 import { Stack, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +18,7 @@ import { notificationsQueryKey, UNREAD_QUERY_KEY } from '../src/lib/constants';
 import { ACCOUNT_ROUTES, DETAIL_ROUTES } from '../src/lib/nav';
 import { asText, useFilterState, type FilterState } from '../src/lib/filters';
 import { useSettled } from '../src/lib/use-settled';
+import { useTokenColor } from '../src/lib/use-token-color';
 import { Badge } from '../src/components/ui/badge';
 import { Button } from '../src/components/ui/button';
 import { Card } from '../src/components/ui/card';
@@ -34,6 +35,7 @@ export default function NotificationsScreen() {
   const query = notificationQuery({ ...state.values, q: search });
   const queryClient = useQueryClient();
   const router = useRouter();
+  const tint = useTokenColor('--muted-foreground');
 
   const list = useInfinitePages({
     queryKey: notificationsQueryKey(query),
@@ -77,6 +79,14 @@ export default function NotificationsScreen() {
         className="flex-1 bg-background"
         contentContainerStyle={CONTENT_STYLE}
         data={list.items}
+        refreshControl={
+          <RefreshControl
+            refreshing={list.isRefreshing}
+            onRefresh={list.retry}
+            tintColor={tint}
+            colors={tint ? [tint] : undefined}
+          />
+        }
         keyExtractor={(row) => row.id}
         onViewableItemsChanged={onViewable}
         viewabilityConfig={VIEWABLE}

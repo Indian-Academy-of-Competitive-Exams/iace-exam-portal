@@ -11,6 +11,8 @@ export const STORAGE_KEYS = {
   /** Which page tours this install has been shown; one key holding the set, so a tour added later needs no migration. */
   TOURS: 'iace.mobile.tours',
   THEME: 'iace.mobile.theme',
+  /** Set while a signed-out phone's FCM token still has to be retired, because signing out could not reach the server. */
+  PUSH_FORGET: 'iace.mobile.push-forget',
 } as const;
 
 /** The keys both student clients cache under, defined once so the two never disagree. */

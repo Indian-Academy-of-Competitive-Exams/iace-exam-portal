@@ -69,6 +69,8 @@ export function useInfinitePages<T>(options: {
   /** The next page failed with rows already held: they stay, and the end of the list offers `loadMore` again. */
   isLoadMoreError: boolean;
   retry: () => void;
+  /** Every loaded page being read again, as a pull to refresh asks; never a next page arriving. */
+  isRefreshing: boolean;
 } {
   const { queryKey, fetchPage, cursorOf, enabled = true } = options;
 
@@ -104,6 +106,7 @@ export function useInfinitePages<T>(options: {
     retry: query.refetch,
     isLoading: query.isPending && !neverRan,
     isLoadingMore: isFetchingNextPage,
+    isRefreshing: query.isRefetching && !isFetchingNextPage,
   };
 }
 
