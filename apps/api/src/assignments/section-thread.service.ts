@@ -8,7 +8,8 @@ import {
   type EditSectionCommentBody,
   type SectionComment,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
+import { beginPaperEdit } from '../common/paper-edit';
+import { PrismaService, TX_LIMITS } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 
 const COMMENT_INCLUDE = {
@@ -60,10 +61,12 @@ export class SectionThreadService {
   ): Promise<SectionComment> {
     await this.assertMayWrite(testId, baseConfigSectionId, authorId, isSuperAdmin);
 
-    const row = await this.prisma.sectionComment.create({
-      data: { testId, baseConfigSectionId, authorId, body: input.body, images: input.images },
-      include: COMMENT_INCLUDE,
-    });
+    const row = await this.writeWhileUnsat(testId, (tx) =>
+      tx.sectionComment.create({
+        data: { testId, baseConfigSectionId, authorId, body: input.body, images: input.images },
+        include: COMMENT_INCLUDE,
+      }),
+    );
     return this.served(row);
   }
 
@@ -91,15 +94,17 @@ export class SectionThreadService {
       body: before.body,
       at: (before.editedAt ?? before.createdAt).toISOString(),
     };
-    const row = await this.prisma.sectionComment.update({
-      where: { id: commentId },
-      data: {
-        body: input.body,
-        editedAt: new Date(),
-        revisions: { push: replaced as unknown as Prisma.InputJsonValue },
-      },
-      include: COMMENT_INCLUDE,
-    });
+    const row = await this.writeWhileUnsat(testId, (tx) =>
+      tx.sectionComment.update({
+        where: { id: commentId },
+        data: {
+          body: input.body,
+          editedAt: new Date(),
+          revisions: { push: replaced as unknown as Prisma.InputJsonValue },
+        },
+        include: COMMENT_INCLUDE,
+      }),
+    );
     return this.served(row);
   }
 
@@ -128,6 +133,19 @@ export class SectionThreadService {
     if (held === 0) throw new AppException(ErrorCodes.NOT_FOUND, 'No such section');
   }
 
+  /** Whether the test is sat is asked under the Test lock, so a first sitting cannot start between the check and the write. */
+  private writeWhileUnsat<T>(
+    testId: string,
+    write: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await beginPaperEdit(tx, testId);
+      const sat = await tx.attempt.findFirst({ where: { testId }, select: { id: true } });
+      if (sat) throw new AppException(ErrorCodes.CONFLICT, SAT_THREAD_CLOSED);
+      return write(tx);
+    }, TX_LIMITS.SHORT);
+  }
+
   /** An assignment row on the pair is both the authority and the proof that the pair is real. */
   private async assertMayWrite(
     testId: string,
@@ -135,10 +153,6 @@ export class SectionThreadService {
     authorId: string,
     isSuperAdmin: boolean,
   ): Promise<void> {
-    // Once a student has answered the paper, a comment can change nothing they were given.
-    const sat = await this.prisma.attempt.findFirst({ where: { testId }, select: { id: true } });
-    if (sat) throw new AppException(ErrorCodes.CONFLICT, SAT_THREAD_CLOSED);
-
     // Whoever the role has passed from still reads the thread, but writes nothing more to it.
     const assignments = await this.prisma.questionAssignment.findMany({
       where: { testId, baseConfigSectionId, replacedAt: null },

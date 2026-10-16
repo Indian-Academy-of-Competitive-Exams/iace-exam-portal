@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
+import type { Prisma } from '@prisma/client';
 import { ADMIN_ROLES, ASSIGNMENT_ROLES, AppException, ErrorCodes } from '@iace/contracts';
 import { SectionThreadService, type ThreadReader } from '../src/assignments/section-thread.service';
+import type { PrismaService } from '../src/prisma/prisma.service';
 import { FakeStorage } from '../test/support/fakes';
 import {
   makeCatalog,
@@ -37,7 +40,7 @@ const reader = (id: string, over: Partial<ThreadReader> = {}): ThreadReader => (
 });
 
 /** One staffed section: a typist, a proof-reader, and two people with no part in it. */
-async function aSection() {
+async function aSection(client: PrismaService = prisma) {
   await makeQuestionBank(prisma, {
     [TYPIST]: 'The Typist',
     [READER]: 'The Reader',
@@ -69,7 +72,7 @@ async function aSection() {
   });
 
   return {
-    thread: new SectionThreadService(prisma, new FakeStorage() as never),
+    thread: new SectionThreadService(client, new FakeStorage() as never),
     testId: test.id,
     sectionId: section.id,
   };
@@ -206,6 +209,51 @@ describe('SectionThreadService', () => {
   });
 });
 
+interface StartRace {
+  testId?: string;
+  /** The first sitting, started the moment the thread asked whether anybody sat the test. */
+  start?: Promise<unknown>;
+  /** Whether that sitting got in before the thread went on to write. */
+  landed?: boolean;
+}
+
+const TIME_TO_LAND_MS = 200;
+
+async function startFirstSitting(race: StartRace): Promise<void> {
+  const student = await makeStudent(prisma);
+  race.start = makeSitting(prisma, { testId: race.testId ?? '', studentId: student.id, score: 0 });
+  race.landed = await Promise.race([
+    race.start.then(() => true),
+    delay(TIME_TO_LAND_MS).then(() => false),
+  ]);
+}
+
+/** The real client, with a first sitting fired straight after the thread asks who sat the test. */
+function startingAfterSatCheck(race: StartRace): PrismaService {
+  const attempts = (delegate: Prisma.TransactionClient['attempt']) =>
+    new Proxy(delegate, {
+      get(inner, method: string | symbol) {
+        const call = Reflect.get(inner, method) as (...args: unknown[]) => Promise<unknown>;
+        if (method !== 'findFirst') return call;
+        return async (...args: unknown[]) => {
+          const answer = await Reflect.apply(call, inner, args);
+          await startFirstSitting(race);
+          return answer;
+        };
+      },
+    });
+  const watching = <T extends PrismaService | Prisma.TransactionClient>(client: T): T =>
+    new Proxy(client, {
+      get(inner, member: string | symbol) {
+        if (member === 'attempt') return attempts(inner.attempt);
+        if (member !== '$transaction') return Reflect.get(inner, member) as unknown;
+        return (work: (tx: Prisma.TransactionClient) => Promise<unknown>, options?: object) =>
+          (inner as PrismaService).$transaction((tx) => work(watching(tx)), options);
+      },
+    });
+  return watching(prisma);
+}
+
 describe('SectionThreadService — a sat test', () => {
   /** THE failure this prevents: a question argued over after students have already answered it. */
   it('takes no new comment and no reword once a student has sat the test, super admin or not', async () => {
@@ -227,6 +275,48 @@ describe('SectionThreadService — a sat test', () => {
       refusedWith(ErrorCodes.CONFLICT),
     );
     assert.equal((await thread.forSection(testId, sectionId, reader(READER))).length, 1);
+  });
+
+  /** The failure this prevents: a comment written a moment after the first student started the test. */
+  it('holds the first sitting behind a comment that has already asked whether anybody sat the test', async () => {
+    const race: StartRace = {};
+    const { thread, testId, sectionId } = await aSection(startingAfterSatCheck(race));
+    race.testId = testId;
+
+    const said = await thread.comment(
+      testId,
+      sectionId,
+      { body: 'Just in time.', images: [] },
+      READER,
+    );
+    await race.start;
+
+    assert.equal(race.landed, false);
+    assert.equal(said.body, 'Just in time.');
+    assert.equal(await prisma.attempt.count({ where: { testId } }), 1);
+  });
+
+  it('holds the first sitting behind a reword the same way', async () => {
+    const { thread, testId, sectionId } = await aSection();
+    const said = await thread.comment(testId, sectionId, { body: 'Before.', images: [] }, READER);
+    const race: StartRace = { testId };
+    const racing = new SectionThreadService(
+      startingAfterSatCheck(race),
+      new FakeStorage() as never,
+    );
+
+    const reworded = await racing.editComment(
+      testId,
+      sectionId,
+      said.id,
+      { body: 'Reworded.' },
+      READER,
+    );
+    await race.start;
+
+    assert.equal(race.landed, false);
+    assert.equal(reworded.body, 'Reworded.');
+    assert.equal(await prisma.attempt.count({ where: { testId } }), 1);
   });
 });
 
