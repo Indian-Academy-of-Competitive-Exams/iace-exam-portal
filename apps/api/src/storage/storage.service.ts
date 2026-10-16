@@ -19,6 +19,10 @@ export function signedWith(
   return { accessKeyId, secretAccessKey };
 }
 
+/** What a read of a key nobody holds throws, S3 and MinIO alike. */
+export const isMissingObject = (error: unknown): boolean =>
+  error instanceof Error && error.name === 'NoSuchKey';
+
 /** THE upload path — there is exactly one, and it is never branched by environment. */
 @Injectable()
 export class StorageService implements OnModuleDestroy {

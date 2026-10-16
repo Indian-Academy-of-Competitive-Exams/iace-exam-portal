@@ -17,7 +17,7 @@ import {
   type StudentExportQuery,
 } from '@iace/contracts';
 import { QUEUE_NAMES } from '../../queue/queues';
-import { StorageService } from '../../storage/storage.service';
+import { StorageService, isMissingObject } from '../../storage/storage.service';
 import { type AuthenticatedUser } from '../security/authenticated-user';
 
 export const EXPORT_JOBS = { BUILD: 'build', DISCARD: 'discard' } as const;
@@ -63,6 +63,8 @@ export interface DiscardJobData {
 
 export const exportFileKey = (jobId: string) => `exports/${jobId}.xlsx`;
 
+const NO_SUCH_FILE_MESSAGE = 'No such file, or it has expired';
+
 /** Asking for a file, and collecting it: the build runs on a worker, never on the request that asked. */
 @Injectable()
 export class ExportJobsService {
@@ -99,7 +101,14 @@ export class ExportJobsService {
     const job = await this.mine(id, adminId);
     const outcome = job.returnvalue as ExportOutcome | null;
     if (!outcome?.file) throw new AppException(ErrorCodes.NOT_FOUND, 'That file is not ready');
-    return { kind: outcome.file.kind, workbook: await this.storage.read(outcome.file.key) };
+    try {
+      return { kind: outcome.file.kind, workbook: await this.storage.read(outcome.file.key) };
+    } catch (error) {
+      // The file goes on its own timer and the job record on the queue's, so the id can outlive the bytes.
+      if (isMissingObject(error))
+        throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_FILE_MESSAGE);
+      throw error;
+    }
   }
 
   /** Someone else's file reads as no file at all, so an id cannot be probed for. */
@@ -107,7 +116,7 @@ export class ExportJobsService {
     const job = await this.queue.getJob(id);
     const data = job?.data as ExportJobData | undefined;
     if (job?.name !== EXPORT_JOBS.BUILD || data?.viewer.id !== adminId) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'No such file, or it has expired');
+      throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_FILE_MESSAGE);
     }
     return job;
   }

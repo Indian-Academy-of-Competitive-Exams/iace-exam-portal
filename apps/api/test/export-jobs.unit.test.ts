@@ -92,6 +92,48 @@ describe('ExportJobsService — a file is its asker’s alone', () => {
   });
 });
 
+describe('ExportJobsService — collecting a file', () => {
+  const key = exportFileKey('job_1');
+  const finished = {
+    name: EXPORT_JOBS.BUILD,
+    data: { request, viewer: { id: ASKER.id, isSuperAdmin: false, isActive: true } },
+    state: 'completed',
+    returnvalue: { file: { key, kind: request.kind } },
+  };
+  const missing = Object.assign(new Error('The specified key does not exist.'), {
+    name: 'NoSuchKey',
+  });
+  const withStorage = (read: () => Promise<Buffer>) =>
+    new ExportJobsService(queueHolding(finished), { read } as never);
+
+  it('hands the asker the stored file', async () => {
+    const jobs = withStorage(() => Promise.resolve(Buffer.from('xlsx')));
+
+    const { kind, workbook } = await jobs.file('job_1', ASKER.id);
+
+    assert.equal(kind, request.kind);
+    assert.equal(workbook.toString(), 'xlsx');
+  });
+
+  /** THE failure this prevents: a file discarded before its job record is gone answering as a server fault. */
+  it('answers a file already discarded as expired, as it does a job it no longer knows', async () => {
+    const jobs = withStorage(() => Promise.reject(missing));
+    const expired = (error: unknown) =>
+      AppException.is(error) &&
+      error.code === ErrorCodes.NOT_FOUND &&
+      error.message === 'No such file, or it has expired';
+
+    await assert.rejects(jobs.file('job_1', ASKER.id), expired);
+  });
+
+  it('lets a storage fault that is not a missing file through as a fault', async () => {
+    const outage = new Error('s3 is down');
+    const jobs = withStorage(() => Promise.reject(outage));
+
+    await assert.rejects(jobs.file('job_1', ASKER.id), (error: unknown) => error === outage);
+  });
+});
+
 describe('ExportsProcessor — the file is built off the request, logged, and later discarded', () => {
   const viewer = { id: ASKER.id, isSuperAdmin: false, isActive: true };
 
