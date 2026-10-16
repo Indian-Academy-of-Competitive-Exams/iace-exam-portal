@@ -28,6 +28,7 @@ permissions:
 env:
   REGISTRY: 598927569098.dkr.ecr.ap-south-1.amazonaws.com
   COMPOSE: docker compose -f deploy/compose.yml --env-file deploy/.env
+  MOVING: ${{ inputs.environment == 'production' && 'prod' || 'staging' }}
 
 jobs:
   deploy:
@@ -79,7 +80,7 @@ jobs:
       # as whoever owns the checkout, because as root it refuses a directory it does not own.
       # --ff-only so a box somebody edited by hand stops the release instead of losing the edit.
       #
-      # await-healthy fails the release unless exam, core and worker report healthy; rollback-to names the image to go back to.
+      # await-healthy fails the release unless exam, core and worker report healthy, then points the box's moving tag at it.
       #
       # The restart is for the two mounted configs alone: `up -d` recreates a container whose
       # compose entry changed, never one whose mounted file did, and a running container holds
@@ -99,11 +100,10 @@ jobs:
               \"sudo -u \$OWNER git merge --quiet --ff-only ${{ github.sha }}\",
               \"aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REGISTRY\",
               \"export API_IMAGE=$REGISTRY/examprep/api MIGRATE_IMAGE=$REGISTRY/examprep/api-migrate API_TAG=${{ inputs.image_tag }}\",
-              \"PREV=\$(docker inspect -f '{{.Config.Image}}' \$($COMPOSE ps -q core) 2>/dev/null || echo none)\",
-              \"echo rollback-to: \$PREV\",
+              \"echo rollback-to: \$(COMPOSE='$COMPOSE' ./deploy/await-healthy.sh --running)\",
               \"$COMPOSE pull\",
               \"$COMPOSE up -d\",
-              \"COMPOSE='$COMPOSE' ./deploy/await-healthy.sh\",
+              \"COMPOSE='$COMPOSE' ./deploy/await-healthy.sh $MOVING\",
               \"sudo -u \$OWNER git diff --quiet \$OLD HEAD -- deploy/Caddyfile deploy/alloy || $COMPOSE restart caddy alloy\",
               \"$COMPOSE ps\",
               \"./deploy/prune-disk.sh\"
@@ -129,3 +129,14 @@ jobs:
             echo '```'; cat /tmp/out; echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           [ "$status" = "Success" ] || { echo "::error::SSM reported $status"; exit 1; }
+
+      # Staging's ECR tag is what a box pulls on boot, so it moves only to a release that passed or one a stopped box will start.
+      - uses: aws-actions/amazon-ecr-login@v2
+        if: inputs.environment == 'staging'
+
+      - name: Advance the moving tag
+        if: inputs.environment == 'staging'
+        run: |
+          for repo in api api-migrate; do
+            docker buildx imagetools create -t "$REGISTRY/examprep/$repo:$MOVING" "$REGISTRY/examprep/$repo:${{ inputs.image_tag }}"
+          done

@@ -887,7 +887,7 @@ infrastructure rather than a habit.**
 | `ci.yml`            | a push to `staging` or `main`, a pull request, Run workflow                                        | Verify (format, `actionlint`, deps, env templates, lint, typecheck, test, build), Database (migrations and `test:db`), End to end |
 | `staging.yml`       | a push to `staging`, or Run workflow with an image tag                                             | Finds which halves changed since the last green run, then build → API → SPAs as one chain                                         |
 | `production.yml`    | `cron` 20:30 UTC (02:00 IST), or Run workflow with a tag and a reason                              | API → SPAs against production. **Disabled in the Actions settings until production exists**                                       |
-| `build-api.yml`     | called by `staging.yml`; a push to `main` touching the API, its packages, `prisma` or the lockfile | Builds both targets natively on `ubuntu-24.04-arm` and pushes `<sha>` plus the branch's moving tag. **Does not deploy.**          |
+| `build-api.yml`     | called by `staging.yml`; a push to `main` touching the API, its packages, `prisma` or the lockfile | Builds both targets natively on `ubuntu-24.04-arm` and pushes `<sha>`, plus `prod` from `main`. **Does not deploy.**              |
 | `_deploy-api.yml`   | called                                                                                             | SSM into Box A: fast-forward the checkout, `docker compose pull && up -d`, wait for healthy, prune                                |
 | `_publish-spas.yml` | called                                                                                             | Builds both SPAs and publishes them                                                                                               |
 | `scale.yml`         | Run workflow only                                                                                  | Sets the exam and core counts, optionally resizes Box A, and refuses a count the database's connections cannot hold (§6)          |
@@ -936,7 +936,8 @@ and is a spelling one. The prefix to copy is `sub_claim_prefix` from
 up to three minutes for exam, core and worker to report healthy on `/health/ready`, and if one does
 not it prints that container's last 80 log lines and fails the run — so SSM cannot report
 Success over a crash loop. Before the pull, the deploy prints `rollback-to:` and the image core was
-running, so the tag to go back to is in the failed run's log.
+running, so the tag to go back to is in the failed run's log. Only a release that passes moves
+the `staging` tag, in ECR and on the box, so a reboot or a scale never starts a release that failed.
 
 Rolling back is a tag, not a rebuild: Run workflow with that tag, or the previous commit's sha.
 

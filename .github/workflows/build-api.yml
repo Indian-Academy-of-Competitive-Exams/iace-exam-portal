@@ -44,11 +44,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # The branch IS the environment. `staging` and `prod` are moving tags each release
-      # advances; the sha tag is the immutable one a rollback names.
+      # `prod` is main's candidate, pushed here; `staging` moves in _deploy-api.yml, only once a release passes.
+      # The sha tag is the immutable one a rollback names.
       - name: Pick the moving tag
         id: tag
-        run: echo "moving=${{ github.ref_name == 'main' && 'prod' || 'staging' }}" >> "$GITHUB_OUTPUT"
+        run: echo "moving=${{ github.ref_name == 'main' && 'prod' || '' }}" >> "$GITHUB_OUTPUT"
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -74,7 +74,7 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/examprep/api:${{ github.sha }}
-            ${{ env.REGISTRY }}/examprep/api:${{ steps.tag.outputs.moving }}
+            ${{ steps.tag.outputs.moving && format('{0}/examprep/api:{1}', env.REGISTRY, steps.tag.outputs.moving) || '' }}
           cache-from: type=gha,scope=api-runtime
           cache-to: type=gha,scope=api-runtime,mode=max
 
@@ -88,7 +88,7 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/examprep/api-migrate:${{ github.sha }}
-            ${{ env.REGISTRY }}/examprep/api-migrate:${{ steps.tag.outputs.moving }}
+            ${{ steps.tag.outputs.moving && format('{0}/examprep/api-migrate:{1}', env.REGISTRY, steps.tag.outputs.moving) || '' }}
           cache-from: type=gha,scope=api-migrate
           cache-to: type=gha,scope=api-migrate,mode=max
 
@@ -98,8 +98,8 @@ jobs:
             echo "### Images pushed, not deployed"
             echo "| | tag |"
             echo "| --- | --- |"
-            echo "| \`examprep/api\` | \`${{ github.sha }}\` and \`${{ steps.tag.outputs.moving }}\` |"
-            echo "| \`examprep/api-migrate\` | \`${{ github.sha }}\` and \`${{ steps.tag.outputs.moving }}\` |"
+            echo "| \`examprep/api\` | \`${{ github.sha }}\` ${{ steps.tag.outputs.moving && format(' and `{0}`', steps.tag.outputs.moving) || '' }} |"
+            echo "| \`examprep/api-migrate\` | \`${{ github.sha }}\` ${{ steps.tag.outputs.moving && format(' and `{0}`', steps.tag.outputs.moving) || '' }} |"
             echo ""
             echo "On \`staging\` the same run deploys this sha next. To put this build back"
             echo "later, run **Staging** or **Production** with \`${{ github.sha }}\` as the image tag."

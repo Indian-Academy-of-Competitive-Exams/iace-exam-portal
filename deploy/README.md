@@ -173,7 +173,8 @@ rollback past the local two is `API_TAG=<sha>` and a pull.
 
 A release fails unless `exam`, `core` and `worker` report healthy within three minutes of `up -d`
 (`await-healthy.sh`), and its log names the image it replaced as `rollback-to:`, so the tag to go
-back to is in the failed run.
+back to is in the failed run. Only a passing release moves the `staging` tag, so a reboot or a
+scale never starts one that failed.
 
 **Never add `--volumes` to a prune.** They hold Caddy's issued certificates and Box B's
 append-only file. Let's Encrypt rate-limits five certificates per hostname per week, so one
