@@ -4,6 +4,7 @@ import { adminOpsClient } from './admin-ops';
 import { adminPeopleClient } from './admin-people';
 import { adminQuestionsClient } from './admin-questions';
 import { adminSectionsClient } from './admin-sections';
+import { adminSupportClient } from './admin-support';
 import { adminTestsClient } from './admin-tests';
 import type { ApiCore } from './core';
 
@@ -16,5 +17,6 @@ export function adminClient(core: ApiCore) {
     ...adminQuestionsClient(core),
     ...adminSectionsClient(core),
     ...adminImportsClient(core),
+    ...adminSupportClient(core),
   };
 }
